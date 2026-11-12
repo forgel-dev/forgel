@@ -8,6 +8,7 @@ from pathlib import Path
 from forgel.config import Settings
 from forgel.ledger import Ledger, new_project_id
 from forgel.orchestrator import Orchestrator
+from forgel.sync import sync_project
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -111,6 +112,58 @@ class EndToEndTest(unittest.TestCase):
             orchestrator.run(project_id)
             self.assertEqual(len(ledger.events(project_id)), first_events)
             self.assertEqual(ledger.checkpoint(project_id), "done")
+
+    def test_sync_starts_new_generation_after_external_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                home=Path(tmp),
+                registry_path=REPO_ROOT / "registry" / "recipes.json",
+                templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+                jurisdiction_path=REPO_ROOT / "jurisdiction",
+                qa_runtime="local",
+            )
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+
+            project_id = new_project_id("hello-web")
+            workspace = settings.projects_dir / project_id
+            ledger.create_project(
+                project_id,
+                "hello-web",
+                "A minimal web app with an index page and a health check.",
+                str(workspace),
+            )
+
+            orchestrator = Orchestrator(settings, ledger)
+            orchestrator.run(project_id)
+            self.assertEqual(ledger.checkpoint_state(project_id), ("done", 1))
+            self.assertTrue((workspace / ".git").exists())
+
+            index = workspace / "web" / "index.html"
+            index.write_text(
+                index.read_text(encoding="utf-8") + "\n<!-- external edit -->\n",
+                encoding="utf-8",
+            )
+
+            result = sync_project(
+                workspace, ledger, project_id, from_stage="review"
+            )
+            self.assertTrue(result["started"])
+            self.assertEqual(result["generation"], 2)
+            self.assertEqual(ledger.checkpoint_state(project_id), ("review", 2))
+
+            changes = workspace / "docs" / "program" / "external-changes.md"
+            self.assertTrue(changes.exists())
+            self.assertIn("web/index.html", changes.read_text(encoding="utf-8"))
+
+            orchestrator.run(project_id)
+            self.assertEqual(ledger.checkpoint_state(project_id), ("done", 2))
+            for stage in ("review", "qa", "acceptance", "audit", "done"):
+                self.assertTrue(
+                    ledger.has_completed(project_id, stage, 2),
+                    f"stage {stage} did not run in generation 2",
+                )
+            self.assertTrue(ledger.has_completed(project_id, "review", 1))
 
 
 if __name__ == "__main__":

@@ -33,6 +33,19 @@ Run the core from the Docker image:
 docker compose run --rm forgel demo
 ```
 
+## Edit Outside Forgel
+
+Forgel never regenerates or overwrites external work. After editing a generated
+project by hand or in another harness:
+
+```bash
+forgel sync <project-id>
+forgel run <project-id>
+```
+
+`sync` records the diff in `docs/program/external-changes.md`, starts a new
+ledger generation, and re-runs the affected gates from `review`.
+
 ## What it will do
 
 - Chat interface (Telegram) → requirements → a validated recipe (stack + cloud + integrations).

@@ -16,6 +16,7 @@ from .artifacts import ensure_dir, read_json
 from .config import Settings
 from .ledger import Ledger, new_project_id
 from .orchestrator import Orchestrator, StageError
+from .sync import SyncError, sync_project
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$")
 
@@ -94,14 +95,19 @@ def cmd_status(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        checkpoint = ledger.checkpoint(args.project_id) or "none"
+        state = ledger.checkpoint_state(args.project_id)
+        checkpoint = state[0] if state is not None else "none"
+        generation = (
+            state[1] if state is not None else ledger.current_generation(args.project_id)
+        )
         print(f"project:    {project['id']}")
         print(f"name:       {project['name']}")
         print(f"recipe:     {project.get('recipe_id') or 'none'}")
         print(f"workspace:  {project['workspace']}")
+        print(f"generation: {generation}")
         print(f"checkpoint: {checkpoint}")
         print()
-        print(f"{'seq':>4}  {'stage':<14} {'status':<10} artifacts")
+        print(f"{'seq':>4}  {'gen':>3}  {'stage':<14} {'status':<10} artifacts")
         for event in ledger.events(args.project_id):
             try:
                 refs = json.loads(event["artifact_refs"])
@@ -109,8 +115,8 @@ def cmd_status(args: argparse.Namespace) -> int:
                 refs = []
             suffix = ", ".join(refs) if refs else "-"
             print(
-                f"{event['seq']:>4}  {event['stage']:<14} "
-                f"{event['status']:<10} {suffix}"
+                f"{event['seq']:>4}  {event['generation']:>3}  "
+                f"{event['stage']:<14} {event['status']:<10} {suffix}"
             )
         return 0
     finally:
@@ -125,12 +131,18 @@ def cmd_list(args: argparse.Namespace) -> int:
         if not projects:
             print("no projects")
             return 0
-        print(f"{'id':<36} {'name':<24} {'checkpoint':<14} created")
+        print(f"{'id':<36} {'name':<24} {'gen':>3} {'checkpoint':<14} created")
         for project in projects:
-            checkpoint = ledger.checkpoint(project["id"]) or "none"
+            state = ledger.checkpoint_state(project["id"])
+            checkpoint = state[0] if state is not None else "none"
+            generation = (
+                state[1]
+                if state is not None
+                else ledger.current_generation(project["id"])
+            )
             print(
                 f"{project['id']:<36} {project['name']:<24} "
-                f"{checkpoint:<14} {project['created_at']}"
+                f"{generation:>3} {checkpoint:<14} {project['created_at']}"
             )
         return 0
     finally:
@@ -149,6 +161,41 @@ def cmd_demo(args: argparse.Namespace) -> int:
     except StageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    finally:
+        ledger.close()
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        try:
+            result = sync_project(
+                Path(project["workspace"]),
+                ledger,
+                args.project_id,
+                from_stage=args.from_stage,
+                force=args.force,
+            )
+        except (SyncError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if result["started"]:
+            print(
+                f"External changes: {result['count']} file(s). "
+                f"Generation {result['generation']} started; "
+                f"re-run from {result['from_stage']}."
+            )
+            print(f"Run: forgel run {args.project_id}")
+        else:
+            print(
+                f"No external changes detected (generation {result['generation']})."
+            )
+        return 0
     finally:
         ledger.close()
 
@@ -225,6 +272,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     demo.add_argument("--home", default=None)
     demo.set_defaults(func=cmd_demo)
+
+    sync = subparsers.add_parser(
+        "sync", help="Reconcile external changes and start a new generation"
+    )
+    sync.add_argument("project_id")
+    sync.add_argument(
+        "--from",
+        dest="from_stage",
+        default="review",
+        help="Stage to re-run from (default: review)",
+    )
+    sync.add_argument("--force", action="store_true")
+    sync.add_argument("--home", default=None)
+    sync.set_defaults(func=cmd_sync)
 
     serve = subparsers.add_parser("serve", help="Serve the generated staging app")
     serve.add_argument("project_id")

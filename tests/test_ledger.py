@@ -58,6 +58,29 @@ class LedgerTest(unittest.TestCase):
         self.ledger.set_checkpoint(self.project_id, "dev")
         self.assertEqual(self.ledger.checkpoint(self.project_id), "dev")
 
+    def test_generation_starts_at_one(self) -> None:
+        self.assertEqual(self.ledger.current_generation(self.project_id), 1)
+
+    def test_generation_scopes_completed_stages(self) -> None:
+        self.ledger.append_event(
+            self.project_id, "review", status="completed", generation=1
+        )
+        generation = self.ledger.start_generation(self.project_id, "review")
+
+        self.assertEqual(generation, 2)
+        self.assertEqual(self.ledger.current_generation(self.project_id), 2)
+        self.assertEqual(
+            self.ledger.checkpoint_state(self.project_id), ("review", 2)
+        )
+        self.assertTrue(self.ledger.has_completed(self.project_id, "review", 1))
+        self.assertFalse(self.ledger.has_completed(self.project_id, "review", 2))
+
+        self.ledger.append_event(
+            self.project_id, "review", status="completed", generation=2
+        )
+        self.assertTrue(self.ledger.has_completed(self.project_id, "review", 2))
+        self.assertEqual(len(self.ledger.events(self.project_id)), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -54,10 +54,16 @@ class Orchestrator:
         if project is None:
             raise StageError(f"Unknown project: {project_id}")
 
-        start = self.ledger.checkpoint(project_id) or "intake"
+        state = self.ledger.checkpoint_state(project_id)
+        if state is None:
+            start = "intake"
+            generation = self.ledger.current_generation(project_id)
+        else:
+            start, generation = state
+
         for stage in stages_from(start):
-            if self.ledger.has_completed(project_id, stage):
-                self.ledger.set_checkpoint(project_id, next_stage(stage))
+            if self.ledger.has_completed(project_id, stage, generation):
+                self.ledger.set_checkpoint(project_id, next_stage(stage), generation)
                 continue
 
             print(f"[{stage}] running")
@@ -69,13 +75,18 @@ class Orchestrator:
                     stage,
                     status="failed",
                     payload={"error": str(exc)},
+                    generation=generation,
                 )
                 print(f"[{stage}] FAILED: {exc}")
                 raise
             self.ledger.append_event(
-                project_id, stage, status="completed", artifact_refs=refs
+                project_id,
+                stage,
+                status="completed",
+                artifact_refs=refs,
+                generation=generation,
             )
-            self.ledger.set_checkpoint(project_id, next_stage(stage))
+            self.ledger.set_checkpoint(project_id, next_stage(stage), generation)
             print(f"[{stage}] completed")
 
         updated = self.ledger.get_project(project_id)
@@ -577,7 +588,92 @@ See `docs/program/jurisdiction/requirements.md` and
         for directory in ("api", "web", "infra", "e2e", "docker", "qa"):
             copy_template(template / directory, workspace / directory, substitutions)
             refs.append(directory)
+
+        self._write_artifact_manifest(workspace)
+        self._init_baseline_git(workspace)
+        refs.append("docs/program/artifact-manifest.json")
         return refs
+
+    @staticmethod
+    def _write_artifact_manifest(workspace: Path) -> None:
+        files: dict[str, str] = {}
+        for path in sorted(workspace.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(workspace)
+            if any(
+                part in {"__pycache__", "node_modules", ".git"}
+                for part in relative.parts
+            ):
+                continue
+            if relative.as_posix() == "docs/program/artifact-manifest.json":
+                continue
+            files[relative.as_posix()] = hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
+        write_json(
+            workspace / "docs" / "program" / "artifact-manifest.json",
+            {"generated_at": utcnow(), "files": files},
+        )
+
+    @staticmethod
+    def _init_baseline_git(workspace: Path) -> None:
+        if shutil.which("git") is None or (workspace / ".git").exists():
+            return
+        subprocess.run(
+            ["git", "init", "-q"], cwd=str(workspace), check=False
+        )
+        subprocess.run(
+            ["git", "add", "-A"], cwd=str(workspace), check=False
+        )
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Forgel",
+                "-c",
+                "user.email=forgel@localhost",
+                "commit",
+                "-q",
+                "-m",
+                "Generated baseline",
+            ],
+            cwd=str(workspace),
+            check=False,
+        )
+        subprocess.run(
+            ["git", "tag", "-f", "forgel-baseline"],
+            cwd=str(workspace),
+            check=False,
+        )
+
+    @staticmethod
+    def _commit_generated_state(workspace: Path, generation: int) -> None:
+        if shutil.which("git") is None or not (workspace / ".git").exists():
+            return
+        subprocess.run(
+            ["git", "add", "-A"], cwd=str(workspace), check=False
+        )
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Forgel",
+                "-c",
+                "user.email=forgel@localhost",
+                "commit",
+                "-q",
+                "-m",
+                f"Forgel generation {generation} complete",
+            ],
+            cwd=str(workspace),
+            check=False,
+        )
+        subprocess.run(
+            ["git", "tag", "-f", "forgel-baseline"],
+            cwd=str(workspace),
+            check=False,
+        )
 
     def stage_review(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
@@ -763,7 +859,7 @@ See `docs/program/jurisdiction/requirements.md` and
         output = ""
         if npm is not None and not (qa_dir / "node_modules" / "puppeteer-core").exists():
             install = subprocess.run(
-                [npm, "install", "--no-audit", "--no-fund"],
+                [npm, "install", "--no-package-lock", "--no-audit", "--no-fund"],
                 cwd=str(qa_dir),
                 capture_output=True,
                 text=True,
@@ -929,6 +1025,7 @@ See `docs/program/jurisdiction/requirements.md` and
             "docs/program/requirements.json",
             "docs/program/master-plan.md",
             "docs/program/change-sets.json",
+            "docs/program/artifact-manifest.json",
             FEATURE_REL,
             "docs/program/spec-review.md",
             "docs/program/review.md",
@@ -1040,6 +1137,9 @@ See `docs/program/jurisdiction/requirements.md` and
 - Staging: {staging.get('url', 'not available')}
 - Staging command: `{staging.get('command', 'not available')}`
 """,
+        )
+        self._commit_generated_state(
+            workspace, self.ledger.current_generation(project["id"])
         )
         return [self._ref(project, path)]
 
