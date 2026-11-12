@@ -36,6 +36,8 @@ Forgel is a tool, not a closed pipeline. It can run the whole lifecycle, or coex
 
 Forgel runs as a long-lived control-plane process. It never polishes endlessly: each iteration has a finite goal, a definition of done and a budget. When the goal is met or the budget is exhausted, the iteration closes with a recorded verdict, and the daemon waits for the next trigger.
 
+The immediate goal is self-hosting: Forgel develops itself through its own daemon and Telegram interface. Another harness may be used for bottlenecks, but it is not the main development environment.
+
 ### Who It Is For
 
 - **Developers and teams** who need control over their code, cloud and model.
@@ -860,6 +862,14 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Context-file resolver (`FORGEL.md` → `AGENTS.md` → `CLAUDE.md`) and `forgel.toml` project config.
 - **Exit:** the process reaches staging with no manual action except approval; production readiness is reported honestly.
 
+### M0.5 — Self-Hosting (immediate goal)
+
+- Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
+- Human approval gate for staging and production; production requires the compliance acknowledgement.
+- Brownfield adoption: point Forgel at its own repository and accept change requests without regenerating it.
+- Deploy the daemon on a server with Docker Compose, a persistent data volume, the bot token and the model key.
+- **Exit:** a real Forgel change is specified, implemented, reviewed, QA'd and accepted through Forgel itself. Another harness is used only for bottlenecks.
+
 ### M1 — Vertical Slice and Public OSS Alpha (up to 3 months)
 
 - Django + React + Postgres + Yandex Cloud.
@@ -973,6 +983,7 @@ By the end of M1:
 - Every post-release proposal carries its SemVer class, evidence, risk and approval state.
 - Every complexity-budget violation has a recorded decision: simplify, accept with a rationale, or change the spec.
 - Every structural refactor has a recorded cost/benefit decision; deferred debt has a trigger.
+- A real Forgel change is delivered through Forgel itself in the self-hosting milestone.
 
 By the end of M2:
 
