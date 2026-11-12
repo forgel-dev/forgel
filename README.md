@@ -61,6 +61,11 @@ responsibility. See [PLAN.md](PLAN.md) and [jurisdiction/README.md](jurisdiction
 
 Core: AGPL-3.0-or-later. Plugin SDK, official plugins and templates: Apache-2.0. Generated project code belongs to the user. See [LICENSE](LICENSE).
 
+## Agent Instructions
+
+- [AGENTS.md](AGENTS.md) — cross-harness canon.
+- [FORGEL.md](FORGEL.md) — native Forgel instructions, read first.
+
 ## Contributing
 
 Public roadmap, RFC process, DCO instead of CLA. See [PLAN.md](PLAN.md) §14.

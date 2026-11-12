@@ -1,0 +1,55 @@
+# AGENTS.md
+
+Canonical instructions for AI agents working on Forgel. `FORGEL.md` adds
+Forgel-specific rules and the read order. `CLAUDE.md` is a local compatibility
+shim and is not part of the public repository.
+
+## Read First
+
+1. `PLAN.md` — product, architecture, decisions, process, roadmap.
+2. `FORGEL.md` — native context file and read order.
+3. `CONTRIBUTING.md` — contribution, DCO, tests.
+4. `jurisdiction/README.md` — jurisdiction packs and the compliance disclaimer.
+
+## Project Rules
+
+- Public artifacts are in English (D-025). Code identifiers are English.
+- The core is AGPL-3.0-or-later. The SDK, official plugins and templates are
+  Apache-2.0. Generated project code belongs to the user.
+- The orchestrator is deterministic; the LLM works only inside a step.
+- Roles have clean context: spec writer, developer, reviewer, QA, acceptor.
+- Artifacts in git are the source of truth; memory is an index.
+- Process prohibitions live in code (gates, ledger, runners), not only in prose.
+- Jurisdiction packs are advisory. Never claim legal compliance; the user is
+  responsible. The production gate requires the compliance acknowledgement.
+- Do not add tool attribution lines or session references to commits, pull
+  requests or issues. Keep public history about the product.
+
+## Change Workflow
+
+1. Read the relevant decision and feature documents.
+2. For a significant change, open an RFC issue first.
+3. Implement one logical change; add a test.
+4. Run `make test` and `make lint`.
+5. Update `PLAN.md` and related docs when a decision changes.
+6. Commit in English, imperative mood, with `git commit -s`.
+
+## Layout
+
+| Path | Purpose |
+|---|---|
+| `src/forgel/` | Core: orchestrator, ledger, state, registry, CLI |
+| `src/forgel/templates/` | Project templates |
+| `registry/` | Recipe registry data |
+| `jurisdiction/` | Jurisdiction pack data |
+| `tests/` | `unittest` suite |
+| `PLAN.md` | Product and architecture plan |
+| `FORGEL.md` | Native Forgel instructions |
+| `INTERNAL.md` | Internal notes — gitignored, never commit |
+
+## Guardrails
+
+- Never commit secrets, private project names, customer data or internal docs.
+- Do not start external services or cloud resources in tests.
+- Do not weaken a test to make it pass; fix the product or the test's premise.
+- Do not claim a state you did not verify in this session.

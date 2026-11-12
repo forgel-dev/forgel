@@ -115,6 +115,7 @@ Jurisdiction is part of the product, not a document attached at the end. Forgel 
 | **D-026** | Jurisdiction is a first-class layer supplied by a `jurisdiction` plugin and consulted by the core | Law dictates how a product must be built in some markets: data residency, consent, payments, advertising, moderation, incident reporting. These are product constraints, not deployment details | Intake captures jurisdiction; recipe selection filters by it; spec, QA, acceptance, audit and deploy gates consult it; a draft pack is usable and production requires the compliance acknowledgement |
 | **D-027** | Legal rules are versioned data with citations, effective dates and a review date; the LLM maps and explains but never certifies | A prompt cannot be an authoritative legal source, and stale law is worse than no law | Each pack has `status`, `reviewed_by`, `review_due`; deterministic checks where possible; ambiguous cases go to human review |
 | **D-028** | Jurisdiction packs are advisory; production approval includes an explicit compliance responsibility acknowledgement | A draft pack is better than an ignored jurisdiction, and small teams cannot fund legal review for every project | The system records the pack, its status and the disclaimer; it does not block on a missing or draft pack; the human who approves production carries responsibility |
+| **D-029** | Context files: `FORGEL.md` is native, `AGENTS.md` is the cross-harness canon, `CLAUDE.md` is a local compatibility shim | One source of truth avoids drift; a public `CLAUDE.md` advertises another harness and contradicts dogfooding | Forgel reads `FORGEL.md` → `AGENTS.md` → `CLAUDE.md`; generated projects get `FORGEL.md` + `AGENTS.md`, never `CLAUDE.md` |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -177,6 +178,8 @@ A **monorepo** at the start for atomic changes; the registry is a separate data 
 
 ```
 forgel/            # engine repository
+  AGENTS.md        # cross-harness instruction canon
+  FORGEL.md        # native Forgel instructions
   core/            # orchestrator, ledger, gates, runtime
   plugin-sdk/      # manifest schemas, conformance kit
   plugins/
@@ -535,6 +538,8 @@ qa/held-out/            # never read by the dev agent
 **Repo level** (generated and maintained by Forgel):
 
 ```
+FORGEL.md               # native instructions, read first
+AGENTS.md               # cross-harness canon
 docs/requirements.md
 docs/features/<timestamp>_<name>.md
 docs/process/*.md       # from Forgel templates
@@ -561,6 +566,17 @@ At the start of every program cycle, and continuously after production:
 5. **Findings → plan:** each becomes a change-set item, not a "someday".
 6. **Criterion:** did the product do its job for the user, not only match the spec.
 7. **Production changes** only after human approval.
+
+### 7.5 Context Files
+
+A generated project carries two instruction files at its root:
+
+- `FORGEL.md` — the native file, read first.
+- `AGENTS.md` — the cross-harness canon.
+
+Forgel never writes `CLAUDE.md` into a generated project. In the Forgel repository itself, `CLAUDE.md` is a local, gitignored shim for tools that require it; it is not part of the public product.
+
+Read order: `FORGEL.md` → `AGENTS.md` → `CLAUDE.md`.
 
 ---
 

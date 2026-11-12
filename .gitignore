@@ -1,6 +1,7 @@
 # Internal — never commit
 INTERNAL.md
 internal/
+CLAUDE.md
 
 # Secrets
 .env
