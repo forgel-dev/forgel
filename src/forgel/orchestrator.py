@@ -10,9 +10,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shutil
+import socket
 import subprocess
 import sys
+import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -562,17 +567,42 @@ See `docs/program/jurisdiction/requirements.md` and
             "__RECIPE__": project.get("recipe_id") or "",
         }
         refs: list[str] = []
-        for repo_id in ("api", "web", "infra", "e2e"):
-            copy_template(template / repo_id, workspace / repo_id, substitutions)
-            refs.append(repo_id)
+        for name in ("Dockerfile", ".dockerignore", ".gitignore"):
+            source = template / name
+            text = source.read_text(encoding="utf-8")
+            for key, value in substitutions.items():
+                text = text.replace(key, value)
+            write_text(workspace / name, text)
+            refs.append(name)
+        for directory in ("api", "web", "infra", "e2e", "docker", "qa"):
+            copy_template(template / directory, workspace / directory, substitutions)
+            refs.append(directory)
         return refs
 
     def stage_review(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
         checks: list[tuple[str, bool]] = []
 
-        for relative in ("api/app.py", "web/index.html", "e2e/check.py"):
+        for relative in (
+            "api/app.py",
+            "web/index.html",
+            "e2e/check.py",
+            "Dockerfile",
+            "docker/docker-compose.qa.yml",
+            "qa/runner.mjs",
+            "qa/package.json",
+            "qa/scenarios/hello_web.mjs",
+        ):
             checks.append((f"exists: {relative}", (workspace / relative).exists()))
+
+        compose = workspace / "docker" / "docker-compose.qa.yml"
+        if compose.exists():
+            checks.append(
+                (
+                    "compose declares services",
+                    "services:" in compose.read_text(encoding="utf-8"),
+                )
+            )
 
         for relative in ("api/app.py", "e2e/check.py"):
             path = workspace / relative
@@ -584,7 +614,15 @@ See `docs/program/jurisdiction/requirements.md` and
 
         unresolved: list[str] = []
         for path in workspace.rglob("*"):
-            if not path.is_file() or path.suffix not in {".py", ".html", ".md", ".yaml", ".json"}:
+            if not path.is_file() or path.suffix not in {
+                ".py",
+                ".html",
+                ".md",
+                ".yaml",
+                ".json",
+                ".js",
+                ".mjs",
+            }:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
             if "__PROJECT_NAME__" in text or "__PROJECT_ID__" in text:
@@ -614,10 +652,41 @@ See `docs/program/jurisdiction/requirements.md` and
 
     def stage_qa(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
+        runtime = self.settings.qa_runtime
+        if runtime == "auto":
+            runtime = "docker" if self._docker_available() else "local"
+
+        if runtime == "docker":
+            returncode, output, runtime_label = self._run_qa_docker(workspace)
+        else:
+            returncode, output = self._run_qa_local(workspace)
+            runtime_label = "local"
+
+        verdict = "PASS" if returncode == 0 else "FAIL"
+        path = self._docs(project) / "qa-report.md"
+        write_text(
+            path,
+            f"""# QA Report
+
+**Verdict:** {verdict}
+
+**Runtime:** {runtime_label}
+
+**Exit code:** {returncode}
+
+```
+{output.strip()}
+```
+""",
+        )
+        if returncode != 0:
+            raise StageError(f"QA failed with exit code {returncode}: {output}")
+        return [self._ref(project, path)]
+
+    def _run_qa_local(self, workspace: Path) -> tuple[int, str]:
         script = workspace / "e2e" / "check.py"
         if not script.exists():
             raise StageError(f"QA script not found: {script}")
-
         completed = subprocess.run(
             [sys.executable, str(script)],
             cwd=str(workspace / "e2e"),
@@ -629,26 +698,132 @@ See `docs/program/jurisdiction/requirements.md` and
         output = completed.stdout
         if completed.stderr:
             output += "\n" + completed.stderr
-        verdict = "PASS" if completed.returncode == 0 else "FAIL"
-        path = self._docs(project) / "qa-report.md"
-        write_text(
-            path,
-            f"""# QA Report
+        return completed.returncode, output
 
-**Verdict:** {verdict}
+    def _run_qa_docker(self, workspace: Path) -> tuple[int, str, str]:
+        compose = workspace / "docker" / "docker-compose.qa.yml"
+        if not compose.exists():
+            compose = workspace / "compose.yaml"
+        if not compose.exists():
+            raise StageError(f"QA compose file not found in {workspace}")
 
-**Exit code:** {completed.returncode}
-
-```
-{output.strip()}
-```
-""",
+        port = self._free_port()
+        env = {**os.environ, "APP_PORT": str(port)}
+        base_url = f"http://127.0.0.1:{port}"
+        output = f"$ docker compose -f {compose} up -d --build\n"
+        result = subprocess.run(
+            ["docker", "compose", "-f", str(compose), "up", "-d", "--build"],
+            cwd=str(workspace),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
         )
-        if completed.returncode != 0:
-            raise StageError(
-                f"QA failed with exit code {completed.returncode}: {output}"
+        output += result.stdout + result.stderr
+        returncode = result.returncode
+
+        try:
+            if returncode == 0:
+                self._wait_for_url(base_url + "/health")
+                returncode, runner_output = self._run_browser_runner(
+                    workspace, base_url
+                )
+                output += runner_output
+        except Exception as exc:  # noqa: BLE001 - surface the failure in the report
+            output += f"\nQA runtime error: {exc}\n"
+            returncode = 1
+        finally:
+            down = subprocess.run(
+                ["docker", "compose", "-f", str(compose), "down", "-v"],
+                cwd=str(workspace),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
             )
-        return [self._ref(project, path)]
+            output += "\n$ docker compose down -v\n" + down.stdout + down.stderr
+
+        return returncode, output, "docker + headless Chrome"
+
+    def _run_browser_runner(
+        self, workspace: Path, base_url: str
+    ) -> tuple[int, str]:
+        qa_dir = workspace / "qa"
+        runner = qa_dir / "runner.mjs"
+        if not runner.exists():
+            raise StageError(f"Browser QA runner not found: {runner}")
+
+        node = shutil.which("node")
+        npm = shutil.which("npm")
+        if node is None:
+            raise StageError("node is required for the browser QA runner")
+
+        output = ""
+        if npm is not None and not (qa_dir / "node_modules" / "puppeteer-core").exists():
+            install = subprocess.run(
+                [npm, "install", "--no-audit", "--no-fund"],
+                cwd=str(qa_dir),
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            output += "$ npm install\n" + install.stdout + install.stderr
+            if install.returncode != 0:
+                return install.returncode, output
+
+        completed = subprocess.run(
+            [node, str(runner), "--base-url", base_url],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        output += (
+            "\n$ node qa/runner.mjs --base-url ...\n"
+            + completed.stdout
+            + completed.stderr
+        )
+        return completed.returncode, output
+
+    @staticmethod
+    def _docker_available() -> bool:
+        if shutil.which("docker") is None:
+            return False
+        try:
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except OSError:
+            return False
+        return result.returncode == 0
+
+    @staticmethod
+    def _free_port() -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return int(sock.getsockname()[1])
+
+    @staticmethod
+    def _wait_for_url(url: str, timeout: float = 90.0) -> None:
+        deadline = time.monotonic() + timeout
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                with urllib.request.urlopen(url, timeout=2) as response:
+                    if response.status == 200:
+                        return
+            except Exception as exc:  # noqa: BLE001 - retry until the deadline
+                last_error = exc
+            time.sleep(0.5)
+        raise StageError(f"Timed out waiting for {url}: {last_error}")
 
     def stage_acceptance(self, project: dict[str, Any]) -> list[str]:
         docs = self._docs(project)
@@ -768,6 +943,13 @@ See `docs/program/jurisdiction/requirements.md` and
             "api/app.py",
             "web/index.html",
             "e2e/check.py",
+            "Dockerfile",
+            ".dockerignore",
+            ".gitignore",
+            "docker/docker-compose.qa.yml",
+            "qa/runner.mjs",
+            "qa/package.json",
+            "qa/scenarios/hello_web.mjs",
         )
         missing = [item for item in required if not (workspace / item).exists()]
 

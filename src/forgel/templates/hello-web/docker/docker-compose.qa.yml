@@ -1,0 +1,26 @@
+# Isolated QA stand for the generated product.
+#
+# The app runs in Docker. The browser runner runs on the host (or in CI with a
+# Chrome/Chromium available at CHROME_PATH), following the Gapi QA pattern.
+name: hello-web-qa
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8000"
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 30

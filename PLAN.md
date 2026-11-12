@@ -69,7 +69,9 @@ Jurisdiction is part of the product, not a document attached at the end. Forgel 
 - Telegram as Forgel's own interface.
 - One jurisdiction pack: a draft for M0, a more complete pack for M1 (legal review optional).
 - Multi-repo from day one.
-- Independent end-to-end QA.
+- Forgel ships as a Docker image with a Compose quickstart.
+- Generated projects ship a `Dockerfile` and a `compose.yaml`.
+- Independent end-to-end QA in an isolated Compose stand with a headless browser.
 - Staging deploy with human approval.
 - Cost tracking and acceptance metrics from day one.
 
@@ -116,6 +118,8 @@ Jurisdiction is part of the product, not a document attached at the end. Forgel 
 | **D-027** | Legal rules are versioned data with citations, effective dates and a review date; the LLM maps and explains but never certifies | A prompt cannot be an authoritative legal source, and stale law is worse than no law | Each pack has `status`, `reviewed_by`, `review_due`; deterministic checks where possible; ambiguous cases go to human review |
 | **D-028** | Jurisdiction packs are advisory; production approval includes an explicit compliance responsibility acknowledgement | A draft pack is better than an ignored jurisdiction, and small teams cannot fund legal review for every project | The system records the pack, its status and the disclaimer; it does not block on a missing or draft pack; the human who approves production carries responsibility |
 | **D-029** | Context files: `FORGEL.md` is native, `AGENTS.md` is the cross-harness canon, `CLAUDE.md` is a local compatibility shim | One source of truth avoids drift; a public `CLAUDE.md` advertises another harness and contradicts dogfooding | Forgel reads `FORGEL.md` → `AGENTS.md` → `CLAUDE.md`; generated projects get `FORGEL.md` + `AGENTS.md`, never `CLAUDE.md` |
+| **D-030** | Docker is the default execution substrate: the core defines a sandbox contract, Docker/Compose is the reference implementation, providers and QA drivers are plugins | Reproducible environments, dev/QA/prod parity, one-command self-host, and isolated E2E runs | Forgel ships as a Docker image; generated projects get `Dockerfile` + `compose.yaml`; QA runs in an isolated Compose stand; the sandbox interface allows other runtimes later |
+| **D-031** | The browser engine is a QA driver plugin: Playwright/Chromium is the default; Lightpanda is an experimental CDP driver for non-visual checks | Visual QA needs rendering and screenshots; Lightpanda is much lighter but has no graphical rendering, ships nightly, and is AGPL | Scenarios are driver-agnostic; Chromium is used for visual checks; Lightpanda is evaluated on real scenarios before adoption |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -149,7 +153,7 @@ Business-model and jurisdiction decisions are not part of this public document. 
 │ EXECUTION PLANE                                              │
 │  Agent runtime (model routing, context assembly, tools)      │
 │  Plugin host (isolated processes, capability grants)         │
-│  Sandbox (containers, egress policy, ephemeral credentials)  │
+│  Sandbox runtime (Docker/Podman, isolated network, ephemeral) │
 └───────────────────────────┬──────────────────────────────────┘
                             │ commits / deploys / metrics
 ┌───────────────────────────▼──────────────────────────────────┐
@@ -181,6 +185,7 @@ forgel/            # engine repository
   AGENTS.md        # cross-harness instruction canon
   FORGEL.md        # native Forgel instructions
   core/            # orchestrator, ledger, gates, runtime
+  sandbox-docker/  # Docker/Podman sandbox contract + reference runtime
   plugin-sdk/      # manifest schemas, conformance kit
   plugins/
     official/
@@ -275,8 +280,9 @@ Repo-level artifacts and hierarchy rules are in §7.3.
 |---|---|
 | `stack` | repo template, conventions, build/test/lint commands |
 | `frontend` | SPA template, build, e2e selectors |
+| `sandbox` | container runtime: Docker/Podman, Compose stand, resource limits |
 | `provider` | provision, deploy, verify, rollback, destroy, observe |
-| `qa` | E2E driver (Playwright, Android/iOS later) |
+| `qa` | E2E driver (Playwright/Chromium, Lightpanda, Maestro later) |
 | `model` | OpenAI-compatible endpoint |
 | `channel` | Forgel interface (Telegram) |
 | `domain` | domain checklists and constraints |
@@ -449,7 +455,7 @@ Rules are data, not prompts. Deterministic checks are preferred; ambiguous cases
 | 7 | Spec review | spec + brief + jurisdiction | findings | Spec reviewer | G3 |
 | 8 | Dev | spec | code + unit tests | Developer | — |
 | 9 | Code review | diff + spec | verdict | Reviewer | G4 |
-| 10 | QA | staging + spec + compliance checks | E2E + compliance report | QA | G5 |
+| 10 | QA | Compose stand + spec + compliance checks | E2E + compliance report | QA | G5 |
 | 11 | Acceptance | change set + held-out + integration + evidence | verdict + production readiness | Acceptor | G6 |
 | 12 | Pre-release audit | release train + jurisdiction report | report | Auditor | G7 |
 | 13 | Human gates | — | legal review, entity, payments, stores, production | User | G8 |
@@ -486,6 +492,7 @@ Practices proven in production; Forgel inherits them as role, document and gate 
 | Reviewer builds a requirement → code → evidence traceability matrix and returns PASS/NEEDS_WORK/FAIL | Gate G4 |
 | An acceptance checkbox is a fact: ticked only after all runs and review approval; unverifiable items stay unticked with a note | Gate G6 |
 | Auto-QA: a scenario must assert (`check()`, exit code, console/pageerror); isolated stand; database reset before each scenario; one full run at release, recorded | QA suite generation |
+| Browser QA runner: isolated Compose stand, headless Chrome, scenario modules, console/pageerror capture | QA stage in Docker; non-zero exit on any failure |
 | A repeated full run is refused by the runner, not by prose | D-023 |
 | Release plan: `[ ] [~] [x] [-]` statuses, links added as they appear, a verdict for every open item, no silent carry-over | Release train |
 | Preflight audit: parallel agents over areas, diff against the tag, regressions/security/migrations/N+1, external APIs checked against source, critical/major fixed or accepted by the owner | Gate G7 |
@@ -540,6 +547,9 @@ qa/held-out/            # never read by the dev agent
 ```
 FORGEL.md               # native instructions, read first
 AGENTS.md               # cross-harness canon
+Dockerfile              # the product image
+compose.yaml            # local stand, including QA services
+.dockerignore
 docs/requirements.md
 docs/features/<timestamp>_<name>.md
 docs/process/*.md       # from Forgel templates
@@ -633,6 +643,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - End-to-end hello world: brief → repo → commit → staging URL.
 - Repository, licenses, CONTRIBUTING/DCO, documentation skeleton.
 - One draft jurisdiction pack; production is allowed with the compliance acknowledgement.
+- Forgel Docker image + Compose quickstart; generated `hello-web` runs in Compose; QA runs in Docker.
 - **Exit:** the process reaches staging with no manual action except approval; production readiness is reported honestly.
 
 ### M1 — Vertical Slice and Public OSS Alpha (up to 3 months)
@@ -643,6 +654,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - 10–20 features of one reference product (B2B SaaS or marketplace).
 - Public repository, one-line install, documentation, Output License.
 - A usable RU jurisdiction pack with default requirements and the compliance acknowledgement; legal review is optional.
+- Playwright/Chromium E2E in the Compose stand; visual checks and screenshots.
 - **Exit:** 3–5 pilot projects; 100+ installs; the §9 metrics measured.
 
 ### M2 — Plugins and Ecosystem (4–6 months)
@@ -651,6 +663,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - A second cloud (international) — the main test of the abstraction; then a second stack (FastAPI).
 - Recipes as data; catalog updates without a core release.
 - A second jurisdiction pack with conformance tests; packs are added without core changes.
+- Lightpanda driver evaluation for non-visual checks; Chromium remains the default.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -677,6 +690,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 | Q2 | Secrets in self-host | env, vault, cloud KMS | Start with env + instructions; KMS in M3 |
 | Q3 | Openness of the hosted control plane | open AGPL, closed, open-core | Open AGPL: monetization is hosting and support, not code |
 | Q4 | How to source and maintain jurisdiction packs | in-house legal, partner counsel, community + maintainer sign-off | Open data + a named reviewer when available; drafts are acceptable and carry the disclaimer |
+| Q5 | Default browser engine | Playwright/Chromium, Lightpanda | Chromium for visual checks; Lightpanda experimental for non-visual CDP checks |
 
 Business-model questions are kept separately.
 
@@ -697,6 +711,10 @@ Business-model questions are kept separately.
 | Literal transfer of repo-level rules to the meta level | High | §7.2 inverts the rules; plan review checks that cross-repo dependencies are explicit |
 | Outdated jurisdiction pack | High | `review_due` warnings, a visible pack status, and the compliance acknowledgement; the layer never silently disappears |
 | False sense of compliance | High | Deterministic checks where possible, an explicit disclaimer, no LLM certification, and human responsibility at the production gate |
+| Docker socket / privileged access | High | Separate sandbox runner, rootless containers, no host socket in generated projects |
+| Image size and cold start | Medium | Slim base images, multi-stage builds, an image-size budget |
+| Headless browser flakiness | Medium | Driver-agnostic scenarios, retries, traces and screenshots on failure |
+| Lightpanda maturity and AGPL | Medium | Experimental driver only; Chromium default; license notices |
 
 ---
 
@@ -710,6 +728,8 @@ By the end of M1:
 - 100+ OSS installs, 10+ external issues/PRs.
 - Every accepted change set has acceptance evidence: criteria, runs, review.
 - Every production deploy records the jurisdiction pack, its review status and the user's compliance acknowledgement.
+- `docker compose run --rm forgel demo` works on a clean machine.
+- The generated product's E2E runs in Compose with a headless browser.
 
 By the end of M2:
 

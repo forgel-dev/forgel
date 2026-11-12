@@ -20,6 +20,7 @@ class EndToEndTest(unittest.TestCase):
                 registry_path=REPO_ROOT / "registry" / "recipes.json",
                 templates_path=REPO_ROOT / "src" / "forgel" / "templates",
                 jurisdiction_path=REPO_ROOT / "jurisdiction",
+                qa_runtime="local",
             )
             ledger = Ledger(settings.db_path)
             self.addCleanup(ledger.close)
@@ -45,6 +46,10 @@ class EndToEndTest(unittest.TestCase):
             self.assertTrue((workspace / "api/app.py").exists())
             self.assertTrue((workspace / "web/index.html").exists())
             self.assertTrue((workspace / "e2e/check.py").exists())
+            self.assertTrue((workspace / "Dockerfile").exists())
+            self.assertTrue((workspace / "docker/docker-compose.qa.yml").exists())
+            self.assertTrue((workspace / "qa/runner.mjs").exists())
+            self.assertTrue((workspace / "qa/scenarios/hello_web.mjs").exists())
             self.assertTrue(
                 (workspace / "docs/program/jurisdiction/profile.json").exists()
             )
@@ -76,6 +81,7 @@ class EndToEndTest(unittest.TestCase):
 
             qa = (workspace / "docs/program/qa-report.md").read_text(encoding="utf-8")
             self.assertIn("**Verdict:** PASS", qa)
+            self.assertIn("**Runtime:** local", qa)
             self.assertIn("SUMMARY: 4/4 checks passed", qa)
 
             acceptance = (
@@ -90,6 +96,7 @@ class EndToEndTest(unittest.TestCase):
                 registry_path=REPO_ROOT / "registry" / "recipes.json",
                 templates_path=REPO_ROOT / "src" / "forgel" / "templates",
                 jurisdiction_path=REPO_ROOT / "jurisdiction",
+                qa_runtime="local",
             )
             ledger = Ledger(settings.db_path)
             self.addCleanup(ledger.close)

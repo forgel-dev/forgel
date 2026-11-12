@@ -32,7 +32,7 @@ def copy_template(
     """Copy a text-only template tree, replacing placeholders in every file."""
 
     for item in sorted(source.rglob("*")):
-        if "__pycache__" in item.parts:
+        if "__pycache__" in item.parts or "node_modules" in item.parts:
             continue
         relative = item.relative_to(source)
         target = destination / relative

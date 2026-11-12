@@ -19,6 +19,7 @@ class Settings:
     registry_path: Path
     templates_path: Path
     jurisdiction_path: Path
+    qa_runtime: str = "auto"
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -35,11 +36,17 @@ class Settings:
         jurisdiction_path = Path(
             os.environ.get("FORGEL_JURISDICTIONS", repo_root / "jurisdiction")
         )
+        qa_runtime = os.environ.get("FORGEL_QA_RUNTIME", "auto").lower()
+        if qa_runtime not in {"auto", "docker", "local"}:
+            raise ValueError(
+                "FORGEL_QA_RUNTIME must be one of: auto, docker, local"
+            )
         return cls(
             home=home_path.expanduser().resolve(),
             registry_path=registry_path.expanduser().resolve(),
             templates_path=templates_path,
             jurisdiction_path=jurisdiction_path.expanduser().resolve(),
+            qa_runtime=qa_runtime,
         )
 
     @property

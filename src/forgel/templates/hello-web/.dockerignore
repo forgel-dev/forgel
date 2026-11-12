@@ -1,0 +1,6 @@
+**/__pycache__
+**/*.pyc
+qa
+e2e
+docs
+.git

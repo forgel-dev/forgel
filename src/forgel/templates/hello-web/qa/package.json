@@ -1,0 +1,11 @@
+{
+  "name": "hello-web-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "node runner.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.0.0"
+  }
+}

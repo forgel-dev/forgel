@@ -27,6 +27,12 @@ Run the tests:
 make test
 ```
 
+Run the core from the Docker image:
+
+```bash
+docker compose run --rm forgel demo
+```
+
 ## What it will do
 
 - Chat interface (Telegram) → requirements → a validated recipe (stack + cloud + integrations).

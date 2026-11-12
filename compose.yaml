@@ -1,0 +1,19 @@
+name: forgel
+
+services:
+  forgel:
+    build: .
+    image: forgel:local
+    environment:
+      FORGEL_HOME: /data
+      FORGEL_REGISTRY: /app/registry/recipes.json
+      FORGEL_JURISDICTIONS: /app/jurisdiction
+      # The core runs QA in-process inside this container. For containerized
+      # QA, run the CLI on the host or attach a sandbox runner (M1).
+      FORGEL_QA_RUNTIME: local
+    volumes:
+      - forgel-data:/data
+    command: ["demo"]
+
+volumes:
+  forgel-data:

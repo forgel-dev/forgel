@@ -1,0 +1,7 @@
+.git
+.forgel-demo
+INTERNAL.md
+CLAUDE.md
+**/__pycache__
+**/*.pyc
+tests
