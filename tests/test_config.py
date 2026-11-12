@@ -35,6 +35,8 @@ class ProjectConfigTest(unittest.TestCase):
             self.assertEqual(config.budget.per_project_usd, 300.0)
             self.assertFalse(config.release.auto_patch)
             self.assertFalse(config.release.propose_minor)
+            self.assertTrue(config.simplicity.enabled)
+            self.assertEqual(config.simplicity.max_added_lines, 400)
 
     def test_missing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -81,6 +83,18 @@ class ProjectConfigTest(unittest.TestCase):
             )
             with self.assertRaises(ConfigError):
                 load_project_config(Path(tmp))
+
+    def test_simplicity_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "forgel.toml").write_text(
+                "[simplicity]\nenabled = false\nmax_added_lines = 50\n",
+                encoding="utf-8",
+            )
+            config = load_project_config(Path(tmp))
+            self.assertIsNotNone(config)
+            assert config is not None
+            self.assertFalse(config.simplicity.enabled)
+            self.assertEqual(config.simplicity.max_added_lines, 50)
 
 
 if __name__ == "__main__":

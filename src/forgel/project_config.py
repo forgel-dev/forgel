@@ -47,6 +47,14 @@ class ReleaseConfig:
 
 
 @dataclass(frozen=True)
+class SimplicityConfig:
+    enabled: bool = True
+    max_added_lines: int = 400
+    max_new_config_keys: int = 2
+    max_compat_markers: int = 0
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str | None
     recipe: str | None
@@ -55,6 +63,7 @@ class ProjectConfig:
     models: ModelsConfig
     budget: BudgetConfig
     release: ReleaseConfig
+    simplicity: SimplicityConfig
 
 
 def render_project_config(
@@ -68,6 +77,10 @@ def render_project_config(
     per_project_usd: float = 300.0,
     auto_patch: bool = False,
     propose_minor: bool = False,
+    simplicity_enabled: bool = True,
+    max_added_lines: int = 400,
+    max_new_config_keys: int = 2,
+    max_compat_markers: int = 0,
 ) -> str:
     return f"""[project]
 name = "{name}"
@@ -90,6 +103,12 @@ per_project_usd = {per_project_usd:g}
 [release]
 auto_patch = {str(auto_patch).lower()}
 propose_minor = {str(propose_minor).lower()}
+
+[simplicity]
+enabled = {str(simplicity_enabled).lower()}
+max_added_lines = {max_added_lines}
+max_new_config_keys = {max_new_config_keys}
+max_compat_markers = {max_compat_markers}
 """
 
 
@@ -115,6 +134,7 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     models = _section(data, "models")
     budget = _section(data, "budget")
     release = _section(data, "release")
+    simplicity = _section(data, "simplicity")
 
     runtime = str(qa.get("runtime", "auto"))
     if runtime not in VALID_QA_RUNTIMES:
@@ -132,6 +152,15 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     if not isinstance(auto_patch, bool) or not isinstance(propose_minor, bool):
         raise ConfigError("forgel.toml: [release] values must be booleans")
 
+    simplicity_enabled = simplicity.get("enabled", True)
+    if not isinstance(simplicity_enabled, bool):
+        raise ConfigError("forgel.toml: simplicity.enabled must be a boolean")
+    max_added_lines = int(simplicity.get("max_added_lines", 400))
+    max_new_config_keys = int(simplicity.get("max_new_config_keys", 2))
+    max_compat_markers = int(simplicity.get("max_compat_markers", 0))
+    if min(max_added_lines, max_new_config_keys, max_compat_markers) < 0:
+        raise ConfigError("forgel.toml: simplicity limits must be non-negative")
+
     return ProjectConfig(
         name=str(project["name"]) if "name" in project else None,
         recipe=str(project["recipe"]) if "recipe" in project else None,
@@ -148,5 +177,11 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
         release=ReleaseConfig(
             auto_patch=auto_patch,
             propose_minor=propose_minor,
+        ),
+        simplicity=SimplicityConfig(
+            enabled=simplicity_enabled,
+            max_added_lines=max_added_lines,
+            max_new_config_keys=max_new_config_keys,
+            max_compat_markers=max_compat_markers,
         ),
     )

@@ -23,11 +23,16 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import copy_template, read_json, write_json, write_text
+from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .intake import build_requirements
 from .jurisdiction import resolve_pack
 from .ledger import Ledger
-from .project_config import load_project_config, render_project_config
+from .project_config import (
+    SimplicityConfig,
+    load_project_config,
+    render_project_config,
+)
 from .registry import load_registry, select_recipe
 from .state import next_stage, stages_from
 
@@ -741,6 +746,14 @@ See `docs/program/jurisdiction/requirements.md` and
             )
         checks: list[tuple[str, bool]] = []
 
+        config = load_project_config(workspace)
+        simplicity = (
+            config.simplicity if config is not None else SimplicityConfig()
+        )
+        metrics = measure_patch(workspace)
+        violations = evaluate(metrics, simplicity)
+        complexity_path = write_report(workspace, metrics, violations)
+
         for relative in (
             "api/app.py",
             "web/index.html",
@@ -790,6 +803,7 @@ See `docs/program/jurisdiction/requirements.md` and
             if "__PROJECT_NAME__" in text or "__PROJECT_ID__" in text:
                 unresolved.append(str(path.relative_to(workspace)))
         checks.append(("no unresolved template placeholders", not unresolved))
+        checks.append(("simplicity budget", not violations))
 
         failed = [name for name, passed in checks if not passed]
         verdict = "PASS" if not failed else "FAIL"
@@ -807,10 +821,15 @@ See `docs/program/jurisdiction/requirements.md` and
         )
         if unresolved:
             lines.extend(["", "Unresolved placeholders: " + ", ".join(unresolved)])
+        if violations:
+            lines.extend(
+                ["", "## Simplicity Violations", ""]
+                + [f"- {item}" for item in violations]
+            )
         write_text(path, "\n".join(lines) + "\n")
         if failed:
             raise StageError(f"Review failed: {failed}")
-        return [self._ref(project, path)]
+        return [self._ref(project, path), self._ref(project, complexity_path)]
 
     def stage_qa(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
@@ -1110,6 +1129,7 @@ See `docs/program/jurisdiction/requirements.md` and
             FEATURE_REL,
             "docs/program/spec-review.md",
             "docs/program/review.md",
+            "docs/program/complexity/report.md",
             "docs/program/qa-report.md",
             "docs/program/acceptance/0001_hello-web.md",
             "docs/program/jurisdiction/profile.json",

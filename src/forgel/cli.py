@@ -13,11 +13,16 @@ from typing import Sequence
 
 from . import __version__
 from .artifacts import ensure_dir, read_json
+from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .context import effective_context, resolve_context
 from .daemon import run_daemon
 from .ledger import Ledger, new_project_id
-from .project_config import ConfigError, load_project_config
+from .project_config import (
+    ConfigError,
+    SimplicityConfig,
+    load_project_config,
+)
 from .proposals import ProposalError, list_proposals, propose_project
 from .orchestrator import Orchestrator, StageError
 from .sync import SyncError, reconcile_project, sync_project
@@ -321,6 +326,45 @@ def cmd_context(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_complexity(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        workspace = Path(project["workspace"])
+        try:
+            config = load_project_config(workspace)
+        except ConfigError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        simplicity = config.simplicity if config is not None else SimplicityConfig()
+        metrics = measure_patch(workspace)
+        violations = evaluate(metrics, simplicity)
+        path = write_report(workspace, metrics, violations)
+        print(f"report: {path.relative_to(workspace)}")
+        print(
+            f"added: {metrics.added_lines}, removed: {metrics.removed_lines}, "
+            f"files: {metrics.files_changed}"
+        )
+        print(
+            f"new config keys: {metrics.new_config_keys}, "
+            f"compat markers: {metrics.compat_markers}, "
+            f"branches: {metrics.branches_added}"
+        )
+        if violations:
+            print("NEEDS_SIMPLIFICATION")
+            for item in violations:
+                print(f"- {item}")
+            return 1
+        print("PASS")
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_propose(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -522,6 +566,13 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--raw", action="store_true")
     context.add_argument("--home", default=None)
     context.set_defaults(func=cmd_context)
+
+    complexity = subparsers.add_parser(
+        "complexity", help="Measure the patch against the simplicity budget"
+    )
+    complexity.add_argument("project_id")
+    complexity.add_argument("--home", default=None)
+    complexity.set_defaults(func=cmd_complexity)
 
     propose = subparsers.add_parser(
         "propose", help="Create a post-release change proposal"

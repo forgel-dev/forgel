@@ -133,6 +133,9 @@ Forgel runs as a long-lived control-plane process. It never polishes endlessly: 
 | **D-037** | Every iteration has a budget cap and stops on exhaustion | Unbounded retries and improvement cycles are the main cost risk | Budget from `forgel.toml`; exhaustion stops the iteration, records the verdict and leaves deferred work explicit |
 | **D-038** | After the user's goal is met, Forgel proposes only PATCH fixes by default; MINOR is opt-in and MAJOR is human-initiated | The product is done when it meets its requirements; endless polishing burns budget and loses control | SemVer classifies every post-release proposal; the default is a proposal with evidence, not an automatic change |
 | **D-039** | Automatic PATCH application is opt-in and off by default | Automatic changes after the goal carry regression and infinite-loop risk | `release.auto_patch = true` enables it; proposals without approval are recorded, not applied |
+| **D-040** | Simplicity is a gate: every patch has a complexity budget for added lines, new config keys and compatibility markers | Models accumulate requirements, branches and shims; complexity compounds and becomes unmaintainable | Review fails over budget until the patch is simplified, the spec is changed, or the budget is consciously adjusted |
+| **D-041** | A clean-context Simplicity Arbiter reviews necessity, not just correctness | The developer's context normalises its own complexity; an independent role can ask whether a branch, flag or shim should exist at all | The arbiter reads the spec, diff and complexity report, and returns simplify / accept / escalate |
+| **D-042** | The arbiter auto-applies safe internal simplifications, asks only on user-visible, irreversible or ambiguous changes, and records every decision | Asking on every change breaks automation; deciding everything silently loses control | Dead-code, unused-flag and unclaimed-shim removals are automatic; user-visible behavior, public contracts, money, legal and data-model changes are escalated; the rest is decided and recorded in an ADR |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -276,6 +279,8 @@ docs/program/
   external-changes.md
   iterations/<id>/close.md
   proposals/<id>.md
+  complexity/{report.md,metrics.json}
+  simplicity/<id>.md
   jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
   adr/NNNN-*.md
   releases/<train>/{plan,qa,post_release}.md
@@ -556,6 +561,8 @@ docs/program/
   external-changes.md
   iterations/<id>/close.md
   proposals/<id>.md
+  complexity/{report.md,metrics.json}
+  simplicity/<id>.md
   jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
   adr/NNNN-*.md
   releases/<train>/{plan,qa,post_release}.md
@@ -630,6 +637,12 @@ per_project_usd = 300
 [release]
 auto_patch = false       # apply PATCH fixes automatically (risky; off by default)
 propose_minor = false    # also propose MINOR improvements
+
+[simplicity]
+enabled = true
+max_added_lines = 400
+max_new_config_keys = 2
+max_compat_markers = 0
 ```
 
 `forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
@@ -698,6 +711,42 @@ SemVer governs the proposal class:
 
 Proposals are written to `docs/program/proposals/<id>.md` and delivered through the chat channel (Telegram in the MVP): what was found, the evidence, the proposed class and the risk. An approved proposal becomes a change set with its own acceptance criteria and budget.
 
+### 7.8 Simplicity and Complexity Control
+
+Coding models tend to accumulate requirements, branches, flags and backward-compatibility shims. Complexity compounds; a product that is "done" can become unmaintainable. Forgel treats simplicity as a gate, not a preference.
+
+**Deterministic pre-filter.** Before review, count the patch since the generated baseline:
+
+- added and removed lines;
+- new files;
+- new configuration keys in `forgel.toml`;
+- compatibility markers (`deprecated`, `legacy`, `compat`, `backward`);
+- added branches.
+
+The budget lives in `[simplicity]` in `forgel.toml`. Exceeding it fails the review gate. The result is in `docs/program/complexity/report.md`; the metrics are in `metrics.json`. `forgel complexity <id>` recomputes the report.
+
+**Simplicity Arbiter.** A clean-context role, independent of the developer. It reads the spec, the diff and the complexity report — never the developer's reasoning. It returns:
+
+- **SIMPLIFY** with a concrete smaller alternative;
+- **ACCEPT** with a rationale;
+- **ESCALATE** to the user.
+
+**Decision policy.** The arbiter has default authority for safe, internal, reversible simplifications:
+
+- remove dead code, unused flags, duplicate abstractions and over-general configuration;
+- remove a compatibility shim when no consumer is named (supported version, telemetry, or contract);
+- replace a one-off flag or branch with a spec/recipe change when the behavior is unchanged.
+
+It asks the user only when the change is user-visible, changes a public contract or data model, touches money, legal or compliance, is irreversible, or the requirements genuinely conflict. Otherwise it decides and records the decision in an ADR; the user receives one digest per iteration, not a question per change.
+
+**Rules:**
+
+- No speculative generality: a new flag, abstraction or branch needs a second consumer or an explicit requirement ID.
+- No backward-compatibility shim without a named consumer and a removal date.
+- Prefer changing the task framing over adding a branch.
+- Reserve part of each iteration for deletion and simplification; track the net complexity delta.
+- A budget exception is a recorded decision, never a silent override.
+
 ---
 
 ## 8. Gates
@@ -738,6 +787,9 @@ Proposals are written to `docs/program/proposals/<id>.md` and delivered through 
 | PATCH proposals with evidence | 100% |
 | Unapproved automatic patches | 0 |
 | MINOR proposals without opt-in | 0 |
+| Budget violations without a recorded decision | 0 |
+| New config knobs without a second consumer | 0 |
+| Net complexity delta per iteration | ≤ 0 or justified in an ADR |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -777,6 +829,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Adopt an existing repository and reconcile external changes; no reset or full regeneration.
 - Daemon mode and iteration close verdicts.
 - Proposal artifacts and the default PATCH-only post-release policy.
+- Deterministic complexity gate in review.
 - **Exit:** 3–5 pilot projects; 100+ installs; the §9 metrics measured.
 
 ### M2 — Plugins and Ecosystem (4–6 months)
@@ -788,6 +841,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Lightpanda driver evaluation for non-visual checks; Chromium remains the default.
 - Post-release triage policy enforced: auto-fix, ask user, record/defer.
 - Opt-in automatic PATCH application and metrics-driven MINOR proposals.
+- Simplicity Arbiter agent with auto-simplification classes and a decision digest.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -818,6 +872,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 | Q6 | How to reconcile external changes | git diff + drift report + human approval | Record and reconcile, never regenerate; update the spec and acceptance only after review |
 | Q7 | Post-release auto-fix thresholds | severity, reversibility, confidence | Money-path and critical security defects auto-fix; ambiguous or risky changes ask; low-signal issues are recorded |
 | Q8 | Where proposals are delivered and approved | Telegram, web | Telegram for the MVP; approval is recorded in the proposal |
+| Q9 | Simplicity thresholds and arbiter authority | per-patch budget; auto-internal; ask-visible | Default budgets; the arbiter auto-applies internal simplifications and escalates user-visible or irreversible ones |
 
 Business-model questions are kept separately.
 
@@ -847,6 +902,9 @@ Business-model questions are kept separately.
 | Auto-fix causes a regression | High | Auto-fix only high-confidence, reversible findings; canary and rollback; human approval for production |
 | Automatic PATCH loop / loss of control | High | Off by default; budget and iteration caps; approval required unless explicitly enabled |
 | MINOR proposal noise | Medium | Opt-in only; proposals need evidence and a finite scope |
+| Arbiter over-simplifies and removes needed behavior | High | Acceptance tests, no user-visible auto changes, decision ledger, revert |
+| Complexity gate false positives | Medium | Configurable thresholds, `enabled = false`, arbiter override with a recorded rationale |
+| Metric gaming | Medium | Multiple metrics, arbiter review, ADR for every exception |
 
 ---
 
@@ -865,6 +923,7 @@ By the end of M1:
 - A project modified by hand or another harness can be resumed without resetting the process.
 - Every iteration ends with a recorded verdict: goal met, budget exhausted, blocked, or cancelled.
 - Every post-release proposal carries its SemVer class, evidence, risk and approval state.
+- Every complexity-budget violation has a recorded decision: simplify, accept with a rationale, or change the spec.
 
 By the end of M2:
 

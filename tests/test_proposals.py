@@ -11,6 +11,7 @@ from forgel.project_config import (
     ProjectConfig,
     QAConfig,
     ReleaseConfig,
+    SimplicityConfig,
 )
 from forgel.proposals import ProposalError, list_proposals, propose_project
 
@@ -28,6 +29,7 @@ def _config(
         release=ReleaseConfig(
             auto_patch=auto_patch, propose_minor=propose_minor
         ),
+        simplicity=SimplicityConfig(),
     )
 
 

@@ -45,6 +45,9 @@ class EndToEndTest(unittest.TestCase):
                 (workspace / "docs/program/iterations/1/close.md").exists()
             )
             self.assertTrue(
+                (workspace / "docs/program/complexity/report.md").exists()
+            )
+            self.assertTrue(
                 (workspace / "docs/program/acceptance/0001_hello-web.md").exists()
             )
             self.assertTrue((workspace / "api/app.py").exists())
