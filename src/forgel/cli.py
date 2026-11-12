@@ -16,7 +16,7 @@ from .artifacts import ensure_dir, read_json
 from .config import Settings
 from .ledger import Ledger, new_project_id
 from .orchestrator import Orchestrator, StageError
-from .sync import SyncError, sync_project
+from .sync import SyncError, reconcile_project, sync_project
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$")
 
@@ -180,21 +180,75 @@ def cmd_sync(args: argparse.Namespace) -> int:
                 args.project_id,
                 from_stage=args.from_stage,
                 force=args.force,
+                decision=args.decision,
+                notes=args.notes,
             )
         except (SyncError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        if result["started"]:
+        if result.get("started"):
+            decision = result.get("decision") or "forced"
             print(
-                f"External changes: {result['count']} file(s). "
+                f"Reconciliation applied: {decision}. "
                 f"Generation {result['generation']} started; "
                 f"re-run from {result['from_stage']}."
             )
             print(f"Run: forgel run {args.project_id}")
-        else:
+        elif result.get("pending"):
+            analysis = result.get("analysis", {})
             print(
-                f"No external changes detected (generation {result['generation']})."
+                f"External changes: {result['count']} file(s). "
+                "Decision required."
             )
+            labels = (
+                ("Violations", "violations"),
+                ("Requirements changed", "requirements"),
+                ("Documented modifications", "documented"),
+                ("Undocumented changes", "undocumented"),
+                ("Deletions", "deletions"),
+            )
+            for label, key in labels:
+                items = analysis.get(key, [])
+                if items:
+                    print(f"  {label}: {len(items)}")
+            print(f"See {result.get('reconciliation')}.")
+            print(
+                f"Run: forgel reconcile {args.project_id} "
+                "--decision accept|fix|rollback|ignore [--notes ...]"
+            )
+        else:
+            print("No external changes detected.")
+        return 0
+    finally:
+        ledger.close()
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        try:
+            result = reconcile_project(
+                Path(project["workspace"]),
+                ledger,
+                args.project_id,
+                decision=args.decision,
+                notes=args.notes,
+                from_stage=args.from_stage,
+            )
+        except (SyncError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"Reconciliation: {result['decision']} ({result['status']}). "
+            f"Generation {result['generation']} started; "
+            f"re-run from {result['from_stage']}."
+        )
+        print(f"Run: forgel run {args.project_id}")
         return 0
     finally:
         ledger.close()
@@ -284,8 +338,33 @@ def build_parser() -> argparse.ArgumentParser:
         help="Stage to re-run from (default: review)",
     )
     sync.add_argument("--force", action="store_true")
+    sync.add_argument(
+        "--decision",
+        choices=["accept", "fix", "rollback", "ignore"],
+        default=None,
+    )
+    sync.add_argument("--notes", default="")
     sync.add_argument("--home", default=None)
     sync.set_defaults(func=cmd_sync)
+
+    reconcile = subparsers.add_parser(
+        "reconcile", help="Apply a decision to a pending reconciliation"
+    )
+    reconcile.add_argument("project_id")
+    reconcile.add_argument(
+        "--decision",
+        choices=["accept", "fix", "rollback", "ignore"],
+        required=True,
+    )
+    reconcile.add_argument("--notes", default="")
+    reconcile.add_argument(
+        "--from",
+        dest="from_stage",
+        default="review",
+        help="Stage to re-run from (default: review)",
+    )
+    reconcile.add_argument("--home", default=None)
+    reconcile.set_defaults(func=cmd_reconcile)
 
     serve = subparsers.add_parser("serve", help="Serve the generated staging app")
     serve.add_argument("project_id")

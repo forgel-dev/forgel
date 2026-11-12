@@ -54,6 +54,15 @@ class Orchestrator:
         if project is None:
             raise StageError(f"Unknown project: {project_id}")
 
+        reconciliation = self._docs(project) / "reconciliation.md"
+        if reconciliation.exists() and "- Status: pending" in reconciliation.read_text(
+            encoding="utf-8"
+        ):
+            raise StageError(
+                "Pending reconciliation; run `forgel reconcile <id> "
+                "--decision accept|fix|rollback|ignore` first."
+            )
+
         state = self.ledger.checkpoint_state(project_id)
         if state is None:
             start = "intake"
@@ -506,6 +515,16 @@ from a brief to a running staging artifact.
 - NFR-2: The acceptance check runs in under 10 seconds.
 - NFR-3: The app binds to `127.0.0.1` by default.
 
+## Affected Files
+
+- `api/app.py`
+- `web/index.html`
+- `e2e/check.py`
+- `Dockerfile`
+- `docker/docker-compose.qa.yml`
+- `qa/runner.mjs`
+- `qa/scenarios/hello_web.mjs`
+
 ## Jurisdiction Requirements
 
 - Pack: `{pack_ref}` ({profile['status']})
@@ -548,6 +567,7 @@ See `docs/program/jurisdiction/requirements.md` and
             "## Goals",
             "## Non-Goals",
             "## Functional Requirements",
+            "## Affected Files",
             "## Jurisdiction Requirements",
             "## Acceptance Criteria",
             "## Open Questions",
@@ -677,6 +697,13 @@ See `docs/program/jurisdiction/requirements.md` and
 
     def stage_review(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
+        reconciliation = self._docs(project) / "reconciliation.md"
+        if reconciliation.exists() and "- Status: fix_required" in reconciliation.read_text(
+            encoding="utf-8"
+        ):
+            raise StageError(
+                "A reconciliation fix is required; see docs/program/reconciliation.md"
+            )
         checks: list[tuple[str, bool]] = []
 
         for relative in (
@@ -933,6 +960,14 @@ See `docs/program/jurisdiction/requirements.md` and
         )
         review_label = jurisdiction.get("legal_review_status", "unknown")
 
+        reconciliation = docs / "reconciliation.md"
+        reconciliation_status = "none"
+        if reconciliation.exists():
+            for line in reconciliation.read_text(encoding="utf-8").splitlines():
+                if line.startswith("- Status:"):
+                    reconciliation_status = line.split(":", 1)[1].strip()
+                    break
+
         summary = re.search(r"SUMMARY: (\d+)/(\d+) checks passed", qa)
         passed_count = int(summary.group(1)) if summary else 0
         total_count = int(summary.group(2)) if summary else 0
@@ -957,6 +992,8 @@ See `docs/program/jurisdiction/requirements.md` and
                 "production_allowed" in jurisdiction
                 and "acknowledgement_required" in jurisdiction
             ),
+            "Reconciliation resolved": reconciliation_status
+            not in {"pending", "fix_required"},
         }
         failed = [name for name, passed in checks.items() if not passed]
         verdict = "PASS" if not failed else "FAIL"
@@ -979,6 +1016,7 @@ See `docs/program/jurisdiction/requirements.md` and
             "Jurisdiction profile present": "`docs/program/jurisdiction/profile.json`",
             "Jurisdiction disclaimer present": "`docs/program/jurisdiction/disclaimer.md`",
             "Jurisdiction gate evaluated": "`docs/program/jurisdiction/requirements.md`",
+            "Reconciliation resolved": "`docs/program/reconciliation.md`",
         }
         lines.extend(
             f"| {name} | {evidence.get(name, '—')} | "
@@ -998,6 +1036,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 f"Production allowed: **{'yes' if production_allowed else 'no'}** "
                 f"(human acknowledgement required: **{'yes' if acknowledgement_required else 'no'}**).",
                 f"Legal review: `{review_label}`.",
+                f"Reconciliation: `{reconciliation_status}`.",
                 "Compliance responsibility remains with the human who approves production; "
                 "see `docs/program/jurisdiction/disclaimer.md`.",
             ]

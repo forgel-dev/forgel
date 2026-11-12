@@ -604,8 +604,9 @@ Forgel is a tool, not a religion. A user may generate a prototype, edit it by ha
 
 - Git is the source of truth. Forgel never requires a clean tree or its own commit history.
 - Never `git reset --hard`. Never overwrite a file without a conflict check.
-- Before each cycle, reconcile: detect changes since the last checkpoint, record them in `docs/program/external-changes.md`, classify them, and update the spec and acceptance criteria when behaviour changed. The command is `forgel sync <project-id> [--from <stage>] [--force]`.
-- Reconciliation starts a new ledger generation; affected gates (spec review, QA, acceptance, audit) run again while the old history is preserved.
+- Before each cycle, reconcile: detect changes since the last checkpoint, record them in `docs/program/external-changes.md`, classify them, and ask the user for a decision in `docs/program/reconciliation.md`. The command is `forgel sync <project-id> [--from <stage>] [--force]`.
+- `forgel reconcile <project-id> --decision accept|fix|rollback|ignore [--notes "..."]` records the decision. `accept` documents the change in the feature spec; `fix` blocks at review until fixed; `rollback` restores the baseline; `ignore` records and continues.
+- `forgel run` refuses a pending reconciliation. Only a recorded decision starts a new ledger generation; affected gates (spec review, QA, acceptance, audit) run again while the old history is preserved.
 - Forgel commits its own generation snapshots and moves the `forgel-baseline` git tag. Edits after that tag are the external changes `sync` reports.
 - Gates run against the current code, not the generated baseline.
 - Generated code contains no proprietary hooks or hidden state. All state lives in standard files.

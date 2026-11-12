@@ -43,8 +43,19 @@ forgel sync <project-id>
 forgel run <project-id>
 ```
 
-`sync` records the diff in `docs/program/external-changes.md`, starts a new
-ledger generation, and re-runs the affected gates from `review`.
+`sync` records the diff in `docs/program/external-changes.md` and
+`docs/program/reconciliation.md`, then asks for a decision:
+
+```bash
+forgel reconcile <project-id> --decision accept|fix|rollback|ignore [--notes "..."]
+```
+
+- `accept` — document the change in the feature spec.
+- `fix` — keep it as a defect; the pipeline blocks at review until it is fixed.
+- `rollback` — restore the changed files from the generated baseline.
+- `ignore` — record the change and continue without documenting it.
+
+Only then does `forgel run` continue, in a new ledger generation, from `review`.
 
 ## What it will do
 

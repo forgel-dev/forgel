@@ -1,8 +1,9 @@
 """Reconcile external changes with the Forgel process.
 
 Forgel never regenerates and never overwrites external work. ``sync`` detects
-changes since the generated baseline, records them, and starts a new ledger
-generation from a chosen stage.
+changes since the generated baseline, records them, and asks for a decision.
+``reconcile`` records the decision and starts a new ledger generation from a
+chosen stage.
 """
 
 from __future__ import annotations
@@ -21,7 +22,28 @@ IGNORED_PARTS = {"__pycache__", "node_modules", ".git", ".forgel"}
 IGNORED_PATHS = {
     "docs/program/artifact-manifest.json",
     "docs/program/external-changes.md",
+    "docs/program/reconciliation.md",
 }
+REQUIRED_PATHS = {
+    "api/app.py",
+    "web/index.html",
+    "e2e/check.py",
+    "Dockerfile",
+    "docker/docker-compose.qa.yml",
+    "qa/runner.mjs",
+    "qa/package.json",
+    "qa/scenarios/hello_web.mjs",
+}
+KNOWN_PREFIXES = {"api", "web", "e2e", "qa", "docker", "infra"}
+KNOWN_ROOT_FILES = {
+    "Dockerfile",
+    ".dockerignore",
+    ".gitignore",
+    "program.yaml",
+    "FORGEL.md",
+    "AGENTS.md",
+}
+VALID_DECISIONS = {"accept", "fix", "rollback", "ignore"}
 
 
 class SyncError(RuntimeError):
@@ -44,6 +66,13 @@ def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 def _filter_paths(paths: set[str]) -> set[str]:
     return {path for path in paths if path and path not in IGNORED_PATHS}
+
+
+def _manifest_files(workspace: Path) -> set[str]:
+    path = workspace / "docs" / "program" / "artifact-manifest.json"
+    if not path.exists():
+        return set()
+    return set(read_json(path).get("files", {}))
 
 
 def _detect_git(workspace: Path) -> dict[str, Any]:
@@ -151,7 +180,54 @@ def detect_external_changes(workspace: Path) -> dict[str, Any]:
     return _detect_manifest(workspace)
 
 
-def _write_report(workspace: Path, report: dict[str, Any]) -> Path:
+def analyze_changes(workspace: Path, changes: dict[str, Any]) -> dict[str, list[str]]:
+    """Classify changed files against explicit constraints and the generated baseline."""
+
+    manifest = _manifest_files(workspace)
+    changed = set(changes.get("files", []))
+    violations: list[str] = []
+    requirements: list[str] = []
+    documented: list[str] = []
+    undocumented: list[str] = []
+    deletions: list[str] = []
+
+    for path in sorted(changed):
+        if not (workspace / path).exists():
+            deletions.append(path)
+            if path in REQUIRED_PATHS:
+                violations.append(f"Required file missing: `{path}`")
+            continue
+
+        if path.startswith("docs/program/") and (
+            path.endswith("requirements.json")
+            or "/features/" in path
+            or path.endswith("change-sets.json")
+        ):
+            requirements.append(path)
+        elif (
+            path in manifest
+            or path in REQUIRED_PATHS
+            or path.split("/", 1)[0] in KNOWN_PREFIXES
+            or path in KNOWN_ROOT_FILES
+        ):
+            documented.append(path)
+        else:
+            undocumented.append(path)
+
+    for required in sorted(REQUIRED_PATHS):
+        if not (workspace / required).exists() and required not in deletions:
+            violations.append(f"Required file missing: `{required}`")
+
+    return {
+        "violations": violations,
+        "requirements": requirements,
+        "documented": documented,
+        "undocumented": undocumented,
+        "deletions": deletions,
+    }
+
+
+def _write_external_report(workspace: Path, report: dict[str, Any]) -> Path:
     lines = [
         "# External Changes",
         "",
@@ -161,7 +237,6 @@ def _write_report(workspace: Path, report: dict[str, Any]) -> Path:
         f"- Files changed: {report['count']}",
         f"- Re-run from: `{report['from_stage']}`",
         f"- Generation: {report['generation']}",
-        f"- Started: {'yes' if report['started'] else 'no'}",
         "",
         "## Note",
         "",
@@ -183,16 +258,198 @@ def _write_report(workspace: Path, report: dict[str, Any]) -> Path:
     return path
 
 
+def _write_reconciliation(
+    workspace: Path,
+    changes: dict[str, Any],
+    analysis: dict[str, list[str]],
+    generation: int,
+) -> Path:
+    def bullets(items: list[str], template: str) -> str:
+        return "\n".join(template.format(item=item) for item in items) or "_None._"
+
+    text = f"""# Reconciliation
+
+- Status: pending
+- Detected: {_utcnow()}
+- Detected at generation: {generation}
+- External files: {changes['count']}
+- Decision: —
+
+## Findings
+
+No requirements document exists for these changes. Validation is limited to
+explicit constraints and the generated file manifest; an intentional change can
+still look like a violation.
+
+### Violations
+
+{bullets(analysis['violations'], '- {item}')}
+
+### Requirements Changed Externally
+
+{bullets(analysis['requirements'], '- `{item}`')}
+
+### Documented Modifications
+
+{bullets(analysis['documented'], '- `{item}`')}
+
+### Undocumented Changes
+
+{bullets(analysis['undocumented'], '- `{item}`')}
+
+### Deletions
+
+{bullets(analysis['deletions'], '- `{item}`')}
+
+## Decision Required
+
+Choose one:
+
+- `accept` — accept and document the change in the feature spec.
+- `fix` — keep it as a defect; the pipeline will require a fix before continuing.
+- `rollback` — restore the changed files from the generated baseline.
+- `ignore` — record the change and continue without documenting it.
+
+Run:
+
+```
+forgel reconcile <project-id> --decision accept|fix|rollback|ignore [--notes "..."]
+```
+"""
+    path = workspace / "docs" / "program" / "reconciliation.md"
+    write_text(path, text)
+    return path
+
+
+def _feature_spec(workspace: Path) -> Path | None:
+    features = sorted((workspace / "docs" / "program" / "features").glob("*.md"))
+    return features[-1] if features else None
+
+
+def _append_revision(spec: Path, notes: str, files: list[str]) -> None:
+    description = notes or "External change accepted"
+    if files:
+        description += ": " + ", ".join(f"`{name}`" for name in files)
+    description = description.replace("|", "\\|")
+    row = f"| 1.1.0 | {datetime.now(timezone.utc).date()} | Forgel reconcile | {description} |"
+    lines = spec.read_text(encoding="utf-8").rstrip().splitlines()
+    insert_at = len(lines)
+    for index in range(len(lines) - 1, -1, -1):
+        if lines[index].startswith("|"):
+            insert_at = index + 1
+            break
+    lines.insert(insert_at, row)
+    write_text(spec, "\n".join(lines) + "\n")
+
+
+def _accept_changes(workspace: Path, changes: dict[str, Any], notes: str) -> None:
+    spec = _feature_spec(workspace)
+    if spec is None:
+        raise SyncError("No feature spec found to document the change")
+    files = changes["files"]
+    section = [
+        "",
+        f"## External Change: {_utcnow()}",
+        "",
+        f"- Files: {', '.join(f'`{name}`' for name in files) or 'none'}",
+        f"- Notes: {notes or '—'}",
+        "- Decision: accepted and documented.",
+        "",
+    ]
+    text = spec.read_text(encoding="utf-8")
+    marker = "## Revision History"
+    if marker in text:
+        before, after = text.split(marker, 1)
+        text = before.rstrip() + "\n" + "\n".join(section) + marker + after
+    else:
+        text = text.rstrip() + "\n" + "\n".join(section)
+    write_text(spec, text.rstrip() + "\n")
+    _append_revision(spec, notes, files)
+
+
+def _mark_fix(path: Path, analysis: dict[str, list[str]], notes: str) -> None:
+    section = [
+        "",
+        "## Fix Request",
+        "",
+        f"- Notes: {notes or '—'}",
+        "- Violations:",
+        *[f"  - {item}" for item in analysis["violations"]],
+        "- Undocumented changes:",
+        *[f"  - `{item}`" for item in analysis["undocumented"]],
+        "",
+    ]
+    text = path.read_text(encoding="utf-8").rstrip()
+    write_text(path, text + "\n" + "\n".join(section) + "\n")
+
+
+def _rollback(workspace: Path, changes: dict[str, Any]) -> None:
+    baseline = _git(workspace, "rev-parse", "--verify", "forgel-baseline")
+    if baseline.returncode != 0 or not baseline.stdout.strip():
+        raise SyncError("Rollback requires a git baseline (tag forgel-baseline)")
+    base = baseline.stdout.strip()
+    trash = workspace / ".forgel" / "trash" / _utcnow().replace(":", "-")
+
+    for path in changes["files"]:
+        target = workspace / path
+        in_baseline = _git(workspace, "cat-file", "-e", f"{base}:{path}")
+        if in_baseline.returncode == 0:
+            _git(workspace, "restore", "--source", base, "--", path)
+        elif target.exists():
+            destination = trash / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            target.replace(destination)
+
+    for required in sorted(REQUIRED_PATHS):
+        if not (workspace / required).exists():
+            _git(workspace, "restore", "--source", base, "--", required)
+
+
+def _update_reconciliation(
+    path: Path,
+    status: str,
+    decision: str,
+    generation: int,
+    notes: str,
+) -> None:
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("- Status: pending", f"- Status: {status}", 1)
+    text = text.replace("- Status: fix_required", f"- Status: {status}", 1)
+    text = text.replace("- Decision: —", f"- Decision: `{decision}`", 1)
+    text = text.rstrip() + f"""
+
+## Decision
+
+- Decision: `{decision}`
+- Generation: {generation}
+- Notes: {notes or "—"}
+"""
+    write_text(path, text)
+
+
+def _reconciliation_status(path: Path) -> str:
+    if not path.exists():
+        return "none"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("- Status:"):
+            return line.split(":", 1)[1].strip()
+    return "none"
+
+
 def sync_project(
     workspace: Path,
     ledger: Ledger,
     project_id: str,
     from_stage: str = "review",
     force: bool = False,
+    decision: str | None = None,
+    notes: str = "",
 ) -> dict[str, Any]:
-    """Detect external changes and start a new generation when needed."""
+    """Detect external changes, record them, and ask for a decision."""
 
     validate_stage(from_stage)
+    if decision is not None and decision not in VALID_DECISIONS:
+        raise SyncError(f"Unknown decision: {decision}")
     project = ledger.get_project(project_id)
     if project is None:
         raise SyncError(f"Unknown project: {project_id}")
@@ -212,26 +469,106 @@ def sync_project(
         "from_stage": from_stage,
         "generation": current_generation,
         "started": False,
+        "pending": False,
+        "decision": decision,
     }
+    _write_external_report(workspace, report)
 
-    if changes["count"] == 0 and not force:
-        _write_report(workspace, report)
+    if changes["count"] == 0:
+        if not force:
+            return report
+        generation = ledger.start_generation(project_id, from_stage)
+        report["generation"] = generation
+        report["started"] = True
         return report
 
+    analysis = analyze_changes(workspace, changes)
+    report["analysis"] = analysis
+    reconciliation = _write_reconciliation(
+        workspace, changes, analysis, current_generation
+    )
+
+    if decision is not None:
+        result = reconcile_project(
+            workspace,
+            ledger,
+            project_id,
+            decision=decision,
+            notes=notes,
+            from_stage=from_stage,
+        )
+        result["external_changes"] = report
+        return result
+
+    report["pending"] = True
+    report["reconciliation"] = str(reconciliation.relative_to(workspace))
+    return report
+
+
+def reconcile_project(
+    workspace: Path,
+    ledger: Ledger,
+    project_id: str,
+    decision: str,
+    notes: str = "",
+    from_stage: str = "review",
+) -> dict[str, Any]:
+    """Apply a user's decision to a pending reconciliation."""
+
+    validate_stage(from_stage)
+    if decision not in VALID_DECISIONS:
+        raise SyncError(f"Unknown decision: {decision}")
+    project = ledger.get_project(project_id)
+    if project is None:
+        raise SyncError(f"Unknown project: {project_id}")
+
+    reconciliation = workspace / "docs" / "program" / "reconciliation.md"
+    status = _reconciliation_status(reconciliation)
+    if status not in {"pending", "fix_required"}:
+        raise SyncError(
+            f"No pending reconciliation for {project_id} (status: {status})"
+        )
+
+    changes = detect_external_changes(workspace)
+    analysis = analyze_changes(workspace, changes)
+
+    if decision == "accept":
+        _accept_changes(workspace, changes, notes)
+        target_status = "accepted"
+    elif decision == "fix":
+        _mark_fix(reconciliation, analysis, notes)
+        target_status = "fix_required"
+    elif decision == "rollback":
+        _rollback(workspace, changes)
+        target_status = "rolled_back"
+    else:
+        target_status = "ignored"
+
     generation = ledger.start_generation(project_id, from_stage)
-    report["generation"] = generation
-    report["started"] = True
-    path = _write_report(workspace, report)
+    _update_reconciliation(
+        reconciliation, target_status, decision, generation, notes
+    )
     ledger.append_event(
         project_id,
-        "sync",
+        "reconcile",
         status="completed",
-        artifact_refs=[str(path.relative_to(workspace))],
+        artifact_refs=[
+            "docs/program/reconciliation.md",
+            "docs/program/external-changes.md",
+        ],
         payload={
+            "decision": decision,
             "files_changed": changes["count"],
             "from_stage": from_stage,
-            "kind": changes["kind"],
         },
         generation=generation,
     )
-    return report
+    return {
+        "started": True,
+        "pending": False,
+        "decision": decision,
+        "generation": generation,
+        "from_stage": from_stage,
+        "status": target_status,
+        "files": changes["files"],
+    }

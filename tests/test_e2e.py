@@ -7,8 +7,8 @@ from pathlib import Path
 
 from forgel.config import Settings
 from forgel.ledger import Ledger, new_project_id
-from forgel.orchestrator import Orchestrator
-from forgel.sync import sync_project
+from forgel.orchestrator import Orchestrator, StageError
+from forgel.sync import reconcile_project, sync_project
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -148,13 +148,37 @@ class EndToEndTest(unittest.TestCase):
             result = sync_project(
                 workspace, ledger, project_id, from_stage="review"
             )
-            self.assertTrue(result["started"])
-            self.assertEqual(result["generation"], 2)
-            self.assertEqual(ledger.checkpoint_state(project_id), ("review", 2))
+            self.assertFalse(result["started"])
+            self.assertTrue(result["pending"])
+            self.assertTrue(
+                (workspace / "docs" / "program" / "reconciliation.md").exists()
+            )
+            with self.assertRaises(StageError):
+                orchestrator.run(project_id)
 
             changes = workspace / "docs" / "program" / "external-changes.md"
             self.assertTrue(changes.exists())
             self.assertIn("web/index.html", changes.read_text(encoding="utf-8"))
+
+            result = reconcile_project(
+                workspace,
+                ledger,
+                project_id,
+                decision="accept",
+                notes="accepted external edit",
+            )
+            self.assertTrue(result["started"])
+            self.assertEqual(result["generation"], 2)
+            self.assertEqual(ledger.checkpoint_state(project_id), ("review", 2))
+
+            spec = (
+                workspace
+                / "docs"
+                / "program"
+                / "features"
+                / "20261113000000_hello_web.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("External Change", spec)
 
             orchestrator.run(project_id)
             self.assertEqual(ledger.checkpoint_state(project_id), ("done", 2))
@@ -164,6 +188,47 @@ class EndToEndTest(unittest.TestCase):
                     f"stage {stage} did not run in generation 2",
                 )
             self.assertTrue(ledger.has_completed(project_id, "review", 1))
+
+    def test_rollback_restores_the_external_change(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                home=Path(tmp),
+                registry_path=REPO_ROOT / "registry" / "recipes.json",
+                templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+                jurisdiction_path=REPO_ROOT / "jurisdiction",
+                qa_runtime="local",
+            )
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+
+            project_id = new_project_id("hello-web")
+            workspace = settings.projects_dir / project_id
+            ledger.create_project(
+                project_id, "hello-web", "A minimal web app.", str(workspace)
+            )
+
+            orchestrator = Orchestrator(settings, ledger)
+            orchestrator.run(project_id)
+
+            index = workspace / "web" / "index.html"
+            original = index.read_text(encoding="utf-8")
+            index.write_text(
+                original + "\n<!-- external edit -->\n", encoding="utf-8"
+            )
+
+            sync_project(workspace, ledger, project_id, from_stage="review")
+            result = reconcile_project(
+                workspace,
+                ledger,
+                project_id,
+                decision="rollback",
+                notes="revert the external edit",
+            )
+            self.assertEqual(result["status"], "rolled_back")
+            self.assertEqual(index.read_text(encoding="utf-8"), original)
+
+            orchestrator.run(project_id)
+            self.assertEqual(ledger.checkpoint_state(project_id), ("done", 2))
 
 
 if __name__ == "__main__":
