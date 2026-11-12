@@ -33,6 +33,13 @@ Run the core from the Docker image:
 docker compose run --rm forgel demo
 ```
 
+## Configuration
+
+- `forgel.toml` — project config: QA runtime, jurisdiction pack, model policy, budget.
+- `FORGEL.md` → `AGENTS.md` → `CLAUDE.md` — instruction files, read in that order.
+- `forgel config <project-id>` — show the effective project config.
+- `forgel context <project-id> [--raw]` — show the resolved context files and their priority.
+
 ## Edit Outside Forgel
 
 Forgel never regenerates or overwrites external work. After editing a generated

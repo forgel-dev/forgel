@@ -51,6 +51,12 @@ class EndToEndTest(unittest.TestCase):
             self.assertTrue((workspace / "docker/docker-compose.qa.yml").exists())
             self.assertTrue((workspace / "qa/runner.mjs").exists())
             self.assertTrue((workspace / "qa/scenarios/hello_web.mjs").exists())
+            self.assertTrue((workspace / "FORGEL.md").exists())
+            self.assertTrue((workspace / "AGENTS.md").exists())
+            self.assertTrue((workspace / "forgel.toml").exists())
+            config = (workspace / "forgel.toml").read_text(encoding="utf-8")
+            self.assertIn('name = "hello-web"', config)
+            self.assertIn('recipe = "hello-web@0.1.0"', config)
             self.assertTrue(
                 (workspace / "docs/program/jurisdiction/profile.json").exists()
             )

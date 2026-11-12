@@ -14,7 +14,9 @@ from typing import Sequence
 from . import __version__
 from .artifacts import ensure_dir, read_json
 from .config import Settings
+from .context import effective_context, resolve_context
 from .ledger import Ledger, new_project_id
+from .project_config import ConfigError, load_project_config
 from .orchestrator import Orchestrator, StageError
 from .sync import SyncError, reconcile_project, sync_project
 
@@ -254,6 +256,69 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_config(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        workspace = Path(project["workspace"])
+        try:
+            config = load_project_config(workspace)
+        except ConfigError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if config is None:
+            print("no forgel.toml; defaults apply")
+            return 0
+        print(f"config:       {workspace / 'forgel.toml'}")
+        print(f"project:      {config.name or '—'}")
+        print(f"recipe:       {config.recipe or '—'}")
+        print(f"qa.runtime:   {config.qa.runtime}")
+        print(f"jurisdiction: {config.jurisdiction.pack}")
+        print(f"models:       {config.models.default} / {config.models.architecture}")
+        print(
+            "budget:       "
+            f"${config.budget.per_feature_usd:g}/feature, "
+            f"${config.budget.per_project_usd:g}/project"
+        )
+        return 0
+    finally:
+        ledger.close()
+
+
+def cmd_context(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        workspace = Path(project["workspace"])
+        files = resolve_context(workspace)
+        if not files:
+            print("no context files")
+            return 0
+        print("context files (priority order):")
+        for item in files:
+            if item.native:
+                kind = "native"
+            elif item.name == "CLAUDE.md":
+                kind = "local shim"
+            else:
+                kind = "canon"
+            print(f"  {item.name:<12} {kind:<10} {len(item.text)} bytes")
+        if args.raw:
+            print()
+            print(effective_context(workspace))
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -365,6 +430,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconcile.add_argument("--home", default=None)
     reconcile.set_defaults(func=cmd_reconcile)
+
+    config = subparsers.add_parser("config", help="Show the project forgel.toml")
+    config.add_argument("project_id")
+    config.add_argument("--home", default=None)
+    config.set_defaults(func=cmd_config)
+
+    context = subparsers.add_parser(
+        "context", help="Show resolved context files and their priority"
+    )
+    context.add_argument("project_id")
+    context.add_argument("--raw", action="store_true")
+    context.add_argument("--home", default=None)
+    context.set_defaults(func=cmd_context)
 
     serve = subparsers.add_parser("serve", help="Serve the generated staging app")
     serve.add_argument("project_id")

@@ -27,6 +27,7 @@ from .config import Settings
 from .intake import build_requirements
 from .jurisdiction import resolve_pack
 from .ledger import Ledger
+from .project_config import load_project_config, render_project_config
 from .registry import load_registry, select_recipe
 from .state import next_stage, stages_from
 
@@ -117,14 +118,25 @@ class Orchestrator:
     # --------------------------------------------------------------- stages
 
     def stage_intake(self, project: dict[str, Any]) -> list[str]:
+        workspace = self._workspace(project)
         requirements = build_requirements(project)
         path = write_json(self._docs(project) / "requirements.json", requirements)
-        return [self._ref(project, path)]
+        config_path = workspace / "forgel.toml"
+        if not config_path.exists():
+            write_text(
+                config_path, render_project_config(project["name"])
+            )
+        return [self._ref(project, path), self._ref(project, config_path)]
 
     def stage_jurisdiction(self, project: dict[str, Any]) -> list[str]:
         docs = self._docs(project)
         requirements = read_json(docs / "requirements.json")
-        pack_id = str(requirements.get("jurisdiction", "ru"))
+        config = load_project_config(self._workspace(project))
+        pack_id = (
+            config.jurisdiction.pack
+            if config is not None
+            else str(requirements.get("jurisdiction", "ru"))
+        )
         region = str(requirements.get("region", ""))
         pack, fallback = resolve_pack(
             self.settings.jurisdiction_path, pack_id, region
@@ -315,6 +327,22 @@ regulatory compliance. Approving a production deploy confirms that responsibilit
 
         project["recipe_id"] = recipe.ref
         self.ledger.set_recipe(project["id"], recipe.ref)
+
+        config_path = self._workspace(project) / "forgel.toml"
+        if config_path.exists():
+            config_text = config_path.read_text(encoding="utf-8")
+            config_text = re.sub(
+                r'(?m)^recipe = ".*"$',
+                f'recipe = "{recipe.ref}"',
+                config_text,
+                count=1,
+            )
+            write_text(config_path, config_text)
+        else:
+            write_text(
+                config_path,
+                render_project_config(project["name"], recipe.ref),
+            )
 
         adr = self._docs(project) / "adr" / "0001-recipe.md"
         write_text(
@@ -549,6 +577,7 @@ See `docs/program/jurisdiction/requirements.md` and
 ## Related Resources
 
 - `program.yaml`
+- `forgel.toml`
 - `docs/program/change-sets.json`
 
 ## Revision History
@@ -598,7 +627,13 @@ See `docs/program/jurisdiction/requirements.md` and
             "__RECIPE__": project.get("recipe_id") or "",
         }
         refs: list[str] = []
-        for name in ("Dockerfile", ".dockerignore", ".gitignore"):
+        for name in (
+            "Dockerfile",
+            ".dockerignore",
+            ".gitignore",
+            "FORGEL.md",
+            "AGENTS.md",
+        ):
             source = template / name
             text = source.read_text(encoding="utf-8")
             for key, value in substitutions.items():
@@ -715,6 +750,9 @@ See `docs/program/jurisdiction/requirements.md` and
             "qa/runner.mjs",
             "qa/package.json",
             "qa/scenarios/hello_web.mjs",
+            "FORGEL.md",
+            "AGENTS.md",
+            "forgel.toml",
         ):
             checks.append((f"exists: {relative}", (workspace / relative).exists()))
 
@@ -745,6 +783,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 ".json",
                 ".js",
                 ".mjs",
+                ".toml",
             }:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -776,6 +815,9 @@ See `docs/program/jurisdiction/requirements.md` and
     def stage_qa(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
         runtime = self.settings.qa_runtime
+        config = load_project_config(workspace)
+        if runtime == "auto" and config is not None:
+            runtime = config.qa.runtime
         if runtime == "auto":
             runtime = "docker" if self._docker_available() else "local"
 
@@ -1086,6 +1128,9 @@ See `docs/program/jurisdiction/requirements.md` and
             "qa/runner.mjs",
             "qa/package.json",
             "qa/scenarios/hello_web.mjs",
+            "FORGEL.md",
+            "AGENTS.md",
+            "forgel.toml",
         )
         missing = [item for item in required if not (workspace / item).exists()]
 

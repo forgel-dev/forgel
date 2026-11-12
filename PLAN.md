@@ -73,7 +73,7 @@ Forgel is a tool, not a closed pipeline. It can run the whole lifecycle, or coex
 - One jurisdiction pack: a draft for M0, a more complete pack for M1 (legal review optional).
 - Multi-repo from day one.
 - Forgel ships as a Docker image with a Compose quickstart.
-- Generated projects ship a `Dockerfile` and a `compose.yaml`.
+- Generated projects ship a `Dockerfile` and a `compose.yaml`, plus `FORGEL.md`, `AGENTS.md` and `forgel.toml`.
 - Independent end-to-end QA in an isolated Compose stand with a headless browser.
 - Staging deploy with human approval.
 - Cost tracking and acceptance metrics from day one.
@@ -125,6 +125,7 @@ Forgel is a tool, not a closed pipeline. It can run the whole lifecycle, or coex
 | **D-031** | The browser engine is a QA driver plugin: Playwright/Chromium is the default; Lightpanda is an experimental CDP driver for non-visual checks | Visual QA needs rendering and screenshots; Lightpanda is much lighter but has no graphical rendering, ships nightly, and is AGPL | Scenarios are driver-agnostic; Chromium is used for visual checks; Lightpanda is evaluated on real scenarios before adoption |
 | **D-032** | Forgel is composable and non-exclusive: external edits are first-class | Users may prototype with Forgel and finish by hand or in another harness; lock-in kills adoption, and the process must survive code changed outside it | Git is the source of truth; a reconcile step detects external changes; Forgel never resets or overwrites them |
 | **D-033** | Reconcile, don't regenerate | External changes may be intentional; regenerating would destroy them and break the user's work | Read the current files, diff against the last known state, update the spec and acceptance, and continue in a new ledger generation that re-runs the affected gates |
+| **D-034** | Project config is `forgel.toml` (TOML, standard library) with `project`, `qa`, `jurisdiction`, `models` and `budget` sections | TOML is explicit, readable, and parsed without dependencies; config is a project artifact, not hidden state | The generated project carries `forgel.toml`; explicit runtime settings win over it, which wins over defaults |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -557,6 +558,7 @@ qa/held-out/            # never read by the dev agent
 ```
 FORGEL.md               # native instructions, read first
 AGENTS.md               # cross-harness canon
+forgel.toml             # project config: qa, jurisdiction, models, budget
 Dockerfile              # the product image
 compose.yaml            # local stand, including QA services
 .dockerignore
@@ -587,16 +589,41 @@ At the start of every program cycle, and continuously after production:
 6. **Criterion:** did the product do its job for the user, not only match the spec.
 7. **Production changes** only after human approval.
 
-### 7.5 Context Files
+### 7.5 Configuration and Context Files
 
-A generated project carries two instruction files at its root:
+A generated project carries:
 
-- `FORGEL.md` — the native file, read first.
+- `FORGEL.md` — the native instruction file, read first.
 - `AGENTS.md` — the cross-harness canon.
+- `forgel.toml` — project configuration:
+
+```toml
+[project]
+name = "acme-crm"
+recipe = "django-react-saas-yandex@1.2"
+
+[qa]
+runtime = "auto"          # auto | docker | local
+
+[jurisdiction]
+pack = "ru"
+
+[models]
+default = "deepseek-flash"
+architecture = "deepseek-v4-pro"
+
+[budget]
+per_feature_usd = 10
+per_project_usd = 300
+```
+
+`forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
+
+`program.yaml` describes the repo graph, `lock.json` pins versions, `registry/` holds recipes, `jurisdiction/` holds legal packs, and `docs/program/` holds the artifacts.
 
 Forgel never writes `CLAUDE.md` into a generated project. In the Forgel repository itself, `CLAUDE.md` is a local, gitignored shim for tools that require it; it is not part of the public product.
 
-Read order: `FORGEL.md` → `AGENTS.md` → `CLAUDE.md`.
+Read order: `FORGEL.md` → `AGENTS.md` → `CLAUDE.md`. Inspect with `forgel context <project-id>` and `forgel config <project-id>`.
 
 ### 7.6 Coexistence and External Changes
 
@@ -670,6 +697,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Repository, licenses, CONTRIBUTING/DCO, documentation skeleton.
 - One draft jurisdiction pack; production is allowed with the compliance acknowledgement.
 - Forgel Docker image + Compose quickstart; generated `hello-web` runs in Compose; QA runs in Docker.
+- Context-file resolver (`FORGEL.md` → `AGENTS.md` → `CLAUDE.md`) and `forgel.toml` project config.
 - **Exit:** the process reaches staging with no manual action except approval; production readiness is reported honestly.
 
 ### M1 — Vertical Slice and Public OSS Alpha (up to 3 months)
