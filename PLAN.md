@@ -141,6 +141,9 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-043** | Refactoring is exception-based, not the default; it requires a proposal comparing extension and maintenance cost against refactor cost | Agents often append branches where a small rewrite is cleaner, but refactoring for every requirement creates its own loop | Default is NO_REFACTOR; a proposal names the current design, the new requirement, both costs, risks and alternatives |
 | **D-044** | Refactoring decisions are NO_REFACTOR, TARGETED_REFACTOR, STRUCTURAL_REFACTOR and DEFER | One rule cannot cover a local cleanup and a cross-module rewrite | Targeted, internal, behavior-preserving refactors that reduce net complexity may be auto-applied; structural refactors need a proposal and human approval; debt is recorded with a trigger |
 | **D-045** | Append-only growth is a signal for the arbiter, not an automatic failure | Extending existing code is usually correct; a rewrite needs cost/benefit judgment | The complexity report surfaces append-only files; the arbiter decides NO_REFACTOR / TARGETED / STRUCTURAL / DEFER |
+| **D-046** | Budget control is a core requirement with hard caps at feature, iteration, day, project and provider-key level | An agent stuck on a misconfigured environment can consume the provider balance, and with auto top-up the card balance; DeepSeek does not enforce a per-key limit | The harness reserves, records and enforces cost before every model call; hard stop at the cap, never a silent overrun |
+| **D-047** | A Budget Arbiter may pause or stop, but never increase a budget | Only the user can accept more spend; an agent must not raise its own ceiling | Every stop records the reason and the checkpoint; the user raises the budget, then the iteration resumes |
+| **D-048** | Provider keys are scoped, prepaid and isolated; auto top-up is disabled; a single egress proxy is the only path to the model | The provider cannot enforce the budget, and subagents must not bypass the ledger | One key per project/environment, no main key, proxy cap; the ledger is the source of truth for spend |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -641,7 +644,12 @@ architecture = "deepseek-v4-pro"
 
 [budget]
 per_feature_usd = 10
+per_iteration_usd = 100
+per_day_usd = 20
 per_project_usd = 300
+warn_percent = 80
+max_spend_per_hour_usd = 10
+max_retries_without_progress = 3
 
 [release]
 auto_patch = false       # apply PATCH fixes automatically (risky; off by default)
@@ -789,6 +797,49 @@ A refactoring proposal (`docs/program/refactoring/<id>.md`) records the current 
 
 **Config:** `[refactoring] enabled`, `budget_percent` (maximum share of an iteration), `allow_auto_targeted`.
 
+### 7.10 Budget Control
+
+Forgel must never let an agent consume an unbounded budget. This is a rare but catastrophic failure mode: an agent hits a misconfigured environment, starts working around it, retries without progress, and keeps calling the model until the provider balance — or the card behind an auto top-up — is exhausted. DeepSeek and similar providers do not enforce a budget on an API key; the harness must.
+
+**Layers:** per call, per feature, per iteration, per day (UTC reset), per project, per provider key.
+
+**Caps and thresholds:**
+- **Warn** at `warn_percent` (default 80%): notify the user, reduce model quality for non-critical work, pause low-priority proposals.
+- **Hard stop** at 100%: stop before the next call, record the checkpoint and ask the user. No silent overrun.
+- **Spend-rate cap** (`max_spend_per_hour_usd`): anomaly circuit breaker.
+- **No-progress cap** (`max_retries_without_progress`): repeated identical errors, retries without new evidence, or environment workaround loops stop the iteration.
+
+**Budget Arbiter.** A clean-context role watches the budget ledger, spend rate and progress. It can pause or stop; it can never increase a budget. Only the user can raise it. Every stop records the reason and the checkpoint.
+
+**Provider-key isolation:**
+- a separate, scoped API key per project/environment, never the user's main key;
+- prepaid balance, auto top-up disabled;
+- balance monitoring where the provider exposes it, otherwise a mandatory egress proxy enforces the cap;
+- the proxy is the only path to the model endpoint; agents and plugins cannot bypass it.
+
+**Enforcement points:** the agent runtime before every model call; the plugin host before tool calls; the daemon before starting an iteration; a global `forgel pause` / `forgel stop` switch and Telegram commands.
+
+**Artifacts:** `docs/program/budget/report.md`; ledger `cost` per event; stop records.
+
+**Resume:** a stopped iteration keeps its checkpoint. After the user raises the budget or fixes the environment, `forgel run` continues from the checkpoint; no work is lost.
+
+**Config:**
+
+```toml
+[budget]
+per_feature_usd = 10
+per_iteration_usd = 100
+per_day_usd = 20
+per_project_usd = 300
+warn_percent = 80
+max_spend_per_hour_usd = 10
+max_retries_without_progress = 3
+```
+
+**Metrics:** daily spend; cost per accepted feature; budget stops per iteration; overspend incidents (must be 0); no-progress stops; cost-estimate error.
+
+**Risks:** provider-key exhaustion or auto top-up; key leakage; a subagent bypassing the ledger; estimate drift; false stops; ignored warnings.
+
 ---
 
 ## 8. Gates
@@ -835,6 +886,9 @@ A refactoring proposal (`docs/program/refactoring/<id>.md`) records the current 
 | Refactors without a proposal and decision | 0 |
 | Targeted refactors with net complexity increase | 0 |
 | Refactoring share per iteration | ≤ 10% unless approved |
+| Overspend incidents | 0 |
+| Budget stops with a recorded checkpoint | 100% |
+| Cost per accepted feature | measured and within budget |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -883,6 +937,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Daemon mode and iteration close verdicts.
 - Proposal artifacts and the default PATCH-only post-release policy.
 - Deterministic complexity gate in review, including the append-only signal.
+- Budget-control requirements fixed; enforcement lands in M1.
 - **Exit:** 3–5 pilot projects; 100+ installs; the §9 metrics measured.
 
 ### M2 — Plugins and Ecosystem (4–6 months)
@@ -896,6 +951,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Opt-in automatic PATCH application and metrics-driven MINOR proposals.
 - Simplicity Arbiter agent with auto-simplification classes and a decision digest.
 - Refactoring Arbiter: targeted-refactor auto-apply, structural proposals, debt triggers.
+- Budget ledger, per-feature/iteration/day caps, hard stop, scoped prepaid keys and egress proxy; Budget Arbiter and anomaly detection.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -928,6 +984,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 | Q8 | Where proposals are delivered and approved | Telegram, web | Telegram for the MVP; approval is recorded in the proposal |
 | Q9 | Simplicity thresholds and arbiter authority | per-patch budget; auto-internal; ask-visible | Default budgets; the arbiter auto-applies internal simplifications and escalates user-visible or irreversible ones |
 | Q10 | Refactoring thresholds and authority | auto-targeted; proposal-only; structural approval | Default NO_REFACTOR; auto only bounded, internal, net-reducing targeted refactors; structural requires human approval |
+| Q11 | Budget enforcement point | client ledger, egress proxy, provider key | Egress proxy + scoped prepaid keys is mandatory; the ledger is the source of truth |
 
 Business-model questions are kept separately.
 
@@ -963,6 +1020,10 @@ Business-model questions are kept separately.
 | Refactoring loop | High | Default NO_REFACTOR; `budget_percent`; arbiter decides; structural refactors need approval |
 | Append-only growth hides structural debt | High | Append-only signal in the complexity report; arbiter decides targeted vs deferred |
 | Refactor breaks behavior | High | Behavior-preserving requirement, tests, canary, rollback |
+| Provider key exhaustion / auto top-up | Critical | Scoped prepaid keys, no auto top-up, egress proxy cap |
+| Subagent bypasses the budget ledger | High | Single egress proxy, no direct keys, per-call reservation |
+| No-progress retry loop | High | Retry cap, no-progress detector, Budget Arbiter stop |
+| Budget estimate drift | Medium | Reserve + reconcile against provider usage, cost report |
 
 ---
 
@@ -984,6 +1045,7 @@ By the end of M1:
 - Every complexity-budget violation has a recorded decision: simplify, accept with a rationale, or change the spec.
 - Every structural refactor has a recorded cost/benefit decision; deferred debt has a trigger.
 - A real Forgel change is delivered through Forgel itself in the self-hosting milestone.
+- No overspend incidents: every agent run stops at its budget or on no progress, with a recorded checkpoint.
 
 By the end of M2:
 
