@@ -136,6 +136,9 @@ Forgel runs as a long-lived control-plane process. It never polishes endlessly: 
 | **D-040** | Simplicity is a gate: every patch has a complexity budget for added lines, new config keys and compatibility markers | Models accumulate requirements, branches and shims; complexity compounds and becomes unmaintainable | Review fails over budget until the patch is simplified, the spec is changed, or the budget is consciously adjusted |
 | **D-041** | A clean-context Simplicity Arbiter reviews necessity, not just correctness | The developer's context normalises its own complexity; an independent role can ask whether a branch, flag or shim should exist at all | The arbiter reads the spec, diff and complexity report, and returns simplify / accept / escalate |
 | **D-042** | The arbiter auto-applies safe internal simplifications, asks only on user-visible, irreversible or ambiguous changes, and records every decision | Asking on every change breaks automation; deciding everything silently loses control | Dead-code, unused-flag and unclaimed-shim removals are automatic; user-visible behavior, public contracts, money, legal and data-model changes are escalated; the rest is decided and recorded in an ADR |
+| **D-043** | Refactoring is exception-based, not the default; it requires a proposal comparing extension and maintenance cost against refactor cost | Agents often append branches where a small rewrite is cleaner, but refactoring for every requirement creates its own loop | Default is NO_REFACTOR; a proposal names the current design, the new requirement, both costs, risks and alternatives |
+| **D-044** | Refactoring decisions are NO_REFACTOR, TARGETED_REFACTOR, STRUCTURAL_REFACTOR and DEFER | One rule cannot cover a local cleanup and a cross-module rewrite | Targeted, internal, behavior-preserving refactors that reduce net complexity may be auto-applied; structural refactors need a proposal and human approval; debt is recorded with a trigger |
+| **D-045** | Append-only growth is a signal for the arbiter, not an automatic failure | Extending existing code is usually correct; a rewrite needs cost/benefit judgment | The complexity report surfaces append-only files; the arbiter decides NO_REFACTOR / TARGETED / STRUCTURAL / DEFER |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -281,6 +284,8 @@ docs/program/
   proposals/<id>.md
   complexity/{report.md,metrics.json}
   simplicity/<id>.md
+  refactoring/<id>.md
+  technical-debt/<id>.md
   jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
   adr/NNNN-*.md
   releases/<train>/{plan,qa,post_release}.md
@@ -563,6 +568,8 @@ docs/program/
   proposals/<id>.md
   complexity/{report.md,metrics.json}
   simplicity/<id>.md
+  refactoring/<id>.md
+  technical-debt/<id>.md
   jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
   adr/NNNN-*.md
   releases/<train>/{plan,qa,post_release}.md
@@ -643,6 +650,11 @@ enabled = true
 max_added_lines = 400
 max_new_config_keys = 2
 max_compat_markers = 0
+
+[refactoring]
+enabled = true
+budget_percent = 10          # max share of an iteration
+allow_auto_targeted = true
 ```
 
 `forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
@@ -747,6 +759,34 @@ It asks the user only when the change is user-visible, changes a public contract
 - Reserve part of each iteration for deletion and simplification; track the net complexity delta.
 - A budget exception is a recorded decision, never a silent override.
 
+### 7.9 Refactoring Policy
+
+Agents often append branches to existing code where a small targeted rewrite would be clearer. Refactoring is not the default, and refactoring for every requirement is a failure mode of its own.
+
+**Default: NO_REFACTOR.** Extend the existing structure with the smallest change that satisfies the requirement.
+
+**A refactor is justified only when:**
+
+- the new requirement cannot be implemented cleanly without changing the structure — not merely because a rewrite is aesthetically nicer;
+- the cost of extending and maintaining the current code over the planning horizon exceeds the cost of the refactor;
+- the refactor is bounded, behavior-preserving, covered by tests, and reduces net complexity;
+- it prevents a known class of defects or removes an unclaimed compatibility shim.
+
+**Decision classes:**
+
+| Class | Scope | Authority |
+|---|---|---|
+| NO_REFACTOR | default; extend in place | Developer |
+| TARGETED_REFACTOR | one module or function; behavior-preserving; bounded files and lines | The Simplicity/Refactoring Arbiter may auto-apply internal, net-complexity-reducing changes |
+| STRUCTURAL_REFACTOR | cross-module, public contract, data model | Proposal + human approval |
+| DEFER | record as technical debt with a trigger | `docs/program/technical-debt/<id>.md` |
+
+A refactoring proposal (`docs/program/refactoring/<id>.md`) records the current design, the new requirement, the cost of extension, the cost of the refactor, the maintenance cost, the risks and the alternatives.
+
+**Signals, not verdicts.** Append-only files (many added lines, almost none removed), files above a size threshold, high branch density and repeated edits to the same area are surfaced in the complexity report. Extending code is the default; the arbiter decides whether the signal justifies a refactor.
+
+**Config:** `[refactoring] enabled`, `budget_percent` (maximum share of an iteration), `allow_auto_targeted`.
+
 ---
 
 ## 8. Gates
@@ -790,6 +830,9 @@ It asks the user only when the change is user-visible, changes a public contract
 | Budget violations without a recorded decision | 0 |
 | New config knobs without a second consumer | 0 |
 | Net complexity delta per iteration | ≤ 0 or justified in an ADR |
+| Refactors without a proposal and decision | 0 |
+| Targeted refactors with net complexity increase | 0 |
+| Refactoring share per iteration | ≤ 10% unless approved |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -829,7 +872,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Adopt an existing repository and reconcile external changes; no reset or full regeneration.
 - Daemon mode and iteration close verdicts.
 - Proposal artifacts and the default PATCH-only post-release policy.
-- Deterministic complexity gate in review.
+- Deterministic complexity gate in review, including the append-only signal.
 - **Exit:** 3–5 pilot projects; 100+ installs; the §9 metrics measured.
 
 ### M2 — Plugins and Ecosystem (4–6 months)
@@ -842,6 +885,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Post-release triage policy enforced: auto-fix, ask user, record/defer.
 - Opt-in automatic PATCH application and metrics-driven MINOR proposals.
 - Simplicity Arbiter agent with auto-simplification classes and a decision digest.
+- Refactoring Arbiter: targeted-refactor auto-apply, structural proposals, debt triggers.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -873,6 +917,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 | Q7 | Post-release auto-fix thresholds | severity, reversibility, confidence | Money-path and critical security defects auto-fix; ambiguous or risky changes ask; low-signal issues are recorded |
 | Q8 | Where proposals are delivered and approved | Telegram, web | Telegram for the MVP; approval is recorded in the proposal |
 | Q9 | Simplicity thresholds and arbiter authority | per-patch budget; auto-internal; ask-visible | Default budgets; the arbiter auto-applies internal simplifications and escalates user-visible or irreversible ones |
+| Q10 | Refactoring thresholds and authority | auto-targeted; proposal-only; structural approval | Default NO_REFACTOR; auto only bounded, internal, net-reducing targeted refactors; structural requires human approval |
 
 Business-model questions are kept separately.
 
@@ -905,6 +950,9 @@ Business-model questions are kept separately.
 | Arbiter over-simplifies and removes needed behavior | High | Acceptance tests, no user-visible auto changes, decision ledger, revert |
 | Complexity gate false positives | Medium | Configurable thresholds, `enabled = false`, arbiter override with a recorded rationale |
 | Metric gaming | Medium | Multiple metrics, arbiter review, ADR for every exception |
+| Refactoring loop | High | Default NO_REFACTOR; `budget_percent`; arbiter decides; structural refactors need approval |
+| Append-only growth hides structural debt | High | Append-only signal in the complexity report; arbiter decides targeted vs deferred |
+| Refactor breaks behavior | High | Behavior-preserving requirement, tests, canary, rollback |
 
 ---
 
@@ -924,6 +972,7 @@ By the end of M1:
 - Every iteration ends with a recorded verdict: goal met, budget exhausted, blocked, or cancelled.
 - Every post-release proposal carries its SemVer class, evidence, risk and approval state.
 - Every complexity-budget violation has a recorded decision: simplify, accept with a rationale, or change the spec.
+- Every structural refactor has a recorded cost/benefit decision; deferred debt has a trigger.
 
 By the end of M2:
 

@@ -17,6 +17,24 @@ from .artifacts import write_json, write_text
 from .project_config import SimplicityConfig
 
 
+CODE_SUFFIXES = (
+    ".py",
+    ".js",
+    ".mjs",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".rb",
+    ".go",
+    ".ex",
+    ".exs",
+    ".rs",
+    ".java",
+    ".kt",
+    ".php",
+)
+
+
 @dataclass(frozen=True)
 class PatchMetrics:
     added_lines: int = 0
@@ -26,6 +44,19 @@ class PatchMetrics:
     new_config_keys: int = 0
     compat_markers: int = 0
     branches_added: int = 0
+    append_only_files: int = 0
+
+
+def count_append_only(rows: list[tuple[int, int, str]]) -> int:
+    """Count code files that only grew: many added lines, almost no removals."""
+
+    count = 0
+    for added, removed, path in rows:
+        if not path.endswith(CODE_SUFFIXES):
+            continue
+        if added >= 20 and removed < max(1, added // 10):
+            count += 1
+    return count
 
 
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -47,13 +78,17 @@ def measure_patch(workspace: Path) -> PatchMetrics:
     base = baseline.stdout.strip()
 
     added = removed = files = 0
+    rows: list[tuple[int, int, str]] = []
     for line in _git(workspace, "diff", "--numstat", base).stdout.splitlines():
         parts = line.split("\t")
         if len(parts) < 3 or parts[0] == "-" or parts[1] == "-":
             continue
-        added += int(parts[0])
-        removed += int(parts[1])
+        file_added = int(parts[0])
+        file_removed = int(parts[1])
+        added += file_added
+        removed += file_removed
         files += 1
+        rows.append((file_added, file_removed, parts[2]))
 
     names = _git(workspace, "diff", "--name-status", base)
     new_files = sum(
@@ -97,6 +132,7 @@ def measure_patch(workspace: Path) -> PatchMetrics:
         new_config_keys=new_config_keys,
         compat_markers=compat_markers,
         branches_added=branches,
+        append_only_files=count_append_only(rows),
     )
 
 
@@ -138,6 +174,8 @@ def write_report(
         f"- New config keys: {metrics.new_config_keys}",
         f"- Compatibility markers: {metrics.compat_markers}",
         f"- Branches added: {metrics.branches_added}",
+        f"- Append-only files: {metrics.append_only_files}",
+        f"- Net line delta: {metrics.added_lines - metrics.removed_lines:+d}",
         "",
         "## Violations",
         "",
@@ -153,6 +191,13 @@ def write_report(
             "This is a deterministic pre-filter. The Simplicity Arbiter reviews whether",
             "the added requirements, branches and compatibility shims are necessary;",
             "prefer changing the task framing over adding a branch.",
+            "",
+            "## Refactoring Signals",
+            "",
+            f"Append-only files: {metrics.append_only_files}. This is a signal, not a verdict.",
+            "Extending the existing structure is correct by default. A refactor needs a",
+            "proposal that compares the cost of extension and maintenance against the",
+            "cost of the refactor.",
         ]
     )
     write_text(path, "\n".join(lines).rstrip() + "\n")

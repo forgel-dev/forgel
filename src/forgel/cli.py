@@ -352,7 +352,8 @@ def cmd_complexity(args: argparse.Namespace) -> int:
         print(
             f"new config keys: {metrics.new_config_keys}, "
             f"compat markers: {metrics.compat_markers}, "
-            f"branches: {metrics.branches_added}"
+            f"branches: {metrics.branches_added}, "
+            f"append-only files: {metrics.append_only_files}"
         )
         if violations:
             print("NEEDS_SIMPLIFICATION")

@@ -55,6 +55,13 @@ class SimplicityConfig:
 
 
 @dataclass(frozen=True)
+class RefactoringConfig:
+    enabled: bool = True
+    budget_percent: int = 10
+    allow_auto_targeted: bool = True
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str | None
     recipe: str | None
@@ -64,6 +71,7 @@ class ProjectConfig:
     budget: BudgetConfig
     release: ReleaseConfig
     simplicity: SimplicityConfig
+    refactoring: RefactoringConfig
 
 
 def render_project_config(
@@ -81,6 +89,9 @@ def render_project_config(
     max_added_lines: int = 400,
     max_new_config_keys: int = 2,
     max_compat_markers: int = 0,
+    refactoring_enabled: bool = True,
+    refactor_budget_percent: int = 10,
+    allow_auto_targeted: bool = True,
 ) -> str:
     return f"""[project]
 name = "{name}"
@@ -109,6 +120,11 @@ enabled = {str(simplicity_enabled).lower()}
 max_added_lines = {max_added_lines}
 max_new_config_keys = {max_new_config_keys}
 max_compat_markers = {max_compat_markers}
+
+[refactoring]
+enabled = {str(refactoring_enabled).lower()}
+budget_percent = {refactor_budget_percent}
+allow_auto_targeted = {str(allow_auto_targeted).lower()}
 """
 
 
@@ -135,6 +151,7 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     budget = _section(data, "budget")
     release = _section(data, "release")
     simplicity = _section(data, "simplicity")
+    refactoring = _section(data, "refactoring")
 
     runtime = str(qa.get("runtime", "auto"))
     if runtime not in VALID_QA_RUNTIMES:
@@ -161,6 +178,16 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     if min(max_added_lines, max_new_config_keys, max_compat_markers) < 0:
         raise ConfigError("forgel.toml: simplicity limits must be non-negative")
 
+    refactoring_enabled = refactoring.get("enabled", True)
+    allow_auto_targeted = refactoring.get("allow_auto_targeted", True)
+    if not isinstance(refactoring_enabled, bool) or not isinstance(
+        allow_auto_targeted, bool
+    ):
+        raise ConfigError("forgel.toml: [refactoring] flags must be booleans")
+    refactor_budget_percent = int(refactoring.get("budget_percent", 10))
+    if refactor_budget_percent < 0:
+        raise ConfigError("forgel.toml: refactoring.budget_percent must be non-negative")
+
     return ProjectConfig(
         name=str(project["name"]) if "name" in project else None,
         recipe=str(project["recipe"]) if "recipe" in project else None,
@@ -183,5 +210,10 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
             max_added_lines=max_added_lines,
             max_new_config_keys=max_new_config_keys,
             max_compat_markers=max_compat_markers,
+        ),
+        refactoring=RefactoringConfig(
+            enabled=refactoring_enabled,
+            budget_percent=refactor_budget_percent,
+            allow_auto_targeted=allow_auto_targeted,
         ),
     )

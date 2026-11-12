@@ -10,6 +10,7 @@ from forgel.project_config import (
     ModelsConfig,
     ProjectConfig,
     QAConfig,
+    RefactoringConfig,
     ReleaseConfig,
     SimplicityConfig,
 )
@@ -30,6 +31,7 @@ def _config(
             auto_patch=auto_patch, propose_minor=propose_minor
         ),
         simplicity=SimplicityConfig(),
+        refactoring=RefactoringConfig(),
     )
 
 

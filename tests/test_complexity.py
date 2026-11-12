@@ -4,7 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from forgel.complexity import PatchMetrics, evaluate, write_report
+from forgel.complexity import (
+    PatchMetrics,
+    count_append_only,
+    evaluate,
+    write_report,
+)
 from forgel.project_config import SimplicityConfig
 
 
@@ -42,11 +47,22 @@ class ComplexityTest(unittest.TestCase):
             [],
         )
 
+    def test_append_only_detection(self) -> None:
+        rows = [
+            (50, 0, "api/app.py"),
+            (10, 0, "docs/readme.md"),
+            (50, 2, "web/index.js"),
+            (5, 5, "api/util.py"),
+        ]
+        self.assertEqual(count_append_only(rows), 2)
+
     def test_write_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = write_report(Path(tmp), PatchMetrics(added_lines=1), [])
             self.assertTrue(path.exists())
-            self.assertIn("PASS", path.read_text(encoding="utf-8"))
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("PASS", text)
+            self.assertIn("Append-only files", text)
             self.assertTrue(
                 (Path(tmp) / "docs/program/complexity/metrics.json").exists()
             )

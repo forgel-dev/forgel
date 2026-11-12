@@ -37,6 +37,8 @@ class ProjectConfigTest(unittest.TestCase):
             self.assertFalse(config.release.propose_minor)
             self.assertTrue(config.simplicity.enabled)
             self.assertEqual(config.simplicity.max_added_lines, 400)
+            self.assertTrue(config.refactoring.enabled)
+            self.assertEqual(config.refactoring.budget_percent, 10)
 
     def test_missing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,6 +97,18 @@ class ProjectConfigTest(unittest.TestCase):
             assert config is not None
             self.assertFalse(config.simplicity.enabled)
             self.assertEqual(config.simplicity.max_added_lines, 50)
+
+    def test_refactoring_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "forgel.toml").write_text(
+                "[refactoring]\nenabled = false\nbudget_percent = 0\n",
+                encoding="utf-8",
+            )
+            config = load_project_config(Path(tmp))
+            self.assertIsNotNone(config)
+            assert config is not None
+            self.assertFalse(config.refactoring.enabled)
+            self.assertEqual(config.refactoring.budget_percent, 0)
 
 
 if __name__ == "__main__":

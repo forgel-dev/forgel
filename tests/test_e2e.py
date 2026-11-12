@@ -66,6 +66,8 @@ class EndToEndTest(unittest.TestCase):
             self.assertIn("[release]", config)
             self.assertIn("auto_patch = false", config)
             self.assertIn("propose_minor = false", config)
+            self.assertIn("[refactoring]", config)
+            self.assertIn("budget_percent = 10", config)
             self.assertTrue(
                 (workspace / "docs/program/jurisdiction/profile.json").exists()
             )
