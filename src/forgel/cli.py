@@ -15,6 +15,7 @@ from . import __version__
 from .artifacts import ensure_dir, read_json
 from .config import Settings
 from .context import effective_context, resolve_context
+from .daemon import run_daemon
 from .ledger import Ledger, new_project_id
 from .project_config import ConfigError, load_project_config
 from .orchestrator import Orchestrator, StageError
@@ -319,6 +320,24 @@ def cmd_context(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_daemon(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        run_daemon(
+            settings,
+            ledger,
+            interval=args.interval,
+            once=args.once,
+            max_cycles=args.max_cycles,
+        )
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -443,6 +462,15 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--raw", action="store_true")
     context.add_argument("--home", default=None)
     context.set_defaults(func=cmd_context)
+
+    daemon = subparsers.add_parser(
+        "daemon", help="Run the long-lived orchestrator loop"
+    )
+    daemon.add_argument("--home", default=None)
+    daemon.add_argument("--interval", type=float, default=5.0)
+    daemon.add_argument("--once", action="store_true")
+    daemon.add_argument("--max-cycles", type=int, default=None)
+    daemon.set_defaults(func=cmd_daemon)
 
     serve = subparsers.add_parser("serve", help="Serve the generated staging app")
     serve.add_argument("project_id")

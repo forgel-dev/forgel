@@ -1206,6 +1206,7 @@ See `docs/program/jurisdiction/requirements.md` and
         allowed_label = "yes" if jurisdiction.get("production_allowed") else "no"
         ack_label = "yes" if jurisdiction.get("acknowledgement_required") else "no"
         review_label = jurisdiction.get("legal_review_status", "unknown")
+        generation = self.ledger.current_generation(project["id"])
         path = self._docs(project) / "state.md"
         write_text(
             path,
@@ -1222,10 +1223,26 @@ See `docs/program/jurisdiction/requirements.md` and
 - Staging command: `{staging.get('command', 'not available')}`
 """,
         )
-        self._commit_generated_state(
-            workspace, self.ledger.current_generation(project["id"])
+        iteration = (
+            self._docs(project)
+            / "iterations"
+            / str(generation)
+            / "close.md"
         )
-        return [self._ref(project, path)]
+        write_text(
+            iteration,
+            f"""# Iteration {generation} Close
+
+- Goal: complete the current generation and pass all gates
+- Status: done
+- Acceptance: PASS
+- Legal review: `{review_label}`
+- Staging: {staging.get('url', 'not available')}
+- Deferred: none recorded
+""",
+        )
+        self._commit_generated_state(workspace, generation)
+        return [self._ref(project, path), self._ref(project, iteration)]
 
 
 def dump_json(data: Any) -> str:

@@ -42,6 +42,9 @@ class EndToEndTest(unittest.TestCase):
             self.assertTrue((workspace / "lock.json").exists())
             self.assertTrue((workspace / "staging.json").exists())
             self.assertTrue(
+                (workspace / "docs/program/iterations/1/close.md").exists()
+            )
+            self.assertTrue(
                 (workspace / "docs/program/acceptance/0001_hello-web.md").exists()
             )
             self.assertTrue((workspace / "api/app.py").exists())
