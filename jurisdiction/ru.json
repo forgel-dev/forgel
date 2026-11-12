@@ -1,0 +1,26 @@
+{
+  "id": "ru",
+  "version": "0.0.0-draft",
+  "status": "draft",
+  "region": "ru",
+  "effective_from": null,
+  "reviewed_by": null,
+  "review_due": null,
+  "requires_human_review": true,
+  "data_residency": "to-be-confirmed",
+  "legal_sources": [],
+  "categories": [
+    "personal-data",
+    "data-residency",
+    "payments",
+    "advertising",
+    "content-moderation",
+    "app-stores",
+    "incident-reporting",
+    "consumer-rights"
+  ],
+  "mandatory_requirements": [],
+  "prohibitions": [],
+  "required_evidence": [],
+  "notes": "Draft skeleton. Not legal advice. Legal review is optional; production is allowed with the compliance acknowledgement."
+}

@@ -1,0 +1,24 @@
+{
+  "recipes": [
+    {
+      "id": "hello-web",
+      "version": "0.1.0",
+      "kind": "recipe",
+      "status": "conformant",
+      "description": "Minimal static web app for the M0 skeleton.",
+      "composes": [
+        "stack-python-stdlib@0.1",
+        "frontend-static@0.1",
+        "provider-local@0.1",
+        "qa-http@0.1"
+      ],
+      "constraints": {
+        "requires": ["web"],
+        "supports": [],
+        "excludes": ["mobile", "regulated"],
+        "regions": ["ru", "eu", "us"]
+      },
+      "template": "hello-web"
+    }
+  ]
+}

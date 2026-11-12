@@ -1,0 +1,719 @@
+# Forgel — Master Plan and Decisions
+
+**Version:** 0.4
+**Date:** 2026-11-12
+**Status:** key decisions locked
+**Product:** Forgel. Domain: `forgel.io`.
+
+> This is a public document. The business model, jurisdiction and internal materials are kept separately and are not committed.
+>
+> Language policy: all repository documents are written in English. Chat and internal working documents are in Russian (D-025).
+
+---
+
+## 1. What We Are Building
+
+Forgel is an open-source autonomous software studio for building and operating cloud services.
+
+The user talks to it through a chat interface (Telegram) and describes a product. Forgel:
+
+1. Turns the brief into structured requirements.
+2. Selects a **recipe** — a validated composition of plugins (stack + infrastructure + integrations) from a known registry.
+3. Splits the work across repositories and features.
+4. Runs development, review, independent QA and acceptance.
+5. Deploys to staging; after launch it watches metrics and prepares changes.
+
+**Two delivery forms:**
+
+- **OSS** — the user installs it on their own server, brings their own API key and their own cloud. The first and primary release.
+- **Hosted** — the same thing out of the box, with no installation. Later, after the OSS release.
+
+**Humans remain only where an action is legally or platform-wise impossible to automate:** incorporating a legal entity, opening a payment account, publishing to app stores, approving a production deploy, and acknowledging compliance responsibility.
+
+Jurisdiction is part of the product, not a document attached at the end. Forgel applies a jurisdiction pack to every project. A draft pack is usable; production approval includes an explicit acknowledgement that the user is responsible for regulatory compliance. Forgel is not a law firm and does not certify compliance.
+
+### Who It Is For
+
+- **Developers and teams** who need control over their code, cloud and model.
+- **Product teams and studios** that need delivery capacity without giving up control.
+- **Not for** those who want no-code without access to the code and infrastructure.
+
+### Brand and Positioning
+
+**Name:** Forgel (a coinage from *forge*; domain `forgel.io`, GitHub org `forgel-dev`, packages `forgel`).
+
+**Category:** open-source autonomous software studio.
+
+**One-liner:** Forgel is an open-source software studio that turns a brief into a working product on your own infrastructure.
+
+**Tagline:** "Brief in. Product out. Your cloud."
+
+**Brand pillars:**
+1. **Own it** — your server, your model key, your code.
+2. **Prove it** — spec → review → independent QA → acceptance; jurisdiction evidence and an auditable trail.
+3. **Extend it** — plugins for stacks, clouds and QA; a recipe registry.
+
+**What we are not:** not a code generator, not no-code, not an agency. We hand over repositories and a running staging environment.
+
+---
+
+## 2. MVP Scope
+
+### In Scope
+
+- A web product: backend + frontend.
+- One backend stack: Django (DRF) — preset #1.
+- React SPA.
+- Postgres + S3-compatible object storage.
+- One cloud provider: Yandex Cloud.
+- Telegram as Forgel's own interface.
+- One jurisdiction pack: a draft for M0, a more complete pack for M1 (legal review optional).
+- Multi-repo from day one.
+- Independent end-to-end QA.
+- Staging deploy with human approval.
+- Cost tracking and acceptance metrics from day one.
+
+### Out of Scope
+
+- Mobile apps.
+- A second cloud.
+- Fully automatic production deploys.
+- Regulated domains: dating, gambling, health, children.
+- Hosted hosting and billing.
+- Telegram integration inside the generated product (that is a separate plugin, not Forgel's chat interface).
+
+---
+
+## 3. Decision Log
+
+| ID | Decision | Rationale | Consequence |
+|---|---|---|---|
+| **D-001** | OSS client + hosted version | OSS provides distribution and trust; hosted sells convenience | Core and official plugins share one codebase with two run modes |
+| **D-002** | Thin core + plugins | Without this the "stack × cloud × QA × domain" matrix is unmanageable | The core is not extended by plugins; only adapters are |
+| **D-003** | Multi-repo is first-class from day one | Backend/frontend/mobile are independently deployable units; a single repo is the degenerate case | The project model, contracts and acceptance are built around the repository graph |
+| **D-004** | The plugin registry is data (JSON), not code | The catalog can be updated without a core release; the MVP can be one file | The registry is versioned and signed; the core works from a pinned snapshot |
+| **D-005** | Choose only from the known: **recipes**, not free composition | The LLM must not invent untested combinations | Brief → structured requirements → deterministic matcher → 1–3 recipes with rationale |
+| **D-006** | DeepSeek by default; OpenAI-compatible layer; BYO endpoint | Low cost, 1M context, automatic prefix caching; open V4 weights (MIT) remove the data-residency question | The model is a plugin; price and quality depend on the chosen endpoint |
+| **D-007** | A plugin is a separate process (JSON-RPC, MCP-compatible transport) | Crash isolation, timeouts, language freedom for the author, sandboxing | The core never imports plugin code |
+| **D-008** | Deterministic orchestrator; the LLM only works inside steps | Over a long horizon, "the agent decides what is next" degrades | State is an explicit state machine, not a free-running loop |
+| **D-009** | Clean context + role contract | Errors and hallucinations do not leak between roles | Each role has an explicit definition of what it reads, does not read, and writes |
+| **D-010** | Deterministic oracles over LLM judges | A compiler, type checker, linter, schema or contract test cannot be talked out of a failure | LLM review is an additional gate, not the primary one |
+| **D-011** | Artifacts in git are the source of truth; memory is an index | Agent memory decays; versioned documents do not | Hierarchy: requirements → ADR → code → memory |
+| **D-012** | Human gates at irreversible points | Production, legal entity, payments, app stores | The core can stop and request an action with instructions |
+| **D-013** | Cost and acceptance metrics from day one | Without them, an improvement cannot be distinguished from a lucky demo | Per-feature and per-project budgets, retry caps, token attribution by role |
+| **D-015** | Refusal is a feature | Regulated domains need a human and a lawyer | The system explicitly says "I won't take this" and explains why |
+| **D-016** | Core in Python | Faster path to a working orchestrator, rich AI/LLM tooling, code that agents can read | Typing via pydantic + mypy; the SDK is Python, but plugins stay language-agnostic through the process boundary |
+| **D-017** | First provider: Yandex Cloud; an international provider is the next priority | We need a testable provider with Terraform and managed services; the product is global | The provider API does not leak Yandex into the core; a second provider is a mandatory M2 exit criterion |
+| **D-018** | AGPL-3.0 for the core; SDK, official plugins, templates and schemas under Apache-2.0; registry under CC0; generated code belongs to the user | Maximum openness for reach and ecosystem; copyleft stays only on the core | Studios need not fear output contamination; plugins may use any license; AGPL + trademark deter hosted clones |
+| **D-019** | OSS-first: self-hosted open source first, hosted later; the only product name is Forgel | Reach and community matter more than early monetization; hosted later sells convenience, not access | The first release is OSS; the roadmap and metrics are built around installs, plugins and external contributors |
+| **D-020** | Open governance: public roadmap, RFC process, DCO instead of CLA, open plugin registry | Maximum openness and a low barrier for contributors | Forks are legal; the brand and the conformance badge protect the official line |
+| **D-021** | For configurable behavior in a generated product, use a declarative spec + a deterministic engine; the LLM writes code only for bespoke logic | Generated executable code is an RCE surface, non-deterministic and hard to debug; a spec is validated, diffed and rolled back | Configs, rules, limits and copy are data; code generation is limited to what a spec cannot express |
+| **D-022** | Model routing is a core policy, not an agent's choice | Cost and quality must be controlled centrally; review must stay independent | A role → model map in config, with cost attribution; an agent cannot upgrade its own model |
+| **D-023** | Process prohibitions live in code, not only in documentation | A written rule gets bypassed: the precedent was a repeated full QA run | Gates, the ledger and runners refuse the violation; prose is an explanation, not a mechanism |
+| **D-024** | A change set is the unit of planning and acceptance; dependencies between repos are explicit edges | A single repository cannot see integration; the product ships as a set of versions | `program.yaml` holds the graph; a blocked status always names the edge and the path to unblock |
+| **D-025** | Repository documents are in English; chat and internal docs are in Russian | The product is international; public documents are part of the product surface | Every committed document, README and public issue is in English; `INTERNAL.md` stays Russian and gitignored |
+| **D-026** | Jurisdiction is a first-class layer supplied by a `jurisdiction` plugin and consulted by the core | Law dictates how a product must be built in some markets: data residency, consent, payments, advertising, moderation, incident reporting. These are product constraints, not deployment details | Intake captures jurisdiction; recipe selection filters by it; spec, QA, acceptance, audit and deploy gates consult it; a draft pack is usable and production requires the compliance acknowledgement |
+| **D-027** | Legal rules are versioned data with citations, effective dates and a review date; the LLM maps and explains but never certifies | A prompt cannot be an authoritative legal source, and stale law is worse than no law | Each pack has `status`, `reviewed_by`, `review_due`; deterministic checks where possible; ambiguous cases go to human review |
+| **D-028** | Jurisdiction packs are advisory; production approval includes an explicit compliance responsibility acknowledgement | A draft pack is better than an ignored jurisdiction, and small teams cannot fund legal review for every project | The system records the pack, its status and the disclaimer; it does not block on a missing or draft pack; the human who approves production carries responsibility |
+
+Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
+
+### Licensing Model
+
+| Component | License | Why |
+|---|---|---|
+| Core (orchestrator, runtime, ledger) | AGPL-3.0 | Deters closed hosted clones; modifications are published when hosted |
+| Plugin SDK, API schemas | Apache-2.0 | Plugin authors are not forced to open their code |
+| Official plugins and templates | Apache-2.0 | Studios can use and modify them without output contamination |
+| Recipe registry | CC0-1.0 | Data should be free |
+| Documentation | CC BY 4.0 | Maximum distribution |
+| Generated code | The user | An explicit Output License: no copyleft on the customer's product |
+| Hosted control plane (later) | AGPL-3.0 — proposal, Q3 | Monetization is hosting and support, not closed code |
+
+**Trademark:** the Forgel name and logo are protected; a fork must rename itself. The `conformant` badge is issued only to plugins that pass the conformance kit.
+
+---
+
+## 4. Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ CONTROL PLANE                                                │
+│  Chat gateway (Telegram / web)                               │
+│  Intake → Recipe selector → Orchestrator (state machine)     │
+│  Task ledger · Artifact store · Gates · Cost accounting      │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ tasks / events
+┌───────────────────────────▼──────────────────────────────────┐
+│ EXECUTION PLANE                                              │
+│  Agent runtime (model routing, context assembly, tools)      │
+│  Plugin host (isolated processes, capability grants)         │
+│  Sandbox (containers, egress policy, ephemeral credentials)  │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ commits / deploys / metrics
+┌───────────────────────────▼──────────────────────────────────┐
+│ PROJECT PLANE (generated product)                            │
+│  repo: api · repo: web · repo: infra · repo: e2e             │
+│  staging environment · observability · production (gated)    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### Core Components
+
+1. **Chat gateway** — Telegram for the MVP, web later.
+2. **Intake** — turns a free-form brief into `requirements.json` (goal, users, features, payments, region, constraints).
+3. **Recipe selector** — a matcher over the registry, not a generator.
+4. **Orchestrator** — a deterministic state machine that keeps state in the ledger.
+5. **Artifact store** — the project's git repositories plus object storage for binary artifacts (screenshots, reports).
+6. **Task ledger** — append-only events, idempotency keys, checkpoints.
+7. **Agent runtime** — context assembly, model routing, tool restriction.
+8. **Plugin host** — starts and supervises plugins.
+9. **Gates** — checks that guard transitions between stages.
+10. **Cost accounting** — tokens and compute per project, feature and role.
+
+### Forgel's Own Repositories
+
+A **monorepo** at the start for atomic changes; the registry is a separate data repository.
+
+```
+forgel/            # engine repository
+  core/            # orchestrator, ledger, gates, runtime
+  plugin-sdk/      # manifest schemas, conformance kit
+  plugins/
+    official/
+      stack-django/
+      stack-fastapi/
+      frontend-react/
+      provider-yandex/
+      channel-telegram/
+      model-deepseek/
+  registry/        # JSON catalog (separate repo/service)
+  web/             # hosted control plane (later)
+  docs/
+```
+
+---
+
+## 5. Multi-Repo Model
+
+### Two Levels
+
+1. **Forgel repositories** — a monorepo at the start (see above).
+2. **Generated product repositories** — always multi-repo. A single repository is the degenerate case with one entry.
+
+### Project Manifest
+
+```yaml
+# program.yaml
+project: acme-crm
+recipe: django-react-saas-yandex@1.2
+repos:
+  - id: api
+    role: backend
+    template: django-api@1.4
+    path: ./api
+    contracts:
+      publishes: [openapi.yaml]
+  - id: web
+    role: frontend
+    template: react-spa@1.1
+    path: ./web
+    contracts:
+      consumes: [api/openapi.yaml]
+  - id: infra
+    role: infrastructure
+    template: yandex-basic@1.0
+    path: ./infra
+  - id: e2e
+    role: acceptance
+    template: playwright-suite@1.0
+    path: ./e2e
+```
+
+### Rules
+
+- **Contract-first is mandatory.** The backend publishes OpenAPI 3.1; the frontend and mobile consume generated clients. Without this, cross-repo drift is the main failure mode.
+- **Change set.** A feature may touch several repos. Acceptance happens at the change-set level, not per repo: otherwise every repo is green while integration is broken.
+- **Dependency graph** determines build order and what can run in parallel.
+- **Integration environment** is built from pinned SHAs of all repos.
+- **Lockfile** stores repo SHAs and plugin versions — reproducibility months later.
+- **Agent isolation:** a separate worktree per task, task claiming in the ledger, a merge queue per repo.
+- **One reviewer per repo**, but the final audit covers the whole change set.
+
+### Project Artifacts
+
+```
+program.yaml
+lock.json
+docs/program/
+  master-plan.md
+  repos/<repo>.md
+  features/<id>_<name>.md
+  contracts/<repo>.yaml
+  acceptance/<id>.md
+  jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
+  adr/NNNN-*.md
+  releases/<train>/{plan,qa,post_release}.md
+  telemetry/{registry.md,triage/<date>.md}
+qa/
+  integration/          # cross-repo change-set scenarios
+  held-out/             # never read by the dev agent
+```
+
+Repo-level artifacts and hierarchy rules are in §7.3.
+
+---
+
+## 6. Plugins and Registry
+
+### Plugin Kinds
+
+| kind | What it provides |
+|---|---|
+| `stack` | repo template, conventions, build/test/lint commands |
+| `frontend` | SPA template, build, e2e selectors |
+| `provider` | provision, deploy, verify, rollback, destroy, observe |
+| `qa` | E2E driver (Playwright, Android/iOS later) |
+| `model` | OpenAI-compatible endpoint |
+| `channel` | Forgel interface (Telegram) |
+| `domain` | domain checklists and constraints |
+| `jurisdiction` | legal rules, mandatory requirements, prohibitions and evidence for a region |
+
+**Two categories, never mixed:**
+
+1. **Deterministic adapters** — code/CLI wrappers. High trust, contract-tested, no LLM inside.
+2. **Agent skills** — prompts and checklists. Low trust, context injection only, no new capabilities.
+
+### Manifest
+
+```yaml
+kind: provider
+apiVersion: 1.2
+name: yandex
+version: 1.0.0
+capabilities:
+  - db.provision
+  - objectstorage.provision
+  - deploy.apply
+  - deploy.rollback
+  - deploy.verify
+  - deploy.destroy
+  - observe.metrics
+config_schema: ./schema.json
+lifecycle:
+  plan: ./bin/plan
+  apply: ./bin/apply
+  verify: ./bin/verify
+  rollback: ./bin/rollback
+  destroy: ./bin/destroy
+  observe: ./bin/observe
+permissions:
+  egress: [api.cloud.yandex.net, storage.yandexcloud.net, registry.terraform.io]
+  secrets: [YC_SERVICE_ACCOUNT_KEY]
+```
+
+`verify` and `destroy` are mandatory. The first gives a deterministic oracle; the second stops abandoned projects from burning money.
+
+### First Provider Profile (Yandex Cloud)
+
+- The `yandex` Terraform provider is the basis of the adapter; no hand-written SDK.
+- Compute: Serverless Containers (revisions make rollback possible) or a Managed Instance Group — decide by the conformance run.
+- Database: Managed PostgreSQL.
+- Storage: Object Storage (S3-compatible) — the same interface as international S3.
+- Registry: Container Registry.
+- Secrets: a service account with minimal roles and a short-lived IAM token.
+- Provider details stay inside the plugin; the core knows nothing about Yandex.
+
+### Registry Entry
+
+```json
+{
+  "id": "django-react-saas-yandex",
+  "version": "1.2.0",
+  "kind": "recipe",
+  "status": "conformant",
+  "composes": [
+    "stack-django@1.4",
+    "frontend-react@1.1",
+    "provider-yandex@1.0",
+    "channel-telegram@1.0",
+    "model-deepseek@1.0"
+  ],
+  "constraints": {
+    "requires": ["web"],
+    "supports": ["payments", "admin", "i18n"],
+    "excludes": ["mobile", "regulated"],
+    "regions": ["ru"]
+  },
+  "conformance_report": "sha256:..."
+}
+```
+
+### Selection Algorithm
+
+1. Brief → `requirements.json` (LLM, structured output, JSON Schema).
+2. Deterministic matcher: filter by `constraints`, discard mismatches.
+3. Ranking: maturity, conformance, cost, requirement coverage.
+4. The LLM chooses from the **top 3** and records the rationale in an ADR.
+5. If ambiguity is high, ask the user in chat (2–3 options in plain language).
+6. If no recipe fits, refuse explicitly and explain what is not supported.
+
+In the MVP the LLM **cannot** assemble a recipe from individual plugins. Composition comes only from the registry.
+
+### Conformance Kit
+
+The core runs a fake project against a plugin in a sandbox:
+`provision → apply → verify → rollback → destroy`.
+A plugin that fails the kit does not enter the registry with `conformant` status.
+
+### Plugin Security
+
+- The process is isolated; access is limited to declared capabilities.
+- Secrets are short-lived, scoped tokens per operation, never ambient credentials.
+- An egress allow-list comes from the manifest.
+- Plugin signing, a lockfile, and no postinstall scripts.
+- For the agent, plugin content (templates, docs) is untrusted data, not instructions.
+- Third-party plugins require explicit user confirmation.
+
+### Jurisdiction Layer (First-Class)
+
+Jurisdiction is not a document attached at the end. It is a layer every stage consults, supplied by a `jurisdiction` plugin and enforced by the core. The purpose is to make the default path easier — requirements that are always needed should not be retyped for every project — not to block delivery.
+
+**Why it is first-class.** In some jurisdictions the law dictates how a product must be built: where personal data is stored, which consent flow is required, how payments and advertising are handled, what content must be moderated, how incidents are reported. These are product constraints, not deployment details. A generated product that ignores them is not a finished product.
+
+**Pack.** A jurisdiction pack is versioned data:
+
+```yaml
+id: ru
+version: 2026.11
+status: reviewed          # draft | reviewed | expired
+region: ru
+effective_from: 2026-11-01
+reviewed_by: "legal counsel"
+review_due: 2027-11-01
+legal_sources:
+  - id: ...
+    title: ...
+    url: ...
+mandatory_requirements:
+  - id: RU-PD-001
+    title: ...
+    applies_when: ...
+    requirement: ...
+    verification: deterministic   # deterministic | manual | legal_review
+    evidence: ...
+prohibitions: []
+required_evidence: []
+```
+
+Rules are data, not prompts. Deterministic checks are preferred; ambiguous cases go to human legal review. The LLM may explain a rule and map it to a requirement, but it never certifies compliance.
+
+**Where it applies:**
+
+| Stage | What the layer does |
+|---|---|
+| Intake | Captures jurisdiction, entity type and operating regions. |
+| Recipe | Filters out incompatible recipes, providers and model endpoints. |
+| Architecture | Adds data-flow, residency and retention constraints. |
+| Spec | Injects mandatory requirements and prohibitions as hard constraints. |
+| QA | Runs deterministic compliance checks. |
+| Acceptance | Requires the evidence matrix and marks production readiness. |
+| Audit | Includes the jurisdiction report and the pack version. |
+| Deploy | Records the pack and its status; requires the compliance acknowledgement at the production gate. |
+| Operations | Tracks ongoing obligations: incident notice deadlines, retention, reporting. |
+
+**Default rule.** No pack → the generic draft is used and the gap is recorded; the project is not refused. Draft or expired → requirements are applied, production is allowed with the compliance acknowledgement. Reviewed → stronger evidence, but still not a legal guarantee. The layer informs; the human production gate decides. The plugin supplies the data; a human carries responsibility.
+
+**Compliance disclaimer.** Forgel is a software development tool, not a law firm. Jurisdiction packs are draft guidance, may be incomplete or out of date, and are not legal advice. Forgel does not warrant that a generated product complies with the laws of any jurisdiction. The user is responsible for regulatory compliance; approving a production deploy confirms that responsibility.
+
+**Production gate.** The production deploy command requires an explicit acknowledgement (for example `--accept-compliance-responsibility`) and records the pack id, status, disclaimer hash and the acknowledgement in the deploy record.
+
+---
+
+## 7. Process
+
+### Stages
+
+| # | Stage | Input | Output | Role | Gate |
+|---|---|---|---|---|---|
+| 0 | Intake | chat brief | `requirements.json` (incl. jurisdiction, entity, regions) | Intake | G0 |
+| 1 | Jurisdiction | requirements | `docs/program/jurisdiction/*`, production readiness | Jurisdiction selector | G0/G1 |
+| 2 | Recipe | requirements + jurisdiction | ADR with the recipe | Selector + LLM | G1 |
+| 3 | Architecture | requirements + recipe + jurisdiction | master plan, repo graph, contracts, data flow | Architect | G2 |
+| 4 | Repo plan | master plan | `docs/program/repos/*.md` | Repo planner | G2 |
+| 5 | Feature plan | repo requirements | change sets with a repo list | Feature planner | G2 |
+| 6 | Spec | feature + jurisdiction requirements | `docs/program/features/*.md` + repo specs | Spec writer | G3 |
+| 7 | Spec review | spec + brief + jurisdiction | findings | Spec reviewer | G3 |
+| 8 | Dev | spec | code + unit tests | Developer | — |
+| 9 | Code review | diff + spec | verdict | Reviewer | G4 |
+| 10 | QA | staging + spec + compliance checks | E2E + compliance report | QA | G5 |
+| 11 | Acceptance | change set + held-out + integration + evidence | verdict + production readiness | Acceptor | G6 |
+| 12 | Pre-release audit | release train + jurisdiction report | report | Auditor | G7 |
+| 13 | Human gates | — | legal review, entity, payments, stores, production | User | G8 |
+
+### Role Contract (Clean Context)
+
+| Role | Reads | Does not read | Writes |
+|---|---|---|---|
+| Spec writer | master plan, repo requirements, brief | code, QA reports | feature doc |
+| Spec reviewer | brief, master plan, feature doc | code, agent history | findings |
+| Developer | feature doc, repo code, conventions | QA reports, review history | code, tests |
+| Reviewer | diff, feature doc, conventions | developer reasoning | verdict |
+| QA | staging, acceptance criteria, UI | code (DOM/API only) | report |
+| Acceptor | held-out tests, feature doc | code, QA reasoning | verdict |
+
+Jurisdiction review is a human gate. No agent certifies legal compliance; the core only enforces the pack and records the evidence.
+
+### State and Resumability
+
+- Append-only ledger: `project_id`, `task_id`, `stage`, `status`, `attempt`, `idempotency_key`, `artifact_refs`, `cost`.
+- A checkpoint after every stage; the artifact is committed before the transition.
+- Resumption starts from the last committed state, not from agent memory.
+- A crash must not leave half-applied infrastructure: plugins must implement `rollback` and `destroy`.
+
+### 7.1 Proven Practices
+
+Practices proven in production; Forgel inherits them as role, document and gate templates.
+
+| Practice | How it is used |
+|---|---|
+| Feature doc: FR/NFR with IDs, non-goals, acceptance criteria, open questions, revision history; no implementation code | Spec template; document version separate from product version |
+| Changing an existing feature: a `## Fix`/`## Addition` section in its doc, not a new file | The spec lives, it does not multiply |
+| Developer reads the spec, follows existing patterns, lints, writes a QA case, reports files/decisions/verification | Role contract |
+| Reviewer builds a requirement → code → evidence traceability matrix and returns PASS/NEEDS_WORK/FAIL | Gate G4 |
+| An acceptance checkbox is a fact: ticked only after all runs and review approval; unverifiable items stay unticked with a note | Gate G6 |
+| Auto-QA: a scenario must assert (`check()`, exit code, console/pageerror); isolated stand; database reset before each scenario; one full run at release, recorded | QA suite generation |
+| A repeated full run is refused by the runner, not by prose | D-023 |
+| Release plan: `[ ] [~] [x] [-]` statuses, links added as they appear, a verdict for every open item, no silent carry-over | Release train |
+| Preflight audit: parallel agents over areas, diff against the tag, regressions/security/migrations/N+1, external APIs checked against source, critical/major fixed or accepted by the owner | Gate G7 |
+| Deploy record: a database row exposed by API and read by triage; "fixed" means absent after deploy | `record_deploy` in the provider plugin |
+| Error registry is cross-version, one row per cause, hashes in an appendix; triage → record → delete | Program telemetry |
+| The queue is closed, the instruments are read; every complaint and every conversation gets a verdict | Improvement loop |
+| The acceptance criterion is "did the product do its job for the user", not only "does it match the spec" | Gate G6 |
+| Incident runbook: honest state, no versions/hosts/stack traces/PII/ETAs; review afterwards | Generated runbook |
+| "AI writes the spec, not the code": declarative spec + deterministic engine | D-021 |
+| Context: source read once → derivative; retrieval instead of dumping; conversation window; stable prefix; narrow typed tools | Agent runtime |
+| No claim about state without in-session evidence; a document is evidence as of its revision date | Evidence discipline |
+| Global settings only via env, not chat commands | Chat changes one project only |
+
+### 7.2 What Changes at the Meta Level
+
+In single-repo practice, "we only write what we do here" and "never wait for the frontend" are correct: a repository does not control someone else's scope. Forgel owns the whole graph, so the rules invert.
+
+| Repo-level rule | Why it does not transfer literally | Forgel rule |
+|---|---|---|
+| The plan covers only this repo | A feature crosses 2+ repos | The unit of planning is a **change set** with a repo list |
+| "Waiting for the frontend" is forbidden | At the meta level the dependency is real | A dependency is an explicit edge in `program.yaml`; a blocked status names the edge and the unblock path; there is no silent waiting |
+| A release is one repo's version | The product ships as a set of versions | **Release train**: repo versions + integration stand + one plan/QA/audit |
+| The repo owner fixes the error | The cause may be in a contract or another repo | The fix is owned by a repo; triage and correlation happen at the program level |
+| A tracker task is for a UX change | One change set produces tasks in several repos | Program acceptance task + repo implementation tasks |
+| Documents live in the repo | Some decisions are above the repo | Program docs are the source of truth; repo docs are derived |
+| The model is inherited | Routing by role and cost is required | Core policy; the agent does not choose its model (D-022) |
+| The owner starts local services | A sandbox exists | The sandbox starts and stops everything itself |
+
+### 7.3 Artifact Hierarchy
+
+**Program level** (created by the core):
+
+```
+program.yaml
+lock.json
+docs/program/
+  master-plan.md
+  repos/<repo>.md
+  features/<id>_<name>.md
+  contracts/<repo>.yaml
+  acceptance/<id>.md
+  jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
+  adr/NNNN-*.md
+  releases/<train>/{plan,qa,post_release}.md
+  telemetry/{registry.md,triage/<date>.md}
+qa/integration/
+qa/held-out/            # never read by the dev agent
+```
+
+**Repo level** (generated and maintained by Forgel):
+
+```
+docs/requirements.md
+docs/features/<timestamp>_<name>.md
+docs/process/*.md       # from Forgel templates
+docs/suite/*.md
+qa/scenarios/*
+CHANGELOG.md
+```
+
+Rules:
+
+- Program docs are the source of truth; repo docs link upward and do not contradict them.
+- Feature doc template: Overview, Goals, Non-goals, FR/NFR with IDs, Acceptance criteria, Open questions, Related resources, Revision history. No implementation code.
+- The document version is separate from the product version; every change adds a revision-history row.
+- Every acceptance criterion has an ID and an evidence link.
+
+### 7.4 Program-Level Telemetry Loop
+
+At the start of every program cycle, and continuously after production:
+
+1. **Instruments:** product metrics, technical metrics, cost, deploy records, the error registry.
+2. **Queue:** failures, complaints, conversations. Read everything; every complaint and every conversation gets a verdict.
+3. **Correlation:** errors are matched against deploy records across all repos; "fixed" means absent after deploy.
+4. **Record before closing:** the registry and journal are updated before the queue is cleaned.
+5. **Findings → plan:** each becomes a change-set item, not a "someday".
+6. **Criterion:** did the product do its job for the user, not only match the spec.
+7. **Production changes** only after human approval.
+
+---
+
+## 8. Gates
+
+| Gate | What it checks | Who passes it |
+|---|---|---|
+| G0 | Brief completeness: users, features, payments, region; jurisdiction, entity and operating regions identified | Automated + user question |
+| G1 | A jurisdiction pack (or the generic draft) is selected and matches the region; the recipe exists, conformance passed, constraints satisfied | Automated |
+| G2 | The plan covers requirements; the repo graph, contracts, dependencies, data flow and residency are defined; every change set has a scope | Automated + LLM |
+| G3 | The spec does not contradict the brief, master plan and jurisdiction requirements; program and repo specs agree | Spec reviewer |
+| G4 | Review: correctness, security, conventions, contracts | Reviewer |
+| G5 | Deterministic oracles + repo E2E + program integration suite + compliance checks | QA |
+| G6 | Held-out + change-set acceptance + jurisdiction evidence matrix + "the product did its job" | Acceptor |
+| G7 | Release-train audit: security, dependencies, migrations, rollback, cross-repo contracts, jurisdiction report and pack version | Auditor |
+| G8 | Compliance acknowledgement, legal entity, payments, app stores, production deploy | Human |
+
+---
+
+## 9. Reliability and Budget
+
+### Targets (measured from M1)
+
+| Metric | Target |
+|---|---|
+| Share of features accepted on the first pass | ≥ 70% |
+| Escaped defects | < 1 per 10 features |
+| E2E flaky rate | < 3% |
+| Share of features returned due to a spec error | < 10% |
+| Share of change sets passing integration on the first run | ≥ 80% |
+| "Fixed" statuses without a deploy record | 0 |
+| Production deploys without a recorded jurisdiction pack and acknowledgement | 0 |
+| Jurisdiction packs past `review_due` surfaced as warnings | 100% |
+
+Cost per feature and human minutes are measured from day one and capped by the project budget.
+
+### Cost Control
+
+- A budget per feature and per project; when exceeded, stop and ask, rather than retry forever.
+- Retry cap: 2 per feature, then escalate.
+- Routing: a cheap model for routine work, a strong one for architecture/review/audit.
+- Context order: a stable prefix (system + plan + spec) first, dynamic tool output last — maximizes prefix cache hits.
+- Asynchronous work goes into the off-peak queue.
+- Token attribution per project, feature, role and stage.
+
+---
+
+## 10. Roadmap
+
+### M0 — Skeleton (2–3 weeks)
+
+- Ledger, state machine, artifact store, chat gateway.
+- One stub recipe, one stub provider.
+- End-to-end hello world: brief → repo → commit → staging URL.
+- Repository, licenses, CONTRIBUTING/DCO, documentation skeleton.
+- One draft jurisdiction pack; production is allowed with the compliance acknowledgement.
+- **Exit:** the process reaches staging with no manual action except approval; production readiness is reported honestly.
+
+### M1 — Vertical Slice and Public OSS Alpha (up to 3 months)
+
+- Django + React + Postgres + Yandex Cloud.
+- Two repos (api, web), OpenAPI contract, Playwright E2E.
+- Held-out acceptance, reports, cost per feature.
+- 10–20 features of one reference product (B2B SaaS or marketplace).
+- Public repository, one-line install, documentation, Output License.
+- A usable RU jurisdiction pack with default requirements and the compliance acknowledgement; legal review is optional.
+- **Exit:** 3–5 pilot projects; 100+ installs; the §9 metrics measured.
+
+### M2 — Plugins and Ecosystem (4–6 months)
+
+- Plugin SDK, registry, conformance kit, `conformant` badge.
+- A second cloud (international) — the main test of the abstraction; then a second stack (FastAPI).
+- Recipes as data; catalog updates without a core release.
+- A second jurisdiction pack with conformance tests; packs are added without core changes.
+- Plugin bounties, "Built with Forgel", public evals.
+- **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
+
+### M3 — Hosted Version (7–9 months)
+
+- Control plane: tenants, billing, quotas (openness decision — Q3).
+- Paid hosting, managed updates, support; OSS stays free.
+- **Exit:** hosted version available; 1000+ OSS installs.
+
+### M4 — Operations (10–12 months)
+
+- Metrics loop: collection, hypotheses, PRs, experiments with approval.
+- Mobile apps (RN) with a human release gate.
+- Compliance packs per jurisdiction.
+- **Exit:** the product lives after launch, not only up to it.
+
+---
+
+## 11. Open Questions
+
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| Q1 | Held-out test isolation | separate repo, separate namespace, ACL | A separate repo with no dev-agent access |
+| Q2 | Secrets in self-host | env, vault, cloud KMS | Start with env + instructions; KMS in M3 |
+| Q3 | Openness of the hosted control plane | open AGPL, closed, open-core | Open AGPL: monetization is hosting and support, not code |
+| Q4 | How to source and maintain jurisdiction packs | in-house legal, partner counsel, community + maintainer sign-off | Open data + a named reviewer when available; drafts are acceptable and carry the disclaimer |
+
+Business-model questions are kept separately.
+
+---
+
+## 12. Risks
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| A spec error propagates through every role | High | Spec reviewer + check against the original brief + held-out |
+| Contracts drift between repos | High | Contract-first, contract tests, change sets |
+| Token cost overrun | Medium | Budgets, retry cap, off-peak, context ordering |
+| Plugins rot with cloud APIs | Medium | Lockfile, conformance kit, API version, registry |
+| Prompt injection through repo/plugin content | High | Untrusted data, egress control, least privilege |
+| Leak of the user's credentials | Critical | Short-lived scoped tokens, sandbox, audit |
+| Dependence on one model provider | Medium | OpenAI-compatible layer, BYO endpoint, evals on change |
+| Low quality of third-party plugins | Medium | Conformance kit, verified status, registry rating |
+| Literal transfer of repo-level rules to the meta level | High | §7.2 inverts the rules; plan review checks that cross-repo dependencies are explicit |
+| Outdated jurisdiction pack | High | `review_due` warnings, a visible pack status, and the compliance acknowledgement; the layer never silently disappears |
+| False sense of compliance | High | Deterministic checks where possible, an explicit disclaimer, no LLM certification, and human responsibility at the production gate |
+
+---
+
+## 13. Definition of Success
+
+By the end of M1:
+
+- The same brief from 3–5 different teams produces a working staging environment in comparable time.
+- Acceptance rate ≥ 60%.
+- No project requires manual code intervention.
+- 100+ OSS installs, 10+ external issues/PRs.
+- Every accepted change set has acceptance evidence: criteria, runs, review.
+- Every production deploy records the jurisdiction pack, its review status and the user's compliance acknowledgement.
+
+By the end of M2:
+
+- 10+ third-party plugins, 500+ installs, 20+ external contributors.
+- An international cloud is added by a plugin without core changes.
+- A second jurisdiction pack is added without core changes.
+- No "fixed" status without the error being absent after deploy.
+
+By the end of M3:
+
+- The hosted version is available; OSS remains free.
+- 1000+ OSS installs.
+
+---
+
+## 14. Participation and Governance
+
+- Public roadmap and RFC process.
+- DCO instead of CLA: the contributor keeps authorship by signing off commits.
+- Official plugins are Apache-2.0; third-party plugins may use any license.
+- The plugin registry is open; the `conformant` badge is issued after the conformance kit.
+- Forks are legal; the name, logo and official-line badge are protected by trademark.
+- Code of conduct and issue/PR templates live in the repository.

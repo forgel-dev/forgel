@@ -1,0 +1,26 @@
+{
+  "id": "generic",
+  "version": "0.0.0-draft",
+  "status": "draft",
+  "region": "*",
+  "effective_from": null,
+  "reviewed_by": null,
+  "review_due": null,
+  "requires_human_review": true,
+  "data_residency": "to-be-confirmed",
+  "legal_sources": [],
+  "categories": [
+    "personal-data",
+    "data-residency",
+    "payments",
+    "advertising",
+    "content-moderation",
+    "app-stores",
+    "incident-reporting",
+    "consumer-rights"
+  ],
+  "mandatory_requirements": [],
+  "prohibitions": [],
+  "required_evidence": [],
+  "notes": "Generic draft used when no pack exists for the selected jurisdiction. Not legal advice."
+}
