@@ -18,6 +18,7 @@ from .context import effective_context, resolve_context
 from .daemon import run_daemon
 from .ledger import Ledger, new_project_id
 from .project_config import ConfigError, load_project_config
+from .proposals import ProposalError, list_proposals, propose_project
 from .orchestrator import Orchestrator, StageError
 from .sync import SyncError, reconcile_project, sync_project
 
@@ -320,6 +321,65 @@ def cmd_context(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_propose(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        workspace = Path(project["workspace"])
+        try:
+            config = load_project_config(workspace)
+            path = propose_project(
+                workspace,
+                config,
+                kind=args.kind,
+                title=args.title,
+                evidence=args.evidence,
+                risk=args.risk,
+            )
+        except (ConfigError, ProposalError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(path.relative_to(workspace))
+        return 0
+    finally:
+        ledger.close()
+
+
+def cmd_proposals(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = ledger.get_project(args.project_id)
+        if project is None:
+            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            return 1
+        workspace = Path(project["workspace"])
+        paths = list_proposals(workspace)
+        if not paths:
+            print("no proposals")
+            return 0
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            kind = ""
+            status = ""
+            title = path.stem
+            for line in text.splitlines():
+                if line.startswith("# Proposal: "):
+                    title = line[len("# Proposal: ") :]
+                elif line.startswith("- Class: "):
+                    kind = line.split(":", 1)[1].strip().strip("`")
+                elif line.startswith("- Status: "):
+                    status = line.split(":", 1)[1].strip().strip("`")
+            print(f"{kind:<6} {status:<8} {title} ({path.name})")
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_daemon(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -462,6 +522,26 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--raw", action="store_true")
     context.add_argument("--home", default=None)
     context.set_defaults(func=cmd_context)
+
+    propose = subparsers.add_parser(
+        "propose", help="Create a post-release change proposal"
+    )
+    propose.add_argument("project_id")
+    propose.add_argument(
+        "--kind", choices=["patch", "minor", "major"], required=True
+    )
+    propose.add_argument("--title", required=True)
+    propose.add_argument("--evidence", default="")
+    propose.add_argument("--risk", default="")
+    propose.add_argument("--home", default=None)
+    propose.set_defaults(func=cmd_propose)
+
+    proposals = subparsers.add_parser(
+        "proposals", help="List change proposals"
+    )
+    proposals.add_argument("project_id")
+    proposals.add_argument("--home", default=None)
+    proposals.set_defaults(func=cmd_proposals)
 
     daemon = subparsers.add_parser(
         "daemon", help="Run the long-lived orchestrator loop"

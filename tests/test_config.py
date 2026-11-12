@@ -33,6 +33,8 @@ class ProjectConfigTest(unittest.TestCase):
             self.assertEqual(config.jurisdiction.pack, "eu")
             self.assertEqual(config.budget.per_feature_usd, 10.0)
             self.assertEqual(config.budget.per_project_usd, 300.0)
+            self.assertFalse(config.release.auto_patch)
+            self.assertFalse(config.release.propose_minor)
 
     def test_missing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -56,6 +58,26 @@ class ProjectConfigTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "forgel.toml").write_text(
                 "[budget]\nper_feature_usd = -1\n", encoding="utf-8"
+            )
+            with self.assertRaises(ConfigError):
+                load_project_config(Path(tmp))
+
+    def test_release_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "forgel.toml").write_text(
+                "[release]\nauto_patch = true\npropose_minor = true\n",
+                encoding="utf-8",
+            )
+            config = load_project_config(Path(tmp))
+            self.assertIsNotNone(config)
+            assert config is not None
+            self.assertTrue(config.release.auto_patch)
+            self.assertTrue(config.release.propose_minor)
+
+    def test_release_flags_must_be_boolean(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "forgel.toml").write_text(
+                '[release]\nauto_patch = "yes"\n', encoding="utf-8"
             )
             with self.assertRaises(ConfigError):
                 load_project_config(Path(tmp))

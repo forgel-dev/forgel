@@ -60,6 +60,9 @@ class EndToEndTest(unittest.TestCase):
             config = (workspace / "forgel.toml").read_text(encoding="utf-8")
             self.assertIn('name = "hello-web"', config)
             self.assertIn('recipe = "hello-web@0.1.0"', config)
+            self.assertIn("[release]", config)
+            self.assertIn("auto_patch = false", config)
+            self.assertIn("propose_minor = false", config)
             self.assertTrue(
                 (workspace / "docs/program/jurisdiction/profile.json").exists()
             )

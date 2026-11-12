@@ -131,6 +131,8 @@ Forgel runs as a long-lived control-plane process. It never polishes endlessly: 
 | **D-035** | Forgel runs as a long-lived control plane with finite iterations: each has a goal, a definition of done and a budget | An always-on orchestrator must stop when the goal is met; endless polishing burns budget without improving the product | The daemon runs pending work, then idles; an iteration closes with a recorded verdict when acceptance/audit pass or the budget is exhausted |
 | **D-036** | Post-release work is triaged into auto-fix, ask-user and record-only | Money-path, security and regression defects must be fixed immediately; ambiguous or risky changes need the user; low-signal issues need more data | Auto-fix critical, reversible, high-confidence findings; ask on ambiguity, scope, migrations and legal; record low-signal issues and revisit on a threshold |
 | **D-037** | Every iteration has a budget cap and stops on exhaustion | Unbounded retries and improvement cycles are the main cost risk | Budget from `forgel.toml`; exhaustion stops the iteration, records the verdict and leaves deferred work explicit |
+| **D-038** | After the user's goal is met, Forgel proposes only PATCH fixes by default; MINOR is opt-in and MAJOR is human-initiated | The product is done when it meets its requirements; endless polishing burns budget and loses control | SemVer classifies every post-release proposal; the default is a proposal with evidence, not an automatic change |
+| **D-039** | Automatic PATCH application is opt-in and off by default | Automatic changes after the goal carry regression and infinite-loop risk | `release.auto_patch = true` enables it; proposals without approval are recorded, not applied |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -273,6 +275,7 @@ docs/program/
   acceptance/<id>.md
   external-changes.md
   iterations/<id>/close.md
+  proposals/<id>.md
   jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
   adr/NNNN-*.md
   releases/<train>/{plan,qa,post_release}.md
@@ -552,6 +555,7 @@ docs/program/
   acceptance/<id>.md
   external-changes.md
   iterations/<id>/close.md
+  proposals/<id>.md
   jurisdiction/{profile.json,requirements.md,data-flow.md,compliance.md,legal-review.md}
   adr/NNNN-*.md
   releases/<train>/{plan,qa,post_release}.md
@@ -622,6 +626,10 @@ architecture = "deepseek-v4-pro"
 [budget]
 per_feature_usd = 10
 per_project_usd = 300
+
+[release]
+auto_patch = false       # apply PATCH fixes automatically (risky; off by default)
+propose_minor = false    # also propose MINOR improvements
 ```
 
 `forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
@@ -678,6 +686,18 @@ It starts on a trigger: a user request, a release milestone, a telemetry thresho
 
 Never: an unbounded improvement loop, a change without a change set and acceptance criteria, or an automatic production deploy.
 
+### Release Policy After the Goal
+
+SemVer governs the proposal class:
+
+| Class | Examples | Default | Config |
+|---|---|---|---|
+| PATCH | security, payments, broken user scenarios, regressions, data integrity | Forgel proposes a fix with evidence; it does not apply it without approval | `release.auto_patch = true` applies PATCH automatically (not recommended) |
+| MINOR | new features, UX/scenario changes, metrics-driven improvements | Not proposed | `release.propose_minor = true` makes Forgel propose them |
+| MAJOR | breaking changes, architecture, platform/store or legal changes | Human-initiated only | Never automatic |
+
+Proposals are written to `docs/program/proposals/<id>.md` and delivered through the chat channel (Telegram in the MVP): what was found, the evidence, the proposed class and the risk. An approved proposal becomes a change set with its own acceptance criteria and budget.
+
 ---
 
 ## 8. Gates
@@ -715,6 +735,9 @@ Never: an unbounded improvement loop, a change without a change set and acceptan
 | Iterations closed with an explicit verdict | 100% |
 | Unbounded improvement cycles | 0 |
 | Money-path defects auto-fixed within the agreed SLA | 100% |
+| PATCH proposals with evidence | 100% |
+| Unapproved automatic patches | 0 |
+| MINOR proposals without opt-in | 0 |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -753,6 +776,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Playwright/Chromium E2E in the Compose stand; visual checks and screenshots.
 - Adopt an existing repository and reconcile external changes; no reset or full regeneration.
 - Daemon mode and iteration close verdicts.
+- Proposal artifacts and the default PATCH-only post-release policy.
 - **Exit:** 3–5 pilot projects; 100+ installs; the §9 metrics measured.
 
 ### M2 — Plugins and Ecosystem (4–6 months)
@@ -763,6 +787,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - A second jurisdiction pack with conformance tests; packs are added without core changes.
 - Lightpanda driver evaluation for non-visual checks; Chromium remains the default.
 - Post-release triage policy enforced: auto-fix, ask user, record/defer.
+- Opt-in automatic PATCH application and metrics-driven MINOR proposals.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -792,6 +817,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 | Q5 | Default browser engine | Playwright/Chromium, Lightpanda | Chromium for visual checks; Lightpanda experimental for non-visual CDP checks |
 | Q6 | How to reconcile external changes | git diff + drift report + human approval | Record and reconcile, never regenerate; update the spec and acceptance only after review |
 | Q7 | Post-release auto-fix thresholds | severity, reversibility, confidence | Money-path and critical security defects auto-fix; ambiguous or risky changes ask; low-signal issues are recorded |
+| Q8 | Where proposals are delivered and approved | Telegram, web | Telegram for the MVP; approval is recorded in the proposal |
 
 Business-model questions are kept separately.
 
@@ -819,6 +845,8 @@ Business-model questions are kept separately.
 | External edits break the process | High | Reconcile from git, record drift, never overwrite, resume from the current stage |
 | Endless polishing / budget burn | High | Finite iteration goal, budget cap, stop conditions, explicit verdict |
 | Auto-fix causes a regression | High | Auto-fix only high-confidence, reversible findings; canary and rollback; human approval for production |
+| Automatic PATCH loop / loss of control | High | Off by default; budget and iteration caps; approval required unless explicitly enabled |
+| MINOR proposal noise | Medium | Opt-in only; proposals need evidence and a finite scope |
 
 ---
 
@@ -836,6 +864,7 @@ By the end of M1:
 - The generated product's E2E runs in Compose with a headless browser.
 - A project modified by hand or another harness can be resumed without resetting the process.
 - Every iteration ends with a recorded verdict: goal met, budget exhausted, blocked, or cancelled.
+- Every post-release proposal carries its SemVer class, evidence, risk and approval state.
 
 By the end of M2:
 

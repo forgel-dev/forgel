@@ -41,6 +41,12 @@ class BudgetConfig:
 
 
 @dataclass(frozen=True)
+class ReleaseConfig:
+    auto_patch: bool = False
+    propose_minor: bool = False
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str | None
     recipe: str | None
@@ -48,6 +54,7 @@ class ProjectConfig:
     jurisdiction: JurisdictionConfig
     models: ModelsConfig
     budget: BudgetConfig
+    release: ReleaseConfig
 
 
 def render_project_config(
@@ -59,6 +66,8 @@ def render_project_config(
     model_architecture: str = "deepseek-v4-pro",
     per_feature_usd: float = 10.0,
     per_project_usd: float = 300.0,
+    auto_patch: bool = False,
+    propose_minor: bool = False,
 ) -> str:
     return f"""[project]
 name = "{name}"
@@ -77,6 +86,10 @@ architecture = "{model_architecture}"
 [budget]
 per_feature_usd = {per_feature_usd:g}
 per_project_usd = {per_project_usd:g}
+
+[release]
+auto_patch = {str(auto_patch).lower()}
+propose_minor = {str(propose_minor).lower()}
 """
 
 
@@ -101,6 +114,7 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     jurisdiction = _section(data, "jurisdiction")
     models = _section(data, "models")
     budget = _section(data, "budget")
+    release = _section(data, "release")
 
     runtime = str(qa.get("runtime", "auto"))
     if runtime not in VALID_QA_RUNTIMES:
@@ -112,6 +126,11 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     per_project = float(budget.get("per_project_usd", 300.0))
     if per_feature < 0 or per_project < 0:
         raise ConfigError("forgel.toml: budget values must be non-negative")
+
+    auto_patch = release.get("auto_patch", False)
+    propose_minor = release.get("propose_minor", False)
+    if not isinstance(auto_patch, bool) or not isinstance(propose_minor, bool):
+        raise ConfigError("forgel.toml: [release] values must be booleans")
 
     return ProjectConfig(
         name=str(project["name"]) if "name" in project else None,
@@ -125,5 +144,9 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
         budget=BudgetConfig(
             per_feature_usd=per_feature,
             per_project_usd=per_project,
+        ),
+        release=ReleaseConfig(
+            auto_patch=auto_patch,
+            propose_minor=propose_minor,
         ),
     )
