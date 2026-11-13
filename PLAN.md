@@ -144,6 +144,10 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-046** | Budget control is a core requirement with hard caps at feature, iteration, day, project and provider-key level | An agent stuck on a misconfigured environment can consume the provider balance, and with auto top-up the card balance; DeepSeek does not enforce a per-key limit | The harness reserves, records and enforces cost before every model call; hard stop at the cap, never a silent overrun |
 | **D-047** | A Budget Arbiter may pause or stop, but never increase a budget | Only the user can accept more spend; an agent must not raise its own ceiling | Every stop records the reason and the checkpoint; the user raises the budget, then the iteration resumes |
 | **D-048** | Provider keys are scoped, prepaid and isolated; auto top-up is disabled; a single egress proxy is the only path to the model | The provider cannot enforce the budget, and subagents must not bypass the ledger | One key per project/environment, no main key, proxy cap; the ledger is the source of truth for spend |
+| **D-049** | GitHub integration uses a GitHub App with short-lived installation tokens; no personal token by default; no direct push to `main` | Short-lived, repo-scoped tokens limit the blast radius; protected `main` keeps a reviewable history | The daemon mints a token per job, clones/fetches, pushes a branch and opens a PR; tokens never touch disk or logs |
+| **D-050** | One branch and one PR per change set; bot identity; protected `main`; human merge by default | PRs are the review and audit unit; direct pushes bypass evidence and review | Branch `forgel/<change-set>-<slug>`, PR with spec/acceptance/complexity/disclaimer; squash merge optional after approval |
+| **D-051** | Fetch before every iteration; rebase on upstream movement; a conflict stops the iteration | Other people and tools push too; force-push would destroy their work | Never `reset --hard` or force-push; conflicts are surfaced to the user |
+| **D-052** | Repo onboarding is a PR; the daemon runs from a released image, not the working copy it modifies | Adopting a repo must be reviewable; a running process must not rewrite its own code | `forgel adopt <repo-url>` opens an onboarding PR; Forgel changes ship via CI-built images |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -665,6 +669,15 @@ max_compat_markers = 0
 enabled = true
 budget_percent = 10          # max share of an iteration
 allow_auto_targeted = true
+
+[git]
+provider = "github"
+auth = "github_app"
+base_branch = "main"
+branch_prefix = "forgel/"
+draft_pr = true
+require_ci = true
+merge = "human"
 ```
 
 `forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
@@ -840,6 +853,42 @@ max_retries_without_progress = 3
 
 **Risks:** provider-key exhaustion or auto top-up; key leakage; a subagent bypassing the ledger; estimate drift; false stops; ignored warnings.
 
+### 7.11 Git and GitHub Integration
+
+Forgel currently uses local git per project: `git init`, a baseline commit, the `forgel-baseline` tag and generation commits. Remote integration is not implemented yet. The target flow for a daemon on a server:
+
+1. **Auth:** a **GitHub App**, not a personal token. Installation tokens are short-lived (about one hour), scoped to selected repositories, with Contents read/write, Pull requests read/write, Checks read and Metadata read. The private key lives in a secret manager; a token is minted per job and never written to disk or logs. A single-user self-host may use a fine-grained PAT or a deploy key, but the App is the default.
+2. **Clone and fetch:** `git fetch origin` before every iteration. Clone into a workspace, never into the running daemon's own code directory.
+3. **Branch:** never commit to `main`. Create `forgel/<change-set>-<slug>` from the current `origin/main`. One branch per change set; the same name across repos in a multi-repo change set.
+4. **Commit:** one logical change per commit; English messages; bot identity (`Forgel <bot@forgel.io>`), not the user; no harness attribution. Add sign-off only when the target repo requires DCO.
+5. **Push and PR:** push the branch and open or update a draft PR with the spec, acceptance evidence, complexity report, jurisdiction disclaimer and rollback note. The PR is the review unit; never force-push a protected branch.
+6. **CI and checks:** require the repository's checks and wait for them through the Checks API or a webhook. On failure, fetch the logs, triage and fix on the same branch. Forgel's own QA passes before the PR is marked ready.
+7. **Merge:** human approval by default; optional squash merge after green checks. Protected `main`, linear history, no direct pushes, no force pushes.
+8. **Upstream sync:** fetch before an iteration. If `main` moved, rebase the branch; if it conflicts, stop and ask the user. Never `reset --hard` or force-push.
+9. **Multi-repo change sets:** one PR per repo, linked by a change-set ID; merge order follows the contracts; the integration environment is built from the pinned SHAs. Cross-repo merge is not atomic; the change set is accepted after all PRs merge and integration passes.
+10. **Repo onboarding:** `forgel adopt <repo-url>` clones the repo, detects the stack, writes `program.yaml`, `forgel.toml`, `FORGEL.md` and `AGENTS.md`, creates the baseline tag and opens an onboarding PR. Generated projects require the user (or an App with template permission) to create the repo; Forgel never pushes directly to `main`.
+11. **Events:** GitHub App webhooks for push, pull request, check run and issue events; polling is the fallback for a minimal self-host.
+12. **Self-update:** the daemon runs from a released image, not from the working copy it modifies. Merging Forgel changes triggers CI to build a new image and the deploy updates it.
+
+**Config:**
+
+```toml
+[git]
+provider = "github"
+auth = "github_app"          # github_app | deploy_key | pat
+base_branch = "main"
+branch_prefix = "forgel/"
+draft_pr = true
+require_ci = true
+merge = "human"              # human | squash
+```
+
+**Artifacts:** PR URL, commit SHA and merge SHA in the ledger; `docs/program/git/report.md`.
+
+**Metrics:** direct pushes to `main` = 0; force pushes = 0; PRs with acceptance evidence = 100%; PR cycle time; conflict rate; CI pass rate; merge rate.
+
+**Risks:** token leakage; branch-protection bypass; force-push; upstream conflicts; large PRs; rate limits; webhook spoofing.
+
 ---
 
 ## 8. Gates
@@ -889,6 +938,9 @@ max_retries_without_progress = 3
 | Overspend incidents | 0 |
 | Budget stops with a recorded checkpoint | 100% |
 | Cost per accepted feature | measured and within budget |
+| Direct pushes to `main` | 0 |
+| Force pushes | 0 |
+| PRs with acceptance evidence | 100% |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -920,6 +972,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 
 - Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
 - Human approval gate for staging and production; production requires the compliance acknowledgement.
+- GitHub App auth, branch/PR flow and remote fetch/push for self-host.
 - Brownfield adoption: point Forgel at its own repository and accept change requests without regenerating it.
 - Deploy the daemon on a server with Docker Compose, a persistent data volume, the bot token and the model key.
 - **Exit:** a real Forgel change is specified, implemented, reviewed, QA'd and accepted through Forgel itself. Another harness is used only for bottlenecks.
@@ -952,6 +1005,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Simplicity Arbiter agent with auto-simplification classes and a decision digest.
 - Refactoring Arbiter: targeted-refactor auto-apply, structural proposals, debt triggers.
 - Budget ledger, per-feature/iteration/day caps, hard stop, scoped prepaid keys and egress proxy; Budget Arbiter and anomaly detection.
+- Multi-repo change sets, GitHub webhooks, CI checks and `forgel adopt`; optional squash merge.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -985,6 +1039,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 | Q9 | Simplicity thresholds and arbiter authority | per-patch budget; auto-internal; ask-visible | Default budgets; the arbiter auto-applies internal simplifications and escalates user-visible or irreversible ones |
 | Q10 | Refactoring thresholds and authority | auto-targeted; proposal-only; structural approval | Default NO_REFACTOR; auto only bounded, internal, net-reducing targeted refactors; structural requires human approval |
 | Q11 | Budget enforcement point | client ledger, egress proxy, provider key | Egress proxy + scoped prepaid keys is mandatory; the ledger is the source of truth |
+| Q12 | GitHub auth for self-host | GitHub App, fine-grained PAT, deploy key | GitHub App for multi-repo; PAT/deploy key for a quick single-user start |
 
 Business-model questions are kept separately.
 
@@ -1024,6 +1079,11 @@ Business-model questions are kept separately.
 | Subagent bypasses the budget ledger | High | Single egress proxy, no direct keys, per-call reservation |
 | No-progress retry loop | High | Retry cap, no-progress detector, Budget Arbiter stop |
 | Budget estimate drift | Medium | Reserve + reconcile against provider usage, cost report |
+| GitHub token leakage | Critical | GitHub App, short-lived scoped tokens, secret manager, log redaction |
+| Force-push / branch-protection bypass | High | Protected `main`, no force-push, required checks |
+| Upstream conflict | Medium | Fetch and rebase before iteration; stop and ask on conflict |
+| Webhook spoofing | Medium | Verify signatures; polling fallback |
+| Daemon modifies its own running code | High | Run from a released image; separate workspace clone |
 
 ---
 
@@ -1046,6 +1106,7 @@ By the end of M1:
 - Every structural refactor has a recorded cost/benefit decision; deferred debt has a trigger.
 - A real Forgel change is delivered through Forgel itself in the self-hosting milestone.
 - No overspend incidents: every agent run stops at its budget or on no progress, with a recorded checkpoint.
+- No direct pushes to `main` and no force pushes; every change lands as a reviewed PR with evidence.
 
 By the end of M2:
 
