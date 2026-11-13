@@ -145,9 +145,10 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-047** | A Budget Arbiter may pause or stop, but never increase a budget | Only the user can accept more spend; an agent must not raise its own ceiling | Every stop records the reason and the checkpoint; the user raises the budget, then the iteration resumes |
 | **D-048** | Provider keys are scoped, prepaid and isolated; auto top-up is disabled; a single egress proxy is the only path to the model | The provider cannot enforce the budget, and subagents must not bypass the ledger | One key per project/environment, no main key, proxy cap; the ledger is the source of truth for spend |
 | **D-049** | GitHub integration uses a GitHub App with short-lived installation tokens; no personal token by default; no direct push to `main` | Short-lived, repo-scoped tokens limit the blast radius; protected `main` keeps a reviewable history | The daemon mints a token per job, clones/fetches, pushes a branch and opens a PR; tokens never touch disk or logs |
-| **D-050** | One branch and one PR per change set; bot identity; protected `main`; human merge by default | PRs are the review and audit unit; direct pushes bypass evidence and review | Branch `forgel/<change-set>-<slug>`, PR with spec/acceptance/complexity/disclaimer; squash merge optional after approval |
+| **D-050** | One branch and one PR per change set; bot identity; protected `main`; **auto-merge is the default**, human merge is an opt-in mode | Mandatory human merge turns Forgel into a copilot-like assistant and breaks the end-to-end automation promise | Auto-merge after all gates and required checks pass; `merge = "human"` for teams that want a final review |
 | **D-051** | Fetch before every iteration; rebase on upstream movement; a conflict stops the iteration | Other people and tools push too; force-push would destroy their work | Never `reset --hard` or force-push; conflicts are surfaced to the user |
 | **D-052** | Repo onboarding is a PR; the daemon runs from a released image, not the working copy it modifies | Adopting a repo must be reviewable; a running process must not rewrite its own code | `forgel adopt <repo-url>` opens an onboarding PR; Forgel changes ship via CI-built images |
+| **D-053** | Auto-merge requires all gates, green CI, no blocking reconciliation, budget within cap, no conflict and a PATCH/MINOR change set; post-merge verification auto-reverts on failure | Removing the human merge must not remove the safety net | A merge queue serializes merges; failed post-merge smoke triggers an automatic revert and a stop; MAJOR changes remain human-initiated |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -677,7 +678,8 @@ base_branch = "main"
 branch_prefix = "forgel/"
 draft_pr = true
 require_ci = true
-merge = "human"
+merge = "auto"               # auto is the default; human is opt-in
+auto_revert_on_failure = true
 ```
 
 `forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
@@ -863,12 +865,19 @@ Forgel currently uses local git per project: `git init`, a baseline commit, the 
 4. **Commit:** one logical change per commit; English messages; bot identity (`Forgel <bot@forgel.io>`), not the user; no harness attribution. Add sign-off only when the target repo requires DCO.
 5. **Push and PR:** push the branch and open or update a draft PR with the spec, acceptance evidence, complexity report, jurisdiction disclaimer and rollback note. The PR is the review unit; never force-push a protected branch.
 6. **CI and checks:** require the repository's checks and wait for them through the Checks API or a webhook. On failure, fetch the logs, triage and fix on the same branch. Forgel's own QA passes before the PR is marked ready.
-7. **Merge:** human approval by default; optional squash merge after green checks. Protected `main`, linear history, no direct pushes, no force pushes.
+7. **Merge:** **auto-merge by default** after every gate and required check passes; `merge = "human"` leaves the PR for a final human review. Protected `main`, linear history, no direct pushes, no force pushes.
 8. **Upstream sync:** fetch before an iteration. If `main` moved, rebase the branch; if it conflicts, stop and ask the user. Never `reset --hard` or force-push.
 9. **Multi-repo change sets:** one PR per repo, linked by a change-set ID; merge order follows the contracts; the integration environment is built from the pinned SHAs. Cross-repo merge is not atomic; the change set is accepted after all PRs merge and integration passes.
 10. **Repo onboarding:** `forgel adopt <repo-url>` clones the repo, detects the stack, writes `program.yaml`, `forgel.toml`, `FORGEL.md` and `AGENTS.md`, creates the baseline tag and opens an onboarding PR. Generated projects require the user (or an App with template permission) to create the repo; Forgel never pushes directly to `main`.
 11. **Events:** GitHub App webhooks for push, pull request, check run and issue events; polling is the fallback for a minimal self-host.
 12. **Self-update:** the daemon runs from a released image, not from the working copy it modifies. Merging Forgel changes triggers CI to build a new image and the deploy updates it.
+
+**Merge modes:**
+
+- **`auto` (default):** Forgel merges its own PR after review, QA, acceptance, audit, complexity/simplicity gates, green CI, no blocking reconciliation, budget within cap, branch up to date and no conflict. A merge queue serializes merges. Post-merge smoke runs on `main`; a failure triggers an automatic revert and a stop.
+- **`human`:** the PR is left for a human decision after the same gates. Use it for teams or repositories whose policy requires human review.
+- **MAJOR changes are not auto-merged:** they remain human-initiated and reviewed.
+- If branch protection requires a human review that Forgel cannot satisfy, it falls back to `human`; it never tries to bypass protection.
 
 **Config:**
 
@@ -880,7 +889,8 @@ base_branch = "main"
 branch_prefix = "forgel/"
 draft_pr = true
 require_ci = true
-merge = "human"              # human | squash
+merge = "auto"               # auto | human; auto is the default
+auto_revert_on_failure = true
 ```
 
 **Artifacts:** PR URL, commit SHA and merge SHA in the ledger; `docs/program/git/report.md`.
@@ -941,6 +951,8 @@ merge = "human"              # human | squash
 | Direct pushes to `main` | 0 |
 | Force pushes | 0 |
 | PRs with acceptance evidence | 100% |
+| Auto-merged changes | measured; human-merge only where configured |
+| Post-merge reverts | < 1% of auto-merged changes |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -972,7 +984,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 
 - Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
 - Human approval gate for staging and production; production requires the compliance acknowledgement.
-- GitHub App auth, branch/PR flow and remote fetch/push for self-host.
+- GitHub App auth, branch/PR flow, auto-merge and remote fetch/push for self-host.
 - Brownfield adoption: point Forgel at its own repository and accept change requests without regenerating it.
 - Deploy the daemon on a server with Docker Compose, a persistent data volume, the bot token and the model key.
 - **Exit:** a real Forgel change is specified, implemented, reviewed, QA'd and accepted through Forgel itself. Another harness is used only for bottlenecks.
@@ -1005,7 +1017,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Simplicity Arbiter agent with auto-simplification classes and a decision digest.
 - Refactoring Arbiter: targeted-refactor auto-apply, structural proposals, debt triggers.
 - Budget ledger, per-feature/iteration/day caps, hard stop, scoped prepaid keys and egress proxy; Budget Arbiter and anomaly detection.
-- Multi-repo change sets, GitHub webhooks, CI checks and `forgel adopt`; optional squash merge.
+- Multi-repo change sets, GitHub webhooks, CI checks and `forgel adopt`; merge queue and post-merge auto-revert.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -1084,6 +1096,7 @@ Business-model questions are kept separately.
 | Upstream conflict | Medium | Fetch and rebase before iteration; stop and ask on conflict |
 | Webhook spoofing | Medium | Verify signatures; polling fallback |
 | Daemon modifies its own running code | High | Run from a released image; separate workspace clone |
+| Auto-merge of a bad change | High | All gates + green CI + merge queue + post-merge smoke + auto-revert; human mode available |
 
 ---
 
@@ -1107,6 +1120,7 @@ By the end of M1:
 - A real Forgel change is delivered through Forgel itself in the self-hosting milestone.
 - No overspend incidents: every agent run stops at its budget or on no progress, with a recorded checkpoint.
 - No direct pushes to `main` and no force pushes; every change lands as a reviewed PR with evidence.
+- A change can land on `main` without a human merge when all gates pass; human merge is opt-in.
 
 By the end of M2:
 
