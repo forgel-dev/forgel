@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .artifacts import write_json, write_text
+from .layout import ProjectLayout
 from .project_config import SimplicityConfig
 
 
@@ -69,37 +70,62 @@ def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def measure_patch(workspace: Path) -> PatchMetrics:
-    if not (workspace / ".git").exists():
-        return PatchMetrics()
-    baseline = _git(workspace, "rev-parse", "--verify", "forgel-baseline")
-    if baseline.returncode != 0 or not baseline.stdout.strip():
-        return PatchMetrics()
-    base = baseline.stdout.strip()
+def _targets(workspace: Path) -> list[tuple[Path, str]]:
+    layout = ProjectLayout.detect(workspace)
+    if not layout.is_container:
+        return [(layout.root, "")]
+    return [(layout.control, "program")] + [
+        (layout.repo_path(repo_id), f"repos/{repo_id}")
+        for repo_id in layout.repo_ids()
+    ]
 
-    added = removed = files = 0
-    rows: list[tuple[int, int, str]] = []
-    for line in _git(workspace, "diff", "--numstat", base).stdout.splitlines():
-        parts = line.split("\t")
-        if len(parts) < 3 or parts[0] == "-" or parts[1] == "-":
-            continue
-        file_added = int(parts[0])
-        file_removed = int(parts[1])
-        added += file_added
-        removed += file_removed
-        files += 1
-        rows.append((file_added, file_removed, parts[2]))
 
-    names = _git(workspace, "diff", "--name-status", base)
-    new_files = sum(
-        1 for line in names.stdout.splitlines() if line.startswith("A\t")
-    )
-
-    added_text = [
+def _diff_text(root: Path, base: str, *args: str) -> list[str]:
+    return [
         line[1:]
-        for line in _git(workspace, "diff", "--unified=0", base).stdout.splitlines()
+        for line in _git(root, "diff", "--unified=0", base, *args)
+        .stdout.splitlines()
         if line.startswith("+") and not line.startswith("+++")
     ]
+
+
+def measure_patch(workspace: Path) -> PatchMetrics:
+    added = removed = files = new_files = 0
+    rows: list[tuple[int, int, str]] = []
+    added_text: list[str] = []
+    config_added: list[str] = []
+
+    for root, prefix in _targets(workspace):
+        if not (root / ".git").exists():
+            continue
+        baseline = _git(root, "rev-parse", "--verify", "forgel-baseline")
+        if baseline.returncode != 0 or not baseline.stdout.strip():
+            continue
+        base = baseline.stdout.strip()
+
+        for line in _git(root, "diff", "--numstat", base).stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3 or parts[0] == "-" or parts[1] == "-":
+                continue
+            file_added = int(parts[0])
+            file_removed = int(parts[1])
+            added += file_added
+            removed += file_removed
+            files += 1
+            name = f"{prefix}/{parts[2]}" if prefix else parts[2]
+            rows.append((file_added, file_removed, name))
+
+        names = _git(root, "diff", "--name-status", base)
+        new_files += sum(
+            1 for line in names.stdout.splitlines() if line.startswith("A\t")
+        )
+
+        added_text.extend(_diff_text(root, base))
+        config_added.extend(
+            line.strip()
+            for line in _diff_text(root, base, "--", "forgel.toml")
+        )
+
     compat_markers = sum(
         1
         for line in added_text
@@ -110,14 +136,6 @@ def measure_patch(workspace: Path) -> PatchMetrics:
         for line in added_text
         if re.match(r"^\s*(if|elif|try:|except)\b", line)
     )
-
-    config_added = [
-        line[1:].strip()
-        for line in _git(
-            workspace, "diff", "--unified=0", base, "--", "forgel.toml"
-        ).stdout.splitlines()
-        if line.startswith("+") and not line.startswith("+++")
-    ]
     new_config_keys = sum(
         1
         for line in config_added

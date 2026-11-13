@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any
 
-from .artifacts import ensure_dir
+from .artifacts import ensure_dir, write_json
 from .config import Settings
+from .layout import TEMPLATE_REPOS
 from .ledger import Ledger, new_project_id
 
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$")
@@ -25,7 +27,11 @@ def derive_name(brief: str) -> str:
 
 
 def create_project(
-    settings: Settings, ledger: Ledger, name: str, brief: str
+    settings: Settings,
+    ledger: Ledger,
+    name: str,
+    brief: str,
+    mode: str = "template",
 ) -> str:
     name = " ".join(name.split())
     if not NAME_RE.fullmatch(name):
@@ -36,9 +42,25 @@ def create_project(
     brief = brief.strip()
     if not brief:
         raise ProjectError("the brief must not be empty")
+    if mode not in {"template", "brownfield"}:
+        raise ProjectError(f"unknown project mode {mode!r}")
     project_id = new_project_id(name)
     workspace = settings.projects_dir / project_id
-    ensure_dir(workspace)
+    ensure_dir(workspace / "program")
+    ensure_dir(workspace / "repos")
+    write_json(
+        workspace / "project.json",
+        {
+            "id": project_id,
+            "name": name,
+            "layout": "container",
+            "mode": mode,
+            "repos": list(TEMPLATE_REPOS) if mode == "template" else [],
+            "created_at": datetime.now(timezone.utc).isoformat(
+                timespec="seconds"
+            ),
+        },
+    )
     ledger.create_project(project_id, name, brief, str(workspace))
     return project_id
 

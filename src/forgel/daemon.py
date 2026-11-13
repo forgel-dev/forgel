@@ -14,6 +14,7 @@ from typing import Any, Callable
 from .approvals import awaits_approval, latest_approval
 from .config import Settings
 from .control import is_paused
+from .layout import ProjectLayout
 from .ledger import Ledger
 from .orchestrator import Orchestrator
 from .state import STAGES
@@ -28,7 +29,9 @@ def project_is_done(ledger: Ledger, project_id: str) -> bool:
 
 
 def has_blocking_reconciliation(workspace: Path) -> bool:
-    path = workspace / "docs" / "program" / "reconciliation.md"
+    path = ProjectLayout.detect(workspace).artifact(
+        "docs/program/reconciliation.md"
+    )
     if not path.exists():
         return False
     text = path.read_text(encoding="utf-8")
@@ -72,6 +75,10 @@ def run_once(
     for project in ledger.list_projects():
         project_id = project["id"]
         if project_is_done(ledger, project_id):
+            continue
+        layout = ProjectLayout.detect(project["workspace"])
+        if layout.metadata().get("mode") == "brownfield":
+            log(f"[daemon] {project_id}: brownfield project has no executor yet")
             continue
         if awaits_approval(ledger, project_id):
             log(f"[daemon] {project_id}: waiting for staging approval")

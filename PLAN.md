@@ -1027,6 +1027,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
 - Multi-project chat sessions: one daemon, a selected project per chat, isolated project contexts, configuration from chat.
 - Project agent over an OpenAI-compatible endpoint: intake, questions and change requests.
+- Project container: a `program/` control repository plus one real git repository per code repo; per-repository sync, rollback and complexity.
 - Human approval gate for staging and production; production requires the compliance acknowledgement.
 - GitHub App auth, branch/PR flow, auto-merge and remote fetch/push for self-host.
 - Deploy modes: `confirm` via Telegram as the default; `manual` fallback; `auto` opt-in.

@@ -24,11 +24,13 @@ PYTHONPATH=src python3 -m forgel run <project-id> --home .forgel-demo
 PYTHONPATH=src python3 -m forgel serve <project-id> --home .forgel-demo
 ```
 
-Approvals are recorded in the ledger and in
-`docs/program/approvals.md` inside the generated project, together with the
-release SHA the human reviewed. They are scoped to one generation, so a new
-generation asks again. Production approval is only accepted for a completed
-release and requires `--accept-compliance-responsibility`.
+Approvals are recorded in the ledger and in `docs/program/approvals.md` inside
+the project's control repository, together with the release the human reviewed.
+They are scoped to one generation, so a new generation asks again. Production
+approval is only accepted for a completed release and requires
+`--accept-compliance-responsibility`. For a multi-repository project the
+release is a digest of every repository state; the per-repository SHAs are in
+`docs/program/releases/g<generation>.json`.
 
 Run the tests:
 
@@ -128,13 +130,31 @@ forgel secret set model.api_key   # reads the value without echo
 forgel secret list
 ```
 
-## Project Layout (next milestone)
+## Project Layout
 
-New projects will use a container layout: a `program/` control repository for
-specs and configuration, and one real git repository per code repo under
-`repos/<id>/`. Existing M0 projects keep the flat layout and remain readable.
-Onboarding an existing repository (`/adopt`, GitHub provider plugin) follows in
-the next milestone.
+New projects use a container:
+
+```
+project/
+  project.json          machine state: layout, mode, repository ids
+  program/              control repository: specs, config, approvals
+    program.yaml
+    forgel.toml
+    FORGEL.md · AGENTS.md
+    docs/program/...
+    lock.json · staging.json
+  repos/
+    api/   web/   infra/   e2e/    one real git repository each
+```
+
+Every repository has its own history and a `forgel-baseline` tag. External
+changes, rollback and the complexity patch are computed per repository and
+aggregated into one project report. `program.yaml` points at `../repos/<id>`
+from the control repository.
+
+Existing M0 projects keep the flat layout and remain readable. Onboarding an
+existing repository (`/adopt`, clone + Forgel config initialization) and the
+GitHub provider plugin follow in the next milestone.
 
 Deploy it beside the core with Docker Compose:
 

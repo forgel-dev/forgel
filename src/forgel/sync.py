@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import read_json, write_text
+from .layout import ProjectLayout
 from .ledger import Ledger
 from .state import validate_stage
 
@@ -52,6 +53,43 @@ class SyncError(RuntimeError):
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _layout(workspace: Path) -> ProjectLayout:
+    return ProjectLayout.detect(workspace)
+
+
+def _docs(workspace: Path) -> Path:
+    return _layout(workspace).artifact("docs/program")
+
+
+def _ref(workspace: Path, path: Path) -> str:
+    return str(path.relative_to(_layout(workspace).root))
+
+
+def _required_paths(workspace: Path) -> set[str]:
+    layout = _layout(workspace)
+    if not layout.is_container:
+        return set(REQUIRED_PATHS)
+    control = layout.control.relative_to(layout.root).as_posix()
+    return {
+        f"{control}/program.yaml",
+        f"{control}/forgel.toml",
+        f"{control}/FORGEL.md",
+        f"{control}/AGENTS.md",
+        layout.repo_ref("api", "app.py"),
+        layout.repo_ref("web", "index.html"),
+        layout.repo_ref("e2e", "check.py"),
+        layout.repo_ref("infra", "Dockerfile"),
+        layout.repo_ref("infra", "docker-compose.qa.yml"),
+        layout.repo_ref("e2e", "qa/runner.mjs"),
+        layout.repo_ref("e2e", "qa/package.json"),
+        layout.repo_ref("e2e", "qa/scenarios/hello_web.mjs"),
+    }
+
+
+def _docs_prefix(workspace: Path) -> str:
+    return _docs(workspace).relative_to(_layout(workspace).root).as_posix()
 
 
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -174,7 +212,39 @@ def _detect_manifest(workspace: Path) -> dict[str, Any]:
     }
 
 
+def _detect_container(layout: ProjectLayout) -> dict[str, Any]:
+    files: set[str] = set()
+    diffstat: list[str] = []
+    commits: list[str] = []
+    statuses: list[str] = []
+    for target in layout.git_roots():
+        info = _detect_git(target)
+        prefix = target.relative_to(layout.root).as_posix()
+        files.update(f"{prefix}/{name}" for name in info["files"])
+        if info["diffstat"]:
+            diffstat.append(f"## {prefix}\n{info['diffstat']}")
+        if info["commits"]:
+            commits.append(f"## {prefix}\n{info['commits']}")
+        if info["status"]:
+            statuses.append(f"## {prefix}\n{info['status']}")
+    return {
+        "kind": "git",
+        "baseline": "multi-repo",
+        "files": sorted(files),
+        "count": len(files),
+        "status": "\n".join(statuses),
+        "diffstat": "\n\n".join(diffstat),
+        "commits": "\n\n".join(commits),
+        "note": "",
+    }
+
+
 def detect_external_changes(workspace: Path) -> dict[str, Any]:
+    layout = _layout(workspace)
+    if layout.is_container:
+        if layout.git_roots():
+            return _detect_container(layout)
+        return _detect_manifest(layout.control)
     if (workspace / ".git").exists():
         return _detect_git(workspace)
     return _detect_manifest(workspace)
@@ -183,7 +253,10 @@ def detect_external_changes(workspace: Path) -> dict[str, Any]:
 def analyze_changes(workspace: Path, changes: dict[str, Any]) -> dict[str, list[str]]:
     """Classify changed files against explicit constraints and the generated baseline."""
 
-    manifest = _manifest_files(workspace)
+    layout = _layout(workspace)
+    manifest = _manifest_files(layout.control)
+    required = _required_paths(workspace)
+    docs_prefix = _docs_prefix(workspace)
     changed = set(changes.get("files", []))
     violations: list[str] = []
     requirements: list[str] = []
@@ -191,32 +264,42 @@ def analyze_changes(workspace: Path, changes: dict[str, Any]) -> dict[str, list[
     undocumented: list[str] = []
     deletions: list[str] = []
 
-    for path in sorted(changed):
-        if not (workspace / path).exists():
-            deletions.append(path)
-            if path in REQUIRED_PATHS:
-                violations.append(f"Required file missing: `{path}`")
-            continue
-
-        if path.startswith("docs/program/") and (
+    def is_requirements_path(path: str) -> bool:
+        return path.startswith(docs_prefix + "/") and (
             path.endswith("requirements.json")
             or "/features/" in path
             or path.endswith("change-sets.json")
-        ):
-            requirements.append(path)
-        elif (
-            path in manifest
-            or path in REQUIRED_PATHS
-            or path.split("/", 1)[0] in KNOWN_PREFIXES
+        )
+
+    def is_documented(path: str) -> bool:
+        if path in manifest or path in required:
+            return True
+        if layout.is_container:
+            return path.startswith("repos/") or path.startswith(
+                layout.control.relative_to(layout.root).as_posix() + "/"
+            )
+        return (
+            path.split("/", 1)[0] in KNOWN_PREFIXES
             or path in KNOWN_ROOT_FILES
-        ):
+        )
+
+    for path in sorted(changed):
+        if not (layout.root / path).exists():
+            deletions.append(path)
+            if path in required:
+                violations.append(f"Required file missing: `{path}`")
+            continue
+
+        if is_requirements_path(path):
+            requirements.append(path)
+        elif is_documented(path):
             documented.append(path)
         else:
             undocumented.append(path)
 
-    for required in sorted(REQUIRED_PATHS):
-        if not (workspace / required).exists() and required not in deletions:
-            violations.append(f"Required file missing: `{required}`")
+    for required_path in sorted(required):
+        if not (layout.root / required_path).exists() and required_path not in deletions:
+            violations.append(f"Required file missing: `{required_path}`")
 
     return {
         "violations": violations,
@@ -253,7 +336,7 @@ def _write_external_report(workspace: Path, report: dict[str, Any]) -> Path:
     if report["status"]:
         lines += ["", "## Working Tree Status", "", "```", report["status"], "```"]
 
-    path = workspace / "docs" / "program" / "external-changes.md"
+    path = _docs(workspace) / "external-changes.md"
     write_text(path, "\n".join(lines).rstrip() + "\n")
     return path
 
@@ -316,13 +399,13 @@ Run:
 forgel reconcile <project-id> --decision accept|fix|rollback|ignore [--notes "..."]
 ```
 """
-    path = workspace / "docs" / "program" / "reconciliation.md"
+    path = _docs(workspace) / "reconciliation.md"
     write_text(path, text)
     return path
 
 
 def _feature_spec(workspace: Path) -> Path | None:
-    features = sorted((workspace / "docs" / "program" / "features").glob("*.md"))
+    features = sorted((_docs(workspace) / "features").glob("*.md"))
     return features[-1] if features else None
 
 
@@ -383,26 +466,59 @@ def _mark_fix(path: Path, analysis: dict[str, list[str]], notes: str) -> None:
     write_text(path, text + "\n" + "\n".join(section) + "\n")
 
 
+def _target_for(
+    layout: ProjectLayout, path: str
+) -> tuple[Path, str]:
+    if not layout.is_container:
+        return layout.root, path
+    control = layout.control.relative_to(layout.root).as_posix()
+    if path == control:
+        return layout.control, ""
+    if path.startswith(control + "/"):
+        return layout.control, path[len(control) + 1 :]
+    parts = path.split("/")
+    if len(parts) >= 3 and parts[0] == "repos":
+        return layout.repo_path(parts[1]), "/".join(parts[2:])
+    return layout.root, path
+
+
 def _rollback(workspace: Path, changes: dict[str, Any]) -> None:
-    baseline = _git(workspace, "rev-parse", "--verify", "forgel-baseline")
-    if baseline.returncode != 0 or not baseline.stdout.strip():
-        raise SyncError("Rollback requires a git baseline (tag forgel-baseline)")
-    base = baseline.stdout.strip()
-    trash = workspace / ".forgel" / "trash" / _utcnow().replace(":", "-")
+    layout = _layout(workspace)
+    trash = layout.root / ".forgel" / "trash" / _utcnow().replace(":", "-")
+    restored = False
 
     for path in changes["files"]:
-        target = workspace / path
-        in_baseline = _git(workspace, "cat-file", "-e", f"{base}:{path}")
+        target, relative = _target_for(layout, path)
+        if not relative or not (target / ".git").exists():
+            continue
+        baseline = _git(target, "rev-parse", "--verify", "forgel-baseline")
+        if baseline.returncode != 0 or not baseline.stdout.strip():
+            continue
+        base = baseline.stdout.strip()
+        restored = True
+        in_baseline = _git(target, "cat-file", "-e", f"{base}:{relative}")
         if in_baseline.returncode == 0:
-            _git(workspace, "restore", "--source", base, "--", path)
-        elif target.exists():
+            _git(target, "restore", "--source", base, "--", relative)
+        elif (layout.root / path).exists():
             destination = trash / path
             destination.parent.mkdir(parents=True, exist_ok=True)
-            target.replace(destination)
+            (layout.root / path).replace(destination)
 
-    for required in sorted(REQUIRED_PATHS):
-        if not (workspace / required).exists():
-            _git(workspace, "restore", "--source", base, "--", required)
+    if not restored:
+        raise SyncError("Rollback requires a git baseline (tag forgel-baseline)")
+
+    for required in sorted(_required_paths(workspace)):
+        if (layout.root / required).exists():
+            continue
+        target, relative = _target_for(layout, required)
+        if not relative or not (target / ".git").exists():
+            continue
+        base = _git(target, "rev-parse", "--verify", "forgel-baseline")
+        if base.returncode != 0 or not base.stdout.strip():
+            continue
+        _git(
+            target, "restore", "--source", base.stdout.strip(), "--", relative
+        )
 
 
 def _update_reconciliation(
@@ -439,7 +555,7 @@ def _reconciliation_status(path: Path) -> str:
 def reconciliation_status(workspace: Path) -> str:
     """Return the recorded reconciliation status for a project workspace."""
 
-    return _reconciliation_status(workspace / "docs" / "program" / "reconciliation.md")
+    return _reconciliation_status(_docs(workspace) / "reconciliation.md")
 
 
 def reconciliation_status_path(path: Path) -> str:
@@ -513,7 +629,7 @@ def sync_project(
         return result
 
     report["pending"] = True
-    report["reconciliation"] = str(reconciliation.relative_to(workspace))
+    report["reconciliation"] = _ref(workspace, reconciliation)
     return report
 
 
@@ -534,7 +650,7 @@ def reconcile_project(
     if project is None:
         raise SyncError(f"Unknown project: {project_id}")
 
-    reconciliation = workspace / "docs" / "program" / "reconciliation.md"
+    reconciliation = _docs(workspace) / "reconciliation.md"
     status = _reconciliation_status(reconciliation)
     if status not in {"pending", "fix_required"}:
         raise SyncError(
@@ -565,8 +681,8 @@ def reconcile_project(
         "reconcile",
         status="completed",
         artifact_refs=[
-            "docs/program/reconciliation.md",
-            "docs/program/external-changes.md",
+            _ref(workspace, reconciliation),
+            _ref(workspace, _docs(workspace) / "external-changes.md"),
         ],
         payload={
             "decision": decision,

@@ -9,11 +9,14 @@ acknowledgement; the human who approves carries that responsibility.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .artifacts import write_text
+from .artifacts import write_json, write_text
+from .layout import ProjectLayout
 from .ledger import Ledger
 
 SCOPES: tuple[str, ...] = ("staging", "production")
@@ -24,19 +27,59 @@ class ApprovalError(RuntimeError):
     """Raised when an approval is not valid."""
 
 
-def release_sha(workspace: Path) -> str:
-    """Return the short SHA of the current release candidate, if there is one."""
-
-    if not (workspace / ".git").exists():
-        return ""
+def _short_sha(target: Path) -> str:
     result = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"],
-        cwd=str(workspace),
+        cwd=str(target),
         capture_output=True,
         text=True,
         check=False,
     )
     return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def release_sha(workspace: Path) -> str:
+    """Return the short SHA of the current release candidate, if there is one."""
+
+    layout = ProjectLayout.detect(workspace)
+    if not layout.is_container:
+        return _short_sha(layout.root) if (layout.root / ".git").exists() else ""
+    digest, _repos = release_state(workspace)
+    return digest
+
+
+def release_state(workspace: Path) -> tuple[str, dict[str, str]]:
+    """Return a release id and the per-repository SHAs it covers.
+
+    A container has one git repository per code repo plus the control repo, so
+    no single SHA can name the release. The digest binds the approval to every
+    repository state; the mapping is written to
+    ``docs/program/releases/g<generation>.json``.
+    """
+
+    layout = ProjectLayout.detect(workspace)
+    if not layout.is_container:
+        sha = _short_sha(layout.root) if (layout.root / ".git").exists() else ""
+        return sha, ({"main": sha} if sha else {})
+    repos: dict[str, str] = {}
+    for target in layout.git_targets():
+        if not (target / ".git").exists():
+            continue
+        sha = _short_sha(target)
+        if not sha:
+            continue
+        name = (
+            "program"
+            if target == layout.control
+            else f"repos/{target.name}"
+        )
+        repos[name] = sha
+    if not repos:
+        return "", {}
+    digest = hashlib.sha256(
+        "\n".join(f"{name}:{sha}" for name, sha in sorted(repos.items())).encode()
+    ).hexdigest()[:12]
+    return digest, repos
 
 
 def latest_approval(
@@ -60,12 +103,14 @@ def _cell(value: Any) -> str:
 
 
 def _append_artifact(workspace: Path, record: dict[str, Any]) -> Path:
-    path = workspace / "docs" / "program" / "approvals.md"
+    layout = ProjectLayout.detect(workspace)
+    path = layout.artifact("docs/program/approvals.md")
     header = """# Approvals
 
 Human decisions recorded by the approval gate. The ledger is the runtime
 source; this file is the committed audit trail. Approvals are scoped to one
-generation.
+generation. For container projects the release is a digest; the per-repository
+SHAs are in `docs/program/releases/g<generation>.json`.
 
 | Time | Scope | Generation | Decision | Actor | Compliance | Release | Notes |
 |---|---|---|---|---|---|---|---|
@@ -127,6 +172,28 @@ def record_approval(
         return latest
 
     workspace = Path(project["workspace"])
+    layout = ProjectLayout.detect(workspace)
+    release_id, repos = release_state(workspace)
+    artifact_refs = [
+        str(layout.artifact("docs/program/approvals.md").relative_to(layout.root))
+    ]
+    if layout.is_container and repos:
+        manifest = layout.artifact(
+            f"docs/program/releases/g{generation}.json"
+        )
+        write_json(
+            manifest,
+            {
+                "generation": generation,
+                "digest": release_id,
+                "repos": repos,
+                "recorded_at": datetime.now(timezone.utc).isoformat(
+                    timespec="seconds"
+                ),
+            },
+        )
+        artifact_refs.append(str(manifest.relative_to(layout.root)))
+
     record = ledger.add_approval(
         project_id=project_id,
         generation=generation,
@@ -135,7 +202,7 @@ def record_approval(
         actor=actor,
         compliance_ack=compliance_ack,
         notes=notes,
-        release_sha=release_sha(workspace),
+        release_sha=release_id,
     )
     _append_artifact(workspace, record)
     ledger.append_event(
@@ -145,13 +212,14 @@ def record_approval(
         idempotency_key=(
             f"{project_id}:g{generation}:approval:{scope}:{decision}"
         ),
-        artifact_refs=["docs/program/approvals.md"],
+        artifact_refs=artifact_refs,
         payload={
             "scope": scope,
             "actor": actor,
             "compliance_ack": compliance_ack,
             "notes": notes,
             "release_sha": record["release_sha"],
+            "release_repos": repos,
         },
         generation=generation,
     )

@@ -28,6 +28,7 @@ from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .intake import build_requirements
 from .jurisdiction import resolve_pack
+from .layout import ProjectLayout
 from .ledger import Ledger
 from .project_config import (
     SimplicityConfig,
@@ -143,22 +144,79 @@ class Orchestrator:
     # -------------------------------------------------------------- helpers
 
     @staticmethod
-    def _workspace(project: dict[str, Any]) -> Path:
-        return Path(project["workspace"])
+    def _layout(project: dict[str, Any]) -> ProjectLayout:
+        return ProjectLayout.from_project(project)
+
+    def _workspace(self, project: dict[str, Any]) -> Path:
+        return self._layout(project).root
+
+    def _control(self, project: dict[str, Any]) -> Path:
+        return self._layout(project).control
+
+    def _repo(self, project: dict[str, Any], repo_id: str) -> Path:
+        return self._layout(project).repo_path(repo_id)
 
     def _docs(self, project: dict[str, Any]) -> Path:
-        return self._workspace(project) / "docs" / "program"
+        return self._control(project) / "docs" / "program"
 
     def _ref(self, project: dict[str, Any], path: Path) -> str:
         return str(path.relative_to(self._workspace(project)))
 
+    def _repo_ref(
+        self, project: dict[str, Any], repo_id: str, relative: str = ""
+    ) -> str:
+        return self._layout(project).repo_ref(repo_id, relative)
+
+    def _affected_paths(self, project: dict[str, Any]) -> dict[str, str]:
+        """Project-root-relative paths of the generated product files."""
+
+        layout = self._layout(project)
+        if layout.is_container:
+            repos_prefix = layout.repos_root.relative_to(
+                layout.root
+            ).as_posix()
+            return {
+                "api": layout.repo_ref("api", "app.py"),
+                "web": layout.repo_ref("web", "index.html"),
+                "e2e": layout.repo_ref("e2e", "check.py"),
+                "dockerfile": layout.repo_ref("infra", "Dockerfile"),
+                "dockerignore": f"{repos_prefix}/.dockerignore",
+                "compose": layout.repo_ref(
+                    "infra", "docker-compose.qa.yml"
+                ),
+                "runner": layout.repo_ref("e2e", "qa/runner.mjs"),
+                "package": layout.repo_ref("e2e", "qa/package.json"),
+                "scenario": layout.repo_ref(
+                    "e2e", "qa/scenarios/hello_web.mjs"
+                ),
+            }
+        return {
+            "api": "api/app.py",
+            "web": "web/index.html",
+            "e2e": "e2e/check.py",
+            "dockerfile": "Dockerfile",
+            "dockerignore": ".dockerignore",
+            "compose": "docker/docker-compose.qa.yml",
+            "runner": "qa/runner.mjs",
+            "package": "qa/package.json",
+            "scenario": "qa/scenarios/hello_web.mjs",
+        }
+
+    def _control_paths(self, project: dict[str, Any]) -> dict[str, str]:
+        layout = self._layout(project)
+        return {
+            "program": self._ref(project, layout.control / "program.yaml"),
+            "config": self._ref(project, layout.control / "forgel.toml"),
+            "forge": self._ref(project, layout.control / "FORGEL.md"),
+            "agents": self._ref(project, layout.control / "AGENTS.md"),
+        }
+
     # --------------------------------------------------------------- stages
 
     def stage_intake(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
         requirements = build_requirements(project)
         path = write_json(self._docs(project) / "requirements.json", requirements)
-        config_path = workspace / "forgel.toml"
+        config_path = self._control(project) / "forgel.toml"
         if not config_path.exists():
             write_text(
                 config_path, render_project_config(project["name"])
@@ -168,7 +226,7 @@ class Orchestrator:
     def stage_jurisdiction(self, project: dict[str, Any]) -> list[str]:
         docs = self._docs(project)
         requirements = read_json(docs / "requirements.json")
-        config = load_project_config(self._workspace(project))
+        config = load_project_config(self._control(project))
         pack_id = (
             config.jurisdiction.pack
             if config is not None
@@ -338,7 +396,8 @@ regulatory compliance. Approving a production deploy confirms that responsibilit
                 "- Status: **reviewed by a named reviewer**\n"
                 f"- Reviewed by: {pack.reviewed_by}\n"
                 f"- Review due: {pack.review_due}\n"
-                "- Production: allowed after the project's human sign-off. This is still not a legal guarantee.\n"
+                "- Production: allowed after the project's human sign-off. "
+                "This is still not a legal guarantee.\n"
             )
         write_text(
             legal_review_path,
@@ -365,7 +424,7 @@ regulatory compliance. Approving a production deploy confirms that responsibilit
         project["recipe_id"] = recipe.ref
         self.ledger.set_recipe(project["id"], recipe.ref)
 
-        config_path = self._workspace(project) / "forgel.toml"
+        config_path = self._control(project) / "forgel.toml"
         if config_path.exists():
             config_text = config_path.read_text(encoding="utf-8")
             config_text = re.sub(
@@ -400,7 +459,7 @@ asked to invent a composition, and no plugin outside the recipe was used.
         return [self._ref(project, adr)]
 
     def stage_architecture(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
+        layout = self._layout(project)
         recipe_ref = project.get("recipe_id") or "unknown"
         profile = read_json(self._docs(project) / "jurisdiction" / "profile.json")
         pack_ref = f"{profile['id']}@{profile['version']}"
@@ -415,12 +474,16 @@ asked to invent a composition, and no plugin outside the recipe was used.
             "repos:",
         ]
         repos = (
-            ("api", "backend", "./api"),
-            ("web", "frontend", "./web"),
-            ("infra", "infrastructure", "./infra"),
-            ("e2e", "acceptance", "./e2e"),
+            ("api", "backend"),
+            ("web", "frontend"),
+            ("infra", "infrastructure"),
+            ("e2e", "acceptance"),
         )
-        for repo_id, role, path in repos:
+        for repo_id, role in repos:
+            if layout.is_container:
+                path = f"../repos/{repo_id}"
+            else:
+                path = f"./{repo_id}"
             lines.extend(
                 [f"  - id: {repo_id}", f"    role: {role}", f"    path: {path}"]
             )
@@ -428,7 +491,9 @@ asked to invent a composition, and no plugin outside the recipe was used.
                 lines.extend(["    contracts:", "      publishes: [openapi.yaml]"])
             if repo_id == "web":
                 lines.extend(["    contracts:", "      consumes: [api/openapi.yaml]"])
-        program_path = write_text(workspace / "program.yaml", "\n".join(lines) + "\n")
+        program_path = write_text(
+            self._control(project) / "program.yaml", "\n".join(lines) + "\n"
+        )
 
         master = self._docs(project) / "master-plan.md"
         write_text(
@@ -443,10 +508,10 @@ asked to invent a composition, and no plugin outside the recipe was used.
 
 | Repo | Role | Path |
 |---|---|---|
-| api | backend | ./api |
-| web | frontend | ./web |
-| infra | infrastructure | ./infra |
-| e2e | acceptance | ./e2e |
+| api | backend | {self._repo_ref(project, "api")} |
+| web | frontend | {self._repo_ref(project, "web")} |
+| infra | infrastructure | {self._repo_ref(project, "infra")} |
+| e2e | acceptance | {self._repo_ref(project, "e2e")} |
 
 ## Contracts
 
@@ -504,7 +569,7 @@ asked to invent a composition, and no plugin outside the recipe was used.
         return refs
 
     def stage_feature_plan(self, project: dict[str, Any]) -> list[str]:
-        feature = self._workspace(project) / FEATURE_REL
+        feature = self._control(project) / FEATURE_REL
         change_sets = {
             "change_sets": [
                 {
@@ -521,7 +586,8 @@ asked to invent a composition, and no plugin outside the recipe was used.
         return [self._ref(project, feature), self._ref(project, path)]
 
     def stage_spec(self, project: dict[str, Any]) -> list[str]:
-        feature = self._workspace(project) / FEATURE_REL
+        feature = self._control(project) / FEATURE_REL
+        affected = self._affected_paths(project)
         profile = read_json(self._docs(project) / "jurisdiction" / "profile.json")
         pack_ref = f"{profile['id']}@{profile['version']}"
         allowed_label = "yes" if profile.get("production_allowed") else "no"
@@ -582,13 +648,13 @@ from a brief to a running staging artifact.
 
 ## Affected Files
 
-- `api/app.py`
-- `web/index.html`
-- `e2e/check.py`
-- `Dockerfile`
-- `docker/docker-compose.qa.yml`
-- `qa/runner.mjs`
-- `qa/scenarios/hello_web.mjs`
+- `{affected['api']}`
+- `{affected['web']}`
+- `{affected['e2e']}`
+- `{affected['dockerfile']}`
+- `{affected['compose']}`
+- `{affected['runner']}`
+- `{affected['scenario']}`
 
 ## Jurisdiction Requirements
 
@@ -627,7 +693,9 @@ See `docs/program/jurisdiction/requirements.md` and
         return [self._ref(project, feature)]
 
     def stage_spec_review(self, project: dict[str, Any]) -> list[str]:
-        spec = (self._workspace(project) / FEATURE_REL).read_text(encoding="utf-8")
+        spec = (self._control(project) / FEATURE_REL).read_text(
+            encoding="utf-8"
+        )
         required = (
             "## Overview",
             "## Goals",
@@ -653,7 +721,7 @@ See `docs/program/jurisdiction/requirements.md` and
         return [self._ref(project, path)]
 
     def stage_dev(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
+        layout = self._layout(project)
         template = self.settings.templates_path / "hello-web"
         if not template.exists():
             raise StageError(f"Template not found: {template}")
@@ -662,7 +730,39 @@ See `docs/program/jurisdiction/requirements.md` and
             "__PROJECT_NAME__": project["name"],
             "__PROJECT_ID__": project["id"],
             "__RECIPE__": project.get("recipe_id") or "",
+            "__DOCKERFILE__": (
+                "infra/Dockerfile" if layout.is_container else "Dockerfile"
+            ),
         }
+        if layout.is_container:
+            refs = self._copy_template_container(template, layout, substitutions)
+        else:
+            refs = self._copy_template_legacy(
+                template, layout.root, substitutions
+            )
+
+        self._write_artifact_manifest(project)
+        self._init_baseline_git(project)
+        refs.append(
+            self._ref(project, self._docs(project) / "artifact-manifest.json")
+        )
+        return refs
+
+    @staticmethod
+    def _render_template_file(
+        source: Path, substitutions: dict[str, str]
+    ) -> str:
+        text = source.read_text(encoding="utf-8")
+        for key, value in substitutions.items():
+            text = text.replace(key, value)
+        return text
+
+    def _copy_template_legacy(
+        self,
+        template: Path,
+        workspace: Path,
+        substitutions: dict[str, str],
+    ) -> list[str]:
         refs: list[str] = []
         for name in (
             "Dockerfile",
@@ -671,99 +771,150 @@ See `docs/program/jurisdiction/requirements.md` and
             "FORGEL.md",
             "AGENTS.md",
         ):
-            source = template / name
-            text = source.read_text(encoding="utf-8")
-            for key, value in substitutions.items():
-                text = text.replace(key, value)
-            write_text(workspace / name, text)
+            write_text(
+                workspace / name,
+                self._render_template_file(template / name, substitutions),
+            )
             refs.append(name)
         for directory in ("api", "web", "infra", "e2e", "docker", "qa"):
-            copy_template(template / directory, workspace / directory, substitutions)
+            copy_template(
+                template / directory, workspace / directory, substitutions
+            )
             refs.append(directory)
-
-        self._write_artifact_manifest(workspace)
-        self._init_baseline_git(workspace)
-        refs.append("docs/program/artifact-manifest.json")
         return refs
 
-    @staticmethod
-    def _write_artifact_manifest(workspace: Path) -> None:
+    def _copy_template_container(
+        self,
+        template: Path,
+        layout: ProjectLayout,
+        substitutions: dict[str, str],
+    ) -> list[str]:
+        api = layout.repo_path("api")
+        web = layout.repo_path("web")
+        infra = layout.repo_path("infra")
+        e2e = layout.repo_path("e2e")
+
+        copy_template(template / "api", api, substitutions)
+        copy_template(template / "web", web, substitutions)
+        copy_template(template / "e2e", e2e, substitutions)
+        copy_template(template / "qa", e2e / "qa", substitutions)
+        copy_template(template / "infra", infra, substitutions)
+        write_text(
+            infra / "Dockerfile",
+            self._render_template_file(template / "Dockerfile", substitutions),
+        )
+        # The build context is ``repos/``; Docker reads .dockerignore there.
+        write_text(
+            layout.repos_root / ".dockerignore",
+            self._render_template_file(
+                template / ".dockerignore", substitutions
+            ),
+        )
+        write_text(
+            infra / "docker-compose.qa.yml",
+            self._render_template_file(
+                template / "docker" / "docker-compose.qa.yml", substitutions
+            ),
+        )
+        for name in ("FORGEL.md", "AGENTS.md"):
+            write_text(
+                layout.control / name,
+                self._render_template_file(template / name, substitutions),
+            )
+
+        gitignore = self._render_template_file(
+            template / ".gitignore", substitutions
+        )
+        for target in (layout.control, api, web, infra, e2e):
+            write_text(target / ".gitignore", gitignore)
+
+        control_ref = layout.control.relative_to(layout.root).as_posix()
+        return [
+            layout.repo_ref("api"),
+            layout.repo_ref("web"),
+            layout.repo_ref("infra"),
+            layout.repo_ref("e2e"),
+            f"{control_ref}/FORGEL.md",
+            f"{control_ref}/AGENTS.md",
+        ]
+
+    def _write_artifact_manifest(self, project: dict[str, Any]) -> None:
+        layout = self._layout(project)
+        manifest = self._docs(project) / "artifact-manifest.json"
+        manifest_ref = self._ref(project, manifest)
         files: dict[str, str] = {}
-        for path in sorted(workspace.rglob("*")):
+        for path in sorted(layout.root.rglob("*")):
             if not path.is_file():
                 continue
-            relative = path.relative_to(workspace)
+            relative = path.relative_to(layout.root)
             if any(
-                part in {"__pycache__", "node_modules", ".git"}
+                part in {"__pycache__", "node_modules", ".git", ".forgel"}
                 for part in relative.parts
             ):
                 continue
-            if relative.as_posix() == "docs/program/artifact-manifest.json":
+            name = relative.as_posix()
+            if name == manifest_ref:
                 continue
-            files[relative.as_posix()] = hashlib.sha256(
-                path.read_bytes()
-            ).hexdigest()
+            files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
         write_json(
-            workspace / "docs" / "program" / "artifact-manifest.json",
+            manifest,
             {"generated_at": utcnow(), "files": files},
         )
 
     @staticmethod
-    def _init_baseline_git(workspace: Path) -> None:
-        if shutil.which("git") is None or (workspace / ".git").exists():
-            return
-        subprocess.run(
-            ["git", "init", "-q"], cwd=str(workspace), check=False
-        )
-        subprocess.run(
-            ["git", "add", "-A"], cwd=str(workspace), check=False
-        )
-        subprocess.run(
-            [
-                "git",
-                "-c",
-                "user.name=Forgel",
-                "-c",
-                "user.email=forgel@localhost",
-                "commit",
-                "-q",
-                "-m",
-                "Generated baseline",
-            ],
-            cwd=str(workspace),
-            check=False,
-        )
-        subprocess.run(
-            ["git", "tag", "-f", "forgel-baseline"],
-            cwd=str(workspace),
+    def _git(target: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=str(target),
+            capture_output=True,
+            text=True,
             check=False,
         )
 
-    @staticmethod
-    def _commit_release_candidate(workspace: Path, generation: int) -> None:
+    def _init_git_target(self, target: Path, message: str) -> None:
+        if shutil.which("git") is None or not target.exists():
+            return
+        if (target / ".git").exists():
+            head = self._git(target, "rev-parse", "--verify", "HEAD")
+            if head.returncode == 0:
+                return
+        self._git(target, "init", "-q")
+        self._git(target, "add", "-A")
+        self._git(
+            target,
+            "-c",
+            "user.name=Forgel",
+            "-c",
+            "user.email=forgel@localhost",
+            "commit",
+            "-q",
+            "-m",
+            message,
+        )
+        self._git(target, "tag", "-f", "forgel-baseline")
+
+    def _init_baseline_git(self, project: dict[str, Any]) -> None:
+        for target in self._layout(project).git_targets():
+            self._init_git_target(target, "Generated baseline")
+
+    def _commit_release_candidate(
+        self, project: dict[str, Any], generation: int
+    ) -> None:
         """Commit the tree the human reviews, so the approval names a SHA.
 
         The baseline tag is not moved here: it marks the last closed
         generation, and ``sync`` still compares against it.
         """
 
-        if shutil.which("git") is None or not (workspace / ".git").exists():
+        if shutil.which("git") is None:
             return
-        status = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=str(workspace),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if not status.stdout.strip():
-            return
-        subprocess.run(
-            ["git", "add", "-A"], cwd=str(workspace), check=False
-        )
-        subprocess.run(
-            [
-                "git",
+        for target in self._layout(project).git_roots():
+            status = self._git(target, "status", "--porcelain")
+            if not status.stdout.strip():
+                continue
+            self._git(target, "add", "-A")
+            self._git(
+                target,
                 "-c",
                 "user.name=Forgel",
                 "-c",
@@ -772,21 +923,17 @@ See `docs/program/jurisdiction/requirements.md` and
                 "-q",
                 "-m",
                 f"Forgel release candidate for generation {generation}",
-            ],
-            cwd=str(workspace),
-            check=False,
-        )
+            )
 
-    @staticmethod
-    def _commit_generated_state(workspace: Path, generation: int) -> None:
-        if shutil.which("git") is None or not (workspace / ".git").exists():
+    def _commit_generated_state(
+        self, project: dict[str, Any], generation: int
+    ) -> None:
+        if shutil.which("git") is None:
             return
-        subprocess.run(
-            ["git", "add", "-A"], cwd=str(workspace), check=False
-        )
-        subprocess.run(
-            [
-                "git",
+        for target in self._layout(project).git_roots():
+            self._git(target, "add", "-A")
+            self._git(
+                target,
                 "-c",
                 "user.name=Forgel",
                 "-c",
@@ -795,18 +942,12 @@ See `docs/program/jurisdiction/requirements.md` and
                 "-q",
                 "-m",
                 f"Forgel generation {generation} complete",
-            ],
-            cwd=str(workspace),
-            check=False,
-        )
-        subprocess.run(
-            ["git", "tag", "-f", "forgel-baseline"],
-            cwd=str(workspace),
-            check=False,
-        )
+            )
+            self._git(target, "tag", "-f", "forgel-baseline")
 
     def stage_review(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
+        layout = self._layout(project)
+        workspace = layout.root
         reconciliation = self._docs(project) / "reconciliation.md"
         if reconciliation.exists() and "- Status: fix_required" in reconciliation.read_text(
             encoding="utf-8"
@@ -816,30 +957,33 @@ See `docs/program/jurisdiction/requirements.md` and
             )
         checks: list[tuple[str, bool]] = []
 
-        config = load_project_config(workspace)
+        config = load_project_config(layout.control)
         simplicity = (
             config.simplicity if config is not None else SimplicityConfig()
         )
         metrics = measure_patch(workspace)
         violations = evaluate(metrics, simplicity)
-        complexity_path = write_report(workspace, metrics, violations)
+        complexity_path = write_report(layout.control, metrics, violations)
 
-        for relative in (
-            "api/app.py",
-            "web/index.html",
-            "e2e/check.py",
-            "Dockerfile",
-            "docker/docker-compose.qa.yml",
-            "qa/runner.mjs",
-            "qa/package.json",
-            "qa/scenarios/hello_web.mjs",
-            "FORGEL.md",
-            "AGENTS.md",
-            "forgel.toml",
-        ):
+        affected = self._affected_paths(project)
+        control = self._control_paths(project)
+        required = (
+            affected["api"],
+            affected["web"],
+            affected["e2e"],
+            affected["dockerfile"],
+            affected["compose"],
+            affected["runner"],
+            affected["package"],
+            affected["scenario"],
+            control["forge"],
+            control["agents"],
+            control["config"],
+        )
+        for relative in required:
             checks.append((f"exists: {relative}", (workspace / relative).exists()))
 
-        compose = workspace / "docker" / "docker-compose.qa.yml"
+        compose = workspace / affected["compose"]
         if compose.exists():
             checks.append(
                 (
@@ -848,7 +992,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 )
             )
 
-        for relative in ("api/app.py", "e2e/check.py"):
+        for relative in (affected["api"], affected["e2e"]):
             path = workspace / relative
             try:
                 compile(path.read_text(encoding="utf-8"), str(path), "exec")
@@ -858,6 +1002,12 @@ See `docs/program/jurisdiction/requirements.md` and
 
         unresolved: list[str] = []
         for path in workspace.rglob("*"):
+            relative_parts = path.relative_to(workspace).parts
+            if any(
+                part in {"__pycache__", "node_modules", ".git", ".forgel"}
+                for part in relative_parts
+            ):
+                continue
             if not path.is_file() or path.suffix not in {
                 ".py",
                 ".html",
@@ -902,18 +1052,17 @@ See `docs/program/jurisdiction/requirements.md` and
         return [self._ref(project, path), self._ref(project, complexity_path)]
 
     def stage_qa(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
         runtime = self.settings.qa_runtime
-        config = load_project_config(workspace)
+        config = load_project_config(self._control(project))
         if runtime == "auto" and config is not None:
             runtime = config.qa.runtime
         if runtime == "auto":
             runtime = "docker" if self._docker_available() else "local"
 
         if runtime == "docker":
-            returncode, output, runtime_label = self._run_qa_docker(workspace)
+            returncode, output, runtime_label = self._run_qa_docker(project)
         else:
-            returncode, output = self._run_qa_local(workspace)
+            returncode, output = self._run_qa_local(project)
             runtime_label = "local"
 
         verdict = "PASS" if returncode == 0 else "FAIL"
@@ -937,13 +1086,15 @@ See `docs/program/jurisdiction/requirements.md` and
             raise StageError(f"QA failed with exit code {returncode}: {output}")
         return [self._ref(project, path)]
 
-    def _run_qa_local(self, workspace: Path) -> tuple[int, str]:
-        script = workspace / "e2e" / "check.py"
+    def _run_qa_local(self, project: dict[str, Any]) -> tuple[int, str]:
+        layout = self._layout(project)
+        affected = self._affected_paths(project)
+        script = layout.root / affected["e2e"]
         if not script.exists():
             raise StageError(f"QA script not found: {script}")
         completed = subprocess.run(
             [sys.executable, str(script)],
-            cwd=str(workspace / "e2e"),
+            cwd=str(script.parent),
             capture_output=True,
             text=True,
             timeout=60,
@@ -954,12 +1105,16 @@ See `docs/program/jurisdiction/requirements.md` and
             output += "\n" + completed.stderr
         return completed.returncode, output
 
-    def _run_qa_docker(self, workspace: Path) -> tuple[int, str, str]:
-        compose = workspace / "docker" / "docker-compose.qa.yml"
+    def _run_qa_docker(
+        self, project: dict[str, Any]
+    ) -> tuple[int, str, str]:
+        layout = self._layout(project)
+        affected = self._affected_paths(project)
+        compose = layout.root / affected["compose"]
         if not compose.exists():
-            compose = workspace / "compose.yaml"
+            compose = layout.control / "compose.yaml"
         if not compose.exists():
-            raise StageError(f"QA compose file not found in {workspace}")
+            raise StageError(f"QA compose file not found in {layout.root}")
 
         port = self._free_port()
         env = {**os.environ, "APP_PORT": str(port)}
@@ -967,7 +1122,7 @@ See `docs/program/jurisdiction/requirements.md` and
         output = f"$ docker compose -f {compose} up -d --build\n"
         result = subprocess.run(
             ["docker", "compose", "-f", str(compose), "up", "-d", "--build"],
-            cwd=str(workspace),
+            cwd=str(layout.root),
             env=env,
             capture_output=True,
             text=True,
@@ -981,7 +1136,7 @@ See `docs/program/jurisdiction/requirements.md` and
             if returncode == 0:
                 self._wait_for_url(base_url + "/health")
                 returncode, runner_output = self._run_browser_runner(
-                    workspace, base_url
+                    project, base_url
                 )
                 output += runner_output
         except Exception as exc:  # noqa: BLE001 - surface the failure in the report
@@ -990,7 +1145,7 @@ See `docs/program/jurisdiction/requirements.md` and
         finally:
             down = subprocess.run(
                 ["docker", "compose", "-f", str(compose), "down", "-v"],
-                cwd=str(workspace),
+                cwd=str(layout.root),
                 env=env,
                 capture_output=True,
                 text=True,
@@ -1002,12 +1157,14 @@ See `docs/program/jurisdiction/requirements.md` and
         return returncode, output, "docker + headless Chrome"
 
     def _run_browser_runner(
-        self, workspace: Path, base_url: str
+        self, project: dict[str, Any], base_url: str
     ) -> tuple[int, str]:
-        qa_dir = workspace / "qa"
-        runner = qa_dir / "runner.mjs"
+        layout = self._layout(project)
+        affected = self._affected_paths(project)
+        runner = layout.root / affected["runner"]
         if not runner.exists():
             raise StageError(f"Browser QA runner not found: {runner}")
+        qa_dir = runner.parent
 
         node = shutil.which("node")
         npm = shutil.which("npm")
@@ -1030,14 +1187,14 @@ See `docs/program/jurisdiction/requirements.md` and
 
         completed = subprocess.run(
             [node, str(runner), "--base-url", base_url],
-            cwd=str(workspace),
+            cwd=str(layout.root),
             capture_output=True,
             text=True,
             timeout=180,
             check=False,
         )
         output += (
-            "\n$ node qa/runner.mjs --base-url ...\n"
+            f"\n$ node {affected['runner']} --base-url ...\n"
             + completed.stdout
             + completed.stderr
         )
@@ -1055,7 +1212,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 timeout=10,
                 check=False,
             )
-        except OSError:
+        except (OSError, subprocess.SubprocessError):
             return False
         return result.returncode == 0
 
@@ -1164,8 +1321,10 @@ See `docs/program/jurisdiction/requirements.md` and
         lines.extend(
             [
                 "",
-                f"Production allowed: **{'yes' if production_allowed else 'no'}** "
-                f"(human acknowledgement required: **{'yes' if acknowledgement_required else 'no'}**).",
+                "Production allowed: "
+                f"**{'yes' if production_allowed else 'no'}** "
+                "(human acknowledgement required: "
+                f"**{'yes' if acknowledgement_required else 'no'}**).",
                 f"Legal review: `{review_label}`.",
                 f"Reconciliation: `{reconciliation_status}`.",
                 "Compliance responsibility remains with the human who approves production; "
@@ -1178,8 +1337,12 @@ See `docs/program/jurisdiction/requirements.md` and
         return [self._ref(project, path)]
 
     def stage_audit(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
-        jurisdiction = read_json(self._docs(project) / "jurisdiction" / "profile.json")
+        layout = self._layout(project)
+        control = layout.control
+        docs = self._docs(project)
+        affected = self._affected_paths(project)
+        control_paths = self._control_paths(project)
+        jurisdiction = read_json(docs / "jurisdiction" / "profile.json")
         production_allowed = bool(jurisdiction.get("production_allowed", True))
         acknowledgement_required = bool(
             jurisdiction.get("acknowledgement_required", True)
@@ -1190,39 +1353,47 @@ See `docs/program/jurisdiction/requirements.md` and
         scope_line = (
             "staging; production requires the human acknowledgement of the compliance disclaimer."
         )
-        required = (
-            "program.yaml",
-            "docs/program/requirements.json",
-            "docs/program/master-plan.md",
-            "docs/program/change-sets.json",
-            "docs/program/artifact-manifest.json",
-            FEATURE_REL,
-            "docs/program/spec-review.md",
-            "docs/program/review.md",
-            "docs/program/complexity/report.md",
-            "docs/program/qa-report.md",
-            "docs/program/acceptance/0001_hello-web.md",
-            "docs/program/jurisdiction/profile.json",
-            "docs/program/jurisdiction/requirements.md",
-            "docs/program/jurisdiction/data-flow.md",
-            "docs/program/jurisdiction/compliance.md",
-            "docs/program/jurisdiction/disclaimer.md",
-            "docs/program/jurisdiction/legal-review.md",
-            "api/app.py",
-            "web/index.html",
-            "e2e/check.py",
-            "Dockerfile",
-            ".dockerignore",
-            ".gitignore",
-            "docker/docker-compose.qa.yml",
-            "qa/runner.mjs",
-            "qa/package.json",
-            "qa/scenarios/hello_web.mjs",
-            "FORGEL.md",
-            "AGENTS.md",
-            "forgel.toml",
+        gitignore_rel = (
+            layout.repo_ref("api", ".gitignore")
+            if layout.is_container
+            else ".gitignore"
         )
-        missing = [item for item in required if not (workspace / item).exists()]
+        required_paths: list[Path] = [
+            control / "program.yaml",
+            docs / "requirements.json",
+            docs / "master-plan.md",
+            docs / "change-sets.json",
+            docs / "artifact-manifest.json",
+            control / FEATURE_REL,
+            docs / "spec-review.md",
+            docs / "review.md",
+            docs / "complexity" / "report.md",
+            docs / "qa-report.md",
+            docs / "acceptance" / "0001_hello-web.md",
+            docs / "jurisdiction" / "profile.json",
+            docs / "jurisdiction" / "requirements.md",
+            docs / "jurisdiction" / "data-flow.md",
+            docs / "jurisdiction" / "compliance.md",
+            docs / "jurisdiction" / "disclaimer.md",
+            docs / "jurisdiction" / "legal-review.md",
+            layout.root / affected["api"],
+            layout.root / affected["web"],
+            layout.root / affected["e2e"],
+            layout.root / affected["dockerfile"],
+            layout.root / affected["dockerignore"],
+            layout.root / affected["compose"],
+            layout.root / affected["runner"],
+            layout.root / affected["package"],
+            layout.root / affected["scenario"],
+            layout.root / gitignore_rel,
+        ]
+        for key in ("forge", "agents", "config"):
+            required_paths.append(layout.root / control_paths[key])
+        missing = [
+            self._ref(project, path)
+            for path in required_paths
+            if not path.exists()
+        ]
 
         registry_sha = hashlib.sha256(
             self.settings.registry_path.read_bytes()
@@ -1246,17 +1417,17 @@ See `docs/program/jurisdiction/requirements.md` and
             },
             "generated_at": utcnow(),
         }
-        lock_path = write_json(workspace / "lock.json", lock)
+        lock_path = write_json(control / "lock.json", lock)
 
         staging = {
             "status": "ready",
             "host": "127.0.0.1",
             "port": 8000,
             "url": "http://127.0.0.1:8000",
-            "command": f"{sys.executable} api/app.py",
+            "command": f"{sys.executable} {affected['api']}",
             "checked_at": utcnow(),
         }
-        staging_path = write_json(workspace / "staging.json", staging)
+        staging_path = write_json(control / "staging.json", staging)
 
         verdict = "PASS" if not missing else "FAIL"
         audit_path = self._docs(project) / "audit.md"
@@ -1292,9 +1463,8 @@ See `docs/program/jurisdiction/requirements.md` and
     def stage_approval(self, project: dict[str, Any]) -> list[str]:
         """Park the pipeline until staging is approved for this generation."""
 
-        workspace = self._workspace(project)
         generation = self.ledger.current_generation(project["id"])
-        self._commit_release_candidate(workspace, generation)
+        self._commit_release_candidate(project, generation)
         approval = latest_approval(self.ledger, project["id"], "staging", generation)
         if approval is None:
             raise ApprovalRequired(project["id"], generation, "staging", "pending")
@@ -1303,7 +1473,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 project["id"], generation, "staging", approval["decision"]
             )
 
-        staging_path = workspace / "staging.json"
+        staging_path = self._control(project) / "staging.json"
         staging = read_json(staging_path) if staging_path.exists() else {}
         staging.update(
             {
@@ -1314,11 +1484,13 @@ See `docs/program/jurisdiction/requirements.md` and
             }
         )
         write_json(staging_path, staging)
-        return [self._ref(project, staging_path), "docs/program/approvals.md"]
+        return [
+            self._ref(project, staging_path),
+            self._ref(project, self._docs(project) / "approvals.md"),
+        ]
 
     def stage_done(self, project: dict[str, Any]) -> list[str]:
-        workspace = self._workspace(project)
-        staging_path = workspace / "staging.json"
+        staging_path = self._control(project) / "staging.json"
         staging = read_json(staging_path) if staging_path.exists() else {}
         jurisdiction = read_json(self._docs(project) / "jurisdiction" / "profile.json")
         allowed_label = "yes" if jurisdiction.get("production_allowed") else "no"
@@ -1367,7 +1539,7 @@ See `docs/program/jurisdiction/requirements.md` and
 - Deferred: none recorded
 """,
         )
-        self._commit_generated_state(workspace, generation)
+        self._commit_generated_state(project, generation)
         return [self._ref(project, path), self._ref(project, iteration)]
 
 

@@ -10,6 +10,7 @@ from forgel.approvals import record_approval
 from forgel.artifacts import write_text
 from forgel.config import Settings
 from forgel.control import is_paused
+from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.project_config import render_project_config
@@ -354,8 +355,9 @@ class SelectionAndAgentTest(unittest.TestCase):
         router = self._router()
         project = self._project("Demo", "A demo brief.")
         self.ledger.set_session(7, project)
+        root = Path(self.ledger.get_project(project)["workspace"])
         write_text(
-            Path(self.ledger.get_project(project)["workspace"]) / "forgel.toml",
+            ProjectLayout.detect(root).control / "forgel.toml",
             render_project_config("Demo"),
         )
         view = router.handle(7, "/config", "@tester")

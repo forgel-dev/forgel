@@ -19,6 +19,7 @@ from .config import Settings
 from .context import effective_context, resolve_context
 from .control import set_paused
 from .daemon import project_state, run_daemon
+from .layout import ProjectLayout
 from .ledger import Ledger
 from .project_config import (
     ConfigError,
@@ -53,7 +54,8 @@ def _print_result(
 ) -> None:
     project = ledger.get_project(project_id)
     assert project is not None
-    staging_path = Path(project["workspace"]) / "staging.json"
+    layout = ProjectLayout.detect(project["workspace"])
+    staging_path = layout.artifact("staging.json")
     staging = read_json(staging_path) if staging_path.exists() else {}
     approval = None
     if result is not None:
@@ -141,7 +143,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             print(f"{scope + ':':<12}{value}")
         print(
             "proposals:  "
-            f"{len(summarize_proposals(Path(project['workspace'])))}"
+            f"{len(summarize_proposals(ProjectLayout.detect(project['workspace']).control))}"
         )
         print()
         print(f"{'seq':>4}  {'gen':>3}  {'stage':<14} {'status':<10} artifacts")
@@ -299,16 +301,16 @@ def cmd_config(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        workspace = Path(project["workspace"])
+        control = ProjectLayout.detect(project["workspace"]).control
         try:
-            config = load_project_config(workspace)
+            config = load_project_config(control)
         except ConfigError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         if config is None:
             print("no forgel.toml; defaults apply")
             return 0
-        print(f"config:       {workspace / 'forgel.toml'}")
+        print(f"config:       {control / 'forgel.toml'}")
         print(f"project:      {config.name or '—'}")
         print(f"recipe:       {config.recipe or '—'}")
         print(f"qa.runtime:   {config.qa.runtime}")
@@ -332,8 +334,8 @@ def cmd_context(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        workspace = Path(project["workspace"])
-        files = resolve_context(workspace)
+        control = ProjectLayout.detect(project["workspace"]).control
+        files = resolve_context(control)
         if not files:
             print("no context files")
             return 0
@@ -348,7 +350,7 @@ def cmd_context(args: argparse.Namespace) -> int:
             print(f"  {item.name:<12} {kind:<10} {len(item.text)} bytes")
         if args.raw:
             print()
-            print(effective_context(workspace))
+            print(effective_context(control))
         return 0
     finally:
         ledger.close()
@@ -362,17 +364,17 @@ def cmd_complexity(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        workspace = Path(project["workspace"])
+        layout = ProjectLayout.detect(project["workspace"])
         try:
-            config = load_project_config(workspace)
+            config = load_project_config(layout.control)
         except ConfigError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         simplicity = config.simplicity if config is not None else SimplicityConfig()
-        metrics = measure_patch(workspace)
+        metrics = measure_patch(layout.root)
         violations = evaluate(metrics, simplicity)
-        path = write_report(workspace, metrics, violations)
-        print(f"report: {path.relative_to(workspace)}")
+        path = write_report(layout.control, metrics, violations)
+        print(f"report: {path.relative_to(layout.root)}")
         print(
             f"added: {metrics.added_lines}, removed: {metrics.removed_lines}, "
             f"files: {metrics.files_changed}"
@@ -402,11 +404,11 @@ def cmd_propose(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        workspace = Path(project["workspace"])
+        control = ProjectLayout.detect(project["workspace"]).control
         try:
-            config = load_project_config(workspace)
+            config = load_project_config(control)
             path = propose_project(
-                workspace,
+                control,
                 config,
                 kind=args.kind,
                 title=args.title,
@@ -416,7 +418,7 @@ def cmd_propose(args: argparse.Namespace) -> int:
         except (ConfigError, ProposalError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(path.relative_to(workspace))
+        print(path.relative_to(control))
         return 0
     finally:
         ledger.close()
@@ -430,8 +432,8 @@ def cmd_proposals(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        workspace = Path(project["workspace"])
-        proposals = summarize_proposals(workspace)
+        control = ProjectLayout.detect(project["workspace"]).control
+        proposals = summarize_proposals(control)
         if not proposals:
             print("no proposals")
             return 0
@@ -471,12 +473,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        workspace = Path(project["workspace"])
-        script = workspace / "api" / "app.py"
+        layout = ProjectLayout.detect(project["workspace"])
+        script = layout.repo_path("api") / "app.py"
         if not script.exists():
             print(f"error: {script} does not exist; run the project first", file=sys.stderr)
             return 1
-        staging_path = workspace / "staging.json"
+        staging_path = layout.artifact("staging.json")
         if not staging_path.exists():
             print(
                 f"error: {staging_path} does not exist; run the project first",
@@ -488,7 +490,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         try:
             subprocess.run(
                 [sys.executable, str(script), "--port", str(args.port)],
-                cwd=str(workspace),
+                cwd=str(layout.root),
                 env=env,
                 check=False,
             )
