@@ -436,6 +436,18 @@ def _reconciliation_status(path: Path) -> str:
     return "none"
 
 
+def reconciliation_status(workspace: Path) -> str:
+    """Return the recorded reconciliation status for a project workspace."""
+
+    return _reconciliation_status(workspace / "docs" / "program" / "reconciliation.md")
+
+
+def reconciliation_status_path(path: Path) -> str:
+    """Return the status from an explicit reconciliation file."""
+
+    return _reconciliation_status(path)
+
+
 def sync_project(
     workspace: Path,
     ledger: Ledger,

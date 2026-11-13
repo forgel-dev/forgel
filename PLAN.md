@@ -150,6 +150,14 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-052** | Repo onboarding is a PR; the daemon runs from a released image, not the working copy it modifies | Adopting a repo must be reviewable; a running process must not rewrite its own code | `forgel adopt <repo-url>` opens an onboarding PR; Forgel changes ship via CI-built images |
 | **D-053** | Auto-merge requires all gates, green CI, no blocking reconciliation, budget within cap, no conflict and a PATCH/MINOR change set; post-merge verification auto-reverts on failure | Removing the human merge must not remove the safety net | A merge queue serializes merges; failed post-merge smoke triggers an automatic revert and a stop; MAJOR changes remain human-initiated |
 | **D-054** | Production deploy has three modes: `auto` (opt-in, not recommended), `confirm` (default when configured) and `manual` (no pipeline) | Full automation must be possible, but a human confirmation is a cheap last gate for an irreversible action | `confirm` asks in Telegram and records the approval; `manual` produces a release bundle and instructions; `auto` requires explicit config and a compliance acknowledgement |
+| **D-055** | The chat gateway is a dependency-free Telegram long-poll adapter, closed by default, hosted in the same process as the daemon | Self-hosting should need one process and no extra services; a bot that can spend money must not be open to strangers | `forgel telegram` polls with `urllib`, requires `TELEGRAM_ALLOWED_CHAT_IDS`, maps commands to core functions, and runs pending iterations between polls |
+| **D-056** | Staging approval is a pipeline stage scoped to one generation; production approval requires a completed, approved release and the compliance acknowledgement | An approval given for one release must not carry over to a new generation, and a production decision must be explicit | The pipeline parks at `approval`; approvals live in the ledger and `docs/program/approvals.md` with the reviewed release SHA; production approval without the acknowledgement is rejected |
+| **D-057** | The chat has a selected project per chat session; a message without a command goes to that project's agent | One daemon serves many projects, and the user should not repeat an id on every line | The ledger stores `chat_id → project_id`; `/new` selects the new project, `/use` switches, `/projects` shows the selection |
+| **D-058** | Project contexts are isolated by construction: no shared agent instance, prompt cache or conversation between projects | A leak between customer projects is the most serious failure a studio can have | Every agent call builds context from one project root and its history file; a test asserts that another project's brief and files never appear in the prompt |
+| **D-059** | Configuration is split into daemon and project layers; secrets are separate and never stored in project artifacts | Polling cadence and the model endpoint belong to the installation, while QA, budget and release policy belong to the project | Daemon keys live in `$FORGEL_HOME/config.toml`; project keys in `forgel.toml`; `/config` shows the value and its source; secrets live in env or a `0600` file |
+| **D-060** | Secrets may be set from the chat only through a one-time command that deletes the message; env and the local CLI take precedence | Telegram bots have no end-to-end encryption, but typing a key on a server during MVP development is too slow | `/secret set` deletes the message, stores a `0600` file, never echoes the value and warns about the channel; `forgel secret set` over SSH is the production path |
+| **D-061** | A project is a container: a `program/` control repository for specs and configuration plus real git repositories under `repos/<id>/` | One project can span a backend and a frontend; a flat workspace hides repository boundaries and makes independent history impossible | New projects use the container layout; legacy flat projects remain readable; sync, QA and the template migrate to the container |
+| **D-062** | Repository hosting is a provider plugin; GitHub is the first implementation | Other teams use GitLab, Gitea or a private server, and the core must not depend on one host | A provider contract covers auth, clone, branch, push, pull request and merge; the in-tree GitHub provider is the reference implementation |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1005,7 +1013,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 
 ### M0 — Skeleton (2–3 weeks)
 
-- Ledger, state machine, artifact store, chat gateway.
+- Ledger, state machine, artifact store, chat gateway (Telegram, closed by default), staging approval gate.
 - One stub recipe, one stub provider.
 - End-to-end hello world: brief → repo → commit → staging URL.
 - Repository, licenses, CONTRIBUTING/DCO, documentation skeleton.
@@ -1017,6 +1025,8 @@ Cost per feature and human minutes are measured from day one and capped by the p
 ### M0.5 — Self-Hosting (immediate goal)
 
 - Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
+- Multi-project chat sessions: one daemon, a selected project per chat, isolated project contexts, configuration from chat.
+- Project agent over an OpenAI-compatible endpoint: intake, questions and change requests.
 - Human approval gate for staging and production; production requires the compliance acknowledgement.
 - GitHub App auth, branch/PR flow, auto-merge and remote fetch/push for self-host.
 - Deploy modes: `confirm` via Telegram as the default; `manual` fallback; `auto` opt-in.

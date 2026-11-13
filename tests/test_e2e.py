@@ -5,12 +5,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from forgel.approvals import record_approval
 from forgel.config import Settings
 from forgel.ledger import Ledger, new_project_id
 from forgel.orchestrator import Orchestrator, StageError
 from forgel.sync import reconcile_project, sync_project
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def approve_and_run(
+    orchestrator: Orchestrator, ledger: Ledger, project_id: str
+) -> None:
+    """Satisfy the staging gate and let the pipeline close the iteration."""
+
+    generation = ledger.current_generation(project_id)
+    record_approval(
+        ledger,
+        project_id,
+        scope="staging",
+        actor="test",
+        notes=f"generation {generation}",
+    )
+    orchestrator.run(project_id)
 
 
 class EndToEndTest(unittest.TestCase):
@@ -35,7 +52,16 @@ class EndToEndTest(unittest.TestCase):
                 str(workspace),
             )
 
-            Orchestrator(settings, ledger).run(project_id)
+            orchestrator = Orchestrator(settings, ledger)
+            result = orchestrator.run(project_id)
+
+            self.assertEqual(ledger.checkpoint(project_id), "approval")
+            self.assertEqual(
+                result["approval_required"]["scope"], "staging"
+            )
+            self.assertTrue((workspace / "staging.json").exists())
+
+            approve_and_run(orchestrator, ledger, project_id)
 
             self.assertEqual(ledger.checkpoint(project_id), "done")
             self.assertTrue((workspace / "program.yaml").exists())
@@ -125,6 +151,7 @@ class EndToEndTest(unittest.TestCase):
 
             orchestrator = Orchestrator(settings, ledger)
             orchestrator.run(project_id)
+            approve_and_run(orchestrator, ledger, project_id)
             first_events = len(ledger.events(project_id))
             orchestrator.run(project_id)
             self.assertEqual(len(ledger.events(project_id)), first_events)
@@ -153,6 +180,7 @@ class EndToEndTest(unittest.TestCase):
 
             orchestrator = Orchestrator(settings, ledger)
             orchestrator.run(project_id)
+            approve_and_run(orchestrator, ledger, project_id)
             self.assertEqual(ledger.checkpoint_state(project_id), ("done", 1))
             self.assertTrue((workspace / ".git").exists())
 
@@ -198,8 +226,19 @@ class EndToEndTest(unittest.TestCase):
             self.assertIn("External Change", spec)
 
             orchestrator.run(project_id)
+            self.assertEqual(
+                ledger.checkpoint_state(project_id), ("approval", 2)
+            )
+            approve_and_run(orchestrator, ledger, project_id)
             self.assertEqual(ledger.checkpoint_state(project_id), ("done", 2))
-            for stage in ("review", "qa", "acceptance", "audit", "done"):
+            for stage in (
+                "review",
+                "qa",
+                "acceptance",
+                "audit",
+                "approval",
+                "done",
+            ):
                 self.assertTrue(
                     ledger.has_completed(project_id, stage, 2),
                     f"stage {stage} did not run in generation 2",
@@ -226,6 +265,7 @@ class EndToEndTest(unittest.TestCase):
 
             orchestrator = Orchestrator(settings, ledger)
             orchestrator.run(project_id)
+            approve_and_run(orchestrator, ledger, project_id)
 
             index = workspace / "web" / "index.html"
             original = index.read_text(encoding="utf-8")
@@ -245,6 +285,10 @@ class EndToEndTest(unittest.TestCase):
             self.assertEqual(index.read_text(encoding="utf-8"), original)
 
             orchestrator.run(project_id)
+            self.assertEqual(
+                ledger.checkpoint_state(project_id), ("approval", 2)
+            )
+            approve_and_run(orchestrator, ledger, project_id)
             self.assertEqual(ledger.checkpoint_state(project_id), ("done", 2))
 
 

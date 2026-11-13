@@ -41,11 +41,17 @@ Run the M0 end-to-end skeleton:
 make demo
 ```
 
-The demo creates a project under `.forgel-demo/`, runs the pipeline, and writes a staging descriptor. Inspect it with:
+The demo creates a project under `.forgel-demo/`, runs the pipeline, and writes a staging descriptor. The pipeline parks at the staging approval gate. Inspect and close it with:
 
 ```bash
-PYTHONPATH=src python3 -m forgel status <project-id>
+PYTHONPATH=src python3 -m forgel status <project-id> --home .forgel-demo
+PYTHONPATH=src python3 -m forgel approve <project-id> --scope staging
+PYTHONPATH=src python3 -m forgel run <project-id> --home .forgel-demo
 ```
+
+`forgel telegram` runs the same core behind a Telegram chat interface; see the
+README. It needs `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_CHAT_IDS` and is
+closed to every other chat.
 
 ## Project Layout
 

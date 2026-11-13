@@ -3,31 +3,39 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Sequence
 
 from . import __version__
-from .artifacts import ensure_dir, read_json
+from .approvals import ApprovalError, latest_approval, record_approval
+from .artifacts import read_json
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .context import effective_context, resolve_context
-from .daemon import run_daemon
-from .ledger import Ledger, new_project_id
+from .control import set_paused
+from .daemon import project_state, run_daemon
+from .ledger import Ledger
 from .project_config import (
     ConfigError,
     SimplicityConfig,
     load_project_config,
 )
-from .proposals import ProposalError, list_proposals, propose_project
+from .projects import ProjectError, create_project, resolve_project
+from .proposals import ProposalError, propose_project, summarize_proposals
 from .orchestrator import Orchestrator, StageError
+from .secrets import (
+    SecretError,
+    delete_secret,
+    secret_status,
+    set_secret,
+)
 from .sync import SyncError, reconcile_project, sync_project
-
-_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$")
+from .telegram import TelegramConfig, TelegramConfigError, run_bot
 
 
 def _settings(args: argparse.Namespace) -> Settings:
@@ -38,21 +46,30 @@ def _ledger(settings: Settings) -> Ledger:
     return Ledger(settings.db_path)
 
 
-def _create_project(
-    settings: Settings, ledger: Ledger, name: str, brief: str
-) -> str:
-    project_id = new_project_id(name)
-    workspace = settings.projects_dir / project_id
-    ensure_dir(workspace)
-    ledger.create_project(project_id, name, brief, str(workspace))
-    return project_id
-
-
-def _print_result(ledger: Ledger, project_id: str) -> None:
+def _print_result(
+    ledger: Ledger,
+    project_id: str,
+    result: dict[str, object] | None = None,
+) -> None:
     project = ledger.get_project(project_id)
     assert project is not None
     staging_path = Path(project["workspace"]) / "staging.json"
     staging = read_json(staging_path) if staging_path.exists() else {}
+    approval = None
+    if result is not None:
+        approval = result.get("approval_required")
+    if isinstance(approval, dict):
+        scope = approval.get("scope", "staging")
+        decision = approval.get("decision", "pending")
+        print(
+            f"Project {project_id} is awaiting {scope} approval "
+            f"({decision}, generation {approval.get('generation')})."
+        )
+        if staging:
+            print(f"Staging: {staging.get('url', 'unknown')}")
+        print(f"Approve: forgel approve {project_id} --scope {scope}")
+        print(f"Then run: forgel run {project_id}")
+        return
     print(f"Project {project_id} is done.")
     if staging:
         print(f"Staging: {staging.get('url', 'unknown')}")
@@ -61,19 +78,15 @@ def _print_result(ledger: Ledger, project_id: str) -> None:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    if not _NAME_RE.fullmatch(args.name):
-        print(
-            "error: name must be 1-64 characters of letters, digits, spaces, "
-            "hyphens or underscores",
-            file=sys.stderr,
-        )
-        return 2
     settings = _settings(args)
     ledger = _ledger(settings)
     try:
-        project_id = _create_project(settings, ledger, args.name, args.brief)
+        project_id = create_project(settings, ledger, args.name, args.brief)
         print(project_id)
         return 0
+    except ProjectError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     finally:
         ledger.close()
 
@@ -86,8 +99,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         if project is None:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
-        Orchestrator(settings, ledger).run(args.project_id)
-        _print_result(ledger, args.project_id)
+        result = Orchestrator(settings, ledger).run(args.project_id)
+        _print_result(ledger, args.project_id, result)
         return 0
     except StageError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -115,6 +128,21 @@ def cmd_status(args: argparse.Namespace) -> int:
         print(f"workspace:  {project['workspace']}")
         print(f"generation: {generation}")
         print(f"checkpoint: {checkpoint}")
+        print(f"state:      {project_state(ledger, project)}")
+        for scope in ("staging", "production"):
+            approval = latest_approval(ledger, project["id"], scope, generation)
+            if approval is None:
+                value = "none"
+            else:
+                value = (
+                    f"{approval['decision']} by {approval['actor']} "
+                    f"at {approval['created_at']}"
+                )
+            print(f"{scope + ':':<12}{value}")
+        print(
+            "proposals:  "
+            f"{len(summarize_proposals(Path(project['workspace'])))}"
+        )
         print()
         print(f"{'seq':>4}  {'gen':>3}  {'stage':<14} {'status':<10} artifacts")
         for event in ledger.events(args.project_id):
@@ -162,12 +190,12 @@ def cmd_demo(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
     try:
-        project_id = _create_project(settings, ledger, args.name, args.brief)
+        project_id = create_project(settings, ledger, args.name, args.brief)
         print(f"Created {project_id}")
-        Orchestrator(settings, ledger).run(project_id)
-        _print_result(ledger, project_id)
+        result = Orchestrator(settings, ledger).run(project_id)
+        _print_result(ledger, project_id, result)
         return 0
-    except StageError as exc:
+    except (ProjectError, StageError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     finally:
@@ -403,23 +431,15 @@ def cmd_proposals(args: argparse.Namespace) -> int:
             print(f"error: unknown project {args.project_id}", file=sys.stderr)
             return 1
         workspace = Path(project["workspace"])
-        paths = list_proposals(workspace)
-        if not paths:
+        proposals = summarize_proposals(workspace)
+        if not proposals:
             print("no proposals")
             return 0
-        for path in paths:
-            text = path.read_text(encoding="utf-8")
-            kind = ""
-            status = ""
-            title = path.stem
-            for line in text.splitlines():
-                if line.startswith("# Proposal: "):
-                    title = line[len("# Proposal: ") :]
-                elif line.startswith("- Class: "):
-                    kind = line.split(":", 1)[1].strip().strip("`")
-                elif line.startswith("- Status: "):
-                    status = line.split(":", 1)[1].strip().strip("`")
-            print(f"{kind:<6} {status:<8} {title} ({path.name})")
+        for proposal in proposals:
+            print(
+                f"{proposal['kind']:<6} {proposal['status']:<8} "
+                f"{proposal['title']} ({proposal['file']})"
+            )
         return 0
     finally:
         ledger.close()
@@ -479,6 +499,140 @@ def cmd_serve(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def _record_decision(args: argparse.Namespace, decision: str) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        actor = args.actor or os.environ.get("USER") or "cli"
+        compliance = bool(
+            getattr(args, "accept_compliance_responsibility", False)
+        )
+        try:
+            record = record_approval(
+                ledger,
+                project["id"],
+                scope=args.scope,
+                actor=actor,
+                decision=decision,
+                compliance_ack=compliance,
+                notes=args.notes,
+            )
+        except ApprovalError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"Decision recorded: {record['scope']} {record['decision']} "
+            f"for {record['project_id']} (generation {record['generation']}) "
+            f"by {record['actor']}."
+        )
+        if record["decision"] != "approved":
+            print(
+                "The project stays at the approval gate. Start a new "
+                "generation with sync/reconcile before deciding again."
+            )
+        elif record["scope"] == "production":
+            print(
+                "No deploy provider is configured; the release stays manual "
+                "and the approval is recorded for the audit trail."
+            )
+        else:
+            print(
+                f"Run: forgel run {record['project_id']} "
+                "(or let the daemon continue)."
+            )
+        return 0
+    finally:
+        ledger.close()
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    return _record_decision(args, "approved")
+
+
+def cmd_reject(args: argparse.Namespace) -> int:
+    return _record_decision(args, "rejected")
+
+
+def cmd_pause(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    set_paused(settings.home, True)
+    print("Daemon paused.")
+    return 0
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    set_paused(settings.home, False)
+    print("Daemon resumed.")
+    return 0
+
+
+def cmd_secret(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    if args.action == "list":
+        for key, state in secret_status(settings.home).items():
+            print(f"{key:<26} {state}")
+        return 0
+    if not args.key:
+        print("error: a secret key is required", file=sys.stderr)
+        return 2
+    try:
+        if args.action == "set":
+            if sys.stdin.isatty():
+                value = getpass.getpass(f"{args.key}: ")
+            else:
+                value = sys.stdin.readline().strip()
+            if not value:
+                print("error: the value must not be empty", file=sys.stderr)
+                return 2
+            path = set_secret(settings.home, args.key, value)
+            print(f"Saved {args.key} to {path} (mode 0600).")
+        else:
+            removed = delete_secret(settings.home, args.key)
+            if removed:
+                print(f"Deleted {args.key}.")
+            else:
+                print(f"{args.key} is not set in the file.")
+        return 0
+    except (SecretError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_telegram(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    try:
+        config = TelegramConfig.from_env(home=settings.home)
+    except TelegramConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    ledger = _ledger(settings)
+    try:
+        print(
+            f"Telegram gateway started; allowed chats: "
+            f"{len(config.allowed_chat_ids)}.",
+            file=sys.stderr,
+        )
+        run_bot(
+            settings,
+            ledger,
+            config,
+            daemon=not args.no_daemon,
+            interval=args.interval,
+            poll_timeout=args.poll_timeout,
+        )
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        ledger.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="forgel",
@@ -493,7 +647,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--home", default=None)
     init.set_defaults(func=cmd_init)
 
-    run = subparsers.add_parser("run", help="Run the project to completion")
+    run = subparsers.add_parser("run", help="Run the project to the next gate")
     run.add_argument("project_id")
     run.add_argument("--home", default=None)
     run.set_defaults(func=cmd_run)
@@ -507,7 +661,9 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("--home", default=None)
     listing.set_defaults(func=cmd_list)
 
-    demo = subparsers.add_parser("demo", help="Create and run a demo project")
+    demo = subparsers.add_parser(
+        "demo", help="Create and run a demo project to the approval gate"
+    )
     demo.add_argument("--name", default="hello-web")
     demo.add_argument(
         "--brief",
@@ -594,6 +750,74 @@ def build_parser() -> argparse.ArgumentParser:
     proposals.add_argument("project_id")
     proposals.add_argument("--home", default=None)
     proposals.set_defaults(func=cmd_proposals)
+
+    approve = subparsers.add_parser(
+        "approve", help="Record a staging or production approval"
+    )
+    approve.add_argument("project_id")
+    approve.add_argument(
+        "--scope", choices=["staging", "production"], default="staging"
+    )
+    approve.add_argument(
+        "--accept-compliance-responsibility", action="store_true"
+    )
+    approve.add_argument("--notes", default="")
+    approve.add_argument("--actor", default="")
+    approve.add_argument("--home", default=None)
+    approve.set_defaults(func=cmd_approve)
+
+    reject = subparsers.add_parser(
+        "reject", help="Reject a staging or production release"
+    )
+    reject.add_argument("project_id")
+    reject.add_argument(
+        "--scope", choices=["staging", "production"], default="staging"
+    )
+    reject.add_argument("--notes", default="")
+    reject.add_argument("--actor", default="")
+    reject.add_argument("--home", default=None)
+    reject.set_defaults(func=cmd_reject)
+
+    pause = subparsers.add_parser("pause", help="Pause new daemon iterations")
+    pause.add_argument("--home", default=None)
+    pause.set_defaults(func=cmd_pause)
+
+    resume = subparsers.add_parser("resume", help="Resume daemon iterations")
+    resume.add_argument("--home", default=None)
+    resume.set_defaults(func=cmd_resume)
+
+    telegram = subparsers.add_parser(
+        "telegram", help="Run the Telegram gateway and the daemon"
+    )
+    telegram.add_argument("--home", default=None)
+    telegram.add_argument(
+        "--interval",
+        type=float,
+        default=None,
+        help="Daemon cycle interval (default: daemon.interval in config.toml)",
+    )
+    telegram.add_argument(
+        "--poll-timeout",
+        type=int,
+        default=None,
+        help="Long-polling timeout in seconds (default: daemon config or env)",
+    )
+    telegram.add_argument(
+        "--no-daemon",
+        action="store_true",
+        help="Serve commands only; do not run iterations",
+    )
+    telegram.set_defaults(func=cmd_telegram)
+
+    secret = subparsers.add_parser(
+        "secret", help="Manage secrets in the local 0600 store"
+    )
+    secret.add_argument(
+        "action", choices=["list", "set", "delete"], nargs="?", default="list"
+    )
+    secret.add_argument("key", nargs="?", default="")
+    secret.add_argument("--home", default=None)
+    secret.set_defaults(func=cmd_secret)
 
     daemon = subparsers.add_parser(
         "daemon", help="Run the long-lived orchestrator loop"

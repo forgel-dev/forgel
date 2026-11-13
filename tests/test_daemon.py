@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from forgel.approvals import awaits_approval, record_approval
 from forgel.config import Settings
 from forgel.daemon import project_is_done, run_daemon
 from forgel.ledger import Ledger, new_project_id
@@ -38,6 +39,14 @@ class DaemonTest(unittest.TestCase):
             )
 
             self.assertEqual(cycles, 1)
+            self.assertFalse(project_is_done(ledger, project_id))
+            self.assertTrue(awaits_approval(ledger, project_id))
+
+            record_approval(
+                ledger, project_id, scope="staging", actor="test"
+            )
+            run_daemon(settings, ledger, once=True, log=lambda message: None)
+
             self.assertTrue(project_is_done(ledger, project_id))
             self.assertTrue(
                 (workspace / "docs/program/iterations/1/close.md").exists()
@@ -55,6 +64,10 @@ class DaemonTest(unittest.TestCase):
                 project_id, "hello-web", "A minimal web app.", str(workspace)
             )
 
+            run_daemon(settings, ledger, once=True, log=lambda message: None)
+            record_approval(
+                ledger, project_id, scope="staging", actor="test"
+            )
             run_daemon(settings, ledger, once=True, log=lambda message: None)
             events = len(ledger.events(project_id))
             run_daemon(settings, ledger, once=True, log=lambda message: None)

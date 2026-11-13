@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
+from .approvals import awaits_approval, latest_approval
 from .config import Settings
+from .control import is_paused
 from .ledger import Ledger
 from .orchestrator import Orchestrator
+from .state import STAGES
 
 
 def project_is_done(ledger: Ledger, project_id: str) -> bool:
@@ -32,6 +35,32 @@ def has_blocking_reconciliation(workspace: Path) -> bool:
     return "- Status: pending" in text or "- Status: fix_required" in text
 
 
+def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
+    """Return a short human-readable state used by status and notifications."""
+
+    project_id = project["id"]
+    state = ledger.checkpoint_state(project_id)
+    if state is None:
+        return "queued"
+    stage, generation = state
+    if stage == "approval":
+        approval = latest_approval(ledger, project_id, "staging", generation)
+        if approval is None:
+            return "awaiting staging approval"
+        if approval["decision"] != "approved":
+            return f"staging {approval['decision']}"
+    if has_blocking_reconciliation(Path(project["workspace"])):
+        return "reconciliation pending"
+    stage_events = [
+        event
+        for event in ledger.events(project_id, generation)
+        if event["stage"] in STAGES
+    ]
+    if stage_events and stage_events[-1]["status"] == "failed":
+        return f"failed at {stage_events[-1]['stage']}"
+    return stage
+
+
 def run_once(
     settings: Settings,
     ledger: Ledger,
@@ -43,6 +72,9 @@ def run_once(
     for project in ledger.list_projects():
         project_id = project["id"]
         if project_is_done(ledger, project_id):
+            continue
+        if awaits_approval(ledger, project_id):
+            log(f"[daemon] {project_id}: waiting for staging approval")
             continue
         workspace = Path(project["workspace"])
         if has_blocking_reconciliation(workspace):
@@ -69,7 +101,11 @@ def run_daemon(
 
     cycles = 0
     while True:
-        processed = run_once(settings, ledger, log)
+        if is_paused(settings.home):
+            processed = []
+            log("[daemon] paused")
+        else:
+            processed = run_once(settings, ledger, log)
         cycles += 1
         if once or (max_cycles is not None and cycles >= max_cycles):
             return cycles

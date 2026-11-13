@@ -105,3 +105,30 @@ def list_proposals(workspace: Path) -> list[Path]:
     if not directory.exists():
         return []
     return sorted(directory.glob("*.md"))
+
+
+def summarize_proposals(workspace: Path) -> list[dict[str, str]]:
+    """Return title, class, status and file name for each proposal."""
+
+    summaries: list[dict[str, str]] = []
+    for path in list_proposals(workspace):
+        text = path.read_text(encoding="utf-8")
+        title = path.stem
+        kind = ""
+        status = ""
+        for line in text.splitlines():
+            if line.startswith("# Proposal: "):
+                title = line[len("# Proposal: ") :]
+            elif line.startswith("- Class: "):
+                kind = line.split(":", 1)[1].strip().strip("`")
+            elif line.startswith("- Status: "):
+                status = line.split(":", 1)[1].strip().strip("`")
+        summaries.append(
+            {
+                "title": title,
+                "kind": kind,
+                "status": status,
+                "file": path.name,
+            }
+        )
+    return summaries

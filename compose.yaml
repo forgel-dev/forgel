@@ -15,5 +15,26 @@ services:
       - forgel-data:/data
     command: ["demo"]
 
+  telegram:
+    build: .
+    image: forgel:local
+    profiles: ["telegram"]
+    restart: unless-stopped
+    environment:
+      FORGEL_HOME: /data
+      FORGEL_REGISTRY: /app/registry/recipes.json
+      FORGEL_JURISDICTIONS: /app/jurisdiction
+      FORGEL_QA_RUNTIME: local
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_ALLOWED_CHAT_IDS: "${TELEGRAM_ALLOWED_CHAT_IDS:-}"
+      TELEGRAM_POLL_TIMEOUT: "${TELEGRAM_POLL_TIMEOUT:-}"
+      FORGEL_MODEL_API_KEY: "${FORGEL_MODEL_API_KEY:-}"
+      FORGEL_MODEL_BASE_URL: "${FORGEL_MODEL_BASE_URL:-}"
+      FORGEL_MODEL_NAME: "${FORGEL_MODEL_NAME:-}"
+      FORGEL_MODEL_MODE: "${FORGEL_MODEL_MODE:-auto}"
+    volumes:
+      - forgel-data:/data
+    command: ["telegram"]
+
 volumes:
   forgel-data:

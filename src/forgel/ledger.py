@@ -37,7 +37,7 @@ class Ledger:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path))
+        self._conn = sqlite3.connect(str(self.path), timeout=30)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
@@ -77,6 +77,28 @@ class Ledger:
                 project_id  TEXT PRIMARY KEY REFERENCES projects(id),
                 stage       TEXT NOT NULL,
                 generation  INTEGER NOT NULL DEFAULT 1,
+                updated_at  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS approvals (
+                seq            INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id     TEXT NOT NULL REFERENCES projects(id),
+                generation     INTEGER NOT NULL,
+                scope          TEXT NOT NULL,
+                decision       TEXT NOT NULL,
+                actor          TEXT NOT NULL,
+                compliance_ack INTEGER NOT NULL DEFAULT 0,
+                notes          TEXT NOT NULL DEFAULT '',
+                release_sha    TEXT NOT NULL DEFAULT '',
+                created_at     TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS approvals_project_scope
+                ON approvals (project_id, scope, generation);
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                chat_id     INTEGER PRIMARY KEY,
+                project_id  TEXT NOT NULL REFERENCES projects(id),
                 updated_at  TEXT NOT NULL
             );
             """
@@ -265,6 +287,94 @@ class Ledger:
     def checkpoint(self, project_id: str) -> str | None:
         state = self.checkpoint_state(project_id)
         return state[0] if state is not None else None
+
+    def add_approval(
+        self,
+        project_id: str,
+        generation: int,
+        scope: str,
+        decision: str,
+        actor: str,
+        compliance_ack: bool = False,
+        notes: str = "",
+        release_sha: str = "",
+    ) -> dict[str, Any]:
+        self._conn.execute(
+            """
+            INSERT INTO approvals (
+                project_id, generation, scope, decision, actor,
+                compliance_ack, notes, release_sha, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                generation,
+                scope,
+                decision,
+                actor,
+                int(compliance_ack),
+                notes,
+                release_sha,
+                utcnow(),
+            ),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT * FROM approvals WHERE seq = last_insert_rowid()"
+        ).fetchone()
+        assert row is not None
+        return dict(row)
+
+    def approvals(
+        self,
+        project_id: str,
+        scope: str | None = None,
+        generation: int | None = None,
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM approvals WHERE project_id = ?"
+        params: list[Any] = [project_id]
+        if scope is not None:
+            query += " AND scope = ?"
+            params.append(scope)
+        if generation is not None:
+            query += " AND generation = ?"
+            params.append(generation)
+        query += " ORDER BY seq"
+        rows = self._conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def latest_approval(
+        self,
+        project_id: str,
+        scope: str,
+        generation: int | None = None,
+    ) -> dict[str, Any] | None:
+        rows = self.approvals(project_id, scope, generation)
+        return rows[-1] if rows else None
+
+    def set_session(self, chat_id: int, project_id: str) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO sessions (chat_id, project_id, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(chat_id)
+            DO UPDATE SET
+                project_id = excluded.project_id,
+                updated_at = excluded.updated_at
+            """,
+            (chat_id, project_id, utcnow()),
+        )
+        self._conn.commit()
+
+    def get_session(self, chat_id: int) -> str | None:
+        row = self._conn.execute(
+            "SELECT project_id FROM sessions WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        return str(row["project_id"]) if row is not None else None
+
+    def clear_session(self, chat_id: int) -> None:
+        self._conn.execute("DELETE FROM sessions WHERE chat_id = ?", (chat_id,))
+        self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()

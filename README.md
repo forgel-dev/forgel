@@ -12,14 +12,23 @@ Requires Python 3.11+.
 make demo
 ```
 
-This creates `.forgel-demo/`, runs the full pipeline from brief to staging, and
-prints the staging URL. Inspect the ledger and the generated artifacts:
+This creates `.forgel-demo/` and runs the full pipeline from brief to staging.
+The pipeline parks at the staging approval gate; nothing reaches `done`
+without a human decision:
 
 ```bash
 PYTHONPATH=src python3 -m forgel list --home .forgel-demo
 PYTHONPATH=src python3 -m forgel status <project-id> --home .forgel-demo
+PYTHONPATH=src python3 -m forgel approve <project-id> --scope staging --home .forgel-demo
+PYTHONPATH=src python3 -m forgel run <project-id> --home .forgel-demo
 PYTHONPATH=src python3 -m forgel serve <project-id> --home .forgel-demo
 ```
+
+Approvals are recorded in the ledger and in
+`docs/program/approvals.md` inside the generated project, together with the
+release SHA the human reviewed. They are scoped to one generation, so a new
+generation asks again. Production approval is only accepted for a completed
+release and requires `--accept-compliance-responsibility`.
 
 Run the tests:
 
@@ -32,6 +41,111 @@ Run the core from the Docker image:
 ```bash
 docker compose run --rm forgel demo
 ```
+
+## Telegram Interface
+
+`forgel telegram` runs the chat gateway and the daemon in one process. It uses
+long polling with the standard library and needs no extra services.
+
+```bash
+export TELEGRAM_BOT_TOKEN=...
+export TELEGRAM_ALLOWED_CHAT_IDS=123456789
+PYTHONPATH=src python3 -m forgel telegram --home .forgel-demo
+```
+
+The gateway is closed by default: it refuses to start without
+`TELEGRAM_ALLOWED_CHAT_IDS` and ignores every other chat. One daemon serves
+many projects. Each chat selects a project with `/use`; a message without a
+command goes to the agent of the selected project. The agent receives only
+that project's files, configuration and conversation history.
+
+```text
+/new <name> | <brief>     create a project and select it
+/projects                 projects, state and the selected one
+/use <id>                 select the current project
+/status [id]              state, staging, approvals, recent stages
+
+/run [id]                 ask the daemon to run it now
+/sync [id]                detect external changes
+/reconcile [id] decide    accept|fix|rollback|ignore
+/proposals [id]           post-release proposals
+/approve [id] [scope]     staging (default) or production
+/reject [id] [scope]      reject and stay at the gate
+
+/config                   effective daemon and project settings
+/config set <key> <value>
+/secret [set|delete] ...  local secret store
+/pause, /resume           control the daemon
+```
+
+Production approval asks for an explicit compliance acknowledgement with an
+inline button. The bot answers with the release SHA and records the decision
+in the ledger and `docs/program/approvals.md`.
+
+### Configuration
+
+Configuration has two layers. Daemon settings live in
+`$FORGEL_HOME/config.toml` and cover the polling cadence, worker interval and
+the model endpoint. Project settings stay in the project's `forgel.toml`:
+QA runtime, jurisdiction, model names, budget, release, simplicity and
+refactoring policy. `/config` shows every value with its source.
+
+```text
+/config set qa.runtime docker
+/config set budget.per_feature_usd 20
+/config set models.default deepseek-chat
+/config set models.base_url https://api.deepseek.com/v1
+```
+
+### Model and agent
+
+The project agent talks to an OpenAI-compatible endpoint. In production the
+key and URL come from the environment or the local secret store:
+
+```bash
+export FORGEL_MODEL_API_KEY=...
+export FORGEL_MODEL_BASE_URL=https://api.deepseek.com/v1   # optional
+export FORGEL_MODEL_NAME=deepseek-chat                     # optional
+```
+
+The current agent is the intake stage: it answers from the project context and
+records change requests in `docs/program/requests/`. It does not edit code yet.
+
+For local runs without a model key, `FORGEL_MODEL_MODE=script` reads responses
+from `$FORGEL_HOME/model-script.json` (`{"responses": ["..."]}`). This is how a
+subagent given the same prompt can stand in for a model call.
+
+### Secrets
+
+Telegram bots have **no end-to-end encryption**: messages pass through
+Telegram's cloud. `/secret set` deletes the source message immediately and
+stores the value in `$FORGEL_HOME/secrets.toml` with mode `0600`; the value is
+never echoed or written to artifacts. Environment variables take precedence.
+For production, prefer setting secrets over SSH:
+
+```bash
+forgel secret set model.api_key   # reads the value without echo
+forgel secret list
+```
+
+## Project Layout (next milestone)
+
+New projects will use a container layout: a `program/` control repository for
+specs and configuration, and one real git repository per code repo under
+`repos/<id>/`. Existing M0 projects keep the flat layout and remain readable.
+Onboarding an existing repository (`/adopt`, GitHub provider plugin) follows in
+the next milestone.
+
+Deploy it beside the core with Docker Compose:
+
+```bash
+cp .env.example .env    # set the token and your chat id
+docker compose --profile telegram up -d --build telegram
+```
+
+The bot and the ledger share the `/data` volume, so state survives restarts.
+The daemon runs from the image; stopping the process is a deployment action,
+not a chat command.
 
 ## Configuration
 

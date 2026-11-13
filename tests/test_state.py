@@ -9,7 +9,8 @@ class StateTest(unittest.TestCase):
     def test_order_is_linear(self) -> None:
         self.assertEqual(next_stage("intake"), "jurisdiction")
         self.assertEqual(next_stage("jurisdiction"), "recipe")
-        self.assertEqual(next_stage("audit"), "done")
+        self.assertEqual(next_stage("audit"), "approval")
+        self.assertEqual(next_stage("approval"), "done")
         self.assertEqual(next_stage("done"), "done")
 
     def test_stages_from(self) -> None:

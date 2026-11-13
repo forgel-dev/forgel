@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .approvals import latest_approval
 from .artifacts import copy_template, read_json, write_json, write_text
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
@@ -42,6 +43,26 @@ FEATURE_REL = f"docs/program/features/{FEATURE_ID}.md"
 
 class StageError(RuntimeError):
     """A stage failed and the pipeline cannot continue."""
+
+
+class ApprovalRequired(Exception):
+    """The pipeline is parked until a human records a decision.
+
+    This is control flow, not a failure: the stage is not marked failed and the
+    checkpoint stays at ``approval`` so the next run resumes there.
+    """
+
+    def __init__(
+        self, project_id: str, generation: int, scope: str, decision: str
+    ) -> None:
+        super().__init__(
+            f"{scope} approval required for {project_id} "
+            f"(generation {generation}, decision: {decision})"
+        )
+        self.project_id = project_id
+        self.generation = generation
+        self.scope = scope
+        self.decision = decision
 
 
 def utcnow() -> str:
@@ -84,6 +105,17 @@ class Orchestrator:
             print(f"[{stage}] running")
             try:
                 refs = getattr(self, f"stage_{stage}")(project)
+            except ApprovalRequired as exc:
+                print(f"[{stage}] awaiting {exc.scope} approval ({exc.decision})")
+                result = self.ledger.get_project(project_id)
+                assert result is not None
+                result = dict(result)
+                result["approval_required"] = {
+                    "scope": exc.scope,
+                    "decision": exc.decision,
+                    "generation": exc.generation,
+                }
+                return result
             except Exception as exc:
                 self.ledger.append_event(
                     project_id,
@@ -708,6 +740,44 @@ See `docs/program/jurisdiction/requirements.md` and
         )
 
     @staticmethod
+    def _commit_release_candidate(workspace: Path, generation: int) -> None:
+        """Commit the tree the human reviews, so the approval names a SHA.
+
+        The baseline tag is not moved here: it marks the last closed
+        generation, and ``sync`` still compares against it.
+        """
+
+        if shutil.which("git") is None or not (workspace / ".git").exists():
+            return
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if not status.stdout.strip():
+            return
+        subprocess.run(
+            ["git", "add", "-A"], cwd=str(workspace), check=False
+        )
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Forgel",
+                "-c",
+                "user.email=forgel@localhost",
+                "commit",
+                "-q",
+                "-m",
+                f"Forgel release candidate for generation {generation}",
+            ],
+            cwd=str(workspace),
+            check=False,
+        )
+
+    @staticmethod
     def _commit_generated_state(workspace: Path, generation: int) -> None:
         if shutil.which("git") is None or not (workspace / ".git").exists():
             return
@@ -1204,6 +1274,7 @@ See `docs/program/jurisdiction/requirements.md` and
 {body}
 - Lockfile: `lock.json`
 - Staging descriptor: `staging.json`
+- Staging approval: **required** before the pipeline may close the iteration
 - Jurisdiction: `{jurisdiction['id']}@{jurisdiction['version']}` ({jurisdiction['status']})
 - Legal review: `{review_label}`
 - Production allowed: **{allowed_label}** (acknowledgement required: **{ack_label}**)
@@ -1218,6 +1289,33 @@ See `docs/program/jurisdiction/requirements.md` and
             self._ref(project, audit_path),
         ]
 
+    def stage_approval(self, project: dict[str, Any]) -> list[str]:
+        """Park the pipeline until staging is approved for this generation."""
+
+        workspace = self._workspace(project)
+        generation = self.ledger.current_generation(project["id"])
+        self._commit_release_candidate(workspace, generation)
+        approval = latest_approval(self.ledger, project["id"], "staging", generation)
+        if approval is None:
+            raise ApprovalRequired(project["id"], generation, "staging", "pending")
+        if approval["decision"] != "approved":
+            raise ApprovalRequired(
+                project["id"], generation, "staging", approval["decision"]
+            )
+
+        staging_path = workspace / "staging.json"
+        staging = read_json(staging_path) if staging_path.exists() else {}
+        staging.update(
+            {
+                "status": "approved",
+                "approved_at": approval["created_at"],
+                "approved_by": approval["actor"],
+                "generation": generation,
+            }
+        )
+        write_json(staging_path, staging)
+        return [self._ref(project, staging_path), "docs/program/approvals.md"]
+
     def stage_done(self, project: dict[str, Any]) -> list[str]:
         workspace = self._workspace(project)
         staging_path = workspace / "staging.json"
@@ -1227,6 +1325,12 @@ See `docs/program/jurisdiction/requirements.md` and
         ack_label = "yes" if jurisdiction.get("acknowledgement_required") else "no"
         review_label = jurisdiction.get("legal_review_status", "unknown")
         generation = self.ledger.current_generation(project["id"])
+        approval = latest_approval(self.ledger, project["id"], "staging", generation)
+        approval_line = (
+            f"{approval['decision']} by {approval['actor']} at {approval['created_at']}"
+            if approval is not None
+            else "not recorded"
+        )
         path = self._docs(project) / "state.md"
         write_text(
             path,
@@ -1238,6 +1342,7 @@ See `docs/program/jurisdiction/requirements.md` and
 - Jurisdiction: `{jurisdiction['id']}@{jurisdiction['version']}` ({jurisdiction['status']})
 - Legal review: `{review_label}`
 - Production allowed: **{allowed_label}** (acknowledgement required: **{ack_label}**)
+- Staging approval: {approval_line}
 - Status: done
 - Staging: {staging.get('url', 'not available')}
 - Staging command: `{staging.get('command', 'not available')}`
@@ -1256,6 +1361,7 @@ See `docs/program/jurisdiction/requirements.md` and
 - Goal: complete the current generation and pass all gates
 - Status: done
 - Acceptance: PASS
+- Staging approval: {approval_line}
 - Legal review: `{review_label}`
 - Staging: {staging.get('url', 'not available')}
 - Deferred: none recorded

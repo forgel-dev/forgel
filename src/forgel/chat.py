@@ -1,0 +1,737 @@
+"""Chat command router and user-facing UX.
+
+The router is transport-free: it turns text from one chat into core calls and a
+reply. It never touches the network, so it is fully testable. Every command is
+scoped to one project, chosen explicitly or from the chat's session; the agent
+receives only that project's context.
+"""
+
+from __future__ import annotations
+
+import re
+import secrets
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+from . import config_store, daemon_config
+from .agent import ProjectAgent
+from .approvals import ApprovalError, is_approved, latest_approval, record_approval
+from .artifacts import read_json
+from .config import Settings
+from .control import is_paused, set_paused
+from .daemon import project_is_done, project_state
+from .layout import ProjectLayout
+from .ledger import Ledger
+from .artifacts import write_text
+from .project_config import ConfigError, render_project_config
+from .projects import ProjectError, create_project, derive_name, resolve_project
+from .proposals import summarize_proposals
+from .secrets import (
+    SECRETS_FILENAME,
+    SECRET_KEYS,
+    SecretError,
+    delete_secret,
+    secret_status,
+    set_secret,
+)
+from .sync import (
+    SyncError,
+    reconcile_project,
+    reconciliation_status_path,
+    sync_project,
+)
+
+DECISIONS = {"accept", "fix", "rollback", "ignore"}
+SCOPES = {"staging", "production"}
+
+SECRET_PATTERNS = (
+    re.compile(r"(^|[^A-Za-z0-9])sk-[A-Za-z0-9_-]{16,}"),
+    re.compile(r"(^|[^A-Za-z0-9])ghp_[A-Za-z0-9]{20,}"),
+    re.compile(r"(^|[^A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"\b\d{7,12}:[A-Za-z0-9_-]{30,}\b"),
+    re.compile(r"(^|[^A-Za-z0-9])AKIA[0-9A-Z]{16}([^A-Za-z0-9]|$)"),
+)
+
+HELP = """Forgel gateway
+
+Projects
+/new <name> | <brief>  create a project and select it
+/projects              projects, state and the selected one
+/use <id>              select the current project
+/status [id]           state, staging, approvals, recent stages
+
+Work on the selected project
+/run [id]              ask the daemon to run it now
+/sync [id]             detect external changes
+/reconcile [id] accept|fix|rollback|ignore [notes]
+/proposals [id]        post-release proposals
+/approve [id] [staging|production] [notes]
+/reject [id] [staging|production] [notes]
+
+Configuration
+/config                effective daemon and project settings
+/config set <key> <value>
+/secret                secret names and where they are set
+/secret set <key> <value>
+/secret delete <key>
+
+/pause, /resume        control the daemon
+/help
+
+A message without a command goes to the agent of the selected project.
+Project ids can be shortened to any unique prefix. Secrets sent to a bot pass
+through Telegram, which has no end-to-end encryption for bots; prefer
+environment variables or `forgel secret set` over SSH in production."""
+
+
+@dataclass(frozen=True)
+class Reply:
+    text: str
+    reply_markup: dict[str, Any] | None = None
+    callback_text: str = ""
+    delete_source: bool = False
+
+
+def looks_like_secret(text: str) -> bool:
+    return any(pattern.search(text) for pattern in SECRET_PATTERNS)
+
+
+class CommandRouter:
+    """Turn chat text into core calls. No network, no threads."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        ledger: Ledger,
+        daemon_enabled: bool = True,
+        agent: ProjectAgent | None = None,
+    ) -> None:
+        self.settings = settings
+        self.ledger = ledger
+        self.daemon_enabled = daemon_enabled
+        self.agent = agent
+        self._production_tokens: dict[str, tuple[str, float]] = {}
+        self._token_ttl = 900.0
+
+    # ------------------------------------------------------------- dispatch
+
+    def handle(self, chat_id: int, text: str, actor: str) -> Reply:
+        text = text.strip()
+        if not text:
+            return Reply("Send a command or a message. /help")
+        if not text.startswith("/"):
+            return self._message(chat_id, text, actor)
+        command_token, _, rest = text.partition(" ")
+        command = command_token.split("@", 1)[0].lower()
+        rest = rest.strip()
+
+        handlers: dict[str, Callable[[int, str, str], Reply]] = {
+            "/start": lambda _chat, _rest, _actor: Reply(HELP),
+            "/help": lambda _chat, _rest, _actor: Reply(HELP),
+            "/new": self._new,
+            "/projects": self._projects,
+            "/list": self._projects,
+            "/use": self._use,
+            "/status": self._status,
+            "/run": self._run,
+            "/sync": self._sync,
+            "/reconcile": self._reconcile,
+            "/proposals": self._proposals,
+            "/approve": self._approve,
+            "/reject": self._reject,
+            "/config": self._config,
+            "/secret": self._secret,
+            "/pause": self._pause,
+            "/resume": self._resume,
+        }
+        handler = handlers.get(command)
+        if handler is None:
+            return Reply(f"Unknown command {command}. /help lists them.")
+        return handler(chat_id, rest, actor)
+
+    def handle_callback(self, chat_id: int, data: str, actor: str) -> Reply:
+        parts = data.split(":")
+        if len(parts) != 3 or parts[0] != "ap":
+            return Reply("Unknown action.", callback_text="Unknown action")
+        _, token, action = parts
+        entry = self._production_tokens.pop(token, None)
+        if entry is None or time.time() - entry[1] > self._token_ttl:
+            return Reply(
+                "This approval request expired. Run /approve again.",
+                callback_text="Expired",
+            )
+        project_id = entry[0]
+        if action == "no":
+            return Reply(
+                f"Production approval cancelled for {project_id}.",
+                callback_text="Cancelled",
+            )
+        if action != "ok":
+            return Reply("Unknown action.", callback_text="Unknown action")
+        try:
+            record = record_approval(
+                self.ledger,
+                project_id,
+                scope="production",
+                actor=actor,
+                decision="approved",
+                compliance_ack=True,
+                notes="confirmed in Telegram",
+            )
+        except ApprovalError as exc:
+            return Reply(f"error: {exc}", callback_text="Not approved")
+        return Reply(
+            self._approval_text(record, production=True),
+            callback_text="Approved",
+        )
+
+    # ------------------------------------------------------------- projects
+
+    def _new(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        if not rest:
+            return Reply(
+                "Usage: /new <name> | <brief>\n"
+                "or: /new <brief> to derive the name."
+            )
+        if "|" in rest:
+            name, brief = rest.split("|", 1)
+        else:
+            name, brief = derive_name(rest), rest
+        try:
+            project_id = create_project(
+                self.settings, self.ledger, name, brief
+            )
+        except ProjectError as exc:
+            return Reply(f"error: {exc}")
+        self.ledger.set_session(chat_id, project_id)
+        return Reply(
+            f"Project {project_id} created and selected.\n"
+            "The daemon will run it and report back."
+        )
+
+    def _projects(self, chat_id: int, _rest: str, _actor: str) -> Reply:
+        projects = self.ledger.list_projects()
+        if not projects:
+            return Reply("No projects. Create one with /new <name> | <brief>.")
+        selected = self.ledger.get_session(chat_id)
+        lines = [f"Projects: {len(projects)}"]
+        for project in projects[:30]:
+            state = project_state(self.ledger, project)
+            generation = self.ledger.current_generation(project["id"])
+            marker = "*" if project["id"] == selected else " "
+            lines.append(
+                f"{marker} {project['id']}\n    gen {generation}  {state}"
+            )
+        if len(projects) > 30:
+            lines.append(f"... and {len(projects) - 30} more")
+        lines.append("Select with /use <id>.")
+        return Reply("\n".join(lines))
+
+    def _use(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        if not rest:
+            return Reply("Usage: /use <id or unique prefix>")
+        project = self._resolve(rest.split()[0])
+        if isinstance(project, Reply):
+            return project
+        self.ledger.set_session(chat_id, project["id"])
+        state = project_state(self.ledger, project)
+        return Reply(
+            f"Selected {project['name']} ({project['id']}).\n"
+            f"State: {state}.\n"
+            "Messages without a command now go to this project's agent."
+        )
+
+    def _status(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project, _remainder = self._target(chat_id, rest)
+        if isinstance(project, Reply):
+            return project
+        project_id = project["id"]
+        generation = self.ledger.current_generation(project_id)
+        checkpoint = self.ledger.checkpoint(project_id) or "none"
+        layout = ProjectLayout.detect(project["workspace"])
+        lines = [
+            f"project: {project_id}",
+            f"name: {project['name']}",
+            f"layout: {layout.kind}",
+            f"recipe: {project.get('recipe_id') or 'none'}",
+            f"generation: {generation}",
+            f"checkpoint: {checkpoint}",
+            f"state: {project_state(self.ledger, project)}",
+        ]
+        staging_path = layout.artifact("staging.json")
+        if staging_path.exists():
+            try:
+                staging = read_json(staging_path)
+            except (OSError, json.JSONDecodeError):
+                staging = {}
+            lines.append(
+                f"staging: {staging.get('status', 'unknown')} "
+                f"{staging.get('url', '')}".rstrip()
+            )
+        for scope in ("staging", "production"):
+            approval = latest_approval(self.ledger, project_id, scope, generation)
+            if approval is None:
+                lines.append(f"{scope} approval: none")
+            else:
+                lines.append(
+                    f"{scope} approval: {approval['decision']} "
+                    f"by {approval['actor']}"
+                )
+        lines.append(
+            "reconciliation: "
+            + reconciliation_status_path(
+                layout.artifact("docs/program/reconciliation.md")
+            )
+        )
+        proposals = summarize_proposals(layout.control)
+        lines.append(f"proposals: {len(proposals)}")
+        events = self.ledger.events(project_id, generation)[-8:]
+        if events:
+            lines.append("recent stages:")
+            for event in events:
+                lines.append(f"  {event['stage']} {event['status']}")
+        return Reply("\n".join(lines))
+
+    # ------------------------------------------------------------ work verbs
+
+    def _run(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project, _remainder = self._target(chat_id, rest)
+        if isinstance(project, Reply):
+            return project
+        project_id = project["id"]
+        if project_is_done(self.ledger, project_id):
+            return Reply(f"{project_id} is already done.")
+        if not self.daemon_enabled:
+            return Reply(
+                "This gateway does not run iterations. "
+                f"Run `forgel run {project_id}` on the host."
+            )
+        if is_paused(self.settings.home):
+            return Reply("The daemon is paused. Send /resume first.")
+        state = project_state(self.ledger, project)
+        if state.startswith("awaiting staging approval") or state.startswith(
+            "staging "
+        ):
+            return Reply(
+                f"{project_id}: {state}.\n"
+                f"Approve: /approve {project_id} staging"
+            )
+        layout = ProjectLayout.detect(project["workspace"])
+        if reconciliation_status_path(
+            layout.artifact("docs/program/reconciliation.md")
+        ) in {"pending", "fix_required"}:
+            return Reply(
+                f"{project_id} needs a reconciliation decision.\n"
+                f"Review: /sync {project_id}"
+            )
+        return Reply(
+            f"{project_id} is queued; the daemon will run it in this cycle."
+        )
+
+    def _sync(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project, _remainder = self._target(chat_id, rest)
+        if isinstance(project, Reply):
+            return project
+        try:
+            result = sync_project(
+                Path(project["workspace"]), self.ledger, project["id"]
+            )
+        except (SyncError, ValueError) as exc:
+            return Reply(f"error: {exc}")
+        if result.get("started"):
+            return Reply(
+                f"Reconciliation: {result.get('decision', 'forced')}. "
+                f"Generation {result['generation']} started from "
+                f"{result['from_stage']}."
+            )
+        if result.get("pending"):
+            analysis = result.get("analysis", {})
+            lines = [
+                f"External changes: {result['count']} file(s). "
+                "A decision is required."
+            ]
+            for label, key in (
+                ("Violations", "violations"),
+                ("Requirements changed", "requirements"),
+                ("Documented modifications", "documented"),
+                ("Undocumented changes", "undocumented"),
+                ("Deletions", "deletions"),
+            ):
+                items = analysis.get(key, [])
+                if items:
+                    lines.append(f"{label}: {len(items)}")
+            lines.append(f"See {result.get('reconciliation')}.")
+            lines.append(
+                f"Decide: /reconcile {project['id']} "
+                "accept|fix|rollback|ignore [notes]"
+            )
+            return Reply("\n".join(lines))
+        return Reply("No external changes detected.")
+
+    def _reconcile(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project, remainder = self._target_args(chat_id, rest, DECISIONS)
+        if isinstance(project, Reply):
+            return project
+        tokens = remainder.split(maxsplit=1)
+        if not tokens or tokens[0].lower() not in DECISIONS:
+            return Reply(
+                "Usage: /reconcile [id] accept|fix|rollback|ignore [notes]"
+            )
+        decision = tokens[0].lower()
+        notes = tokens[1] if len(tokens) > 1 else ""
+        try:
+            result = reconcile_project(
+                Path(project["workspace"]),
+                self.ledger,
+                project["id"],
+                decision=decision,
+                notes=notes,
+            )
+        except (SyncError, ValueError) as exc:
+            return Reply(f"error: {exc}")
+        return Reply(
+            f"Reconciliation: {result['decision']} ({result['status']}). "
+            f"Generation {result['generation']} will re-run from "
+            f"{result['from_stage']}."
+        )
+
+    def _proposals(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project, _remainder = self._target(chat_id, rest)
+        if isinstance(project, Reply):
+            return project
+        layout = ProjectLayout.detect(project["workspace"])
+        proposals = summarize_proposals(layout.control)
+        if not proposals:
+            return Reply("No proposals.")
+        lines = [f"Proposals: {len(proposals)}"]
+        for proposal in proposals:
+            lines.append(
+                f"{proposal['kind'] or '?'}  {proposal['status'] or '?'}  "
+                f"{proposal['title']}\n  {proposal['file']}"
+            )
+        return Reply("\n".join(lines))
+
+    # ------------------------------------------------------------- approvals
+
+    def _approve(self, chat_id: int, rest: str, actor: str) -> Reply:
+        return self._decide(chat_id, rest, actor, approved=True)
+
+    def _reject(self, chat_id: int, rest: str, actor: str) -> Reply:
+        return self._decide(chat_id, rest, actor, approved=False)
+
+    def _decide(
+        self, chat_id: int, rest: str, actor: str, approved: bool
+    ) -> Reply:
+        argument_tokens = SCOPES | {"--accept-compliance-responsibility"}
+        project, remainder = self._target_args(chat_id, rest, argument_tokens)
+        if isinstance(project, Reply):
+            return project
+        command = "/approve" if approved else "/reject"
+        project_id = project["id"]
+        tokens = remainder.split()
+        scope = "staging"
+        if tokens and tokens[0] in SCOPES:
+            scope = tokens.pop(0)
+        ack = "--accept-compliance-responsibility" in tokens
+        notes = " ".join(
+            token for token in tokens
+            if token != "--accept-compliance-responsibility"
+        )
+
+        if approved and scope == "production" and not ack:
+            state = self.ledger.checkpoint_state(project_id)
+            if state is None or state[0] != "done":
+                return Reply(
+                    "Production approval requires a completed release.\n"
+                    f"Current checkpoint: {state[0] if state else 'none'}. "
+                    "Approve staging and let the daemon finish it first."
+                )
+            generation = self.ledger.current_generation(project_id)
+            if not is_approved(
+                self.ledger, project_id, "staging", generation
+            ):
+                return Reply(
+                    "Approve staging before production:\n"
+                    f"/approve {project_id} staging"
+                )
+            token = secrets.token_hex(4)
+            self._production_tokens[token] = (project_id, time.time())
+            markup = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "I accept responsibility",
+                            "callback_data": f"ap:{token}:ok",
+                        }
+                    ],
+                    [{"text": "Cancel", "callback_data": f"ap:{token}:no"}],
+                ]
+            }
+            return Reply(
+                self._production_prompt(project),
+                reply_markup=markup,
+            )
+
+        try:
+            record = record_approval(
+                self.ledger,
+                project_id,
+                scope=scope,
+                actor=actor,
+                decision="approved" if approved else "rejected",
+                compliance_ack=ack,
+                notes=notes,
+            )
+        except ApprovalError as exc:
+            return Reply(f"error: {exc}")
+        return Reply(
+            self._approval_text(record, production=scope == "production")
+        )
+
+    # ------------------------------------------------------------ config
+
+    def _config(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        tokens = rest.split(maxsplit=2)
+        if not tokens:
+            project = self._selected(chat_id)
+            control = (
+                None
+                if isinstance(project, Reply)
+                else ProjectLayout.detect(project["workspace"]).control
+            )
+            try:
+                view = config_store.effective_view(
+                    self.settings.home, control
+                )
+            except (ConfigError, daemon_config.DaemonConfigError) as exc:
+                return Reply(f"error: {exc}")
+            lines = [view, "", "Secrets:"]
+            for key, state in secret_status(self.settings.home).items():
+                lines.append(f"  {key}: {state}")
+            return Reply("\n".join(lines))
+        if tokens[0] != "set" or len(tokens) < 3:
+            return Reply("Usage: /config or /config set <key> <value>")
+        key, value = tokens[1], tokens[2]
+
+        if key in daemon_config.SCHEMA:
+            try:
+                daemon_config.set_value(self.settings.home, key, value)
+            except daemon_config.DaemonConfigError as exc:
+                return Reply(f"error: {exc}")
+            current = daemon_config.get_value(self.settings.home, key)
+            note = ""
+            if key in {"daemon.interval", "telegram.poll_timeout"}:
+                note = "\nRestart the gateway to apply it."
+            return Reply(
+                f"Set {key} = {config_store.format_value(current)} "
+                f"(daemon).{note}"
+            )
+        if key in SECRET_KEYS:
+            return Reply(
+                f"{key} is a secret. Use: /secret set {key} <value>"
+            )
+        if key in config_store.PROJECT_KINDS:
+            project = self._selected(chat_id)
+            if isinstance(project, Reply):
+                return project
+            control = ProjectLayout.detect(project["workspace"]).control
+            config_path = control / "forgel.toml"
+            if not config_path.exists():
+                write_text(
+                    config_path,
+                    render_project_config(project["name"]),
+                )
+            try:
+                typed = config_store.set_project_value(control, key, value)
+            except (ConfigError, OSError) as exc:
+                return Reply(f"error: {exc}")
+            return Reply(
+                f"Set {key} = {config_store.format_value(typed)} "
+                f"(project {project['id']})."
+            )
+        return Reply(
+            "Unknown setting.\n"
+            "Project keys: "
+            + ", ".join(sorted(config_store.PROJECT_KINDS))
+            + "\nDaemon keys: "
+            + ", ".join(sorted(daemon_config.SCHEMA))
+        )
+
+    def _secret(self, _chat_id: int, rest: str, _actor: str) -> Reply:
+        tokens = rest.split(maxsplit=1)
+        note = (
+            "\nTelegram bots have no end-to-end encryption. This message is "
+            "deleted after the command, but prefer environment variables or "
+            "`forgel secret set` over SSH in production."
+        )
+        if not tokens:
+            lines = ["Secrets (env overrides the file):"]
+            for key, state in secret_status(self.settings.home).items():
+                lines.append(f"  {key}: {state}")
+            lines.append(
+                "Set with /secret set <key> <value>; the message is deleted."
+            )
+            return Reply("\n".join(lines))
+
+        action = tokens[0].lower()
+        if action == "set":
+            if len(tokens) < 2:
+                return Reply("Usage: /secret set <key> <value>")
+            parts = tokens[1].split(maxsplit=1)
+            if len(parts) < 2:
+                return Reply("Usage: /secret set <key> <value>")
+            key, value = parts
+            try:
+                path = set_secret(self.settings.home, key, value)
+            except (SecretError, OSError) as exc:
+                return Reply(f"error: {exc}")
+            restart = (
+                "\nRestart the gateway to use a new telegram.bot_token."
+                if key == "telegram.bot_token"
+                else ""
+            )
+            return Reply(
+                f"Saved {key} to {path.name} (mode 0600). "
+                "The value was not echoed and the source message is being "
+                "deleted." + restart + note,
+                delete_source=True,
+            )
+        if action == "delete":
+            if len(tokens) < 2:
+                return Reply("Usage: /secret delete <key>")
+            key = tokens[1].strip()
+            try:
+                removed = delete_secret(self.settings.home, key)
+            except (SecretError, OSError) as exc:
+                return Reply(f"error: {exc}")
+            if removed:
+                return Reply(f"Deleted {key} from {SECRETS_FILENAME}.")
+            return Reply(f"{key} is not set in the file.")
+        return Reply(
+            "Usage: /secret, /secret set <key> <value>, "
+            "/secret delete <key>"
+        )
+
+    # ----------------------------------------------------------- daemon
+
+    def _pause(self, _chat_id: int, _rest: str, _actor: str) -> Reply:
+        set_paused(self.settings.home, True)
+        return Reply("The daemon is paused. /resume starts new iterations again.")
+
+    def _resume(self, _chat_id: int, _rest: str, _actor: str) -> Reply:
+        set_paused(self.settings.home, False)
+        return Reply("The daemon is running again.")
+
+    # ------------------------------------------------------------- agent
+
+    def _message(self, chat_id: int, text: str, actor: str) -> Reply:
+        if looks_like_secret(text):
+            return Reply(
+                "This looks like a secret and was not processed. Use "
+                "/secret set <key> <value>; the message is being deleted.",
+                delete_source=True,
+            )
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        if self.agent is None:
+            return Reply(
+                "The project agent is not configured. Set "
+                "FORGEL_MODEL_API_KEY on the host or use "
+                "/secret set model.api_key <value>, then restart the gateway."
+            )
+        try:
+            result = self.agent.handle(project, text, actor)
+        except Exception as exc:  # noqa: BLE001 - answer instead of crashing
+            return Reply(f"Agent error: {exc}")
+        return Reply(result.text)
+
+    # -------------------------------------------------------------- helpers
+
+    def _selected(self, chat_id: int) -> dict[str, Any] | Reply:
+        project_id = self.ledger.get_session(chat_id)
+        if project_id is None:
+            return Reply(
+                "No project selected. Use /projects, then /use <id>."
+            )
+        project = self.ledger.get_project(project_id)
+        if project is None:
+            self.ledger.clear_session(chat_id)
+            return Reply(
+                "The selected project no longer exists. Use /projects."
+            )
+        return project
+
+    def _resolve(self, token: str) -> dict[str, Any] | Reply:
+        try:
+            return resolve_project(self.ledger, token)
+        except ProjectError as exc:
+            return Reply(f"error: {exc}")
+
+    def _target(
+        self, chat_id: int, rest: str
+    ) -> tuple[dict[str, Any] | Reply, str]:
+        """Resolve an explicit leading project id, or the selected project."""
+
+        rest = rest.strip()
+        if not rest:
+            return self._selected(chat_id), ""
+        token, _, remainder = rest.partition(" ")
+        project = self._resolve(token)
+        return project, remainder.strip()
+
+    def _target_args(
+        self, chat_id: int, rest: str, argument_tokens: set[str]
+    ) -> tuple[dict[str, Any] | Reply, str]:
+        """Like :meth:`_target`, but a leading argument keeps the selection."""
+
+        rest = rest.strip()
+        if not rest:
+            return self._selected(chat_id), ""
+        token, _, remainder = rest.partition(" ")
+        if token in argument_tokens:
+            return self._selected(chat_id), rest
+        project = self._resolve(token)
+        return project, remainder.strip()
+
+    def _approval_text(self, record: dict[str, Any], production: bool) -> str:
+        scope = "Production" if production else "Staging"
+        if record["decision"] == "approved":
+            text = f"{scope} approval recorded"
+        else:
+            text = f"{scope} rejected"
+        text += (
+            f" for {record['project_id']} (generation {record['generation']}"
+        )
+        if record.get("release_sha"):
+            text += f", release {record['release_sha']}"
+        text += f") by {record['actor']}."
+        if record["decision"] != "approved":
+            text += (
+                "\nThe project stays at the approval gate. Use /sync to start "
+                "a new generation, then decide again."
+            )
+        elif production:
+            text += (
+                "\nNo deploy provider is configured, so this release stays "
+                "manual; the approval is recorded in the ledger and "
+                "docs/program/approvals.md."
+            )
+        else:
+            text += "\nThe daemon will continue on its next cycle."
+        return text
+
+    def _production_prompt(self, project: dict[str, Any]) -> str:
+        generation = self.ledger.current_generation(project["id"])
+        return (
+            f"Production approval for {project['name']} "
+            f"({project['id']}), generation {generation}.\n\n"
+            "Forgel is a software development tool, not a law firm. "
+            "Jurisdiction packs are advisory and do not establish legal "
+            "compliance. By accepting, you confirm that you are responsible "
+            "for the product's regulatory compliance in its target markets. "
+            "See docs/program/jurisdiction/disclaimer.md.\n\n"
+            "Approve production?"
+        )
