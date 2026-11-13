@@ -149,6 +149,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-051** | Fetch before every iteration; rebase on upstream movement; a conflict stops the iteration | Other people and tools push too; force-push would destroy their work | Never `reset --hard` or force-push; conflicts are surfaced to the user |
 | **D-052** | Repo onboarding is a PR; the daemon runs from a released image, not the working copy it modifies | Adopting a repo must be reviewable; a running process must not rewrite its own code | `forgel adopt <repo-url>` opens an onboarding PR; Forgel changes ship via CI-built images |
 | **D-053** | Auto-merge requires all gates, green CI, no blocking reconciliation, budget within cap, no conflict and a PATCH/MINOR change set; post-merge verification auto-reverts on failure | Removing the human merge must not remove the safety net | A merge queue serializes merges; failed post-merge smoke triggers an automatic revert and a stop; MAJOR changes remain human-initiated |
+| **D-054** | Production deploy has three modes: `auto` (opt-in, not recommended), `confirm` (default when configured) and `manual` (no pipeline) | Full automation must be possible, but a human confirmation is a cheap last gate for an irreversible action | `confirm` asks in Telegram and records the approval; `manual` produces a release bundle and instructions; `auto` requires explicit config and a compliance acknowledgement |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -680,6 +681,11 @@ draft_pr = true
 require_ci = true
 merge = "auto"               # auto is the default; human is opt-in
 auto_revert_on_failure = true
+
+[deploy]
+mode = "confirm"             # auto | confirm | manual
+health_check_url = ""
+rollback = true
 ```
 
 `forgel.toml` is read at intake, jurisdiction and QA. Precedence: an explicit runtime setting (environment or API) wins over the project file, which wins over defaults. Budget and model fields are the configuration surface; enforcement lands with the cost-accounting stage.
@@ -899,6 +905,31 @@ auto_revert_on_failure = true
 
 **Risks:** token leakage; branch-protection bypass; force-push; upstream conflicts; large PRs; rate limits; webhook spoofing.
 
+### 7.12 Deployment Modes
+
+Production deploy has three modes, configured in `[deploy]`:
+
+| Mode | Behavior | Default |
+|---|---|---|
+| `auto` | Forgel deploys without confirmation | Disabled; explicit opt-in; not recommended |
+| `confirm` | Forgel prepares the release, asks the user in Telegram (Deploy / Cancel), then deploys | Default when a deploy provider is configured |
+| `manual` | No deploy pipeline is configured; Forgel produces the release bundle, runbook and instructions, then stops | Automatic fallback when no provider is configured |
+
+- **`confirm`** is the default when a deploy plugin exists. Approval is recorded in the ledger with the user, time, release SHA and the compliance acknowledgement.
+- **`auto`** requires explicit configuration and a one-time compliance acknowledgement. It still records the deploy and runs post-deploy verification; failure triggers a rollback where supported and a PATCH proposal.
+- **`manual`** is not a failure: the iteration closes with a release artifact and instructions for the human.
+- Every deploy writes `docs/program/deploy/report.md` and a deploy record: mode, release SHA, tag, time, approver (if any), health-check result.
+- Legal gates — legal entity, payments, app stores, jurisdiction acknowledgement — are separate and always human.
+
+**Config:**
+
+```toml
+[deploy]
+mode = "confirm"        # auto | confirm | manual
+health_check_url = ""
+rollback = true
+```
+
 ---
 
 ## 8. Gates
@@ -913,7 +944,7 @@ auto_revert_on_failure = true
 | G5 | Deterministic oracles + repo E2E + program integration suite + compliance checks | QA |
 | G6 | Held-out + change-set acceptance + jurisdiction evidence matrix + "the product did its job" | Acceptor |
 | G7 | Release-train audit: security, dependencies, migrations, rollback, cross-repo contracts, jurisdiction report and pack version | Auditor |
-| G8 | Compliance acknowledgement, legal entity, payments, app stores, production deploy | Human |
+| G8 | Compliance acknowledgement, legal entity, payments, app stores, production deploy per `[deploy] mode` | Human, or Forgel after confirmation in `confirm` mode |
 
 ---
 
@@ -953,6 +984,9 @@ auto_revert_on_failure = true
 | PRs with acceptance evidence | 100% |
 | Auto-merged changes | measured; human-merge only where configured |
 | Post-merge reverts | < 1% of auto-merged changes |
+| Deploy modes recorded | 100% |
+| Auto-deploys without explicit opt-in | 0 |
+| Post-deploy rollbacks | measured |
 
 Cost per feature and human minutes are measured from day one and capped by the project budget.
 
@@ -985,6 +1019,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
 - Human approval gate for staging and production; production requires the compliance acknowledgement.
 - GitHub App auth, branch/PR flow, auto-merge and remote fetch/push for self-host.
+- Deploy modes: `confirm` via Telegram as the default; `manual` fallback; `auto` opt-in.
 - Brownfield adoption: point Forgel at its own repository and accept change requests without regenerating it.
 - Deploy the daemon on a server with Docker Compose, a persistent data volume, the bot token and the model key.
 - **Exit:** a real Forgel change is specified, implemented, reviewed, QA'd and accepted through Forgel itself. Another harness is used only for bottlenecks.
@@ -1018,6 +1053,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Refactoring Arbiter: targeted-refactor auto-apply, structural proposals, debt triggers.
 - Budget ledger, per-feature/iteration/day caps, hard stop, scoped prepaid keys and egress proxy; Budget Arbiter and anomaly detection.
 - Multi-repo change sets, GitHub webhooks, CI checks and `forgel adopt`; merge queue and post-merge auto-revert.
+- Post-deploy health checks, rollback and auto-deploy opt-in.
 - Plugin bounties, "Built with Forgel", public evals.
 - **Exit:** 10+ third-party plugins, 500+ installs, external contributors.
 
@@ -1097,6 +1133,9 @@ Business-model questions are kept separately.
 | Webhook spoofing | Medium | Verify signatures; polling fallback |
 | Daemon modifies its own running code | High | Run from a released image; separate workspace clone |
 | Auto-merge of a bad change | High | All gates + green CI + merge queue + post-merge smoke + auto-revert; human mode available |
+| Auto-deploy regression | High | Opt-in only, health checks, rollback, canary; `confirm` is the default |
+| Manual deploy drift | Medium | Release bundle, runbook and deploy record |
+| Confirmation fatigue | Medium | Confirm only for production; batch releases |
 
 ---
 
@@ -1121,6 +1160,7 @@ By the end of M1:
 - No overspend incidents: every agent run stops at its budget or on no progress, with a recorded checkpoint.
 - No direct pushes to `main` and no force pushes; every change lands as a reviewed PR with evidence.
 - A change can land on `main` without a human merge when all gates pass; human merge is opt-in.
+- Every deploy records its mode, release SHA, health result and approver (or a manual release bundle).
 
 By the end of M2:
 
