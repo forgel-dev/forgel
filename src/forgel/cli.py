@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
@@ -27,6 +28,16 @@ from .config import Settings
 from .context import effective_context, resolve_context
 from .control import is_paused, set_paused
 from .daemon import project_state, run_daemon
+from .deploy import (
+    DeployConfig,
+    DeployError,
+    deploy_backup,
+    deploy_init,
+    deploy_logs,
+    deploy_restart,
+    deploy_status,
+    deploy_up,
+)
 from .github_flow import (
     GithubFlowError,
     merge_pr,
@@ -839,6 +850,48 @@ def cmd_repo(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_deploy(args: argparse.Namespace) -> int:
+    target = Path(args.file)
+    try:
+        if args.action == "init":
+            path = deploy_init(target)
+            print(f"Created {path} (mode 0600); edit it and run forgel deploy up.")
+            return 0
+        config = DeployConfig.from_file(target)
+        try:
+            mode = target.stat().st_mode & 0o777
+            if mode & 0o077:
+                print(
+                    f"warning: {target} is mode {mode:o}; use chmod 600",
+                    file=sys.stderr,
+                )
+        except OSError:
+            pass
+        if args.action == "up":
+            deploy_up(config)
+        elif args.action == "status":
+            deploy_status(config)
+        elif args.action == "logs":
+            deploy_logs(config, follow=args.follow)
+        elif args.action == "restart":
+            deploy_restart(config)
+        else:
+            output = (
+                Path(args.output)
+                if args.output
+                else Path(
+                    "forgel-backup-"
+                    + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+                    + ".tgz"
+                )
+            )
+            deploy_backup(config, output)
+        return 0
+    except DeployError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     settings = _settings(args)
     issues: list[str] = []
@@ -1229,6 +1282,17 @@ def build_parser() -> argparse.ArgumentParser:
     repo.add_argument("--role", default="application")
     repo.add_argument("--home", default=None)
     repo.set_defaults(func=cmd_repo)
+
+    deploy = subparsers.add_parser(
+        "deploy", help="Deploy the daemon to a remote host over SSH"
+    )
+    deploy.add_argument(
+        "action", choices=["init", "up", "status", "logs", "restart", "backup"]
+    )
+    deploy.add_argument("--file", default=".env.deploy")
+    deploy.add_argument("--follow", action="store_true")
+    deploy.add_argument("--output", default="")
+    deploy.set_defaults(func=cmd_deploy)
 
     doctor = subparsers.add_parser(
         "doctor", help="Check the local installation and deployment prerequisites"

@@ -164,6 +164,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-066** | The coding agent uses a JSON action protocol with a bounded loop, not provider-specific tool calling | Any chat model can drive it, and the same protocol works over a provider API, a scripted client or a file bridge to a local subagent | One action per turn (list/read/write/delete/run/done/fail), paths confined to the repository, a command allowlist, secret-free child env, a step cap, a final test command and a report |
 | **D-067** | The migration e2e is a manual, budget-gated harness with deterministic product checks and separate harness checks | The result depends on the model; a harness failure must be distinguishable from a model-quality failure, and a local subagent run must not spend provider budget | `tests/e2e` builds a minimal blog with `script`, `bridge` or `api` modes; `validate_blog.py` is an external validator; harness checks cover daemon/task/report/commit lifecycle; runs only on explicit instruction |
 | **D-068** | A plain chat change request becomes a coding-agent task; the intake agent fills explicit requirements, acceptance, repository, constraints and test command | The chat is the product interface and should not stop at a recorded request; the executable unit is a task the daemon can run and the user can inspect or cancel | The intake agent returns a structured change request; the task is stored in `docs/program/tasks/`, shown by `/tasks`, cancellable with `/task cancel`, and executed by the daemon; ambiguous multi-repository requests are questions, not guesses |
+| **D-069** | Deployment is a local SSH utility driven by `.env.deploy`; the image is pushed to a registry or built remotely, and the remote env is written with mode `0600` | Manual SSH configuration is the main source of deployment mistakes, and configuration must stay easy to change as the installation evolves | `forgel deploy up` builds/pushes or remote-builds, uploads the production Compose file and a filtered env, starts the service and runs the doctor; secrets never appear in argv or logs |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -943,6 +944,12 @@ mode = "confirm"        # auto | confirm | manual
 health_check_url = ""
 rollback = true
 ```
+
+**Delivery:** `forgel deploy up` (D-069) is the installation path: a local
+`.env.deploy` holds the target, image strategy and runtime configuration; the
+utility writes the production Compose file and a `0600` env to the server over
+SSH. Publishing the image to GHCR is recommended for versioned releases;
+remote build keeps the first self-host registry-free.
 
 ---
 

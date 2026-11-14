@@ -1,0 +1,484 @@
+"""One-command deployment of the Forgel daemon to a remote host.
+
+The operator edits one local file, ``.env.deploy``, and runs
+``forgel deploy up``. The utility talks to the server over SSH: it builds or
+pushes the image, uploads the production Compose file and a filtered runtime
+``.env`` (mode 0600), starts the service and runs the doctor.
+
+Two image strategies:
+
+* ``local`` + ``push`` — build locally, push to a registry (GHCR recommended),
+  pull on the server;
+* ``remote`` — send the build context and build on the server (no registry).
+
+Secrets never appear in argv or logs. Registry tokens are passed on stdin, and
+the remote environment file is written through an SSH tar stream.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import tarfile
+import tempfile
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Callable, Mapping
+
+ROOT = Path(__file__).resolve().parents[2]
+COMPOSE_PATH = ROOT / "deploy" / "compose.yaml"
+EXAMPLE_PATH = ROOT / ".env.deploy.example"
+DEFAULT_DIRECTORY = "/srv/forgel"
+RUNTIME_PREFIX = "DEPLOY_"
+VALID_BUILD_MODES = {"auto", "local", "remote"}
+
+
+class DeployError(RuntimeError):
+    """The deployment cannot continue safely."""
+
+
+def _parse_env_file(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
+        key, separator, value = line.partition("=")
+        if not separator:
+            continue
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        if key:
+            values[key] = value
+    return values
+
+
+def _as_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class DeployConfig:
+    host: str
+    user: str
+    port: int = 22
+    ssh_key: str = ""
+    directory: str = DEFAULT_DIRECTORY
+    image: str = ""
+    build: str = "auto"
+    push: bool = False
+    registry_user: str = ""
+    registry_token: str = ""
+    app_key_file: str = ""
+    env: dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_file(cls, path: Path) -> DeployConfig:
+        path = Path(path)
+        if not path.exists():
+            raise DeployError(
+                f"{path} does not exist; create it with `forgel deploy init`"
+            )
+        values = _parse_env_file(path.read_text(encoding="utf-8"))
+        host = values.get("DEPLOY_HOST", "").strip()
+        user = values.get("DEPLOY_USER", "").strip()
+        if not host or not user:
+            raise DeployError("DEPLOY_HOST and DEPLOY_USER are required")
+        try:
+            port = int(values.get("DEPLOY_PORT", "22") or "22")
+        except ValueError as exc:
+            raise DeployError("DEPLOY_PORT must be an integer") from exc
+        build = values.get("DEPLOY_BUILD", "auto").strip().lower()
+        if build not in VALID_BUILD_MODES:
+            raise DeployError(
+                f"DEPLOY_BUILD must be one of {sorted(VALID_BUILD_MODES)}"
+            )
+        directory = values.get("DEPLOY_DIR", DEFAULT_DIRECTORY).strip()
+        if not directory.startswith("/"):
+            raise DeployError("DEPLOY_DIR must be an absolute remote path")
+        env: dict[str, str] = {}
+        for key, value in values.items():
+            if key.startswith(RUNTIME_PREFIX):
+                continue
+            if not key.replace("_", "").isalnum() or key[0].isdigit():
+                raise DeployError(f"invalid environment key: {key!r}")
+            env[key] = value
+        return cls(
+            host=host,
+            user=user,
+            port=port,
+            ssh_key=values.get("DEPLOY_SSH_KEY", "").strip(),
+            directory=directory,
+            image=values.get("DEPLOY_IMAGE", "").strip(),
+            build=build,
+            push=_as_bool(values.get("DEPLOY_PUSH", "false")),
+            registry_user=values.get("DEPLOY_REGISTRY_USER", "").strip(),
+            registry_token=values.get("DEPLOY_REGISTRY_TOKEN", "").strip(),
+            app_key_file=values.get("DEPLOY_APP_KEY_FILE", "").strip(),
+            env=env,
+        )
+
+    @property
+    def target(self) -> str:
+        return f"{self.user}@{self.host}"
+
+
+class Runner:
+    """SSH and local command runner. Injectable for tests."""
+
+    def __init__(
+        self,
+        config: DeployConfig,
+        log: Callable[[str], None] = print,
+    ) -> None:
+        self.config = config
+        self.log = log
+
+    def _ssh_args(self) -> list[str]:
+        args = [
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-p",
+            str(self.config.port),
+        ]
+        if self.config.ssh_key:
+            args.extend(["-i", os.path.expanduser(self.config.ssh_key)])
+        args.append(self.config.target)
+        return args
+
+    def ssh(
+        self,
+        command: str,
+        input_data: str | bytes | None = None,
+        binary: bool = False,
+        stream: bool = False,
+        allow_fail: bool = False,
+        timeout: float = 300.0,
+    ) -> subprocess.CompletedProcess:
+        self.log(f"ssh {self.config.target}: {command}")
+        try:
+            completed = subprocess.run(
+                self._ssh_args() + [command],
+                input=input_data,
+                capture_output=not stream,
+                text=not binary,
+                timeout=timeout,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise DeployError(f"ssh failed: {exc}") from exc
+        if not allow_fail and completed.returncode != 0:
+            detail = ""
+            if completed.stderr:
+                detail = (
+                    completed.stderr
+                    if isinstance(completed.stderr, str)
+                    else completed.stderr.decode("utf-8", "replace")
+                )
+            raise DeployError(
+                f"remote command failed ({completed.returncode}): "
+                f"{command}\n{detail.strip()}"
+            )
+        return completed
+
+    def local(
+        self,
+        command: list[str],
+        input_data: str | None = None,
+        env: Mapping[str, str] | None = None,
+        timeout: float = 1800.0,
+    ) -> subprocess.CompletedProcess[str]:
+        self.log("local: " + " ".join(shlex.quote(item) for item in command))
+        try:
+            completed = subprocess.run(
+                command,
+                input=input_data,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env={**os.environ, **dict(env or {})},
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise DeployError(f"local command failed: {exc}") from exc
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip()
+            raise DeployError(
+                f"local command failed ({completed.returncode}): "
+                f"{' '.join(command)}\n{detail}"
+            )
+        return completed
+
+    def upload(
+        self, files: dict[str, tuple[bytes, int]], directory: str
+    ) -> None:
+        buffer = io.BytesIO()
+        now = int(datetime.now(timezone.utc).timestamp())
+        with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+            for name, (content, mode) in files.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                info.mode = mode
+                info.mtime = now
+                archive.addfile(info, io.BytesIO(content))
+        command = (
+            f"umask 077; mkdir -p {shlex.quote(directory)}; "
+            f"tar -xzf - -C {shlex.quote(directory)}"
+        )
+        self.ssh(command, input_data=buffer.getvalue(), binary=True)
+
+
+def _resolve_image(config: DeployConfig) -> tuple[str, str]:
+    image = config.image or (
+        "forgel:" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    )
+    mode = config.build
+    if mode == "auto":
+        mode = "local" if config.push else "remote"
+    if mode == "local" and not config.push:
+        raise DeployError(
+            "DEPLOY_BUILD=local needs DEPLOY_PUSH=true; use remote build "
+            "otherwise"
+        )
+    return image, mode
+
+
+def _registry(image: str) -> str:
+    first = image.split("/", 1)[0]
+    if "." in first or ":" in first or first == "localhost":
+        return first
+    return "docker.io"
+
+
+def _runtime_env(config: DeployConfig, image: str) -> dict[str, str]:
+    env = dict(config.env)
+    env["FORGEL_IMAGE"] = image
+    if config.app_key_file:
+        env["FORGEL_GITHUB_APP_PRIVATE_KEY_PATH"] = (
+            "/run/secrets/forge-github-app.pem"
+        )
+    return env
+
+
+def _env_bytes(env: Mapping[str, str]) -> bytes:
+    lines = [f"{key}={json.dumps(value)}" for key, value in env.items()]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def _compose_files(
+    config: DeployConfig, image: str
+) -> dict[str, tuple[bytes, int]]:
+    files: dict[str, tuple[bytes, int]] = {
+        "compose.yaml": (COMPOSE_PATH.read_bytes(), 0o644),
+        ".env": (_env_bytes(_runtime_env(config, image)), 0o600),
+    }
+    if config.app_key_file:
+        key_path = Path(config.app_key_file).expanduser()
+        if not key_path.exists():
+            raise DeployError(f"app key file not found: {key_path}")
+        files["secrets/forge-github-app.pem"] = (
+            key_path.read_bytes(),
+            0o600,
+        )
+    return files
+
+
+def _context_files() -> dict[str, tuple[bytes, int]]:
+    files: dict[str, tuple[bytes, int]] = {}
+    for name in ("Dockerfile", "pyproject.toml", "README.md", "LICENSE"):
+        path = ROOT / name
+        if not path.exists():
+            raise DeployError(f"build context file missing: {path}")
+        files[f"context/{name}"] = (path.read_bytes(), 0o644)
+    for directory in ("src", "registry", "jurisdiction"):
+        for path in sorted((ROOT / directory).rglob("*")):
+            if not path.is_file():
+                continue
+            if any(
+                part in {"__pycache__", ".git"} for part in path.parts
+            ):
+                continue
+            if path.suffix == ".pyc":
+                continue
+            files[f"context/{path.relative_to(ROOT).as_posix()}"] = (
+                path.read_bytes(),
+                0o644,
+            )
+    return files
+
+
+def deploy_up(
+    config: DeployConfig,
+    runner: Runner | None = None,
+    log: Callable[[str], None] = print,
+) -> None:
+    runner = runner or Runner(config, log=log)
+    log(f"target: {config.target}:{config.directory}")
+    runner.ssh("true", timeout=30)
+    runner.ssh("docker version --format '{{.Server.Version}}'", timeout=30)
+    runner.ssh("docker compose version", timeout=30)
+
+    image, mode = _resolve_image(config)
+    log(f"image: {image} ({mode} build)")
+
+    if mode == "local":
+        docker_config: str | None = None
+        env: dict[str, str] = {}
+        if config.registry_token:
+            if not config.registry_user:
+                raise DeployError(
+                    "DEPLOY_REGISTRY_USER is required with "
+                    "DEPLOY_REGISTRY_TOKEN"
+                )
+            docker_config = tempfile.mkdtemp(prefix="forgel-docker-")
+            env = {"DOCKER_CONFIG": docker_config}
+        try:
+            if config.registry_token and docker_config is not None:
+                runner.local(
+                    [
+                        "docker",
+                        "login",
+                        _registry(image),
+                        "-u",
+                        config.registry_user,
+                        "--password-stdin",
+                    ],
+                    input_data=config.registry_token,
+                    env=env,
+                )
+            runner.local(["docker", "build", "-t", image, str(ROOT)], env=env)
+            runner.local(["docker", "push", image], env=env)
+        finally:
+            if docker_config is not None:
+                shutil.rmtree(docker_config, ignore_errors=True)
+
+    files = _compose_files(config, image)
+    if mode == "remote":
+        files.update(_context_files())
+    runner.upload(files, config.directory)
+
+    if mode == "remote":
+        runner.ssh(
+            f"cd {shlex.quote(config.directory)} && "
+            f"docker build -t {shlex.quote(image)} context",
+            timeout=3600,
+        )
+    elif config.registry_token:
+        runner.ssh(
+            f"docker login {shlex.quote(_registry(image))} -u "
+            f"{shlex.quote(config.registry_user)} --password-stdin",
+            input_data=config.registry_token,
+            timeout=60,
+        )
+        runner.ssh(
+            f"cd {shlex.quote(config.directory)} && "
+            "docker compose pull --quiet",
+            timeout=600,
+        )
+
+    runner.ssh(
+        f"cd {shlex.quote(config.directory)} && chmod 700 . && "
+        "chmod 600 .env && docker compose up -d --remove-orphans",
+        timeout=900,
+    )
+    status = runner.ssh(
+        f"cd {shlex.quote(config.directory)} && docker compose ps"
+    )
+    if status.stdout:
+        log(status.stdout.strip())
+    doctor = runner.ssh(
+        f"cd {shlex.quote(config.directory)} && "
+        "docker compose exec -T forgel forgel doctor",
+        allow_fail=True,
+        timeout=120,
+    )
+    if doctor.stdout:
+        log(doctor.stdout.strip())
+    log("deploy: up")
+
+
+def deploy_status(
+    config: DeployConfig,
+    runner: Runner | None = None,
+    log: Callable[[str], None] = print,
+) -> None:
+    runner = runner or Runner(config, log=log)
+    completed = runner.ssh(
+        f"cd {shlex.quote(config.directory)} && docker compose ps"
+    )
+    print(completed.stdout.rstrip() if completed.stdout else "")
+
+
+def deploy_logs(
+    config: DeployConfig,
+    follow: bool = False,
+    runner: Runner | None = None,
+    log: Callable[[str], None] = print,
+) -> None:
+    runner = runner or Runner(config, log=log)
+    suffix = " -f" if follow else ""
+    command = (
+        f"cd {shlex.quote(config.directory)} && "
+        f"docker compose logs --tail=200{suffix} forgel"
+    )
+    completed = runner.ssh(command, stream=follow, timeout=3600)
+    if not follow and completed.stdout:
+        print(completed.stdout.rstrip())
+
+
+def deploy_restart(
+    config: DeployConfig,
+    runner: Runner | None = None,
+    log: Callable[[str], None] = print,
+) -> None:
+    runner = runner or Runner(config, log=log)
+    completed = runner.ssh(
+        f"cd {shlex.quote(config.directory)} && "
+        "docker compose restart forgel"
+    )
+    if completed.stdout:
+        print(completed.stdout.rstrip())
+    log("deploy: restarted")
+
+
+def deploy_backup(
+    config: DeployConfig,
+    output: Path,
+    runner: Runner | None = None,
+    log: Callable[[str], None] = print,
+) -> Path:
+    runner = runner or Runner(config, log=log)
+    completed = runner.ssh(
+        f"cd {shlex.quote(config.directory)} && "
+        "docker compose exec -T forgel tar czf - -C /data .",
+        binary=True,
+        timeout=900,
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(completed.stdout or b"")
+    output.chmod(0o600)
+    log(f"backup: {output}")
+    return output
+
+
+def deploy_init(target: Path) -> Path:
+    target = Path(target)
+    if target.exists():
+        raise DeployError(f"{target} already exists; edit it instead")
+    target.write_text(
+        EXAMPLE_PATH.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    target.chmod(0o600)
+    return target

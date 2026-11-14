@@ -2,6 +2,9 @@
 .forgel-demo
 INTERNAL.md
 CLAUDE.md
+.env
+.env.*
+.env.deploy
 **/__pycache__
 **/*.pyc
 tests

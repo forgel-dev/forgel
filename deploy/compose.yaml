@@ -1,0 +1,27 @@
+# Production deployment of the Forgel Telegram daemon.
+# Written to the remote server by `forgel deploy`; do not edit it there.
+name: forgel
+
+services:
+  forgel:
+    image: ${FORGEL_IMAGE:?FORGEL_IMAGE is required}
+    restart: unless-stopped
+    command: ["telegram"]
+    env_file:
+      - .env
+    environment:
+      FORGEL_HOME: /data
+      FORGEL_REGISTRY: /app/registry/recipes.json
+      FORGEL_JURISDICTIONS: /app/jurisdiction
+      FORGEL_QA_RUNTIME: local
+    volumes:
+      - forgel-data:/data
+      - ./secrets:/run/secrets:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  forgel-data:

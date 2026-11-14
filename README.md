@@ -293,7 +293,22 @@ Existing M0 projects keep the flat layout and remain readable. Onboarding an
 existing repository (`/adopt`, clone + Forgel config initialization) and the
 GitHub provider plugin follow in the next milestone.
 
-Deploy it beside the core with Docker Compose:
+Deploy it from your laptop with one command:
+
+```bash
+forgel deploy init          # creates .env.deploy
+$EDITOR .env.deploy
+forgel deploy up
+```
+
+The utility reads `.env.deploy`, talks to the server over SSH, builds the image
+remotely or pushes it to a registry, uploads the production Compose file and a
+`0600` runtime `.env`, starts the service and runs the doctor. Edit the same
+file and run `forgel deploy up` to change configuration; `status`, `logs`,
+`restart` and `backup` are available too. Image publishing to GHCR is optional;
+see [docs/deploy.md](docs/deploy.md).
+
+The manual Compose path is still available:
 
 ```bash
 cp .env.example .env    # set the token and your chat id
@@ -302,8 +317,7 @@ docker compose --profile telegram up -d --build telegram
 
 The bot and the ledger share the `/data` volume, so state survives restarts.
 The daemon runs from the image; stopping the process is a deployment action,
-not a chat command. The full server guide, including secrets, backup, updates
-and `forgel doctor`, is in [docs/deploy.md](docs/deploy.md).
+not a chat command.
 
 ## Configuration
 
