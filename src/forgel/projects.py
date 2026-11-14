@@ -8,8 +8,8 @@ from typing import Any
 
 from .artifacts import ensure_dir, write_json
 from .config import Settings
-from .layout import TEMPLATE_REPOS
 from .ledger import Ledger, new_project_id
+from .program_manifest import DEFAULT_TEMPLATE_REPOS
 
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$")
 
@@ -55,7 +55,11 @@ def create_project(
             "name": name,
             "layout": "container",
             "mode": mode,
-            "repos": list(TEMPLATE_REPOS) if mode == "template" else [],
+            "repos": (
+                [dict(entry) for entry in DEFAULT_TEMPLATE_REPOS]
+                if mode == "template"
+                else []
+            ),
             "created_at": datetime.now(timezone.utc).isoformat(
                 timespec="seconds"
             ),

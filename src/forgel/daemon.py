@@ -42,9 +42,12 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
     """Return a short human-readable state used by status and notifications."""
 
     project_id = project["id"]
+    layout = ProjectLayout.detect(project["workspace"])
+    if has_blocking_reconciliation(Path(project["workspace"])):
+        return "reconciliation pending"
     state = ledger.checkpoint_state(project_id)
     if state is None:
-        return "queued"
+        return "adopted" if layout.metadata().get("mode") == "brownfield" else "queued"
     stage, generation = state
     if stage == "approval":
         approval = latest_approval(ledger, project_id, "staging", generation)
@@ -52,8 +55,6 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
             return "awaiting staging approval"
         if approval["decision"] != "approved":
             return f"staging {approval['decision']}"
-    if has_blocking_reconciliation(Path(project["workspace"])):
-        return "reconciliation pending"
     stage_events = [
         event
         for event in ledger.events(project_id, generation)

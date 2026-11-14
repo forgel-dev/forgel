@@ -130,6 +130,63 @@ forgel secret set model.api_key   # reads the value without echo
 forgel secret list
 ```
 
+### Adopt an Existing Repository
+
+`/new` generates a project from a template. To bring an existing repository
+under Forgel without regenerating it:
+
+```text
+/adopt <url> [| brief]
+/adopt https://github.com/owner/backend
+/adopt git@github.com:owner/backend.git
+/adopt owner/backend
+/adopt /srv/repos/backend | Internal billing service
+```
+
+A bare `owner/repo` is treated as a GitHub shorthand; for a local path use an
+absolute path or prefix it with `./`.
+
+The repository is cloned into `repos/main`, receives a `forgel-baseline` tag,
+and the control repository `program/` gets `forgel.toml`, `program.yaml`,
+`FORGEL.md`, `AGENTS.md` and `docs/program/adoption.md`. The project is
+brownfield: the template pipeline never runs and Forgel never regenerates the
+code.
+
+Add related repositories or change their edges:
+
+```text
+/repo add <url> [id] [depends_on=<id>]
+/repo link <id> depends_on=<id,id>
+/repo list
+```
+
+```text
+/repo add https://github.com/owner/frontend web depends_on=main
+/repo add https://github.com/owner/infra infra
+/repo link web depends_on=main
+```
+
+Link repositories only when their code depends on each other: a frontend
+consumes a backend contract, an E2E suite exercises both, an infrastructure
+repository deploys a specific backend. Independent repositories can be added
+to one project; nothing breaks, but Forgel maintains them separately and the
+grouping adds no coupling.
+
+**GitHub authentication.** Public HTTPS clones need no credentials. Private
+repositories and later push/pull requests need a token with Contents
+read/write (fine-grained) or `repo` (classic):
+
+```bash
+export FORGEL_GITHUB_TOKEN=...
+# or, for the MVP, from the chat (the message is deleted; no E2E):
+/secret set github.token <token>
+```
+
+SSH remotes use the host key. A GitHub App with short-lived installation
+tokens is the target production auth; repository hosting sits behind a
+provider contract, so GitLab, Gitea or a private server can be added without
+touching the core.
+
 ## Project Layout
 
 New projects use a container:
@@ -197,6 +254,11 @@ forgel reconcile <project-id> --decision accept|fix|rollback|ignore [--notes "..
 - `ignore` — record the change and continue without documenting it.
 
 Only then does `forgel run` continue, in a new ledger generation, from `review`.
+
+For a brownfield project, reconcile does not start the template pipeline:
+`accept` and `ignore` commit the accepted changes to the repository baseline,
+`rollback` restores the files, and `fix` records the defect. The same decisions
+are available from the chat with `/sync` and `/reconcile`.
 
 ## What it will do
 

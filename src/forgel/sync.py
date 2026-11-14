@@ -17,6 +17,7 @@ from typing import Any
 from .artifacts import read_json, write_text
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .program_manifest import entries as manifest_entries
 from .state import validate_stage
 
 IGNORED_PARTS = {"__pycache__", "node_modules", ".git", ".forgel"}
@@ -72,20 +73,31 @@ def _required_paths(workspace: Path) -> set[str]:
     if not layout.is_container:
         return set(REQUIRED_PATHS)
     control = layout.control.relative_to(layout.root).as_posix()
-    return {
+    required = {
         f"{control}/program.yaml",
         f"{control}/forgel.toml",
         f"{control}/FORGEL.md",
         f"{control}/AGENTS.md",
-        layout.repo_ref("api", "app.py"),
-        layout.repo_ref("web", "index.html"),
-        layout.repo_ref("e2e", "check.py"),
-        layout.repo_ref("infra", "Dockerfile"),
-        layout.repo_ref("infra", "docker-compose.qa.yml"),
-        layout.repo_ref("e2e", "qa/runner.mjs"),
-        layout.repo_ref("e2e", "qa/package.json"),
-        layout.repo_ref("e2e", "qa/scenarios/hello_web.mjs"),
     }
+    if layout.metadata().get("mode") == "brownfield":
+        required.update(
+            layout.repo_ref(entry["id"])
+            for entry in manifest_entries(layout)
+        )
+        return required
+    required.update(
+        {
+            layout.repo_ref("api", "app.py"),
+            layout.repo_ref("web", "index.html"),
+            layout.repo_ref("e2e", "check.py"),
+            layout.repo_ref("infra", "Dockerfile"),
+            layout.repo_ref("infra", "docker-compose.qa.yml"),
+            layout.repo_ref("e2e", "qa/runner.mjs"),
+            layout.repo_ref("e2e", "qa/package.json"),
+            layout.repo_ref("e2e", "qa/scenarios/hello_web.mjs"),
+        }
+    )
+    return required
 
 
 def _docs_prefix(workspace: Path) -> str:
@@ -482,6 +494,50 @@ def _target_for(
     return layout.root, path
 
 
+def _commit_control_record(workspace: Path, message: str) -> None:
+    layout = _layout(workspace)
+    target = layout.control
+    if not (target / ".git").exists():
+        return
+    _git(target, "add", "-A")
+    _git(
+        target,
+        "-c",
+        "user.name=Forgel",
+        "-c",
+        "user.email=forgel@localhost",
+        "commit",
+        "-q",
+        "-m",
+        message,
+    )
+    _git(target, "tag", "-f", "forgel-baseline")
+
+
+def _commit_changed_repositories(
+    layout: ProjectLayout, changes: dict[str, Any]
+) -> None:
+    targets = set()
+    for path in changes.get("files", []):
+        target, relative = _target_for(layout, path)
+        if relative and (target / ".git").exists():
+            targets.add(target)
+    for target in sorted(targets):
+        _git(target, "add", "-A")
+        _git(
+            target,
+            "-c",
+            "user.name=Forgel",
+            "-c",
+            "user.email=forgel@localhost",
+            "commit",
+            "-q",
+            "-m",
+            "Accept external changes",
+        )
+        _git(target, "tag", "-f", "forgel-baseline")
+
+
 def _rollback(workspace: Path, changes: dict[str, Any]) -> None:
     layout = _layout(workspace)
     trash = layout.root / ".forgel" / "trash" / _utcnow().replace(":", "-")
@@ -650,6 +706,8 @@ def reconcile_project(
     if project is None:
         raise SyncError(f"Unknown project: {project_id}")
 
+    layout = _layout(workspace)
+    brownfield = layout.metadata().get("mode") == "brownfield"
     reconciliation = _docs(workspace) / "reconciliation.md"
     status = _reconciliation_status(reconciliation)
     if status not in {"pending", "fix_required"}:
@@ -661,7 +719,8 @@ def reconcile_project(
     analysis = analyze_changes(workspace, changes)
 
     if decision == "accept":
-        _accept_changes(workspace, changes, notes)
+        if not brownfield:
+            _accept_changes(workspace, changes, notes)
         target_status = "accepted"
     elif decision == "fix":
         _mark_fix(reconciliation, analysis, notes)
@@ -672,10 +731,19 @@ def reconcile_project(
     else:
         target_status = "ignored"
 
-    generation = ledger.start_generation(project_id, from_stage)
+    if brownfield:
+        generation = ledger.current_generation(project_id)
+    else:
+        generation = ledger.start_generation(project_id, from_stage)
     _update_reconciliation(
         reconciliation, target_status, decision, generation, notes
     )
+    if brownfield:
+        _commit_control_record(
+            workspace, f"Record reconciliation: {decision}"
+        )
+        if decision in {"accept", "ignore"}:
+            _commit_changed_repositories(layout, changes)
     ledger.append_event(
         project_id,
         "reconcile",
@@ -692,8 +760,9 @@ def reconcile_project(
         generation=generation,
     )
     return {
-        "started": True,
+        "started": not brownfield,
         "pending": False,
+        "brownfield": brownfield,
         "decision": decision,
         "generation": generation,
         "from_stage": from_stage,

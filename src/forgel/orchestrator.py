@@ -30,6 +30,8 @@ from .intake import build_requirements
 from .jurisdiction import resolve_pack
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .program_manifest import entries as manifest_entries
+from .program_manifest import repo_control_path, write_program
 from .project_config import (
     SimplicityConfig,
     load_project_config,
@@ -467,33 +469,21 @@ asked to invent a composition, and no plugin outside the recipe was used.
         ack_label = "yes" if profile.get("acknowledgement_required") else "no"
         review_label = profile.get("legal_review_status", "unknown")
 
-        lines = [
-            "# program.yaml",
-            f"project: {project['name']}",
-            f"recipe: {recipe_ref}",
-            "repos:",
-        ]
-        repos = (
-            ("api", "backend"),
-            ("web", "frontend"),
-            ("infra", "infrastructure"),
-            ("e2e", "acceptance"),
+        repos = manifest_entries(layout)
+        program_path = write_program(
+            layout, project["name"], recipe_ref
         )
-        for repo_id, role in repos:
-            if layout.is_container:
-                path = f"../repos/{repo_id}"
-            else:
-                path = f"./{repo_id}"
-            lines.extend(
-                [f"  - id: {repo_id}", f"    role: {role}", f"    path: {path}"]
-            )
-            if repo_id == "api":
-                lines.extend(["    contracts:", "      publishes: [openapi.yaml]"])
-            if repo_id == "web":
-                lines.extend(["    contracts:", "      consumes: [api/openapi.yaml]"])
-        program_path = write_text(
-            self._control(project) / "program.yaml", "\n".join(lines) + "\n"
+        repo_rows = "\n".join(
+            f"| {entry['id']} | {entry['role']} | "
+            f"{repo_control_path(layout, entry['id'])} |"
+            for entry in repos
         )
+        dependency_lines = [
+            f"- `{entry['id']}` depends on "
+            + ", ".join(f"`{item}`" for item in entry["depends_on"])
+            for entry in repos
+            if entry["depends_on"]
+        ] or ["- No dependency edges recorded."]
 
         master = self._docs(project) / "master-plan.md"
         write_text(
@@ -508,10 +498,7 @@ asked to invent a composition, and no plugin outside the recipe was used.
 
 | Repo | Role | Path |
 |---|---|---|
-| api | backend | {self._repo_ref(project, "api")} |
-| web | frontend | {self._repo_ref(project, "web")} |
-| infra | infrastructure | {self._repo_ref(project, "infra")} |
-| e2e | acceptance | {self._repo_ref(project, "e2e")} |
+{repo_rows}
 
 ## Contracts
 
@@ -528,9 +515,7 @@ asked to invent a composition, and no plugin outside the recipe was used.
 
 ## Dependency Graph
 
-- `web` depends on `api`.
-- `e2e` depends on `api` and `web`.
-- `infra` is independent.
+{dependency_lines}
 
 ## Open Questions
 
@@ -1402,10 +1387,8 @@ See `docs/program/jurisdiction/requirements.md` and
             "recipe": project.get("recipe_id"),
             "registry_sha256": registry_sha,
             "repos": {
-                "api": "0.1.0",
-                "web": "0.1.0",
-                "infra": "0.1.0",
-                "e2e": "0.1.0",
+                entry["id"]: "0.1.0"
+                for entry in manifest_entries(layout)
             },
             "jurisdiction": {
                 "id": jurisdiction["id"],

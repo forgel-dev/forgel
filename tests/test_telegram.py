@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -368,6 +369,93 @@ class SelectionAndAgentTest(unittest.TestCase):
         self.assertIn("qa.runtime = docker", set_reply.text)
         after = router.handle(7, "/config", "@tester")
         self.assertIn("qa.runtime = docker (project)", after.text)
+
+
+class AdoptCommandsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.settings = Settings(
+            home=Path(self._tmp.name),
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+        )
+        self.ledger = Ledger(self.settings.db_path)
+        self.addCleanup(self.ledger.close)
+        self.router = CommandRouter(self.settings, self.ledger)
+
+    def _repo(self, name: str) -> Path:
+        path = self.settings.home / "sources" / name
+        path.mkdir(parents=True)
+        (path / "README.md").write_text("hello\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=path, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-q",
+                "-m",
+                "initial",
+            ],
+            cwd=path,
+            check=True,
+        )
+        return path
+
+    def test_adopt_selects_and_adds_related_repositories(self) -> None:
+        backend = self._repo("backend")
+        adopted = self.router.handle(
+            7, f"/adopt {backend} | Backend service", "@tester"
+        )
+        self.assertIn("Adopted", adopted.text)
+        project = self.ledger.list_projects()[0]
+        self.assertEqual(self.ledger.get_session(7), project["id"])
+        listing = self.router.handle(7, "/repo list", "@tester")
+        self.assertIn("main", listing.text)
+        self.assertIn(str(backend), listing.text)
+
+        frontend = self._repo("frontend")
+        added = self.router.handle(
+            7,
+            f"/repo add {frontend} web depends_on=main",
+            "@tester",
+        )
+        self.assertIn("Added repository web", added.text)
+        self.assertIn("Dependency edges: main", added.text)
+        layout = ProjectLayout.detect(project["workspace"])
+        program = (layout.control / "program.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("id: web", program)
+        self.assertIn("depends_on: [main]", program)
+
+        infra = self._repo("infra")
+        independent = self.router.handle(
+            7, f"/repo add {infra} infra", "@tester"
+        )
+        self.assertIn("No dependency edges", independent.text)
+
+        linked = self.router.handle(
+            7, "/repo link infra depends_on=main", "@tester"
+        )
+        self.assertIn("Updated dependencies for infra: main", linked.text)
+        program = (layout.control / "program.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("depends_on: [main]", program)
+
+    def test_repo_add_requires_a_selected_project(self) -> None:
+        reply = self.router.handle(
+            7, f"/repo add {self._repo('x')}", "@tester"
+        )
+        self.assertIn("No project selected", reply.text)
 
 
 class GatewayTest(unittest.TestCase):

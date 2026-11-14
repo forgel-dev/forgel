@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .adopt import (
+    AdoptError,
+    add_repository,
+    adopt_repository,
+    set_dependencies,
+)
 from .approvals import ApprovalError, latest_approval, record_approval
 from .artifacts import read_json
 from .complexity import evaluate, measure_patch, write_report
@@ -26,8 +32,10 @@ from .project_config import (
     SimplicityConfig,
     load_project_config,
 )
+from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
+from .providers import ProviderError
 from .orchestrator import Orchestrator, StageError
 from .secrets import (
     SecretError,
@@ -225,7 +233,13 @@ def cmd_sync(args: argparse.Namespace) -> int:
         except (SyncError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        if result.get("started"):
+        if result.get("brownfield"):
+            print(
+                f"Reconciliation: {result['decision']} "
+                f"({result['status']}). No generation started "
+                "(brownfield project)."
+            )
+        elif result.get("started"):
             decision = result.get("decision") or "forced"
             print(
                 f"Reconciliation applied: {decision}. "
@@ -282,12 +296,19 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         except (SyncError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(
-            f"Reconciliation: {result['decision']} ({result['status']}). "
-            f"Generation {result['generation']} started; "
-            f"re-run from {result['from_stage']}."
-        )
-        print(f"Run: forgel run {args.project_id}")
+        if result.get("brownfield"):
+            print(
+                f"Reconciliation: {result['decision']} "
+                f"({result['status']}). No generation started "
+                "(brownfield project)."
+            )
+        else:
+            print(
+                f"Reconciliation: {result['decision']} ({result['status']}). "
+                f"Generation {result['generation']} started; "
+                f"re-run from {result['from_stage']}."
+            )
+            print(f"Run: forgel run {args.project_id}")
         return 0
     finally:
         ledger.close()
@@ -574,6 +595,107 @@ def cmd_resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_adopt(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            result = adopt_repository(
+                settings,
+                ledger,
+                args.url,
+                brief=args.brief,
+                name=args.name,
+            )
+        except (AdoptError, ProviderError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"project:  {result.project_id}")
+        print(f"repo:     {result.repo_id} ({result.provider})")
+        print(f"url:      {result.url}")
+        print("mode:     brownfield")
+        print(f"auth:     {result.auth.detail}")
+        return 0
+    finally:
+        ledger.close()
+
+
+def cmd_repo(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        layout = ProjectLayout.detect(project["workspace"])
+        if args.action == "list":
+            repos = manifest_entries(layout)
+            if not repos:
+                print("no repositories")
+                return 0
+            for entry in repos:
+                depends = ", ".join(entry["depends_on"]) or "none"
+                print(
+                    f"{entry['id']:<12} {entry['role']:<16} "
+                    f"{entry['provider']:<8} {entry['url'] or '—'}"
+                    f"  depends_on={depends}"
+                )
+            return 0
+        depends = [item for item in args.depends_on.split(",") if item]
+        if args.action == "link":
+            if not args.url:
+                print(
+                    "error: repo link requires a repository id",
+                    file=sys.stderr,
+                )
+                return 2
+            try:
+                entry = set_dependencies(
+                    settings,
+                    ledger,
+                    project,
+                    args.url,
+                    depends,
+                )
+            except (AdoptError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            edges = ", ".join(entry["depends_on"]) or "none"
+            print(f"Updated dependencies for {entry['id']}: {edges}.")
+            return 0
+        if not args.url:
+            print("error: repo add requires a URL", file=sys.stderr)
+            return 2
+        try:
+            result = add_repository(
+                settings,
+                ledger,
+                project,
+                args.url,
+                repo_id=args.id,
+                depends_on=depends,
+                role=args.role,
+            )
+        except (AdoptError, ProviderError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"Added {result.entry['id']} ({result.entry['provider']}) "
+            f"to {project['id']}."
+        )
+        if result.entry["depends_on"]:
+            print(
+                "depends_on: " + ", ".join(result.entry["depends_on"])
+            )
+        else:
+            print("no dependency edges; maintained separately in the project")
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_secret(args: argparse.Namespace) -> int:
     settings = _settings(args)
     if args.action == "list":
@@ -810,6 +932,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Serve commands only; do not run iterations",
     )
     telegram.set_defaults(func=cmd_telegram)
+
+    adopt = subparsers.add_parser(
+        "adopt", help="Adopt an existing repository as a project"
+    )
+    adopt.add_argument("url")
+    adopt.add_argument("--brief", default="")
+    adopt.add_argument("--name", default="")
+    adopt.add_argument("--home", default=None)
+    adopt.set_defaults(func=cmd_adopt)
+
+    repo = subparsers.add_parser(
+        "repo", help="List or add repositories in a project"
+    )
+    repo.add_argument("action", choices=["list", "add", "link"])
+    repo.add_argument("project_id")
+    repo.add_argument("url", nargs="?", default="")
+    repo.add_argument("--id", default="")
+    repo.add_argument("--depends-on", dest="depends_on", default="")
+    repo.add_argument("--role", default="application")
+    repo.add_argument("--home", default=None)
+    repo.set_defaults(func=cmd_repo)
 
     secret = subparsers.add_parser(
         "secret", help="Manage secrets in the local 0600 store"

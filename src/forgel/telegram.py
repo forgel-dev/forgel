@@ -299,7 +299,11 @@ class TelegramGateway:
         if not isinstance(text, str):
             return False
         actor = actor_label(message.get("from") or {})
-        if not text.startswith("/"):
+        if (
+            not text.startswith("/")
+            or text.startswith("/adopt")
+            or text.startswith("/repo add")
+        ):
             try:
                 self.api.send_chat_action(chat_id, "typing")
             except TelegramError:

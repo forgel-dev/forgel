@@ -158,6 +158,8 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-060** | Secrets may be set from the chat only through a one-time command that deletes the message; env and the local CLI take precedence | Telegram bots have no end-to-end encryption, but typing a key on a server during MVP development is too slow | `/secret set` deletes the message, stores a `0600` file, never echoes the value and warns about the channel; `forgel secret set` over SSH is the production path |
 | **D-061** | A project is a container: a `program/` control repository for specs and configuration plus real git repositories under `repos/<id>/` | One project can span a backend and a frontend; a flat workspace hides repository boundaries and makes independent history impossible | New projects use the container layout; legacy flat projects remain readable; sync, QA and the template migrate to the container |
 | **D-062** | Repository hosting is a provider plugin; GitHub is the first implementation | Other teams use GitLab, Gitea or a private server, and the core must not depend on one host | A provider contract covers auth, clone, branch, push, pull request and merge; the in-tree GitHub provider is the reference implementation |
+| **D-063** | A project can be created by adopting an existing repository, and repositories can be added later; control files live outside the code repositories | Users already have code, and a project often grows a repository after it starts | Adoption clones into `repos/<id>/`, initializes `program/` (`forgel.toml`, `program.yaml`, context files) and never regenerates code; `repo add` extends the container |
+| **D-064** | Repositories are grouped in a project by dependency edges, not by theme | The value of a multi-repo project is that a change in one repository has a contract consequence in another; unrelated repositories gain nothing from grouping | `program.yaml` records `depends_on`; `/repo add` and `/repo link` set edges; independent repositories are allowed and maintained separately, and the UI says the grouping adds no coupling |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1028,6 +1030,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - Multi-project chat sessions: one daemon, a selected project per chat, isolated project contexts, configuration from chat.
 - Project agent over an OpenAI-compatible endpoint: intake, questions and change requests.
 - Project container: a `program/` control repository plus one real git repository per code repo; per-repository sync, rollback and complexity.
+- Brownfield adoption: `/adopt` an existing repository, `/repo add` and `/repo link` to build a dependency-linked project; GitHub provider first.
 - Human approval gate for staging and production; production requires the compliance acknowledgement.
 - GitHub App auth, branch/PR flow, auto-merge and remote fetch/push for self-host.
 - Deploy modes: `confirm` via Telegram as the default; `manual` fallback; `auto` opt-in.

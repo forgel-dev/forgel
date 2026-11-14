@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import config_store, daemon_config
+from .adopt import (
+    AdoptError,
+    add_repository,
+    adopt_repository,
+    set_dependencies,
+)
 from .agent import ProjectAgent
 from .approvals import ApprovalError, is_approved, latest_approval, record_approval
 from .artifacts import read_json
@@ -26,8 +32,10 @@ from .layout import ProjectLayout
 from .ledger import Ledger
 from .artifacts import write_text
 from .project_config import ConfigError, render_project_config
+from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, derive_name, resolve_project
 from .proposals import summarize_proposals
+from .providers import ProviderError
 from .secrets import (
     SECRETS_FILENAME,
     SECRET_KEYS,
@@ -58,6 +66,10 @@ HELP = """Forgel gateway
 
 Projects
 /new <name> | <brief>  create a project and select it
+/adopt <url> [| brief]  adopt an existing repository and select it
+/repo list              repositories and dependency edges
+/repo add <url> [id] [depends_on=<id>]
+/repo link <id> depends_on=<id,id>   replace the edges of a repository
 /projects              projects, state and the selected one
 /use <id>              select the current project
 /status [id]           state, staging, approvals, recent stages
@@ -131,6 +143,8 @@ class CommandRouter:
             "/start": lambda _chat, _rest, _actor: Reply(HELP),
             "/help": lambda _chat, _rest, _actor: Reply(HELP),
             "/new": self._new,
+            "/adopt": self._adopt,
+            "/repo": self._repo,
             "/projects": self._projects,
             "/list": self._projects,
             "/use": self._use,
@@ -210,6 +224,163 @@ class CommandRouter:
             f"Project {project_id} created and selected.\n"
             "The daemon will run it and report back."
         )
+
+    def _adopt(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        if not rest:
+            return Reply(
+                "Usage: /adopt <repository-url> [| brief]\n"
+                "Supports GitHub URLs, SSH remotes, owner/repo and local paths."
+            )
+        url, _, brief = rest.partition("|")
+        try:
+            result = adopt_repository(
+                self.settings, self.ledger, url.strip(), brief.strip()
+            )
+        except (AdoptError, ProviderError) as exc:
+            return Reply(
+                f"error: {exc}" + self._github_hint(url, str(exc))
+            )
+        self.ledger.set_session(chat_id, result.project_id)
+        lines = [
+            f"Adopted {result.url} as {result.project_id} and selected it.",
+            f"Repository: {result.repo_id} ({result.provider}).",
+            "Mode: brownfield — Forgel will not regenerate this repository.",
+            "Config initialized in program/forgel.toml and program.yaml.",
+        ]
+        if result.provider == "github":
+            if result.auth.configured:
+                lines.append("GitHub: " + result.auth.detail + ".")
+            else:
+                lines.append(
+                    "GitHub: " + result.auth.detail + ". For private "
+                    "repositories and later push/PR set FORGEL_GITHUB_TOKEN "
+                    "on the host or /secret set github.token <token>; a "
+                    "fine-grained token needs Contents read/write."
+                )
+        lines.append(
+            "Add a related repository: /repo add <url> [id] "
+            "[depends_on=<id>]"
+        )
+        lines.append(
+            "Link repositories only when their code depends on each other "
+            "(for example a frontend consumes a backend contract). "
+            "Independent repositories can be linked, but Forgel will simply "
+            "maintain them separately."
+        )
+        return Reply("\n".join(lines))
+
+    def _repo(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        tokens = rest.split(maxsplit=1)
+        action = tokens[0].lower() if tokens else "list"
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        if action == "list":
+            layout = ProjectLayout.detect(project["workspace"])
+            repos = manifest_entries(layout)
+            if not repos:
+                return Reply("This project has no repositories recorded.")
+            lines = [f"Repositories: {len(repos)}"]
+            for entry in repos:
+                depends = ", ".join(entry["depends_on"]) or "none"
+                lines.append(
+                    f"{entry['id']}  {entry['role']}  {entry['provider']}\n"
+                    f"  url: {entry['url'] or '—'}\n"
+                    f"  depends on: {depends}"
+                )
+            return Reply("\n".join(lines))
+        if action == "link":
+            if len(tokens) < 2:
+                return Reply("Usage: /repo link <id> depends_on=<id,id>")
+            parts = tokens[1].split()
+            if not parts:
+                return Reply("Usage: /repo link <id> depends_on=<id,id>")
+            repo_id = parts[0]
+            depends_on: list[str] = []
+            found = False
+            for token in parts[1:]:
+                if token.startswith("depends_on="):
+                    found = True
+                    depends_on = [
+                        item
+                        for item in token.split("=", 1)[1].split(",")
+                        if item
+                    ]
+            if not found:
+                return Reply("Usage: /repo link <id> depends_on=<id,id>")
+            try:
+                entry = set_dependencies(
+                    self.settings,
+                    self.ledger,
+                    project,
+                    repo_id,
+                    depends_on,
+                )
+            except (AdoptError, ValueError) as exc:
+                return Reply(f"error: {exc}")
+            edges = ", ".join(entry["depends_on"]) or "none"
+            return Reply(
+                f"Updated dependencies for {entry['id']}: {edges}."
+            )
+        if action != "add":
+            return Reply(
+                "Usage: /repo list, /repo add <url> [id] "
+                "[depends_on=<id,id>] or /repo link <id> "
+                "depends_on=<id,id>"
+            )
+        if len(tokens) < 2:
+            return Reply(
+                "Usage: /repo add <url> [id] [depends_on=<id,id>]"
+            )
+        parts = tokens[1].split()
+        if not parts:
+            return Reply(
+                "Usage: /repo add <url> [id] [depends_on=<id,id>]"
+            )
+        url = parts[0]
+        repo_id = ""
+        depends_on: list[str] = []
+        for token in parts[1:]:
+            if token.startswith("depends_on="):
+                depends_on = [
+                    item
+                    for item in token.split("=", 1)[1].split(",")
+                    if item
+                ]
+            elif not repo_id:
+                repo_id = token
+            else:
+                return Reply(f"unexpected argument: {token}")
+        try:
+            result = add_repository(
+                self.settings,
+                self.ledger,
+                project,
+                url,
+                repo_id=repo_id,
+                depends_on=depends_on,
+            )
+        except (AdoptError, ProviderError) as exc:
+            return Reply(
+                f"error: {exc}" + self._github_hint(url, str(exc))
+            )
+        entry = result.entry
+        lines = [
+            f"Added repository {entry['id']} to {project['id']}.",
+            f"Provider: {entry['provider']}; url: {entry['url']}.",
+        ]
+        if entry["depends_on"]:
+            lines.append(
+                "Dependency edges: "
+                + ", ".join(entry["depends_on"])
+                + "."
+            )
+        else:
+            lines.append(
+                "No dependency edges recorded: this repository is maintained "
+                "separately inside the project."
+            )
+        return Reply("\n".join(lines))
 
     def _projects(self, chat_id: int, _rest: str, _actor: str) -> Reply:
         projects = self.ledger.list_projects()
@@ -311,6 +482,12 @@ class CommandRouter:
         if is_paused(self.settings.home):
             return Reply("The daemon is paused. Send /resume first.")
         state = project_state(self.ledger, project)
+        if state == "adopted":
+            return Reply(
+                f"{project_id} is a brownfield project: the template pipeline "
+                "does not run. Send a change request as a plain message or "
+                "inspect it with /status."
+            )
         if state.startswith("awaiting staging approval") or state.startswith(
             "staging "
         ):
@@ -391,10 +568,16 @@ class CommandRouter:
             )
         except (SyncError, ValueError) as exc:
             return Reply(f"error: {exc}")
+        if result.get("brownfield"):
+            tail = "No generation started (brownfield project)."
+        else:
+            tail = (
+                f"Generation {result['generation']} will re-run from "
+                f"{result['from_stage']}."
+            )
         return Reply(
-            f"Reconciliation: {result['decision']} ({result['status']}). "
-            f"Generation {result['generation']} will re-run from "
-            f"{result['from_stage']}."
+            f"Reconciliation: {result['decision']} "
+            f"({result['status']}). {tail}"
         )
 
     def _proposals(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -649,6 +832,27 @@ class CommandRouter:
         return Reply(result.text)
 
     # -------------------------------------------------------------- helpers
+
+    @staticmethod
+    def _github_hint(url: str, message: str) -> str:
+        if "github.com" not in url:
+            return ""
+        lowered = message.lower()
+        if not any(
+            marker in lowered
+            for marker in (
+                "could not read username",
+                "authentication failed",
+                "terminal prompts disabled",
+                "repository not found",
+            )
+        ):
+            return ""
+        return (
+            "\n\nGitHub authentication failed. Set FORGEL_GITHUB_TOKEN on "
+            "the host or /secret set github.token <token>; a fine-grained "
+            "token needs Contents read/write."
+        )
 
     def _selected(self, chat_id: int) -> dict[str, Any] | Reply:
         project_id = self.ledger.get_session(chat_id)
