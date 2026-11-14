@@ -40,6 +40,8 @@ shim and is not part of the public repository.
 |---|---|
 | `src/forgel/` | Core: orchestrator, ledger, state, registry, CLI |
 | `src/forgel/templates/` | Project templates |
+| `environment.yaml` | Environment contract for Forgel itself: build, commands, env |
+| `environment/` | Dockerfile for Forgel's own sandbox environment |
 | `registry/` | Recipe registry data |
 | `jurisdiction/` | Jurisdiction pack data |
 | `tests/` | `unittest` suite |
