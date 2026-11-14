@@ -115,7 +115,7 @@ Reply with exactly one JSON object per turn. Available actions:
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
-{"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"]}
+{"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}]}
 {"action": "fail", "reason": "why the task cannot be completed"}
 
 Context:
@@ -144,6 +144,11 @@ Rules:
 - No external APIs, no network calls, no deployment changes, no Telegram.
 - Write tests for the requirements and run them. Call done only after the
   tests pass and the requirements are implemented.
+- Tests are normally only added. Deleting a test requires a justification in
+  done.test_removals, with one of: "removed" (the scenario is genuinely
+  removed), "replaced" (the behavior changed and a new test replaces it; name
+  the replacement), or "wrong" (the test was incorrect or duplicated). Never
+  delete or weaken a test just to make the run pass.
 - Keep the change small and readable.
 """
 
@@ -257,7 +262,17 @@ class CodingAgent:
         repo_id, repo = self._repository(layout, task)
         if not (repo / ".git").exists():
             raise AgentError(f"repository {repo_id} has no git history")
-        base_sha = git_ops.head_sha(repo)
+        previous = dict(task.get("result") or {})
+        previous_git = (
+            previous.get("git")
+            if isinstance(previous.get("git"), dict)
+            else {}
+        )
+        # A rework keeps the original base so the reviewer sees the whole
+        # change across attempts, not only the latest fix.
+        base_sha = str(previous_git.get("base") or "") or git_ops.head_sha(
+            repo
+        )
         gitignore = repo / ".gitignore"
         if not gitignore.exists():
             write_text(gitignore, DEFAULT_GITIGNORE)
@@ -282,6 +297,8 @@ class CodingAgent:
                 test_output,
                 assumptions,
                 context_stats,
+                failure_kind,
+                test_removals,
             ) = self._converse(
                 layout, repo, repo_id, task, model, runner, environment
             )
@@ -298,6 +315,7 @@ class CodingAgent:
                     )
             except git_ops.GitOperationError as exc:
                 status = "failed"
+                failure_kind = "infrastructure"
                 summary += f"; commit failed: {exc}"
 
         files_changed = sorted(
@@ -316,6 +334,7 @@ class CodingAgent:
             test_output,
             assumptions,
             context_stats,
+            test_removals,
         )
         tasks.update_task(
             layout,
@@ -330,10 +349,16 @@ class CodingAgent:
                 "test_output": _cap(test_output, 6000),
                 "assumptions": assumptions,
                 "context": context_stats,
+                "test_removals": test_removals,
                 "git": {
                     "base": base_sha,
                     "head": git_ops.head_sha(repo),
                 },
+                "failure": (
+                    {"kind": failure_kind, "message": summary}
+                    if status == "failed"
+                    else {}
+                ),
                 "report": _ref(layout, report),
             },
         )
@@ -423,6 +448,7 @@ class CodingAgent:
         str,
         list[str],
         dict[str, Any],
+        list[dict[str, str]],
     ]:
         """Run the model loop and the final test, returning the run state.
 
@@ -457,8 +483,10 @@ class CodingAgent:
             for item in task.get("assumptions", [])
             if str(item).strip()
         ]
+        test_removals: list[dict[str, str]] = []
         status = "failed"
         summary = "step limit reached"
+        failure_kind = "agent"
         invalid = 0
         steps = 0
         sessions = 0
@@ -509,6 +537,7 @@ class CodingAgent:
                 except ModelError as exc:
                     status = "failed"
                     summary = f"model call failed: {exc}"
+                    failure_kind = "infrastructure"
                     terminal = True
                     break
                 action = parse_action(raw)
@@ -545,6 +574,25 @@ class CodingAgent:
                         value = str(item).strip()
                         if value and value not in assumptions:
                             assumptions.append(value)
+                    for item in action.get("test_removals", []):
+                        if not isinstance(item, dict):
+                            continue
+                        test = str(item.get("test", "")).strip()
+                        reason = str(item.get("reason", "")).strip().lower()
+                        replacement = str(
+                            item.get("replacement", "")
+                        ).strip()
+                        if (
+                            test
+                            and reason in {"removed", "replaced", "wrong"}
+                        ):
+                            test_removals.append(
+                                {
+                                    "test": test,
+                                    "reason": reason,
+                                    "replacement": replacement,
+                                }
+                            )
                     terminal = True
                     break
                 if kind == "fail":
@@ -631,6 +679,7 @@ class CodingAgent:
                 )
                 if code != 0:
                     status = "failed"
+                    failure_kind = "qa"
                     summary += f"; final test command exited {code}"
         context_stats = {
             "window": window,
@@ -650,6 +699,8 @@ class CodingAgent:
             test_output,
             assumptions,
             context_stats,
+            failure_kind,
+            test_removals,
         )
 
     # ------------------------------------------------------------- setup
@@ -698,6 +749,17 @@ class CodingAgent:
         assumptions = "\n".join(
             f"- {item}" for item in task.get("assumptions", [])
         ) or "- none"
+        feedback = "\n".join(
+            f"- {item}"
+            for item in (
+                (task.get("result") or {}).get("feedback") or []
+            )
+        )
+        feedback_section = (
+            f"\nPrevious attempt feedback (address it):\n{feedback}\n"
+            if feedback
+            else ""
+        )
         test_command = task.get("test_command") or []
         tree = self._list(repo)
         branch = git_ops.current_branch(repo)
@@ -714,7 +776,7 @@ Constraints:
 
 Assumptions already recorded at intake (do not re-ask):
 {assumptions}
-
+{feedback_section}
 Final test command: {json.dumps(test_command)}
 Repository: {repo_id} at {repo} (branch {branch})
 
@@ -944,6 +1006,7 @@ Files:
         test_output: str,
         assumptions: list[str],
         context_stats: dict[str, Any],
+        test_removals: list[dict[str, str]],
     ) -> Path:
         path = layout.artifact(
             f"docs/program/agent/{task['id']}.md"
@@ -994,6 +1057,10 @@ Files:
 ## Assumptions
 
 {assumption_lines}
+
+## Test Removals
+
+{chr(10).join(f"- {item['test']}: {item['reason']}" + (f" -> {item['replacement']}" if item.get('replacement') else "") for item in test_removals) or "- none"}
 
 ## Context
 

@@ -88,6 +88,45 @@ class TasksTest(unittest.TestCase):
         blocked = tasks.blocked_pending(self.layout)
         self.assertEqual([item["id"] for item in blocked], [second["id"]])
 
+    def test_a_failure_blocks_dependents_and_retry_releases_them(
+        self,
+    ) -> None:
+        first = tasks.create_task(
+            self.layout, "First", ["A"], ["B"], repo_id="main",
+            plan_id="p1", order=1,
+        )
+        second = tasks.create_task(
+            self.layout, "Second", ["A"], ["B"], repo_id="main",
+            plan_id="p1", order=2, depends_on=[first["id"]],
+        )
+        third = tasks.create_task(
+            self.layout, "Third", ["A"], ["B"], repo_id="main",
+            plan_id="p1", order=3,
+        )
+        tasks.update_task(
+            self.layout,
+            first["id"],
+            status="failed",
+            result={"failure": {"kind": "qa", "message": "red"}},
+        )
+        blocked = tasks.block_dependents(self.layout, first["id"])
+        self.assertEqual(
+            [item["id"] for item in blocked], [second["id"]]
+        )
+        stored = tasks.get_task(self.layout, second["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(stored["result"]["blocked_by"], first["id"])
+        pending = tasks.get_task(self.layout, third["id"])
+        assert pending is not None
+        self.assertEqual(pending["status"], "pending")
+        retried = tasks.retry_task(self.layout, first["id"])
+        self.assertEqual(retried["status"], "pending")
+        self.assertEqual(retried["result"]["manual_retries"], 1)
+        released = tasks.get_task(self.layout, second["id"])
+        assert released is not None
+        self.assertEqual(released["status"], "pending")
+
     def test_interrupted_tasks_are_requeued(self) -> None:
         task = tasks.create_task(
             self.layout,

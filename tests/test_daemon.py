@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,8 @@ from forgel.config import Settings
 from forgel.daemon import project_is_done, run_daemon, run_once
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger, new_project_id
+from forgel.model import ScriptedModelClient
+from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.tasks import create_task, get_task
 
@@ -55,6 +58,84 @@ class DaemonTest(unittest.TestCase):
             self.assertTrue(project_is_done(ledger, project_id))
             self.assertTrue(
                 (workspace / "docs/program/iterations/1/close.md").exists()
+            )
+
+    def test_infrastructure_failure_is_retried_then_quarantined(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self._settings(tmp)
+            settings = Settings(
+                home=settings.home,
+                registry_path=settings.registry_path,
+                templates_path=settings.templates_path,
+                jurisdiction_path=settings.jurisdiction_path,
+                qa_runtime="local",
+                task_retries=1,
+            )
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+            project_id = create_project(
+                settings,
+                ledger,
+                "Retry demo",
+                "A demo brief.",
+                mode="brownfield",
+            )
+            project = ledger.get_project(project_id)
+            assert project is not None
+            layout = ProjectLayout.detect(project["workspace"])
+            set_entries(
+                layout,
+                [
+                    {
+                        "id": "main",
+                        "role": "application",
+                        "provider": "local",
+                        "url": "",
+                        "depends_on": [],
+                    }
+                ],
+            )
+            repo = layout.repo_path("main")
+            repo.mkdir(parents=True)
+            (repo / "README.md").write_text("demo\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "init", "-q"], cwd=repo, check=True
+            )
+            subprocess.run(
+                ["git", "add", "-A"], cwd=repo, check=True
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=T",
+                    "-c",
+                    "user.email=t@example.com",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "initial",
+                ],
+                cwd=repo,
+                check=True,
+            )
+            task = create_task(
+                layout, "Do work", ["A"], ["B"], repo_id="main"
+            )
+            client = ScriptedModelClient([])
+            run_once(settings, ledger, log=lambda _m: None, client=client)
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "pending")
+            self.assertEqual(stored["result"]["attempts"], 1)
+            run_once(settings, ledger, log=lambda _m: None, client=client)
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "failed")
+            self.assertEqual(
+                stored["result"]["failure"]["kind"], "infrastructure"
             )
 
     def test_peak_hours_defer_model_work(self) -> None:

@@ -57,6 +57,94 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def plan_tasks(
+    layout: ProjectLayout, plan_id: str = ""
+) -> tuple[str, list[dict[str, Any]]]:
+    """Tasks of a plan, and the plan id (the latest when not given)."""
+
+    items = [
+        task for task in tasks.list_tasks(layout) if task.get("plan_id")
+    ]
+    if not plan_id and items:
+        plan_id = max(str(task["plan_id"]) for task in items)
+    return plan_id, [
+        task for task in items if str(task.get("plan_id")) == plan_id
+    ]
+
+
+def plan_status(
+    layout: ProjectLayout, plan_id: str = ""
+) -> dict[str, Any]:
+    """Derive the milestone state from its tasks.
+
+    done     all tasks are done or cancelled;
+    review   nothing runnable, at least one task awaits acceptance;
+    stalled  a failure/blocked task and nothing runnable;
+    running  there is still runnable work (or acceptance is pending).
+    """
+
+    plan_id, items = plan_tasks(layout, plan_id)
+    if not items:
+        return {
+            "plan_id": "",
+            "goal": "",
+            "status": "none",
+            "counts": {},
+            "tasks": [],
+        }
+    statuses = {
+        str(task["id"]): str(task.get("status")) for task in items
+    }
+    counts: dict[str, int] = {}
+    for status in statuses.values():
+        counts[status] = counts.get(status, 0) + 1
+    runnable = any(
+        task.get("status") == "pending"
+        and all(
+            statuses.get(dep) == "done"
+            for dep in (task.get("depends_on") or [])
+        )
+        for task in items
+    )
+    failed = any(status == "failed" for status in statuses.values())
+    blocked = any(status == "blocked" for status in statuses.values())
+    reviewing = any(
+        status == "review" for status in statuses.values()
+    )
+    if all(
+        status in {"done", "cancelled"} for status in statuses.values()
+    ):
+        state = "done"
+    elif failed and not runnable:
+        state = "stalled"
+    elif blocked and not runnable and not reviewing:
+        state = "stalled"
+    elif reviewing and not runnable:
+        state = "review"
+    else:
+        state = "running"
+    goal = next(
+        (str(task.get("plan_goal") or "") for task in items), ""
+    )
+    return {
+        "plan_id": plan_id,
+        "goal": goal,
+        "status": state,
+        "counts": counts,
+        "tasks": [
+            {
+                "id": task["id"],
+                "title": task.get("title", ""),
+                "status": task.get("status", ""),
+                "blocked_by": (task.get("result") or {}).get(
+                    "blocked_by", ""
+                ),
+            }
+            for task in items
+        ],
+    }
+
+
 def _slug(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return slug[:40] or "goal"
@@ -84,6 +172,11 @@ Return exactly one JSON object:
       "acceptance": ["observable acceptance criterion", "..."],
       "constraints": ["constraint", "..."],
       "repo_id": "one of the project repositories, or empty for the sole one",
+      "checks": [
+        {{"criterion": "which acceptance criterion this verifies",
+          "command": ["command", "arg"],
+          "verification": "command" | "review"}}
+      ],
       "test_command": ["command", "arg"] or [],
       "depends_on": [0]
     }}
@@ -96,6 +189,11 @@ Rules:
 - One repository per task; do not mix repositories in one task.
 - Give every task explicit requirements and acceptance criteria; the agent
   must not invent unstated features.
+- Give every task at least one executable check per acceptance criterion.
+  The check command runs in the repository and must exit 0 when the criterion
+  is met. If a criterion cannot be checked by a command (documentation, UX),
+  set "verification": "review" and explain in the criterion; a human must then
+  accept the task. Never use a vacuous check.
 - Set test_command when the project's test command is evident from the
   environment contract or the repository; otherwise leave it empty.
 - Do not create tasks for production deploys, payments, secrets, data
@@ -211,6 +309,51 @@ def _parse_plan(
             raise PlanningError(
                 f"task {index} targets unknown repository {repo_id!r}"
             )
+        raw_checks = item.get("checks")
+        if not isinstance(raw_checks, list) or not raw_checks:
+            raise PlanningError(
+                f"task {index} has no acceptance checks"
+            )
+        checks: list[dict[str, Any]] = []
+        for check in raw_checks:
+            if not isinstance(check, dict):
+                raise PlanningError(
+                    f"task {index}: a check must be an object"
+                )
+            criterion = str(check.get("criterion", "")).strip()
+            if not criterion:
+                raise PlanningError(
+                    f"task {index}: a check has no criterion"
+                )
+            verification = str(
+                check.get("verification", "command")
+            ).strip().lower()
+            if verification not in {"command", "review"}:
+                raise PlanningError(
+                    f"task {index}: check verification must be "
+                    "command or review"
+                )
+            check_command = check.get("command", [])
+            if isinstance(check_command, str):
+                check_command = [check_command]
+            if not isinstance(check_command, list):
+                raise PlanningError(
+                    f"task {index}: check command must be a list"
+                )
+            check_command = [
+                str(value) for value in check_command if str(value).strip()
+            ]
+            if verification == "command" and not check_command:
+                raise PlanningError(
+                    f"task {index}: check {criterion!r} has no command"
+                )
+            checks.append(
+                {
+                    "criterion": criterion,
+                    "verification": verification,
+                    "command": check_command,
+                }
+            )
         command = item.get("test_command", [])
         if isinstance(command, str):
             command = [command]
@@ -231,6 +374,7 @@ def _parse_plan(
                 "acceptance": acceptance,
                 "constraints": constraints,
                 "repo_id": repo_id,
+                "checks": checks,
                 "test_command": [str(value) for value in command],
                 "depends_on": list(dict.fromkeys(depends)),
                 "assumptions": [
@@ -315,6 +459,7 @@ def plan_project(
             repo_id=item["repo_id"],
             test_command=item["test_command"],
             assumptions=item["assumptions"],
+            checks=item["checks"],
             plan_id=plan_id,
             plan_goal=goal,
             order=index + 1,
@@ -334,7 +479,19 @@ def plan_project(
         f"   - repo: {item['repo_id'] or '(sole)'}\n"
         f"   - depends on: {', '.join(item['depends_on']) or 'none'}\n"
         f"   - requirements: {'; '.join(item['requirements'])}\n"
-        f"   - acceptance: {'; '.join(item['acceptance'])}"
+        f"   - acceptance: {'; '.join(item['acceptance'])}\n"
+        f"   - checks: "
+        + (
+            "; ".join(
+                check["criterion"]
+                + (
+                    ""
+                    if check["verification"] == "review"
+                    else f" ({json.dumps(check['command'])})"
+                )
+                for check in item["checks"]
+            )
+        )
         for index, item in enumerate(created, 1)
     )
     write_text(

@@ -182,6 +182,8 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-084** | A completed coding task gets an independent QA pass: the project's environment contract runs again after the agent, and the verdict is authoritative | The agent's own final test is self-reported; a green task with a red project gate must not look accepted, and the template pipeline already separates developer work from QA | `task_qa` runs `test` then `e2e` (sandbox or local), writes `docs/program/agent/<task>.qa.md`, records the verdict in the task and ledger; a red verdict fails the task; no command means `skipped`, never a false pass; `FORGEL_TASK_QA` turns it off |
 | **D-085** | A milestone goal becomes an ordered backlog in one planner call; tasks carry a plan id, order and dependencies, and the daemon runs only tasks whose dependencies are done | Hand-decomposing a milestone is the remaining human bottleneck; a small, reviewable plan artifact keeps the decomposition visible and correctable | `forgel plan` and `/plan` ask the model for 1–20 small tasks with explicit requirements, acceptance, repository and test command; `--dry-run` previews them; the plan is committed as `docs/program/plans/<id>.md`; dependency edges gate execution; a failed dependency leaves its dependents pending and reported as blocked |
 | **D-086** | Review and acceptance are explicit task stages: an independent reviewer with clean context judges the committed diff, and a passing review leaves the task in `review` until a human accepts it unless the project opts into automatic acceptance | QA proves the gate passes, not that the change is the right one; the reviewer must not see the agent's self-justification, and a human acceptance is the M0.5 exit criterion | `run_task_review` sends requirements, diff, assumptions and the QA verdict to the model; a failed verdict fails the task; `docs/program/agent/<task>.review.md`; `forgel task accept|reject` and `/task accept|reject`; `FORGEL_TASK_REVIEW` and `FORGEL_TASK_ACCEPT=auto|human`; an errored review never auto-accepts |
+| **D-087** | Failure handling depends on the failure kind: infrastructure is retried within a limit; QA and review rejections are sent back for rework with the feedback within a limit; external causes stop and ask a human; when a budget is exhausted the task is quarantined and its dependents are blocked. An external arbiter resolves a repeated developer/reviewer disagreement | Treating every failure the same either throws away good work or hides a broken foundation; a repeated rejection may mean the acceptance criteria are wrong, not the change, and neither side can settle that alone | `failure.kind` is recorded (`infrastructure`, `external`, `agent`, `qa`, `review`, `criteria`); `FORGEL_TASK_RETRIES`, `FORGEL_TASK_REWORKS`, `FORGEL_TASK_ARBITER`, `FORGEL_PLAN_ON_FAILURE=quarantine|stop|continue`; rework feeds the review/QA feedback into the task; the arbiter returns `accept|fix|criteria` with a report and can rule the criteria wrong; `forgel task retry` and `forgel plan status` are the human controls |
+| **D-088** | Acceptance checks are executable commands stored in the task record, outside the agent's write scope; a criterion that cannot be automated is marked review-only and cannot be auto-accepted. Tests may only be deleted with a recorded justification: the scenario is gone, the behaviour changed and a replacement exists, or the test was wrong; an unjustified deletion is a deterministic review failure | Prose acceptance and self-written tests are not proof; checks the agent cannot edit are an independent oracle, and a deletion policy catches weakened tests | The planner must produce checks per criterion; QA runs the environment gate, the checks and the task test; `--dry-run` shows them; `done.test_removals` records the reason and replacement; the reviewer sees the detected removals and fails unjustified ones |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1129,6 +1131,45 @@ them. `/peak` shows the state and windows, `/peak always` and `/peak
 off_peak` set the project policy, and `/config set models.peak_policy ...`
 does the same from the settings screen. A task that starts off-peak is allowed
 to finish; the gate applies at task start and to free-text model calls.
+
+### 7.17 Failure Handling and Acceptance Checks
+
+A failure is classified before it is answered (D-087):
+
+| Kind | Answer |
+|---|---|
+| `infrastructure` | retry within `FORGEL_TASK_RETRIES` |
+| `qa`, `review` | rework within `FORGEL_TASK_REWORKS`, with the feedback in the task |
+| `external` | stop and ask a human (missing access, credentials, model) |
+| `agent` | quarantine: the task is too large or malformed; split or replan |
+| `criteria` | quarantine with the arbiter's proposed revision; the task must be re-specified |
+
+When a budget is exhausted, the task is quarantined: its transitive dependents
+become `blocked`, independent tasks continue, and the plan is `stalled` when
+nothing runnable remains. `FORGEL_PLAN_ON_FAILURE=stop` stops the whole
+milestone; `continue` leaves dependents pending. A human retries with
+`forgel task retry` (which releases the blocked dependents) or replans.
+
+The **external arbiter** is invoked when the rework budget for a QA/review
+rejection is exhausted. It sees the requirements, the reviewer's verdict and
+blocking defects, the QA evidence, the developer's summary and the diff, and
+returns `accept` (the reviewer is wrong), `fix` (the change is wrong) or
+`criteria` (the criteria are wrong and need revision). `accept` still goes
+through human acceptance unless the project auto-accepts; `criteria` fails the
+task with the proposed revision and blocks the plan for a human.
+
+**Acceptance checks (D-088).** Each task carries `checks`: a command or an
+explicit `verification: review` per acceptance criterion. QA runs the
+environment gate, the checks and the task test command. The task record lives
+in the control repository, outside the agent's write path, so checks cannot be
+weakened from the change. A review-only criterion cannot be auto-accepted.
+
+**Test removals.** Tests are normally only added. A deletion needs a recorded
+justification in `done.test_removals`: `removed` (the scenario is gone),
+`replaced` (the behaviour changed; the replacement must exist in the diff) or
+`wrong` (the test was incorrect or duplicated). The runtime detects deleted
+test files and removed test functions in the diff; an unjustified deletion is
+a deterministic review failure, and the reviewer checks the justification.
 
 ---
 

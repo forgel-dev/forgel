@@ -111,7 +111,9 @@ class TaskReviewTest(unittest.TestCase):
             capture_output=True, text=True,
         )
 
-    def _task(self, status: str = "done") -> dict:
+    def _task(
+        self, status: str = "done", checks: list[dict] | None = None
+    ) -> dict:
         task = create_task(
             self.layout,
             "Do it",
@@ -119,6 +121,7 @@ class TaskReviewTest(unittest.TestCase):
             ["It is done"],
             repo_id="main",
             test_command=["python", "-c", "print('task')"],
+            checks=checks,
         )
         sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -294,6 +297,247 @@ class TaskReviewTest(unittest.TestCase):
             actor="tester", notes="accepted",
         )
         self.assertEqual(accepted["status"], "done")
+
+    def test_qa_failure_quarantines_dependent_tasks(self) -> None:
+        write_text(
+            self.layout.control / "environment.yaml",
+            render_environment(
+                Environment(
+                    image="python:3.12-slim",
+                    test=(
+                        "python -c \"import sys; sys.exit(3)\"",
+                    ),
+                )
+            ),
+        )
+        first = create_task(
+            self.layout,
+            "First",
+            ["Write a note"],
+            ["The note exists"],
+            repo_id="main",
+        )
+        second = create_task(
+            self.layout,
+            "Second",
+            ["Write another note"],
+            ["The note exists"],
+            repo_id="main",
+            depends_on=[first["id"]],
+        )
+        responses = [
+            json.dumps(
+                {
+                    "action": "write_file",
+                    "path": "note.md",
+                    "content": "# Note\n",
+                }
+            ),
+            json.dumps({"action": "done", "summary": "added the note"}),
+        ]
+        run_once(
+            self.settings,
+            self.ledger,
+            log=lambda _m: None,
+            client=ScriptedModelClient(responses),
+        )
+        stored = get_task(self.layout, first["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "failed")
+        self.assertEqual(stored["result"]["failure"]["kind"], "qa")
+        dependent = get_task(self.layout, second["id"])
+        assert dependent is not None
+        self.assertEqual(dependent["status"], "blocked")
+        self.assertEqual(
+            dependent["result"]["blocked_by"], first["id"]
+        )
+
+    def _deleted_test_diff(self) -> tuple[str, str]:
+        test_dir = self.repo / "tests"
+        test_dir.mkdir(exist_ok=True)
+        (test_dir / "test_old.py").write_text(
+            "def test_old():\n    assert True\n", encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "add test",
+        )
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        (test_dir / "test_old.py").unlink()
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "remove test",
+        )
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        return base, head
+
+    def test_a_deleted_test_without_justification_fails_review(
+        self,
+    ) -> None:
+        base, head = self._deleted_test_diff()
+        task = self._task()
+        data = dict(task.get("result") or {})
+        data["git"] = {"base": base, "head": head}
+        update_task(self.layout, task["id"], result=data)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            stored,
+            None,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "fail")
+        self.assertTrue(
+            any(
+                "tests/test_old.py" in item
+                for item in result.blocking
+            )
+        )
+
+    def test_a_justified_deleted_test_goes_to_the_reviewer(self) -> None:
+        base, head = self._deleted_test_diff()
+        task = self._task()
+        data = dict(task.get("result") or {})
+        data["git"] = {"base": base, "head": head}
+        data["test_removals"] = [
+            {
+                "test": "tests/test_old.py",
+                "reason": "removed",
+                "replacement": "",
+            }
+        ]
+        update_task(self.layout, task["id"], result=data)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            stored,
+            ScriptedModelClient([PASS]),
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "pass", result.summary)
+
+    def test_review_only_checks_block_auto_acceptance(self) -> None:
+        self.settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+            task_qa=True,
+            task_review=True,
+            task_accept="auto",
+        )
+        task = self._task(
+            checks=[
+                {
+                    "criterion": "Docs are accurate",
+                    "verification": "review",
+                }
+            ]
+        )
+        process_task_result(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            ScriptedModelClient([PASS]),
+            log=lambda _m: None,
+        )
+        final = get_task(self.layout, task["id"])
+        assert final is not None
+        self.assertEqual(final["status"], "review")
+        self.assertTrue(
+            final["result"]["qa"]["review_required"]
+        )
+
+    def test_a_rejected_review_goes_back_for_rework(self) -> None:
+        settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+            task_qa=True,
+            task_review=True,
+            task_accept="human",
+            task_reworks=1,
+            task_arbiter=False,
+        )
+        task = create_task(
+            self.layout,
+            "Add a note",
+            ["Create note.md"],
+            ["The file exists"],
+            repo_id="main",
+            test_command=["python", "-c", "print('task')"],
+        )
+        responses = [
+            json.dumps(
+                {
+                    "action": "write_file",
+                    "path": "note.md",
+                    "content": "# Note\n",
+                }
+            ),
+            json.dumps(
+                {"action": "done", "summary": "added the note"}
+            ),
+            FAIL,
+            json.dumps(
+                {
+                    "action": "write_file",
+                    "path": "note.md",
+                    "content": "# Note\n\nFixed.\n",
+                }
+            ),
+            json.dumps(
+                {"action": "done", "summary": "addressed the review"}
+            ),
+            PASS,
+        ]
+        client = ScriptedModelClient(responses)
+        run_once(
+            settings, self.ledger, log=lambda _m: None, client=client
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "pending")
+        self.assertEqual(stored["result"]["rework_count"], 1)
+        self.assertTrue(stored["result"]["feedback"])
+        run_once(
+            settings, self.ledger, log=lambda _m: None, client=client
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "review", stored["result"])
+        self.assertEqual(
+            stored["result"]["review"]["status"], "pass"
+        )
+        prompts = [
+            request[1].content
+            for request in client.requests
+            if len(request) > 1
+        ]
+        self.assertTrue(
+            any(
+                "Previous attempt feedback" in prompt
+                for prompt in prompts
+            )
+        )
 
     def test_rejecting_a_review_fails_the_task(self) -> None:
         task = self._task()

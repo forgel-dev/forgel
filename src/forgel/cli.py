@@ -51,7 +51,7 @@ from .git_ops import GitOperationError
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
-from .planner import PlanningError, plan_project
+from .planner import PlanningError, plan_project, plan_status
 from .project_config import (
     ConfigError,
     SimplicityConfig,
@@ -635,6 +635,23 @@ def cmd_task(args: argparse.Namespace) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
+        if args.action == "retry":
+            if not args.task_id:
+                print("error: task retry requires --task", file=sys.stderr)
+                return 2
+            try:
+                task = tasks.retry_task(layout, args.task_id)
+            except ValueError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            tasks.commit_task(
+                layout, task["id"], f"Retry task {task['id']}"
+            )
+            print(
+                f"Requeued {task['id']} "
+                f"(manual retry {task['result'].get('manual_retries', 0)})."
+            )
+            return 0
         if args.action in {"accept", "reject"}:
             if not args.task_id:
                 print(
@@ -1182,6 +1199,34 @@ def cmd_plan(args: argparse.Namespace) -> int:
         except ProjectError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
+        if args.status:
+            layout = ProjectLayout.detect(project["workspace"])
+            summary = plan_status(layout)
+            if summary["status"] == "none":
+                print("no plans")
+                return 0
+            print(
+                f"Plan {summary['plan_id']}: {summary['status']} "
+                f"({len(summary['tasks'])} tasks)"
+            )
+            if summary["goal"]:
+                print(f"Goal: {summary['goal']}")
+            for item in summary["tasks"]:
+                suffix = (
+                    f" blocked_by={item['blocked_by']}"
+                    if item["blocked_by"]
+                    else ""
+                )
+                print(
+                    f"  {item['status']:<8} {item['title']}{suffix}"
+                )
+            return 0
+        if not args.goal:
+            print(
+                "error: provide --goal \"...\" or --status",
+                file=sys.stderr,
+            )
+            return 2
         try:
             result = plan_project(
                 settings,
@@ -1419,7 +1464,8 @@ def build_parser() -> argparse.ArgumentParser:
         "plan", help="Turn a milestone goal into queued tasks"
     )
     plan.add_argument("project_id")
-    plan.add_argument("--goal", required=True)
+    plan.add_argument("--goal", default="")
+    plan.add_argument("--status", action="store_true")
     plan.add_argument("--max-tasks", type=int, default=8)
     plan.add_argument("--dry-run", action="store_true")
     plan.add_argument("--home", default=None)
@@ -1461,7 +1507,8 @@ def build_parser() -> argparse.ArgumentParser:
         "task", help="Queue or list coding-agent tasks"
     )
     task.add_argument(
-        "action", choices=["add", "list", "cancel", "accept", "reject"]
+        "action",
+        choices=["add", "list", "cancel", "retry", "accept", "reject"],
     )
     task.add_argument("project_id")
     task.add_argument("--task", dest="task_id", default="")

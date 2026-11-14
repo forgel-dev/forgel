@@ -55,6 +55,7 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
         "pending",
         "running",
         "review",
+        "blocked",
         "failed",
     }:
         return f"task {task['status']}"
@@ -91,6 +92,214 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _failure(
+    kind: str, message: str, retryable: bool | None = None
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "message": message,
+        "retryable": (
+            kind == "infrastructure" if retryable is None else retryable
+        ),
+    }
+
+
+def _classify_crash(exc: Exception) -> dict[str, Any]:
+    message = str(exc)
+    lowered = message.lower()
+    if "sandbox" in lowered or "docker" in lowered:
+        return _failure("infrastructure", message)
+    return _failure("external", message, retryable=False)
+
+
+def _feedback_from(data: dict[str, Any]) -> list[str]:
+    feedback: list[str] = []
+    review = data.get("review") if isinstance(data.get("review"), dict) else {}
+    for item in review.get("blocking") or []:
+        feedback.append(f"review: {item}")
+    if review.get("summary"):
+        feedback.append(f"review summary: {review['summary']}")
+    qa = data.get("qa") if isinstance(data.get("qa"), dict) else {}
+    for item in qa.get("checks") or []:
+        if item.get("verdict") == "fail":
+            feedback.append(
+                f"QA check failed: {item.get('criterion')} "
+                f"(exit {item.get('exit_code')})"
+            )
+    if not feedback:
+        feedback.append(
+            str(data.get("summary") or "the previous attempt failed")
+        )
+    return feedback
+
+
+def _quarantine(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task_id: str,
+    failure: dict[str, Any],
+    attempts: int,
+    log: Callable[[str], None],
+) -> None:
+    if settings.plan_on_failure == "stop":
+        tasks.block_dependents(layout, task_id, stop=True)
+    elif settings.plan_on_failure == "quarantine":
+        tasks.block_dependents(layout, task_id, stop=False)
+    ledger.append_event(
+        str(project["id"]),
+        "task_failure",
+        status="failed",
+        idempotency_key=(
+            f"{project['id']}:task_failure:{task_id}:"
+            f"{failure.get('kind')}:{attempts}"
+        ),
+        artifact_refs=[],
+        payload={
+            "task": task_id,
+            "kind": failure.get("kind"),
+            "attempts": attempts,
+            "policy": settings.plan_on_failure,
+        },
+        generation=ledger.current_generation(str(project["id"])),
+    )
+    log(
+        f"[task] {project['id']}: {task_id} failed "
+        f"({failure.get('kind')}); policy {settings.plan_on_failure}"
+    )
+
+
+def handle_failure(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task_id: str,
+    client: ModelClient | None,
+    log: Callable[[str], None],
+) -> None:
+    """React to a failure by kind: retry, rework, arbitrate, quarantine."""
+
+    task = tasks.get_task(layout, task_id)
+    if task is None or task.get("status") != "failed":
+        return
+    data = dict(task.get("result") or {})
+    failure = dict(
+        data.get("failure")
+        or _failure("external", "unknown failure", retryable=False)
+    )
+    kind = str(failure.get("kind") or "external")
+    attempts = int(data.get("attempts", 0))
+    if kind == "infrastructure" and attempts < settings.task_retries:
+        data["attempts"] = attempts + 1
+        data["last_failure"] = failure
+        data.pop("failure", None)
+        tasks.update_task(
+            layout,
+            task_id,
+            status="pending",
+            started_at="",
+            finished_at="",
+            result=data,
+        )
+        log(
+            f"[retry] {project['id']}: task {task_id} infrastructure "
+            f"failure; retry {attempts + 1}/{settings.task_retries}"
+        )
+        return
+    if kind in {"qa", "review"}:
+        reworks = int(data.get("rework_count", 0))
+        if reworks < settings.task_reworks:
+            data["rework_count"] = reworks + 1
+            data["feedback"] = _feedback_from(data)
+            data["last_failure"] = failure
+            data.pop("failure", None)
+            tasks.update_task(
+                layout,
+                task_id,
+                status="pending",
+                started_at="",
+                finished_at="",
+                result=data,
+            )
+            log(
+                f"[rework] {project['id']}: task {task_id} sent back "
+                f"({kind}); rework {reworks + 1}/{settings.task_reworks}"
+            )
+            return
+        if settings.task_arbiter and client is not None:
+            from .arbiter import run_task_arbiter
+            from .task_review import accept_task, await_acceptance
+
+            arbitration = run_task_arbiter(
+                settings, ledger, project, task, client, log
+            )
+            if arbitration.verdict == "accept":
+                if settings.task_accept == "auto":
+                    accept_task(
+                        settings,
+                        ledger,
+                        project,
+                        task,
+                        actor="arbiter",
+                        notes=arbitration.summary,
+                    )
+                else:
+                    await_acceptance(
+                        layout,
+                        task,
+                        "arbiter accepted; human acceptance required",
+                    )
+                return
+            if arbitration.verdict == "criteria":
+                data = dict(
+                    (tasks.get_task(layout, task_id) or task).get("result")
+                    or data
+                )
+                data["summary"] = (
+                    str(data.get("summary") or "").strip()
+                    + "; acceptance criteria need revision"
+                ).strip("; ")
+                data["failure"] = {
+                    "kind": "criteria",
+                    "message": arbitration.summary,
+                    "retryable": False,
+                }
+                tasks.update_task(
+                    layout, task_id, status="failed", result=data
+                )
+                _quarantine(
+                    settings,
+                    ledger,
+                    project,
+                    layout,
+                    task_id,
+                    data["failure"],
+                    attempts,
+                    log,
+                )
+                return
+            if arbitration.verdict == "fix":
+                data = dict(
+                    (tasks.get_task(layout, task_id) or task).get("result")
+                    or data
+                )
+                data["failure"] = {
+                    "kind": "review",
+                    "message": arbitration.summary
+                    or "the arbiter confirmed the review rejection",
+                    "retryable": False,
+                }
+                tasks.update_task(
+                    layout, task_id, status="failed", result=data
+                )
+                failure = data["failure"]
+    _quarantine(
+        settings, ledger, project, layout, task_id, failure, attempts, log
+    )
+
+
 def _run_task(
     settings: Settings,
     ledger: Ledger,
@@ -118,9 +327,19 @@ def _run_task(
             task_id,
             status="failed",
             finished_at=_now(),
-            result={"summary": "no model configured for the coding agent"},
+            result={
+                "summary": "no model configured for the coding agent",
+                "failure": _failure(
+                    "external",
+                    "no model configured",
+                    retryable=False,
+                ),
+            },
         )
         log(f"[daemon] {project['id']}: task {task_id} has no model client")
+        handle_failure(
+            settings, ledger, project, layout, task_id, None, log
+        )
         return True
     try:
         result = CodingAgent(settings, ledger, model).run(
@@ -142,6 +361,11 @@ def _run_task(
                     result={
                         **dict(stored.get("result") or {}),
                         "summary": f"post-agent pipeline failed: {exc}",
+                        "failure": _failure(
+                            "external",
+                            f"post-agent pipeline failed: {exc}",
+                            retryable=False,
+                        ),
                     },
                 )
                 log(
@@ -154,9 +378,15 @@ def _run_task(
             task_id,
             status="failed",
             finished_at=_now(),
-            result={"summary": f"agent crashed: {exc}"},
+            result={
+                "summary": f"agent crashed: {exc}",
+                "failure": _classify_crash(exc),
+            },
         )
         log(f"[daemon] {project['id']}: task {task_id} crashed: {exc}")
+    handle_failure(
+        settings, ledger, project, layout, task_id, model, log
+    )
     return True
 
 

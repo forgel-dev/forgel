@@ -237,6 +237,45 @@ class CodingAgentTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["result"]["resume_count"], 1)
 
+    def test_test_removals_are_recorded(self) -> None:
+        task = create_task(
+            self.layout,
+            "Update a test",
+            ["Replace the old test"],
+            ["The new test exists"],
+            repo_id="main",
+            test_command=[],
+        )
+        response = json.dumps(
+            {
+                "action": "done",
+                "summary": "replaced the test",
+                "test_removals": [
+                    {
+                        "test": "tests/test_old.py",
+                        "reason": "replaced",
+                        "replacement": "tests/test_new.py",
+                    }
+                ],
+            }
+        )
+        result = CodingAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([response]),
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done")
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["test_removals"][0]["reason"], "replaced"
+        )
+        report = (self.layout.root / result.report).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Test Removals", report)
+        self.assertIn("tests/test_old.py", report)
+
     def test_commands_run_in_the_sandbox_when_configured(self) -> None:
         settings = replace(
             self.settings,

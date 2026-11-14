@@ -67,6 +67,10 @@ class Settings:
     task_qa: bool = False
     task_review: bool = False
     task_accept: str = "auto"  # auto | human
+    task_retries: int = 0
+    task_reworks: int = 0
+    task_arbiter: bool = False
+    plan_on_failure: str = "quarantine"  # quarantine | stop | continue
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -151,6 +155,31 @@ class Settings:
             raise ValueError(
                 "FORGEL_TASK_ACCEPT must be one of: auto, human"
             )
+        retries_raw = (
+            os.environ.get("FORGEL_TASK_RETRIES", "2").strip() or "2"
+        )
+        if not retries_raw.isdigit() or int(retries_raw) > 5:
+            raise ValueError(
+                "FORGEL_TASK_RETRIES must be an integer from 0 to 5"
+            )
+        reworks_raw = (
+            os.environ.get("FORGEL_TASK_REWORKS", "2").strip() or "2"
+        )
+        if not reworks_raw.isdigit() or int(reworks_raw) > 5:
+            raise ValueError(
+                "FORGEL_TASK_REWORKS must be an integer from 0 to 5"
+            )
+        plan_on_failure = (
+            os.environ.get("FORGEL_PLAN_ON_FAILURE", "quarantine")
+            .strip()
+            .lower()
+            or "quarantine"
+        )
+        if plan_on_failure not in {"quarantine", "stop", "continue"}:
+            raise ValueError(
+                "FORGEL_PLAN_ON_FAILURE must be one of: "
+                "quarantine, stop, continue"
+            )
         return cls(
             home=home_path.expanduser().resolve(),
             registry_path=registry_path.expanduser().resolve(),
@@ -179,6 +208,10 @@ class Settings:
             task_qa=_env_bool("FORGEL_TASK_QA", True),
             task_review=_env_bool("FORGEL_TASK_REVIEW", True),
             task_accept=task_accept,
+            task_retries=int(retries_raw),
+            task_reworks=int(reworks_raw),
+            task_arbiter=_env_bool("FORGEL_TASK_ARBITER", True),
+            plan_on_failure=plan_on_failure,
         )
 
     @property

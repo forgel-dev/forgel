@@ -257,6 +257,12 @@ and point the project at them, or wait for a dedicated services sandbox.
   `FORGEL_TASK_ACCEPT=human` (the default) a green task waits in `review`
   until `/task accept <id>`; set `auto` to accept green reviews without a
   human. An errored review never auto-accepts.
+- Infrastructure failures are retried (`FORGEL_TASK_RETRIES`); QA and review
+  rejections go back for rework with the feedback (`FORGEL_TASK_REWORKS`) and
+  an external arbiter (`FORGEL_TASK_ARBITER`) resolves a repeated conflict.
+  An exhausted budget quarantines the task and blocks its dependents;
+  `FORGEL_PLAN_ON_FAILURE=stop` stops the milestone instead. `/task retry`
+  releases a quarantined task and its dependents.
 - The bot uses outbound long polling; no inbound port is needed. Restrict SSH
   and keep the host patched.
 - Budget enforcement is not implemented yet (M1). Use a scoped, prepaid model

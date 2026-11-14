@@ -10,10 +10,10 @@ from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
-from forgel.planner import PlanningError, plan_project
+from forgel.planner import PlanningError, plan_project, plan_status
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
-from forgel.tasks import list_tasks
+from forgel.tasks import list_tasks, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,6 +26,12 @@ PLAN = {
             "acceptance": ["GET /health returns 200"],
             "repo_id": "main",
             "test_command": ["python", "-m", "unittest"],
+            "checks": [
+                {
+                    "criterion": "GET /health returns 200",
+                    "command": ["python", "-m", "unittest", "tests.test_health"],
+                }
+            ],
         },
         {
             "title": "Add an index page",
@@ -33,6 +39,12 @@ PLAN = {
             "acceptance": ["GET / returns 200"],
             "repo_id": "main",
             "depends_on": [0],
+            "checks": [
+                {
+                    "criterion": "GET / returns 200",
+                    "command": ["python", "-m", "unittest", "tests.test_index"],
+                }
+            ],
         },
     ],
 }
@@ -106,12 +118,65 @@ class PlannerTest(unittest.TestCase):
         ]
         self.assertIn("plan", stages)
 
+    def test_plan_status_follows_its_tasks(self) -> None:
+        result = self._plan()
+        summary = plan_status(self.layout, result.plan_id)
+        self.assertEqual(summary["status"], "running")
+        first, second = list_tasks(self.layout)
+        update_task(self.layout, first["id"], status="failed")
+        summary = plan_status(self.layout, result.plan_id)
+        self.assertEqual(summary["status"], "stalled")
+        self.assertEqual(summary["counts"].get("failed"), 1)
+        update_task(self.layout, first["id"], status="done")
+        update_task(self.layout, second["id"], status="review")
+        summary = plan_status(self.layout, result.plan_id)
+        self.assertEqual(summary["status"], "review")
+        update_task(self.layout, second["id"], status="done")
+        summary = plan_status(self.layout, result.plan_id)
+        self.assertEqual(summary["status"], "done")
+
     def test_dry_run_creates_nothing(self) -> None:
         result = self._plan(dry_run=True)
         self.assertTrue(result.dry_run)
         self.assertNotIn("task_id", result.tasks[0])
         self.assertEqual(result.artifact, "")
         self.assertEqual(list_tasks(self.layout), [])
+
+    def test_a_task_without_checks_is_rejected(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "title": "No checks",
+                    "requirements": ["x"],
+                    "acceptance": ["y"],
+                    "repo_id": "main",
+                }
+            ]
+        }
+        with self.assertRaises(PlanningError):
+            self._plan(payload)
+
+    def test_a_review_only_check_is_accepted(self) -> None:
+        payload = {
+            "tasks": [
+                {
+                    "title": "Docs",
+                    "requirements": ["Write the docs"],
+                    "acceptance": ["The prose is accurate"],
+                    "repo_id": "main",
+                    "checks": [
+                        {
+                            "criterion": "The prose is accurate",
+                            "verification": "review",
+                        }
+                    ],
+                }
+            ]
+        }
+        result = self._plan(payload)
+        self.assertEqual(
+            result.tasks[0]["checks"][0]["verification"], "review"
+        )
 
     def test_unknown_repository_is_rejected(self) -> None:
         payload = {

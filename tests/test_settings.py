@@ -110,6 +110,72 @@ class SettingsTest(unittest.TestCase):
         self.assertFalse(direct.task_review)
         self.assertEqual(direct.task_accept, "auto")
 
+    def test_failure_policy_defaults_and_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"FORGEL_TASK_RETRIES": "", "FORGEL_PLAN_ON_FAILURE": ""},
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.task_retries, 2)
+        self.assertEqual(settings.plan_on_failure, "quarantine")
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {
+                    "FORGEL_TASK_RETRIES": "1",
+                    "FORGEL_PLAN_ON_FAILURE": "stop",
+                },
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.task_retries, 1)
+        self.assertEqual(settings.plan_on_failure, "stop")
+
+    def test_rework_and_arbiter_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"FORGEL_TASK_REWORKS": "", "FORGEL_TASK_ARBITER": ""},
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.task_reworks, 2)
+        self.assertTrue(settings.task_arbiter)
+        direct = Settings(
+            home=Path(tmp),
+            registry_path=Path("/x"),
+            templates_path=Path("/x"),
+            jurisdiction_path=Path("/x"),
+        )
+        self.assertEqual(direct.task_reworks, 0)
+        self.assertFalse(direct.task_arbiter)
+
+    def test_invalid_rework_limit_is_rejected(self) -> None:
+        for value in ("9", "x"):
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as tmp:
+                    with patch.dict(
+                        os.environ,
+                        {"FORGEL_TASK_REWORKS": value},
+                        clear=False,
+                    ):
+                        with self.assertRaises(ValueError):
+                            Settings.from_env(tmp)
+
+    def test_invalid_failure_policy_is_rejected(self) -> None:
+        for case in (
+            {"FORGEL_TASK_RETRIES": "9"},
+            {"FORGEL_TASK_RETRIES": "x"},
+            {"FORGEL_PLAN_ON_FAILURE": "sometimes"},
+        ):
+            with self.subTest(case=case):
+                with tempfile.TemporaryDirectory() as tmp:
+                    with patch.dict(os.environ, case, clear=False):
+                        with self.assertRaises(ValueError):
+                            Settings.from_env(tmp)
+
     def test_invalid_task_accept_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(

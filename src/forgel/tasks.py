@@ -21,6 +21,7 @@ VALID_STATUSES = {
     "pending",
     "running",
     "review",
+    "blocked",
     "done",
     "failed",
     "cancelled",
@@ -44,6 +45,36 @@ def task_path(layout: ProjectLayout, task_id: str) -> Path:
     return tasks_dir(layout) / f"{task_id}.json"
 
 
+def _normalize_check(item: dict[str, Any]) -> dict[str, Any]:
+    """One acceptance check: a command, or an explicit review criterion."""
+
+    if not isinstance(item, dict):
+        raise ValueError("a check must be an object")
+    criterion = str(item.get("criterion", "")).strip()
+    if not criterion:
+        raise ValueError("a check needs a criterion")
+    verification = str(item.get("verification", "command")).strip().lower()
+    if verification not in {"command", "review"}:
+        raise ValueError(
+            f"check {criterion!r}: verification must be command or review"
+        )
+    command = item.get("command", [])
+    if isinstance(command, str):
+        command = [command]
+    if not isinstance(command, list):
+        raise ValueError(f"check {criterion!r}: command must be a list")
+    command = [str(value) for value in command if str(value).strip()]
+    if verification == "command" and not command:
+        raise ValueError(
+            f"check {criterion!r}: a command check needs a command"
+        )
+    return {
+        "criterion": criterion,
+        "verification": verification,
+        "command": command,
+    }
+
+
 def create_task(
     layout: ProjectLayout,
     title: str,
@@ -57,6 +88,7 @@ def create_task(
     plan_goal: str = "",
     order: int = 0,
     depends_on: list[str] | None = None,
+    checks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     title = title.strip()
     requirements = [item.strip() for item in requirements if item.strip()]
@@ -88,6 +120,7 @@ def create_task(
         "depends_on": [
             item for item in (depends_on or []) if item
         ],
+        "checks": [_normalize_check(item) for item in (checks or [])],
         "status": "pending",
         "created_at": _now(),
         "started_at": "",
@@ -197,16 +230,124 @@ def _dependency_blockers(
 
 
 def blocked_pending(layout: ProjectLayout) -> list[dict[str, Any]]:
-    """Pending tasks whose dependencies are not done yet (or have failed)."""
+    """Tasks waiting on a dependency, or explicitly blocked by a failure."""
 
     tasks = list_tasks(layout)
     statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
     return [
         task
         for task in tasks
-        if task.get("status") == "pending"
-        and _dependency_blockers(task, statuses)
+        if task.get("status") == "blocked"
+        or (
+            task.get("status") == "pending"
+            and _dependency_blockers(task, statuses)
+        )
     ]
+
+
+def block_dependents(
+    layout: ProjectLayout, failed_id: str, stop: bool = False
+) -> list[dict[str, Any]]:
+    """Quarantine a failed task's dependents (or the whole plan on stop)."""
+
+    tasks = list_tasks(layout)
+    failed = next(
+        (task for task in tasks if task["id"] == failed_id), None
+    )
+    if failed is None:
+        return []
+    plan_id = str(failed.get("plan_id") or "")
+    frontier = {failed_id}
+    seen = {failed_id}
+    dependents: set[str] = set()
+    while frontier:
+        next_frontier: set[str] = set()
+        for task in tasks:
+            task_id = str(task["id"])
+            if task_id in seen:
+                continue
+            if any(
+                dep in frontier for dep in (task.get("depends_on") or [])
+            ):
+                dependents.add(task_id)
+                next_frontier.add(task_id)
+                seen.add(task_id)
+        frontier = next_frontier
+    changed: list[dict[str, Any]] = []
+    for task in tasks:
+        task_id = str(task["id"])
+        if task_id == failed_id:
+            continue
+        target = task_id in dependents
+        if stop and plan_id and task.get("plan_id") == plan_id:
+            target = target or task.get("status") in {"pending", "blocked"}
+        if not target:
+            continue
+        if task.get("status") not in {"pending", "blocked"}:
+            continue
+        data = dict(task.get("result") or {})
+        data["blocked_by"] = failed_id
+        changed.append(
+            update_task(
+                layout,
+                task_id,
+                status="blocked",
+                result=data,
+            )
+        )
+    return changed
+
+
+def unblock_for_retry(
+    layout: ProjectLayout, task_id: str
+) -> list[dict[str, Any]]:
+    """Return tasks quarantined by ``task_id`` to pending."""
+
+    changed: list[dict[str, Any]] = []
+    for task in list_tasks(layout):
+        if task.get("status") != "blocked":
+            continue
+        data = dict(task.get("result") or {})
+        if data.get("blocked_by") != task_id:
+            continue
+        data.pop("blocked_by", None)
+        changed.append(
+            update_task(
+                layout, str(task["id"]), status="pending", result=data
+            )
+        )
+    return changed
+
+
+def retry_task(
+    layout: ProjectLayout, task_id: str
+) -> dict[str, Any]:
+    """Manually requeue a failed task and release its quarantined dependents."""
+
+    task = get_task(layout, task_id)
+    if task is None:
+        raise ValueError(f"unknown task {task_id!r}")
+    if task.get("status") != "failed":
+        raise ValueError(
+            f"only failed tasks can be retried (status: {task.get('status')})"
+        )
+    data = dict(task.get("result") or {})
+    if data.get("failure"):
+        data["last_failure"] = data["failure"]
+    data.pop("failure", None)
+    data["attempts"] = 0
+    data["rework_count"] = 0
+    data["manual_retries"] = int(data.get("manual_retries", 0)) + 1
+    updated = update_task(
+        layout,
+        task_id,
+        status="pending",
+        started_at="",
+        finished_at="",
+        result=data,
+    )
+    unblock_for_retry(layout, task_id)
+    return updated
 
 
 def next_pending_task(layout: ProjectLayout) -> dict[str, Any] | None:

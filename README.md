@@ -343,6 +343,21 @@ A passing review leaves the task in `review` for a human decision (the default
 accept|reject` records it. Set `FORGEL_TASK_ACCEPT=auto` to accept green
 reviews automatically; an errored review never auto-accepts.
 
+Failures are handled by kind: infrastructure failures are retried
+(`FORGEL_TASK_RETRIES`), QA/review rejections go back for rework with the
+feedback (`FORGEL_TASK_REWORKS`), external causes stop and ask a human, and an
+exhausted budget quarantines the task and blocks its dependents. When a review
+rejection repeats, an external arbiter decides whether the change or the
+acceptance criteria are wrong; `criteria` fails the task with a proposed
+revision. `forgel task retry` requeues a failed task and releases its
+dependents; `forgel plan --status` shows the milestone state.
+
+Tasks carry executable acceptance checks, run by QA and stored outside the
+agent's write scope. A criterion that cannot be automated is marked
+`verification: review` and cannot be auto-accepted. Tests are normally only
+added; a deletion needs a recorded reason (`removed`, `replaced` with the
+replacement, or `wrong`), and an unjustified deletion fails the review.
+
 From the chat: send a plain message to the selected project to queue a change;
 `/plan` decomposes a milestone; `/tasks` shows the queue; `/task accept|reject`
 records a review decision; `/task cancel <id>` cancels a pending task.

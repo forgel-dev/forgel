@@ -1,14 +1,18 @@
 """Independent QA for a coding task.
 
 The coding agent runs its own final test; this pass runs the project's
-environment contract again, from a clean process, after the agent has committed.
-It is the difference between "the agent says it works" and "the project's own
-gate passes".
+environment contract again, plus the task's explicit acceptance checks and its
+test command, from a clean process after the agent has committed.
 
-The QA verdict is authoritative: a green agent run with a red QA becomes a
-failed task, with the QA report attached. A project without an environment
-contract falls back to the task's test command; when there is nothing to run,
-the verdict is ``skipped`` rather than a false pass.
+Acceptance checks are ordinary commands stored in the task record, outside the
+agent's write scope: the agent cannot weaken them from the repository. A check
+whose criterion cannot be automated is marked ``verification: review``; the QA
+verdict is then ``review`` and the task cannot be auto-accepted — a reviewer
+and a human decide.
+
+The verdict is authoritative: a green agent run with a red QA becomes a failed
+task, with the QA report attached. When there is nothing to run, the verdict is
+``skipped`` rather than a false pass.
 """
 
 from __future__ import annotations
@@ -34,11 +38,13 @@ MAX_OUTPUT = 20_000
 
 @dataclass(frozen=True)
 class TaskQAResult:
-    status: str  # pass | fail | skipped
+    status: str  # pass | fail | review | skipped
     runtime: str
     report: str = ""
     commands: list[dict[str, Any]] = field(default_factory=list)
     output: str = ""
+    checks: list[dict[str, Any]] = field(default_factory=list)
+    review_required: bool = False
 
 
 def _now() -> str:
@@ -65,29 +71,40 @@ def _task_repo_id(
     return ""
 
 
-def _environment_commands(
+def _qa_checks(
     environment: Environment | None, task: dict[str, Any]
-) -> tuple[list[str], bool]:
-    """The project gate plus the task's own test command.
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Executable checks and review-only criteria, deduplicated by command."""
 
-    The environment contract is the project gate; a task-specific test command
-    is an additional check on this change and runs too, unless it is already
-    one of the gate commands. The boolean says whether the environment
-    contributed a command (used in the runtime label).
-    """
+    executable: list[dict[str, Any]] = []
+    review: list[dict[str, Any]] = []
+    seen: set[str] = set()
 
-    commands = (
-        list(environment.test) + list(environment.e2e)
-        if environment is not None
-        else []
-    )
-    from_environment = bool(commands)
+    def add(label: str, command: str) -> None:
+        if command in seen:
+            return
+        seen.add(command)
+        executable.append(
+            {"criterion": label, "command": command, "verification": "command"}
+        )
+
+    if environment is not None:
+        for command in environment.test:
+            add("environment test", command)
+        for command in environment.e2e:
+            add("environment e2e", command)
+    for check in task.get("checks", []):
+        criterion = str(check.get("criterion", "")).strip() or "check"
+        if check.get("verification") == "review":
+            review.append(
+                {"criterion": criterion, "verification": "review"}
+            )
+            continue
+        add(criterion, shlex.join(check.get("command", [])))
     test_command = [str(item) for item in task.get("test_command", [])]
     if test_command:
-        rendered = shlex.join(test_command)
-        if rendered not in commands:
-            commands.append(rendered)
-    return commands, from_environment
+        add("task test command", shlex.join(test_command))
+    return executable, review
 
 
 def _workdir(
@@ -106,20 +123,22 @@ def _run_local(
     layout: ProjectLayout,
     environment: Environment | None,
     repo_id: str,
-    commands: Sequence[str],
-) -> tuple[int, str]:
+    checks: Sequence[dict[str, Any]],
+) -> list[tuple[dict[str, Any], int, str]]:
     workdir = _workdir(layout, environment, repo_id)
     env = {
         **os.environ,
         **(environment.env_map if environment is not None else {}),
     }
-    output = ""
-    for command in commands:
+    results: list[tuple[dict[str, Any], int, str]] = []
+    for check in checks:
+        command = check["command"]
+        output = ""
         try:
             argv = command_argv(command)
         except Exception as exc:  # noqa: BLE001 - reported as a failure
-            output += f"$ {command}\ninvalid command: {exc}\n"
-            return 2, output
+            results.append((check, 2, f"invalid command: {exc}"))
+            continue
         output += f"$ {command}\n"
         try:
             completed = subprocess.run(
@@ -133,15 +152,23 @@ def _run_local(
             )
         except subprocess.TimeoutExpired as exc:
             partial = (exc.stdout or "") + (exc.stderr or "")
-            output += f"timed out after 600s\n{partial}"
-            return 124, output
+            results.append(
+                (check, 124, output + f"timed out after 600s\n{partial}")
+            )
+            continue
         except (OSError, subprocess.SubprocessError) as exc:
-            output += f"cannot run command: {exc}\n"
-            return 127, output
-        output += completed.stdout + completed.stderr
-        if completed.returncode != 0:
-            return completed.returncode, output
-    return 0, output
+            results.append(
+                (check, 127, output + f"cannot run command: {exc}")
+            )
+            continue
+        results.append(
+            (
+                check,
+                completed.returncode,
+                output + completed.stdout + completed.stderr,
+            )
+        )
+    return results
 
 
 def _run_sandbox(
@@ -150,8 +177,8 @@ def _run_sandbox(
     layout: ProjectLayout,
     environment: Environment | None,
     repo_id: str,
-    commands: Sequence[str],
-) -> tuple[int, str, str]:
+    checks: Sequence[dict[str, Any]],
+) -> tuple[list[tuple[dict[str, Any], int, str]], str]:
     sandbox = DockerSandbox(settings)
     available, detail = sandbox.available()
     if not available:
@@ -160,19 +187,21 @@ def _run_sandbox(
         layout, environment, str(project["id"]), repo_id
     )
     label = f"docker sandbox ({session.image})"
-    output = ""
+    results: list[tuple[dict[str, Any], int, str]] = []
     with session:
-        for command in commands:
-            argv = shlex.split(command)
+        for check in checks:
+            argv = shlex.split(check["command"])
+            output = f"$ {check['command']}\n"
             if not argv:
-                output += f"$ {command}\nempty command\n"
-                return 2, output, label
-            output += f"$ {command}\n"
-            code, text = session.run(argv, timeout=600)
-            output += text
-            if code != 0:
-                return code, output, label
-    return 0, output, label
+                results.append((check, 2, output + "empty command\n"))
+                continue
+            try:
+                code, text = session.run(argv, timeout=600)
+            except SandboxError as exc:
+                results.append((check, 1, output + f"sandbox error: {exc}"))
+                break
+            results.append((check, code, output + text))
+    return results, label
 
 
 def _record(
@@ -185,14 +214,17 @@ def _record(
     log: Callable[[str], None],
 ) -> TaskQAResult:
     task_id = str(task["id"])
-    path = layout.artifact(
-        f"docs/program/agent/{task_id}.qa.md"
-    )
+    path = layout.artifact(f"docs/program/agent/{task_id}.qa.md")
     report_ref = str(path.relative_to(layout.root))
-    command_lines = (
+    check_lines = (
         "\n".join(
-            f"- `{item['command']}` -> exit {item['exit_code']}"
-            for item in result.commands
+            f"- {item['criterion']}: {item.get('verdict', item.get('verification', 'command'))}"
+            + (
+                f" (exit {item['exit_code']})"
+                if item.get("exit_code") is not None
+                else ""
+            )
+            for item in result.checks
         )
         or "- none"
     )
@@ -207,9 +239,9 @@ def _record(
 - Exit code: {exit_code}
 - Finished: {_now()}
 
-## Commands
+## Checks
 
-{command_lines}
+{check_lines}
 
 ## Output
 
@@ -225,6 +257,8 @@ def _record(
         "runtime": result.runtime,
         "report": report_ref,
         "commands": result.commands,
+        "checks": result.checks,
+        "review_required": result.review_required,
     }
     status = str(stored.get("status") or task.get("status") or "done")
     if result.status == "fail":
@@ -234,6 +268,11 @@ def _record(
             (summary + "; " if summary else "")
             + f"task QA failed (exit {exit_code})"
         )
+        data["failure"] = {
+            "kind": "qa",
+            "message": f"task QA failed (exit {exit_code})",
+            "retryable": False,
+        }
     update_task(layout, task_id, status=status, result=data)
     ledger.append_event(
         str(project["id"]),
@@ -241,6 +280,7 @@ def _record(
         status={
             "pass": "completed",
             "fail": "failed",
+            "review": "review",
             "skipped": "skipped",
         }[result.status],
         idempotency_key=(
@@ -251,6 +291,7 @@ def _record(
             "task": task_id,
             "status": result.status,
             "runtime": result.runtime,
+            "review_required": result.review_required,
         },
         generation=ledger.current_generation(str(project["id"])),
     )
@@ -264,6 +305,8 @@ def _record(
         report=report_ref,
         commands=result.commands,
         output=result.output,
+        checks=result.checks,
+        review_required=result.review_required,
     )
 
 
@@ -274,7 +317,7 @@ def run_task_qa(
     task: dict[str, Any],
     log: Callable[[str], None] = print,
 ) -> TaskQAResult:
-    """Run the project's gate for a completed task and record the verdict."""
+    """Run the project gate and the task's acceptance checks."""
 
     layout = ProjectLayout.detect(project["workspace"])
     task = get_task(layout, str(task["id"])) or task
@@ -295,8 +338,8 @@ def run_task_qa(
             2,
             log,
         )
-    commands, from_environment = _environment_commands(environment, task)
-    if not commands:
+    executable, review = _qa_checks(environment, task)
+    if not executable and not review:
         return _record(
             ledger,
             layout,
@@ -305,11 +348,12 @@ def run_task_qa(
             TaskQAResult(
                 status="skipped",
                 runtime="none",
-                output="No environment command and no task test command.",
+                output="No environment command, check or task test command.",
             ),
             0,
             log,
         )
+    results: list[tuple[dict[str, Any], int, str]]
     if docker_runner(settings) is not None:
         if not repo_id:
             return _record(
@@ -326,37 +370,68 @@ def run_task_qa(
                 log,
             )
         try:
-            code, output, runtime = _run_sandbox(
-                settings,
-                project,
-                layout,
-                environment,
-                repo_id,
-                commands,
+            results, runtime = _run_sandbox(
+                settings, project, layout, environment, repo_id, executable
             )
         except SandboxError as exc:
-            code, output, runtime = 1, f"sandbox error: {exc}", "sandbox"
+            results = [
+                ({"criterion": "sandbox", "command": ""}, 1, str(exc))
+            ]
+            runtime = "sandbox"
     else:
-        code, output = _run_local(
-            layout, environment, repo_id, commands
-        )
+        results = _run_local(layout, environment, repo_id, executable)
         runtime = "local"
-        if from_environment:
+        if environment is not None and (environment.test or environment.e2e):
             runtime += " + environment.yaml"
+    checks: list[dict[str, Any]] = []
+    output = ""
+    exit_code = 0
+    for check, code, text in results:
+        output += text
+        checks.append(
+            {
+                "criterion": check["criterion"],
+                "command": check["command"],
+                "exit_code": code,
+                "verdict": "pass" if code == 0 else "fail",
+            }
+        )
+        if code != 0 and exit_code == 0:
+            exit_code = code
+    for check in review:
+        checks.append(
+            {
+                "criterion": check["criterion"],
+                "command": "",
+                "exit_code": None,
+                "verdict": "review",
+            }
+        )
+    if exit_code != 0:
+        status = "fail"
+    elif executable:
+        status = "pass"
+    else:
+        status = "review"
+    if exit_code != 0:
+        exit_code = exit_code or 1
     return _record(
         ledger,
         layout,
         project,
         task,
         TaskQAResult(
-            status="pass" if code == 0 else "fail",
+            status=status,
             runtime=runtime,
             commands=[
-                {"command": command, "exit_code": code}
-                for command in commands
+                {"command": item["command"], "exit_code": item["exit_code"]}
+                for item in checks
+                if item["exit_code"] is not None
             ],
             output=_cap(output),
+            checks=checks,
+            review_required=bool(review),
         ),
-        code,
+        exit_code,
         log,
     )

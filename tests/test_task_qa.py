@@ -145,6 +145,102 @@ class TaskQATest(unittest.TestCase):
         self.assertEqual(result.status, "pass", result.output)
         self.assertNotIn("environment.yaml", result.runtime)
 
+    def test_a_task_check_is_executed(self) -> None:
+        task = create_task(
+            self.layout,
+            "Check it",
+            ["Do it"],
+            ["It passes"],
+            repo_id="main",
+            checks=[
+                {
+                    "criterion": "The check passes",
+                    "command": ["python", "-c", "print('check')"],
+                }
+            ],
+        )
+        update_task(self.layout, task["id"], status="done")
+        result = run_task_qa(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "pass", result.output)
+        self.assertTrue(
+            any(
+                item["criterion"] == "The check passes"
+                and item["verdict"] == "pass"
+                for item in result.checks
+            )
+        )
+
+    def test_a_failing_check_fails_qa(self) -> None:
+        task = create_task(
+            self.layout,
+            "Check it",
+            ["Do it"],
+            ["It passes"],
+            repo_id="main",
+            checks=[
+                {
+                    "criterion": "The check passes",
+                    "command": [
+                        "python",
+                        "-c",
+                        "import sys; sys.exit(3)",
+                    ],
+                }
+            ],
+        )
+        update_task(self.layout, task["id"], status="done")
+        result = run_task_qa(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "fail")
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "failed")
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "qa"
+        )
+
+    def test_a_review_only_check_requires_review(self) -> None:
+        task = create_task(
+            self.layout,
+            "Review it",
+            ["Write docs"],
+            ["The prose is accurate"],
+            repo_id="main",
+            checks=[
+                {
+                    "criterion": "The prose is accurate",
+                    "verification": "review",
+                }
+            ],
+        )
+        update_task(self.layout, task["id"], status="done")
+        result = run_task_qa(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "review")
+        self.assertTrue(result.review_required)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "done")
+        self.assertTrue(
+            stored["result"]["qa"]["review_required"]
+        )
+
     def test_without_anything_to_run_qa_is_skipped(self) -> None:
         task = self._task([])
         result = run_task_qa(

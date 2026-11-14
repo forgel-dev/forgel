@@ -40,7 +40,7 @@ from .github_flow import (
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .artifacts import write_text
-from .planner import PlanningError, plan_project
+from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
 from .task_review import accept_task, reject_task
 from .program_manifest import entries as manifest_entries
@@ -69,6 +69,7 @@ from .tasks import (
     get_task,
     latest_task,
     list_tasks,
+    retry_task,
 )
 
 DECISIONS = {"accept", "fix", "rollback", "ignore"}
@@ -97,8 +98,10 @@ Projects
 /github merge [repo] [pr]        merge after checks
 
 /plan <goal>            turn a milestone goal into queued tasks
+/plan status            show the latest milestone state
 /tasks                  coding-agent tasks for the selected project
 /task cancel <id>       cancel a pending task
+/task retry <id>        requeue a failed task and release its dependents
 /task accept <id> [note]   accept a task awaiting review
 /task reject <id> [note]   reject a task awaiting review
 /projects              projects, state and the selected one
@@ -536,13 +539,13 @@ class CommandRouter:
 
     def _task(self, chat_id: int, rest: str, _actor: str) -> Reply:
         usage = (
-            "Usage: /task cancel <task-id>, "
+            "Usage: /task cancel|retry <task-id>, "
             "/task accept <task-id> [note] or "
             "/task reject <task-id> [note]"
         )
         tokens = rest.split(maxsplit=2)
         action = tokens[0].lower() if tokens else ""
-        if action not in {"cancel", "accept", "reject"}:
+        if action not in {"cancel", "retry", "accept", "reject"}:
             return Reply(usage)
         if len(tokens) < 2:
             return Reply(usage)
@@ -552,13 +555,24 @@ class CommandRouter:
         layout = ProjectLayout.detect(project["workspace"])
         task_id = tokens[1]
         notes = tokens[2].strip() if len(tokens) > 2 else ""
-        if action == "cancel":
+        if action in {"cancel", "retry"}:
             try:
-                task = cancel_task(layout, task_id)
+                task = (
+                    cancel_task(layout, task_id)
+                    if action == "cancel"
+                    else retry_task(layout, task_id)
+                )
             except ValueError as exc:
                 return Reply(f"error: {exc}")
-            commit_task(layout, task["id"], f"Cancel task {task['id']}")
-            return Reply(f"Cancelled task {task['id']}.")
+            commit_task(
+                layout,
+                task["id"],
+                f"{action.capitalize()} task {task['id']}",
+            )
+            return Reply(
+                f"{'Cancelled' if action == 'cancel' else 'Requeued'} "
+                f"task {task['id']}."
+            )
         task = get_task(layout, task_id)
         if task is None:
             return Reply(f"error: unknown task {task_id!r}")
@@ -969,8 +983,29 @@ class CommandRouter:
         if isinstance(project, Reply):
             return project
         goal = rest.strip()
+        if goal.lower() in {"status", "list"}:
+            layout = ProjectLayout.detect(project["workspace"])
+            summary = plan_status(layout)
+            if summary["status"] == "none":
+                return Reply("No plans for this project.")
+            lines = [
+                f"Plan {summary['plan_id']}: {summary['status']} "
+                f"({len(summary['tasks'])} tasks)"
+            ]
+            if summary["goal"]:
+                lines.append(f"Goal: {summary['goal']}")
+            for item in summary["tasks"]:
+                suffix = (
+                    f" (blocked by {item['blocked_by']})"
+                    if item["blocked_by"]
+                    else ""
+                )
+                lines.append(
+                    f"- {item['status']}: {item['title']}{suffix}"
+                )
+            return Reply("\n".join(lines))
         if not goal:
-            return Reply("Usage: /plan <milestone goal>")
+            return Reply("Usage: /plan <milestone goal> or /plan status")
         try:
             result = plan_project(
                 self.settings, self.ledger, project, goal
