@@ -11,13 +11,13 @@ if [ "$(id -u)" = "0" ]; then
     chown -R 10001:10001 "$FORGEL_HOME"
   fi
   if command -v setpriv >/dev/null 2>&1; then
-    exec setpriv --reuid=10001 --regid=10001 --clear-groups "$@"
+    exec setpriv --reuid=10001 --regid=10001 --clear-groups forgel "$@"
   fi
   if command -v runuser >/dev/null 2>&1; then
-    exec runuser -u forgel -- "$@"
+    exec runuser -u forgel -- forgel "$@"
   fi
   echo "forgel: no setpriv or runuser to drop privileges" >&2
   exit 1
 fi
 
-exec "$@"
+exec forgel "$@"

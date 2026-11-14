@@ -23,7 +23,8 @@ RUN set -eux; \
       *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
     esac; \
     apt-get update; \
-    apt-get install -y --no-install-recommends curl ca-certificates; \
+    apt-get install -y --no-install-recommends \
+      curl ca-certificates git openssh-client; \
     curl -fsSL "https://download.docker.com/linux/static/stable/${cli_arch}/docker-${DOCKER_CLI_VERSION}.tgz" \
       | tar -xz --strip-components=1 -C /usr/local/bin "docker/docker"; \
     rm -rf /var/lib/apt/lists/*

@@ -367,5 +367,18 @@ class DeployFlowTest(unittest.TestCase):
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
 
 
+class EntrypointTest(unittest.TestCase):
+    def test_container_arguments_are_forgel_subcommands(self) -> None:
+        script = (
+            Path(__file__).resolve().parents[1]
+            / "deploy"
+            / "entrypoint.sh"
+        ).read_text(encoding="utf-8")
+        # `docker run forgel:local doctor` and Compose `command: ["telegram"]`
+        # must both reach the Forgel CLI after the privilege drop.
+        self.assertIn("--clear-groups forgel \"$@\"", script)
+        self.assertIn("exec forgel \"$@\"", script)
+
+
 if __name__ == "__main__":
     unittest.main()

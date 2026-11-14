@@ -103,7 +103,16 @@ class DockerSandbox:
         if self.settings.sandbox_host:
             env["DOCKER_HOST"] = self.settings.sandbox_host
         env["PATH"] = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
-        env["HOME"] = os.environ.get("HOME", "/tmp")
+        # The CLI runs as the daemon user, whose home may not be writable
+        # (in the container HOME can be /root). Keep its config under the
+        # Forgel home so registry credentials can live there too.
+        env["HOME"] = str(self.settings.home)
+        config_dir = self.settings.home / ".docker"
+        try:
+            config_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        env["DOCKER_CONFIG"] = str(config_dir)
         return env
 
     def _run(
