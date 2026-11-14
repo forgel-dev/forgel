@@ -13,6 +13,7 @@ console; there are no separate utilities to remember.
 cd /path/to/repo
 forgel
 forgel> /adopt .
+forgel> /plan --dry-run Bring the project to M1   # preview the backlog
 forgel> /plan Bring the project to M1
 # the daemon works; /task accept <id> when a review is ready
 forgel> /quit

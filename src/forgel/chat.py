@@ -98,6 +98,7 @@ Projects
 /github merge [repo] [pr]        merge after checks
 
 /plan <goal>            turn a milestone goal into queued tasks
+/plan --dry-run <goal>  preview the backlog without creating tasks
 /plan status            show the latest milestone state
 /tasks                  coding-agent tasks for the selected project
 /task cancel <id>       cancel a pending task
@@ -983,6 +984,10 @@ class CommandRouter:
         if isinstance(project, Reply):
             return project
         goal = rest.strip()
+        dry_run = False
+        if goal.startswith("--dry-run"):
+            dry_run = True
+            goal = goal[len("--dry-run") :].strip()
         if goal.lower() in {"status", "list"}:
             layout = ProjectLayout.detect(project["workspace"])
             summary = plan_status(layout)
@@ -1005,10 +1010,16 @@ class CommandRouter:
                 )
             return Reply("\n".join(lines))
         if not goal:
-            return Reply("Usage: /plan <milestone goal> or /plan status")
+            return Reply(
+                "Usage: /plan [--dry-run] <milestone goal> or /plan status"
+            )
         try:
             result = plan_project(
-                self.settings, self.ledger, project, goal
+                self.settings,
+                self.ledger,
+                project,
+                goal,
+                dry_run=dry_run,
             )
         except PlanningError as exc:
             return Reply(f"error: {exc}")
@@ -1022,13 +1033,16 @@ class CommandRouter:
             suffix = f" ({len(checks)} checks)" if checks else ""
             lines.append(
                 f"{index}. {item['title']} "
-                f"[{item.get('repo_id') or 'sole'}] -> {item['task_id']}"
-                f"{suffix}"
+                f"[{item.get('repo_id') or 'sole'}] -> "
+                f"{item.get('task_id') or '-'}{suffix}"
             )
-        lines.append(
-            "The daemon runs them in order; a task waits for its "
-            "dependencies."
-        )
+        if dry_run:
+            lines.append("(dry run; no tasks created)")
+        else:
+            lines.append(
+                "The daemon runs them in order; a task waits for its "
+                "dependencies."
+            )
         return Reply("\n".join(lines))
 
     def _peak(self, chat_id: int, rest: str, _actor: str) -> Reply:

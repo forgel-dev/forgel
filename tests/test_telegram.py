@@ -311,6 +311,36 @@ class SelectionAndAgentTest(unittest.TestCase):
         assert updated is not None
         self.assertEqual(updated["status"], "done")
 
+    def test_plan_dry_run_previews_without_creating(self) -> None:
+        router = self._router()
+        project = self._project("Plan", "A brief.")
+        self.ledger.set_session(7, project)
+        planned = SimpleNamespace(
+            plan_id="plan-dry",
+            notes="",
+            dry_run=True,
+            tasks=[
+                {
+                    "title": "First",
+                    "repo_id": "main",
+                    "checks": [{"criterion": "It works"}],
+                    "depends_on": [],
+                }
+            ],
+        )
+        with patch(
+            "forgel.chat.plan_project", return_value=planned
+        ) as plan:
+            reply = router.handle(
+                7, "/plan --dry-run Bring it to M1", "@tester"
+            )
+        self.assertIn("dry run", reply.text)
+        self.assertIn("1 checks", reply.text)
+        self.assertTrue(plan.call_args.kwargs["dry_run"])
+        self.assertEqual(
+            plan.call_args.args[3], "Bring it to M1"
+        )
+
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()
         project = self._project("Plan", "A brief.")
