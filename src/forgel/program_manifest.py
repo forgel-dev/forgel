@@ -13,6 +13,7 @@ but the grouping adds no coupling, and the UI says so.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -78,7 +79,7 @@ def _normalize(entry: dict[str, Any]) -> dict[str, Any]:
         for key, values in contracts.items()
         if isinstance(values, list) and values
     }
-    return {
+    normalized: dict[str, Any] = {
         "id": repo_id,
         "role": str(
             entry.get("role") or ROLE_BY_ID.get(repo_id, "application")
@@ -90,6 +91,9 @@ def _normalize(entry: dict[str, Any]) -> dict[str, Any]:
         "depends_on": [str(item) for item in depends_on if str(item).strip()],
         "contracts": normalized_contracts,
     }
+    if entry.get("path"):
+        normalized["path"] = str(entry["path"])
+    return normalized
 
 
 def _default_entry(repo_id: str) -> dict[str, Any]:
@@ -122,7 +126,15 @@ def entry_map(layout: ProjectLayout) -> dict[str, dict[str, Any]]:
 def repo_control_path(layout: ProjectLayout, repo_id: str) -> str:
     """Path as written in program.yaml, relative to the control repo."""
 
-    return f"../repos/{repo_id}" if layout.is_container else f"./{repo_id}"
+    if layout.is_container:
+        return f"../repos/{repo_id}"
+    if layout.is_linked:
+        target = layout.repo_path(repo_id)
+        try:
+            return os.path.relpath(target, layout.control)
+        except ValueError:
+            return str(target)
+    return f"./{repo_id}"
 
 
 def repo_project_path(layout: ProjectLayout, repo_id: str) -> str:
@@ -175,11 +187,15 @@ def write_program(layout: ProjectLayout, name: str, recipe: str) -> Path:
 
 
 def update_metadata(layout: ProjectLayout, values: dict[str, Any]) -> Path:
-    if not layout.is_container:
-        raise ValueError("project metadata is only available in a container")
+    if layout.is_container:
+        path = layout.root / "project.json"
+    elif layout.is_linked:
+        path = layout.root / ".forgel" / "project.json"
+    else:
+        raise ValueError("project metadata is only available in a project")
     metadata = layout.metadata()
     metadata.update(values)
-    return write_json(layout.root / "project.json", metadata)
+    return write_json(path, metadata)
 
 
 def set_entries(

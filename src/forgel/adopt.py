@@ -26,7 +26,7 @@ from . import git_ops
 from .artifacts import ensure_dir, write_json, write_text
 from .config import Settings
 from .layout import ProjectLayout
-from .ledger import Ledger
+from .ledger import Ledger, new_project_id
 from .program_manifest import (
     add_entry,
     entries,
@@ -45,7 +45,12 @@ from .project_config import (
 from .projects import NAME_RE, ProjectError, create_project
 from .providers import AuthReport, ProviderError, Remote, get_provider
 from .providers.github_api import GithubAPI, GithubAPIError
-from .providers.github_auth import DEFAULT_API_BASE, AuthToken, GithubAuth
+from .providers.github_auth import (
+    DEFAULT_API_BASE,
+    AuthToken,
+    GithubAuth,
+    GithubAuthError,
+)
 
 ADOPTED_CONTEXT = """# FORGEL.md
 
@@ -370,6 +375,249 @@ def _event(
     )
 
 
+
+
+def _local_directory(value: str) -> Path | None:
+    """A local folder passed to adoption, or ``None`` for a remote URL."""
+
+    raw = value.strip()
+    if not raw or "://" in raw or raw.startswith("git@"):
+        return None
+    path = Path(raw).expanduser()
+    return path.resolve() if path.is_dir() else None
+
+
+def _ensure_source_repository(root: Path) -> Path:
+    """Keep the source folder in place: git, an ignore entry, a first commit."""
+
+    result = _git(root, "rev-parse", "--show-toplevel")
+    if result.returncode == 0 and result.stdout.strip():
+        root = Path(result.stdout.strip()).resolve()
+    if not (root / ".git").exists():
+        init = _git(root, "init", "-b", "main")
+        if init.returncode != 0:
+            raise AdoptError(
+                "git init failed: " + (init.stderr or init.stdout).strip()
+            )
+    gitignore = root / ".gitignore"
+    changed = False
+    if gitignore.exists():
+        text = gitignore.read_text(encoding="utf-8")
+        ignored = any(
+            line.strip() in {".forgel/", ".forgel"}
+            for line in text.splitlines()
+        )
+        if not ignored:
+            if text and not text.endswith("\n"):
+                text += "\n"
+            gitignore.write_text(text + ".forgel/\n", encoding="utf-8")
+            changed = True
+    else:
+        gitignore.write_text(".forgel/\n", encoding="utf-8")
+        changed = True
+    head = _git(root, "rev-parse", "--verify", "HEAD")
+    if head.returncode != 0:
+        _git(root, "add", "-A")
+        commit = _git(
+            root,
+            "-c", "user.name=Forgel",
+            "-c", "user.email=forgel@localhost",
+            "commit", "-q", "--allow-empty", "-m",
+            "Initialize with Forgel",
+        )
+        if commit.returncode != 0:
+            raise AdoptError(
+                "git commit failed: "
+                + (commit.stderr or commit.stdout).strip()
+            )
+    elif changed:
+        _git(root, "add", "--", ".gitignore")
+        _git(
+            root,
+            "-c", "user.name=Forgel",
+            "-c", "user.email=forgel@localhost",
+            "commit", "-q", "-m", "Adopt with Forgel", "--", ".gitignore",
+        )
+    return root
+
+
+def _source_remote(root: Path) -> tuple[str, str]:
+    origin = git_ops.origin_url(root)
+    if not origin:
+        return "", "local"
+    try:
+        remote = get_provider(origin).parse(origin)
+    except (ProviderError, ValueError):
+        return origin, "local"
+    return remote.url, remote.provider
+
+
+def _maybe_create_remote(
+    settings: Settings,
+    root: Path,
+    project_name: str,
+    brief: str,
+) -> tuple[str, str, AuthReport]:
+    """Create an origin repository when the folder has none."""
+
+    try:
+        auth_client = GithubAuth(settings.home)
+        token = auth_client.resolve("auto")
+    except GithubAuthError as exc:
+        return (
+            "",
+            "local",
+            AuthReport(
+                configured=False,
+                detail=f"no origin remote and GitHub is not configured: {exc}",
+            ),
+        )
+    client = GithubAPI(token.token, api_base=auth_client.api_base)
+    org = os.environ.get("FORGEL_GITHUB_ORG", "").strip()
+    if org:
+        owner = org
+    elif token.kind == "pat":
+        owner = str(client.user().get("login", "")).strip()
+    else:
+        return (
+            "",
+            "local",
+            AuthReport(
+                configured=False,
+                detail=(
+                    "no origin remote and FORGEL_GITHUB_ORG is not set; "
+                    "a GitHub App needs the organization"
+                ),
+            ),
+        )
+    if not owner:
+        return (
+            "",
+            "local",
+            AuthReport(
+                configured=False,
+                detail="no origin remote and the GitHub owner is unknown",
+            ),
+        )
+    name = slugify_repo_id(project_name)
+    try:
+        full_name, url = _create_remote(
+            client, name, owner, True, brief
+        )
+    except AdoptError as exc:
+        return "", "local", AuthReport(configured=False, detail=str(exc))
+    try:
+        git_ops.ensure_remote(root, url)
+        branch = git_ops.current_branch(root) or "main"
+        git_ops.push(root, branch, token.token)
+    except git_ops.GitOperationError as exc:
+        return (
+            url,
+            "github",
+            AuthReport(
+                configured=True,
+                detail=f"origin created at {full_name}; push failed: {exc}",
+            ),
+        )
+    return (
+        url,
+        "github",
+        AuthReport(
+            configured=True,
+            detail=f"origin created at {full_name}",
+        ),
+    )
+
+
+def _adopt_linked(
+    settings: Settings,
+    ledger: Ledger,
+    path: Path,
+    brief: str,
+    name: str,
+) -> AdoptResult:
+    """Adopt a local folder in place: no clone, no second copy of the code."""
+
+    root = _ensure_source_repository(path)
+    if (root / ".forgel" / "project.json").exists():
+        raise AdoptError(
+            "this folder is already a Forgel project; select it with "
+            "`/use <id>` or adopt from a copy"
+        )
+    project_name = name.strip() or _project_name(root.name)
+    if not NAME_RE.fullmatch(project_name):
+        raise AdoptError(
+            "project name must be 1-64 characters of letters, digits, "
+            "spaces, hyphens or underscores"
+        )
+    project_brief = brief.strip() or f"Adopted in place from {root}."
+    url, provider = _source_remote(root)
+    if url:
+        auth = AuthReport(
+            configured=True,
+            detail=f"using the existing origin {url}",
+        )
+    else:
+        url, provider, auth = _maybe_create_remote(
+            settings, root, project_name, project_brief
+        )
+        if not url:
+            url = str(root)
+            provider = "local"
+    project_id = new_project_id(project_name)
+    ensure_dir(root / ".forgel" / "program")
+    entry = {
+        "id": "main",
+        "role": "application",
+        "provider": provider,
+        "url": url,
+        "path": ".",
+        "depends_on": [],
+    }
+    write_json(
+        root / ".forgel" / "project.json",
+        {
+            "id": project_id,
+            "name": project_name,
+            "layout": "linked",
+            "mode": "brownfield",
+            "repos": [entry],
+            "created_at": _now(),
+        },
+    )
+    ledger.create_project(
+        project_id, project_name, project_brief, str(root)
+    )
+    layout = ProjectLayout.detect(root)
+    _write_brownfield_files(layout, project_name, project_brief)
+    _tag_baseline(root)
+    _control_commit(layout.control, f"Adopt {project_name}")
+    _event(
+        ledger,
+        project_id,
+        "adopt",
+        [
+            _artifact_ref(layout, "program.yaml"),
+            _artifact_ref(layout, "docs/program/adoption.md"),
+        ],
+        {
+            "repo": "main",
+            "provider": provider,
+            "url": url,
+            "mode": "linked",
+        },
+    )
+    return AdoptResult(
+        project_id=project_id,
+        repo_id="main",
+        provider=provider,
+        url=url,
+        slug=root.name,
+        auth=auth,
+        mode="brownfield",
+    )
+
+
 def adopt_repository(
     settings: Settings,
     ledger: Ledger,
@@ -377,6 +625,9 @@ def adopt_repository(
     brief: str = "",
     name: str = "",
 ) -> AdoptResult:
+    local = _local_directory(url)
+    if local is not None:
+        return _adopt_linked(settings, ledger, local, brief, name)
     temporary, clone, remote, auth = _clone_temp(settings, url)
     try:
         project_name = name.strip() or _project_name(remote.slug)
@@ -443,6 +694,116 @@ def adopt_repository(
         shutil.rmtree(temporary, ignore_errors=True)
 
 
+
+
+def _add_linked_repository(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    url: str,
+    repo_id: str,
+    depends_on: list[str] | None,
+    role: str,
+) -> "RepoAddResult":
+    local = _local_directory(url)
+    if local is None:
+        raise AdoptError(
+            "linked projects add local folders; clone a remote repository "
+            "yourself and add its path"
+        )
+    top = _git(local, "rev-parse", "--show-toplevel")
+    if top.returncode != 0 or not top.stdout.strip():
+        raise AdoptError(
+            f"{local} has no git history; commit it before adding"
+        )
+    root = Path(top.stdout.strip()).resolve()
+    head = _git(root, "rev-parse", "--verify", "HEAD")
+    if head.returncode != 0:
+        raise AdoptError(
+            f"{root} has no commits; commit it before adding"
+        )
+    if root == layout.root.resolve():
+        raise AdoptError(
+            "the folder is already the project's main repository"
+        )
+    existing = entries(layout)
+    known_ids = {entry["id"] for entry in existing}
+    for entry in existing:
+        if layout.repo_path(entry["id"]).resolve() == root:
+            raise AdoptError(
+                f"repository {entry['id']} already points at {root}"
+            )
+    if repo_id:
+        selected_id = slugify_repo_id(repo_id)
+        if selected_id in known_ids:
+            raise AdoptError(
+                f"repository id already exists: {selected_id}"
+            )
+    else:
+        selected_id = unique_repo_id(layout, root.name)
+    dependencies = [
+        item.strip() for item in (depends_on or []) if item.strip()
+    ]
+    if selected_id in dependencies:
+        raise AdoptError("a repository cannot depend on itself")
+    try:
+        validate_dependencies(known_ids, dependencies)
+    except ValueError as exc:
+        raise AdoptError(str(exc)) from exc
+    origin, provider = _source_remote(root)
+    if not origin:
+        origin = str(root)
+        provider = "local"
+    entry = {
+        "id": selected_id,
+        "role": role.strip() or "application",
+        "provider": provider,
+        "url": origin,
+        "path": str(root),
+        "depends_on": dependencies,
+    }
+    add_entry(layout, entry)
+    _write_repo_doc(layout, entry)
+    write_program(
+        layout,
+        str(project["name"]),
+        str(project.get("recipe_id") or ""),
+    )
+    _control_commit(layout.control, f"Add repository {selected_id}")
+    _tag_baseline(root)
+    _event(
+        ledger,
+        str(project["id"]),
+        "repo_add",
+        [
+            _artifact_ref(layout, "program.yaml"),
+            _artifact_ref(
+                layout, f"docs/program/repos/{selected_id}.md"
+            ),
+        ],
+        {
+            "repo": selected_id,
+            "provider": provider,
+            "url": origin,
+            "depends_on": dependencies,
+            "path": str(root),
+        },
+    )
+    return RepoAddResult(
+        project_id=str(project["id"]),
+        entry=entry,
+        auth=AuthReport(
+            configured=provider != "local",
+            detail=(
+                f"using {origin}"
+                if provider != "local"
+                else "linked folder has no origin remote"
+            ),
+        ),
+    )
+
+
 def add_repository(
     settings: Settings,
     ledger: Ledger,
@@ -453,16 +814,27 @@ def add_repository(
     role: str = "application",
 ) -> RepoAddResult:
     layout = ProjectLayout.detect(project["workspace"])
-    if not layout.is_container:
+    if not layout.is_project:
         raise AdoptError(
             "this project uses the legacy flat layout; repositories can only "
-            "be added to a container project"
+            "be added to a project"
         )
     if layout.metadata().get("mode") != "brownfield":
         raise AdoptError(
             "adopting an existing repository into an existing project is "
             "supported for brownfield projects; use 'repo create' for a new "
             "repository or '/adopt' for a new project"
+        )
+    if layout.is_linked:
+        return _add_linked_repository(
+            settings,
+            ledger,
+            project,
+            layout,
+            url,
+            repo_id,
+            depends_on,
+            role,
         )
     temporary, clone, remote, auth = _clone_temp(settings, url)
     try:
@@ -918,9 +1290,9 @@ def set_dependencies(
     """Replace the dependency edges of a repository in an existing project."""
 
     layout = ProjectLayout.detect(project["workspace"])
-    if not layout.is_container:
+    if not layout.is_project:
         raise AdoptError(
-            "dependency edges can only be edited in a container project"
+            "dependency edges can only be edited in a project"
         )
     current = entries(layout)
     known_ids = {entry["id"] for entry in current}

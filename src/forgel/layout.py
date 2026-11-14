@@ -16,6 +16,8 @@ from typing import Any
 CONTROL_DIR = "program"
 REPOS_DIR = "repos"
 LAYOUT_MARKER = "project.json"
+LINKED_DIR = ".forgel"
+LINKED_MARKER = Path(LINKED_DIR) / LAYOUT_MARKER
 TEMPLATE_REPOS = ("api", "web", "infra", "e2e")
 
 
@@ -29,6 +31,8 @@ class ProjectLayout:
         root = Path(workspace)
         if (root / LAYOUT_MARKER).exists():
             return cls(root=root, kind="container")
+        if (root / LINKED_MARKER).exists():
+            return cls(root=root, kind="linked")
         return cls(root=root, kind="legacy")
 
     @classmethod
@@ -39,8 +43,22 @@ class ProjectLayout:
     def is_container(self) -> bool:
         return self.kind == "container"
 
+    @property
+    def is_linked(self) -> bool:
+        """A project whose repositories are the folders themselves, in place."""
+
+        return self.kind == "linked"
+
+    @property
+    def is_project(self) -> bool:
+        return self.kind in {"container", "linked"}
+
     def metadata(self) -> dict[str, Any]:
-        path = self.root / LAYOUT_MARKER
+        path = (
+            self.root / LINKED_MARKER
+            if self.is_linked
+            else self.root / LAYOUT_MARKER
+        )
         if not path.exists():
             return {}
         try:
@@ -50,8 +68,17 @@ class ProjectLayout:
         return data if isinstance(data, dict) else {}
 
     def repo_ids(self) -> list[str]:
-        """Repository ids for a container, discovered from ``repos/``."""
+        """Repository ids for a project."""
 
+        if self.is_linked:
+            repos = self.metadata().get("repos")
+            if isinstance(repos, list):
+                return [
+                    str(item["id"])
+                    for item in repos
+                    if isinstance(item, dict) and item.get("id")
+                ]
+            return ["main"]
         if not self.is_container or not self.repos_root.exists():
             return []
         return sorted(
@@ -63,7 +90,7 @@ class ProjectLayout:
     def git_targets(self) -> list[Path]:
         """Roots that carry their own git history, with or without ``.git``."""
 
-        if not self.is_container:
+        if not self.is_project:
             return [self.root]
         return [self.control] + [
             self.repo_path(repo_id) for repo_id in self.repo_ids()
@@ -75,6 +102,15 @@ class ProjectLayout:
     def repo_ref(self, repo_id: str, relative: str = "") -> str:
         """Return a project-root-relative path for a repository file."""
 
+        if self.is_linked:
+            path = self.repo_path(repo_id)
+            try:
+                base = path.relative_to(self.root).as_posix()
+            except ValueError:
+                base = str(path)
+            if base == ".":
+                return relative or "."
+            return f"{base}/{relative}".rstrip("/") if relative else base
         base = f"{REPOS_DIR}/{repo_id}" if self.is_container else repo_id
         return f"{base}/{relative}".rstrip("/") if relative else base
 
@@ -82,13 +118,38 @@ class ProjectLayout:
     def control(self) -> Path:
         """Where program artifacts, config and docs live."""
 
-        return self.root / CONTROL_DIR if self.is_container else self.root
+        if self.is_container:
+            return self.root / CONTROL_DIR
+        if self.is_linked:
+            return self.root / LINKED_DIR / CONTROL_DIR
+        return self.root
 
     @property
     def repos_root(self) -> Path:
-        return self.root / REPOS_DIR if self.is_container else self.root
+        if self.is_container:
+            return self.root / REPOS_DIR
+        return self.root
 
     def repo_path(self, repo_id: str) -> Path:
+        if self.is_linked:
+            repos = self.metadata().get("repos")
+            if isinstance(repos, list):
+                for item in repos:
+                    if (
+                        isinstance(item, dict)
+                        and item.get("id") == repo_id
+                    ):
+                        stored = str(item.get("path") or "")
+                        if stored:
+                            path = Path(stored)
+                            return (
+                                path
+                                if path.is_absolute()
+                                else self.root / path
+                            ).resolve()
+                        if repo_id == "main":
+                            return self.root
+            return self.root / repo_id
         return self.repos_root / repo_id
 
     def artifact(self, relative: str) -> Path:

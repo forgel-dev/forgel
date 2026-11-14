@@ -262,12 +262,37 @@ class CommandRouter:
                 f"error: {exc}" + self._github_hint(url, str(exc))
             )
         self.ledger.set_session(chat_id, result.project_id)
-        lines = [
-            f"Adopted {result.url} as {result.project_id} and selected it.",
-            f"Repository: {result.repo_id} ({result.provider}).",
-            "Mode: brownfield — Forgel will not regenerate this repository.",
-            "Config initialized in program/forgel.toml and program.yaml.",
-        ]
+        project = self.ledger.get_project(result.project_id)
+        layout = (
+            ProjectLayout.detect(project["workspace"])
+            if project is not None
+            else None
+        )
+        if layout is not None and layout.is_linked:
+            control = layout.control.relative_to(layout.root).as_posix()
+            lines = [
+                f"Adopted the folder in place as {result.project_id} and "
+                "selected it.",
+                f"Repository: {result.repo_id} ({result.provider}).",
+                "Mode: brownfield — the source folder is the repository; "
+                "there is no second copy.",
+                f"Control artifacts live in {control}/.",
+            ]
+        else:
+            lines = [
+                f"Adopted {result.url} as {result.project_id} and selected "
+                "it.",
+                f"Repository: {result.repo_id} ({result.provider}).",
+                "Mode: brownfield — Forgel will not regenerate this "
+                "repository.",
+                "Config initialized in program/forgel.toml and program.yaml.",
+            ]
+        if result.provider == "local":
+            lines.append(
+                "No origin remote was found. The folder stays local; "
+                "configure GitHub and ask me to publish it, or add a remote "
+                "yourself."
+            )
         if result.provider == "github":
             if result.auth.configured:
                 lines.append("GitHub: " + result.auth.detail + ".")

@@ -865,11 +865,30 @@ def cmd_adopt(args: argparse.Namespace) -> int:
         except (AdoptError, ProviderError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
+        project = ledger.get_project(result.project_id)
+        layout = (
+            ProjectLayout.detect(project["workspace"])
+            if project is not None
+            else None
+        )
         print(f"project:  {result.project_id}")
         print(f"repo:     {result.repo_id} ({result.provider})")
         print(f"url:      {result.url}")
-        print("mode:     brownfield")
+        if layout is not None and layout.is_linked:
+            print("mode:     brownfield (linked in place)")
+            print(
+                "control:  "
+                + layout.control.relative_to(layout.root).as_posix()
+                + "/"
+            )
+        else:
+            print("mode:     brownfield (cloned into the project)")
         print(f"auth:     {result.auth.detail}")
+        if result.provider == "local":
+            print(
+                "note:     no origin remote; the folder is local only "
+                "until you add one"
+            )
         return 0
     finally:
         ledger.close()

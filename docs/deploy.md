@@ -314,3 +314,12 @@ it with the coding agent. `/tasks` shows the queue.
 - Docker QA is not run inside the daemon container by default; projects use
   local QA.
 - The blog e2e in `tests/e2e` is a manual test, not part of the service.
+
+### Linked (in-place) projects
+
+A local adoption keeps the repository in its own folder; the project state is
+in `.forgel/` inside it. A Docker sandbox must see that absolute path on its
+daemon: on a local engine it works as is, while a remote or DinD daemon needs
+the folder mounted at the same path (or the local sandbox for that project).
+`FORGEL_SANDBOX_PROJECTS_ROOT` only maps `$FORGEL_HOME/projects`, so it does
+not cover linked folders.

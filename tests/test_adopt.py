@@ -64,7 +64,7 @@ class AdoptTest(unittest.TestCase):
     def _source(self, name: str, filename: str = "README.md") -> Path:
         return _make_repo(self.home / "sources" / name, filename)
 
-    def test_adopt_creates_a_brownfield_container(self) -> None:
+    def test_adopt_links_the_source_folder_in_place(self) -> None:
         source = self._source("backend")
         result = adopt_repository(
             self.settings,
@@ -77,8 +77,16 @@ class AdoptTest(unittest.TestCase):
         self.assertEqual(result.repo_id, "main")
         self.assertEqual(result.provider, "local")
         layout = ProjectLayout.detect(project["workspace"])
-        self.assertTrue(layout.is_container)
+        self.assertTrue(layout.is_linked)
+        self.assertEqual(
+            Path(project["workspace"]).resolve(), source.resolve()
+        )
+        self.assertFalse((source / "repos").exists())
+        self.assertTrue((source / ".forgel" / "project.json").exists())
         self.assertEqual(layout.metadata()["mode"], "brownfield")
+        self.assertEqual(
+            layout.repo_path("main").resolve(), source.resolve()
+        )
         self.assertTrue((layout.repo_path("main") / ".git").exists())
         self.assertTrue((layout.control / ".git").exists())
         self.assertTrue((layout.control / "forgel.toml").exists())
@@ -274,7 +282,7 @@ class AdoptTest(unittest.TestCase):
             Path(project["workspace"]), self.ledger, project["id"]
         )
         self.assertTrue(result["pending"])
-        self.assertIn("repos/main/README.md", result["files"])
+        self.assertIn("README.md", result["files"])
         self.assertEqual(result["analysis"]["violations"], [])
 
         decision = reconcile_project(
@@ -324,9 +332,11 @@ class AdoptTest(unittest.TestCase):
             depends_on=["main"],
         )
         metadata = json.loads(
-            (Path(project["workspace"]) / "project.json").read_text(
-                encoding="utf-8"
-            )
+            (
+                Path(project["workspace"])
+                / ".forgel"
+                / "project.json"
+            ).read_text(encoding="utf-8")
         )
         ids = [entry["id"] for entry in metadata["repos"]]
         self.assertEqual(ids, ["main", "web"])

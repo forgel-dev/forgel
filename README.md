@@ -234,12 +234,23 @@ under Forgel without regenerating it:
 A bare `owner/repo` is treated as a GitHub shorthand; for a local path use an
 absolute path or prefix it with `./`.
 
-The repository is cloned into `repos/main`, receives a `forgel-baseline` tag,
-and the control repository `program/` gets `forgel.toml`, `program.yaml`,
-`FORGEL.md`, `AGENTS.md` and `docs/program/adoption.md`. The adopted
-repository's current branch becomes `git.base_branch`, so a `master` repository
-publishes to `master` without extra configuration. The project is brownfield:
-the template pipeline never runs and Forgel never regenerates the code.
+A **local path** is adopted in place: the folder stays the repository, Forgel
+does not clone or copy it, and `.forgel/` inside it holds the project state
+(`project.json`, the control repository `program/`, adoption notes). `.forgel/`
+is added to the folder's `.gitignore` and the control repository has its own
+history. The existing `origin` is used; if there is none, Forgel creates a
+repository under `FORGEL_GITHUB_ORG` and pushes, or reports that the folder
+stays local. The folder is never added as a git remote. This is the normal
+way to hand over a repository you already work in: other tools keep using the
+same folder.
+
+A **remote URL** (`https://…`, `git@…`, `owner/repo`) is cloned into a project
+container as before. Either way the repository receives a `forgel-baseline`
+tag, the control repository gets `forgel.toml`, `program.yaml`, `FORGEL.md`,
+`AGENTS.md` and `docs/program/adoption.md`, and the current branch becomes
+`git.base_branch`, so a `master` repository publishes to `master` without
+extra configuration. The project is brownfield: the template pipeline never
+runs and Forgel never regenerates the code.
 
 Add related repositories or change their edges:
 
@@ -405,29 +416,38 @@ it is run on explicit instruction and not part of `make test`.
 
 ## Project Layout
 
-New projects use a container:
+A local adoption links the folder in place:
+
+```
+my-repo/                 the source folder — the single source of truth
+  .forgel/               gitignored by the source repository
+    project.json         layout, mode, repository ids and paths
+    program/             control repository: specs, config, approvals
+      program.yaml
+      forgel.toml
+      FORGEL.md · AGENTS.md
+      docs/program/...
+  README.md · src/ · ...  the product, untouched and shared with your tools
+```
+
+The control directory is hidden inside the folder, has its own git history and
+is not committed to the product. `program.yaml` points at the repository with
+a relative path (`../..` for the folder itself). No copy of the code exists.
+
+Remote adoption and template projects use a container:
 
 ```
 project/
   project.json          machine state: layout, mode, repository ids
-  program/              control repository: specs, config, approvals
-    program.yaml
-    forgel.toml
-    FORGEL.md · AGENTS.md
-    docs/program/...
-    lock.json · staging.json
+  program/              control repository
   repos/
     api/   web/   infra/   e2e/    one real git repository each
 ```
 
 Every repository has its own history and a `forgel-baseline` tag. External
 changes, rollback and the complexity patch are computed per repository and
-aggregated into one project report. `program.yaml` points at `../repos/<id>`
-from the control repository.
-
-Existing M0 projects keep the flat layout and remain readable. Onboarding an
-existing repository (`/adopt`, clone + Forgel config initialization) and the
-GitHub provider plugin follow in the next milestone.
+aggregated into one project report. Existing M0 projects keep the flat layout
+and remain readable.
 
 Deploy it from your laptop with one command:
 

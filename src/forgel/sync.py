@@ -71,7 +71,7 @@ def _ref(workspace: Path, path: Path) -> str:
 
 def _required_paths(workspace: Path) -> set[str]:
     layout = _layout(workspace)
-    if not layout.is_container:
+    if not layout.is_project:
         return set(REQUIRED_PATHS)
     control = layout.control.relative_to(layout.root).as_posix()
     required = {
@@ -81,10 +81,13 @@ def _required_paths(workspace: Path) -> set[str]:
         f"{control}/AGENTS.md",
     }
     if layout.metadata().get("mode") == "brownfield":
-        required.update(
-            layout.repo_ref(entry["id"])
-            for entry in manifest_entries(layout)
-        )
+        if layout.is_container:
+            required.update(
+                layout.repo_ref(entry["id"])
+                for entry in manifest_entries(layout)
+            )
+        return required
+    if not layout.is_container:
         return required
     required.update(
         {
@@ -286,6 +289,8 @@ def analyze_changes(workspace: Path, changes: dict[str, Any]) -> dict[str, list[
 
     def is_documented(path: str) -> bool:
         if path in manifest or path in required:
+            return True
+        if layout.is_linked:
             return True
         if layout.is_container:
             return path.startswith("repos/") or path.startswith(
