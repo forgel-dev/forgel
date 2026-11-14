@@ -944,6 +944,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     paused = "paused" if is_paused(settings.home) else "running"
     report("control", paused)
+    report("sandbox", settings.sandbox)
 
     try:
         telegram = TelegramConfig.from_env(home=settings.home)

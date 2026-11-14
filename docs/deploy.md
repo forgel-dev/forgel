@@ -10,12 +10,11 @@ SSH.
 
 The server needs only:
 
-- SSH access with a key;
+- SSH access;
 - Docker Engine;
 - Docker Compose v2 (v1 is detected as a fallback).
 
-Nothing else is required. The SSH user should be root, or have passwordless
-sudo for installation and Docker access (directly or through `sudo -n`).
+Nothing else is required. `DEPLOY_HOST` can be an `~/.ssh/config` alias. `DEPLOY_USER`, `DEPLOY_PORT` and `DEPLOY_SSH_KEY` are optional: leave them empty and ssh uses the config, the agent and the default key (for example `~/.ssh/id_rsa`). The SSH user should be root, or have passwordless sudo for installation and Docker access (directly or through `sudo -n`).
 
 `forgel deploy up` checks this before doing anything:
 
@@ -126,20 +125,58 @@ Set `DEPLOY_APP_KEY_FILE=./github-app.pem`. The key is uploaded to
 mounts `./secrets` read-only at `/run/secrets` and the runtime sets
 `FORGEL_GITHUB_APP_PRIVATE_KEY_PATH`. Do not put the key in the runtime env.
 
-### Security
+## Container Rights and Project Environments
+
+The image starts as root only for one action: make the `/data` volume writable,
+then drop to the unprivileged `forgel` user (UID/GID `10001`) through
+`deploy/entrypoint.sh`. The long-running daemon and every agent command run as
+`10001`.
+
+What the runtime user can do:
+
+- read and write `/data` (the ledger, projects, configuration);
+- clone and push repositories through git with the configured HTTPS/PAT
+  credentials or a key mounted by the operator;
+- run project commands from the allowlist (`python`, `node`, `npm`, `make`,
+  read-only git) inside the container;
+- run local tests and an app as a local process.
+
+What it cannot do:
+
+- become root;
+- access the host filesystem;
+- access the host Docker socket — it is deliberately not mounted;
+- see the daemon's secret environment in agent commands (`_safe_env` strips
+  it).
+
+`FORGEL_SANDBOX=local` is the only implemented mode. It is **single-tenant**:
+all projects live under the same `/data` and the same UID, so a hostile project
+command could read another project's files. Do not run untrusted projects on a
+shared installation. A per-project sandbox (a separate Docker daemon or remote
+sandbox, project-only mounts, labels, network and resource limits) is the next
+milestone; the core refuses `FORGEL_SANDBOX=docker` until it exists.
+
+Project environments that need containers (Postgres, Redis, a compose stack)
+require that sandbox. The daemon never mounts the host `/var/run/docker.sock`;
+doing so would give project code root-equivalent control of the host. For a
+trusted single-user host, run those services outside Forgel and point the
+project at them explicitly; for multi-tenant, wait for the sandbox.
+
+### Secrets
 
 - Keep `.env.deploy` at `0600`. It contains the bot token, model key and
   optionally GitHub credentials.
 - The utility never puts secrets in command arguments or logs. The remote
   `.env` and the secrets directory are `0600`/`0700`.
+- Prefer environment variables for daemon secrets in production. The
+  `/secret` file lives under `/data` and is readable by the runtime user, so it
+  is not a boundary against project code in the local sandbox.
 - SSH keys, the provider key and the GitHub App key are the valuable assets;
   rotate them if the laptop or server is compromised.
 - The bot uses outbound long polling; no inbound port is needed. Restrict SSH
   and keep the host patched.
 - Budget enforcement is not implemented yet (M1). Use a scoped, prepaid model
   key with auto top-up disabled.
-- The container currently runs as root; treat it as a single-user control
-  plane on a dedicated host/network.
 
 ## Manual Fallback
 

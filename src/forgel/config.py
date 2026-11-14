@@ -20,6 +20,7 @@ class Settings:
     templates_path: Path
     jurisdiction_path: Path
     qa_runtime: str = "auto"
+    sandbox: str = "local"
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -41,12 +42,22 @@ class Settings:
             raise ValueError(
                 "FORGEL_QA_RUNTIME must be one of: auto, docker, local"
             )
+        sandbox = (
+            os.environ.get("FORGEL_SANDBOX", "local").strip().lower()
+            or "local"
+        )
+        if sandbox != "local":
+            raise ValueError(
+                "FORGEL_SANDBOX=docker is not implemented yet; the daemon "
+                "supports the single-tenant local sandbox"
+            )
         return cls(
             home=home_path.expanduser().resolve(),
             registry_path=registry_path.expanduser().resolve(),
             templates_path=templates_path,
             jurisdiction_path=jurisdiction_path.expanduser().resolve(),
             qa_runtime=qa_runtime,
+            sandbox=sandbox,
         )
 
     @property

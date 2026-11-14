@@ -70,8 +70,8 @@ def _as_bool(value: str) -> bool:
 @dataclass(frozen=True)
 class DeployConfig:
     host: str
-    user: str
-    port: int = 22
+    user: str = ""
+    port: int | None = None
     ssh_key: str = ""
     directory: str = DEFAULT_DIRECTORY
     image: str = ""
@@ -91,13 +91,16 @@ class DeployConfig:
             )
         values = _parse_env_file(path.read_text(encoding="utf-8"))
         host = values.get("DEPLOY_HOST", "").strip()
+        if not host:
+            raise DeployError("DEPLOY_HOST is required")
         user = values.get("DEPLOY_USER", "").strip()
-        if not host or not user:
-            raise DeployError("DEPLOY_HOST and DEPLOY_USER are required")
-        try:
-            port = int(values.get("DEPLOY_PORT", "22") or "22")
-        except ValueError as exc:
-            raise DeployError("DEPLOY_PORT must be an integer") from exc
+        raw_port = values.get("DEPLOY_PORT", "").strip()
+        port: int | None = None
+        if raw_port:
+            try:
+                port = int(raw_port)
+            except ValueError as exc:
+                raise DeployError("DEPLOY_PORT must be an integer") from exc
         build = values.get("DEPLOY_BUILD", "auto").strip().lower()
         if build not in VALID_BUILD_MODES:
             raise DeployError(
@@ -130,7 +133,7 @@ class DeployConfig:
 
     @property
     def target(self) -> str:
-        return f"{self.user}@{self.host}"
+        return f"{self.user}@{self.host}" if self.user else self.host
 
 
 @dataclass(frozen=True)
@@ -141,6 +144,7 @@ class RemoteEnv:
     sudo: bool = False
     os_id: str = ""
     daemon: bool = False
+    remote_user: str = ""
 
     @property
     def privilege(self) -> tuple[str, ...]:
@@ -168,9 +172,10 @@ def _manual_instructions(
     else:
         lines.append("  use your distribution's Docker package")
     lines.append("  sudo systemctl enable --now docker")
+    who = f" {user!r}" if user else ""
     if not can_install:
         lines.append(
-            f"The SSH user {user!r} has no root or passwordless sudo; ask "
+            f"The SSH user{who} has no root or passwordless sudo; ask "
             "the server administrator to install Docker, or grant that user "
             "passwordless sudo / docker-group access."
         )
@@ -196,9 +201,9 @@ class Runner:
             "BatchMode=yes",
             "-o",
             "StrictHostKeyChecking=accept-new",
-            "-p",
-            str(self.config.port),
         ]
+        if self.config.port is not None:
+            args.extend(["-p", str(self.config.port)])
         if self.config.ssh_key:
             args.extend(["-i", os.path.expanduser(self.config.ssh_key)])
         args.append(self.config.target)
@@ -337,6 +342,7 @@ class Runner:
         self.ssh("true", timeout=30)
         root = self._probe("id -u")[1].strip() == "0"
         sudo = self._probe("sudo -n true")[0] == 0
+        remote_user = self._probe("whoami")[1].strip()
         os_id = ""
         release_rc, release = self._probe("cat /etc/os-release")
         if release_rc == 0:
@@ -344,7 +350,12 @@ class Runner:
                 if line.startswith("ID="):
                     os_id = line.split("=", 1)[1].strip().strip('"')
         can_install = root or sudo
-        self.env = RemoteEnv(root=root, sudo=sudo, os_id=os_id)
+        self.env = RemoteEnv(
+            root=root,
+            sudo=sudo,
+            os_id=os_id,
+            remote_user=remote_user,
+        )
         manual = _manual_instructions(os_id, can_install, self.config.user)
 
         if not self._command_exists("docker"):
@@ -418,6 +429,7 @@ class Runner:
             sudo=sudo,
             os_id=os_id,
             daemon=True,
+            remote_user=remote_user,
         )
 
     def _offer_install(
@@ -520,10 +532,11 @@ class Runner:
 
     def _start_daemon(self) -> None:
         privilege = list(self.env.privilege)
-        if not self.env.root and self.env.sudo:
+        remote_user = self.env.remote_user or self.config.user
+        if not self.env.root and self.env.sudo and remote_user:
             self.ssh(
                 shlex.join(
-                    privilege + ["usermod", "-aG", "docker", self.config.user]
+                    privilege + ["usermod", "-aG", "docker", remote_user]
                 ),
                 allow_fail=True,
                 timeout=60,
@@ -619,7 +632,13 @@ def _compose_files(
 
 def _context_files() -> dict[str, tuple[bytes, int]]:
     files: dict[str, tuple[bytes, int]] = {}
-    for name in ("Dockerfile", "pyproject.toml", "README.md", "LICENSE"):
+    for name in (
+        "Dockerfile",
+        "pyproject.toml",
+        "README.md",
+        "LICENSE",
+        "deploy/entrypoint.sh",
+    ):
         path = ROOT / name
         if not path.exists():
             raise DeployError(f"build context file missing: {path}")
@@ -746,7 +765,13 @@ def deploy_up(
     doctor = runner.ssh(
         f"cd {shlex.quote(config.directory)} && "
         + runner.compose_command(
-            "exec", "-T", "forgel", "forgel", "doctor"
+            "exec",
+            "-T",
+            "--user",
+            "10001:10001",
+            "forgel",
+            "forgel",
+            "doctor",
         ),
         allow_fail=True,
         timeout=120,
@@ -818,7 +843,17 @@ def deploy_backup(
     completed = runner.ssh(
         f"cd {shlex.quote(config.directory)} && "
         + runner.compose_command(
-            "exec", "-T", "forgel", "tar", "czf", "-", "-C", "/data", "."
+            "exec",
+            "-T",
+            "--user",
+            "10001:10001",
+            "forgel",
+            "tar",
+            "czf",
+            "-",
+            "-C",
+            "/data",
+            ".",
         ),
         binary=True,
         timeout=900,

@@ -15,6 +15,9 @@ services:
       FORGEL_REGISTRY: /app/registry/recipes.json
       FORGEL_JURISDICTIONS: /app/jurisdiction
       FORGEL_QA_RUNTIME: local
+      # Project code runs in this container in the single-tenant local
+      # sandbox. The host Docker socket is deliberately not mounted.
+      FORGEL_SANDBOX: local
     volumes:
       - forgel-data:/data
       - ./secrets:/run/secrets:ro

@@ -235,6 +235,32 @@ class DeployConfigTest(unittest.TestCase):
                 },
             )
 
+    def test_ssh_user_port_and_key_are_optional(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".env.deploy"
+            path.write_text("DEPLOY_HOST=forgel-prod\n", encoding="utf-8")
+            config = DeployConfig.from_file(path)
+            self.assertEqual(config.user, "")
+            self.assertIsNone(config.port)
+            self.assertEqual(config.target, "forgel-prod")
+            args = Runner(config)._ssh_args()
+            self.assertNotIn("-i", args)
+            self.assertNotIn("-p", args)
+            self.assertEqual(args[-1], "forgel-prod")
+
+            path.write_text(
+                "DEPLOY_HOST=forgel-prod\nDEPLOY_USER=deploy\n"
+                "DEPLOY_PORT=2200\nDEPLOY_SSH_KEY=~/.ssh/custom\n",
+                encoding="utf-8",
+            )
+            config = DeployConfig.from_file(path)
+            args = Runner(config)._ssh_args()
+            self.assertIn("-p", args)
+            self.assertIn("2200", args)
+            self.assertIn("-i", args)
+            self.assertTrue(any(item.endswith("/.ssh/custom") for item in args))
+            self.assertEqual(args[-1], "deploy@forgel-prod")
+
     def test_invalid_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / ".env.deploy"

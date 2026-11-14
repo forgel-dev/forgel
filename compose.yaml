@@ -25,6 +25,7 @@ services:
       FORGEL_REGISTRY: /app/registry/recipes.json
       FORGEL_JURISDICTIONS: /app/jurisdiction
       FORGEL_QA_RUNTIME: local
+      FORGEL_SANDBOX: local
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_ALLOWED_CHAT_IDS: "${TELEGRAM_ALLOWED_CHAT_IDS:-}"
       TELEGRAM_POLL_TIMEOUT: "${TELEGRAM_POLL_TIMEOUT:-}"

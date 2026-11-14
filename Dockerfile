@@ -12,11 +12,20 @@ COPY jurisdiction ./jurisdiction
 
 RUN pip install --no-cache-dir ".[github]"
 
+RUN groupadd --gid 10001 forgel && \
+    useradd --uid 10001 --gid forgel --create-home \
+    --shell /usr/sbin/nologin forgel
+
+COPY deploy/entrypoint.sh /usr/local/bin/forgel-entrypoint
+RUN chmod 0755 /usr/local/bin/forgel-entrypoint
+
 ENV FORGEL_HOME=/data \
     FORGEL_REGISTRY=/app/registry/recipes.json \
     FORGEL_JURISDICTIONS=/app/jurisdiction \
-    FORGEL_QA_RUNTIME=local
+    FORGEL_QA_RUNTIME=local \
+    FORGEL_SANDBOX=local
 
 VOLUME ["/data"]
 
-ENTRYPOINT ["forgel"]
+# Starts as root only to chown the volume, then drops to UID 10001.
+ENTRYPOINT ["forgel-entrypoint"]
