@@ -156,11 +156,17 @@ shared installation. A per-project sandbox (a separate Docker daemon or remote
 sandbox, project-only mounts, labels, network and resource limits) is the next
 milestone; the core refuses `FORGEL_SANDBOX=docker` until it exists.
 
+The target environment contract is an OCI image or Compose definition plus a
+small `environment.yaml` with `setup`, `test` and `e2e` commands. The core has
+no per-language adapters; official recipes are starting points, and the agent
+may author a standard environment definition for a missing stack with review.
+
 Project environments that need containers (Postgres, Redis, a compose stack)
-require that sandbox. The daemon never mounts the host `/var/run/docker.sock`;
-doing so would give project code root-equivalent control of the host. For a
-trusted single-user host, run those services outside Forgel and point the
-project at them explicitly; for multi-tenant, wait for the sandbox.
+require that future sandbox. The daemon never mounts the host
+`/var/run/docker.sock`; doing so would give project code root-equivalent
+control of the host. For a trusted single-user host, run those services
+outside Forgel and point the project at them explicitly; for multi-tenant,
+wait for the sandbox.
 
 ### Secrets
 
