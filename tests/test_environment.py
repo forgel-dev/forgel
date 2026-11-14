@@ -18,6 +18,8 @@ from forgel.environment import (
 )
 from forgel.layout import ProjectLayout
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 FULL = """
 # the project environment
 image: python:3.12-slim
@@ -336,6 +338,20 @@ class LoadEnvironmentTest(unittest.TestCase):
             )
             with self.assertRaises(EnvironmentError):
                 load_environment(self._layout(root))
+
+
+class RepositoryEnvironmentTest(unittest.TestCase):
+    def test_the_repository_environment_contract_is_valid(self) -> None:
+        layout = ProjectLayout(root=REPO_ROOT, kind="legacy")
+        environment = load_environment(layout)
+        self.assertIsNotNone(environment)
+        assert environment is not None
+        self.assertEqual(environment.build, "environment")
+        self.assertEqual(
+            environment.test, ("python -m unittest discover -s tests",)
+        )
+        self.assertEqual(environment.env_map, {"PYTHONPATH": "src"})
+        self.assertTrue((REPO_ROOT / "environment" / "Dockerfile").is_file())
 
 
 class CommandArgvTest(unittest.TestCase):

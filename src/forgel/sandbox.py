@@ -43,6 +43,7 @@ DOCKER_ENV_KEYS = (
     "DOCKER_TLS_VERIFY",
     "DOCKER_CERT_PATH",
     "DOCKER_CONTEXT",
+    "DOCKER_CONFIG",
 )
 
 
@@ -103,16 +104,14 @@ class DockerSandbox:
         if self.settings.sandbox_host:
             env["DOCKER_HOST"] = self.settings.sandbox_host
         env["PATH"] = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
-        # The CLI runs as the daemon user, whose home may not be writable
-        # (in the container HOME can be /root). Keep its config under the
-        # Forgel home so registry credentials can live there too.
-        env["HOME"] = str(self.settings.home)
-        config_dir = self.settings.home / ".docker"
-        try:
-            config_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
-        env["DOCKER_CONFIG"] = str(config_dir)
+        # The CLI runs as the daemon user, whose home may not be writable (in
+        # the container HOME is root's home). Fall back to the Forgel home so
+        # the CLI can read its config; keep the real home on the host so the
+        # Docker context and credentials still work.
+        home = os.environ.get("HOME", "")
+        if not home or not os.access(home, os.W_OK):
+            home = str(self.settings.home)
+        env["HOME"] = home
         return env
 
     def _run(

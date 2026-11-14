@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.config import Settings
 from forgel.environment import Environment
@@ -86,6 +87,38 @@ class SandboxAvailabilityTest(unittest.TestCase):
             available, detail = Broken(_settings(Path(tmp))).available()
         self.assertFalse(available)
         self.assertIn("daemon check failed", detail)
+
+
+class DockerCliEnvironmentTest(unittest.TestCase):
+    def test_endpoint_and_config_are_forwarded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            sandbox = DockerSandbox(
+                _settings(
+                    Path(tmp), sandbox_host="tcp://sandbox:2375"
+                )
+            )
+            with patch.dict(
+                os.environ, {"DOCKER_CONFIG": "/cfg"}, clear=False
+            ):
+                env = sandbox._env()
+        self.assertEqual(env["DOCKER_HOST"], "tcp://sandbox:2375")
+        self.assertEqual(env["DOCKER_CONFIG"], "/cfg")
+
+    def test_an_unwritable_home_falls_back_to_the_forgel_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blocked = root / "blocked"
+            blocked.mkdir()
+            blocked.chmod(0o500)
+            settings = _settings(root)
+            try:
+                with patch.dict(
+                    os.environ, {"HOME": str(blocked)}, clear=False
+                ):
+                    env = DockerSandbox(settings)._env()
+            finally:
+                blocked.chmod(0o700)
+        self.assertEqual(env["HOME"], str(settings.home))
 
 
 class ImagePolicyTest(unittest.TestCase):
