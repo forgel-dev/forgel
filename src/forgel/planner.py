@@ -37,6 +37,9 @@ from .program_manifest import entries as manifest_entries
 
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
+MAX_RESEARCH_STEPS = 8
+MAX_READ_CHARS = 12_000
+MAX_LIST_ENTRIES = 200
 
 
 class PlanningError(RuntimeError):
@@ -161,6 +164,15 @@ def _system_prompt(max_tasks: int) -> str:
 Turn the milestone goal into an ordered backlog of small coding tasks. The
 daemon runs one task at a time; each task is one repository change that a
 coding agent can implement, test and commit on its own.
+
+You may inspect the repositories yourself before planning. Reply with exactly
+one JSON action per turn:
+{{"action": "list_files", "path": ".", "repo_id": "main"}}
+{{"action": "read_file", "path": "PLAN.md", "repo_id": "main"}}
+Paths are relative to the repository and may not leave it. Read the project's
+own documents and code instead of guessing; do not ask a human. When you have
+enough context, reply with the plan object below. Never mix an action and the
+plan in one reply.
 
 Return exactly one JSON object:
 {{
@@ -387,6 +399,102 @@ def _parse_plan(
     return notes, items
 
 
+def _json_object(raw: str) -> dict[str, Any] | None:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n... [truncated]"
+
+
+def _research_repo(
+    layout: ProjectLayout,
+    repos: Sequence[Mapping[str, Any]],
+    action: Mapping[str, Any],
+) -> tuple[Path, str]:
+    known = [str(entry["id"]) for entry in repos]
+    requested = str(action.get("repo_id") or "").strip()
+    if not requested:
+        requested = "main" if "main" in known else (known[0] if known else "")
+    if requested not in known:
+        raise PlanningError(f"unknown repository: {requested or '(none)'}")
+    return layout.repo_path(requested), requested
+
+
+def _research_path(repo: Path, value: Any) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise PlanningError("a path is required")
+    relative = Path(value)
+    if relative.is_absolute():
+        raise PlanningError("absolute paths are not allowed")
+    candidate = (repo / relative).resolve()
+    try:
+        candidate.relative_to(repo.resolve())
+    except ValueError as exc:
+        raise PlanningError("path escapes the repository") from exc
+    if any(part in {".git", ".forgel"} for part in relative.parts):
+        raise PlanningError("the .git and .forgel directories are off-limits")
+    return candidate
+
+
+def _run_research(
+    layout: ProjectLayout,
+    repos: Sequence[Mapping[str, Any]],
+    action: Mapping[str, Any],
+) -> str:
+    repo, _repo_id = _research_repo(layout, repos, action)
+    kind = str(action.get("action"))
+    if kind == "list_files":
+        path = _research_path(repo, action.get("path") or ".")
+        if not path.exists():
+            return f"not found: {action.get('path')}"
+        if not path.is_dir():
+            return f"not a directory: {action.get('path')}"
+        lines: list[str] = []
+        for item in sorted(path.rglob("*")):
+            relative = item.relative_to(repo)
+            if any(part in {".git", ".forgel"} for part in relative.parts):
+                continue
+            if item.name.endswith((".pyc", ".sqlite3", ".sqlite")):
+                continue
+            lines.append(relative.as_posix() + ("/" if item.is_dir() else ""))
+            if len(lines) >= MAX_LIST_ENTRIES:
+                lines.append("... [list truncated]")
+                break
+        return "\n".join(lines) or "(empty)"
+    if kind == "read_file":
+        path = _research_path(repo, action.get("path"))
+        if (
+            path.name.startswith(".env")
+            or path.name in {"id_rsa", "id_ed25519", "ledger.sqlite3"}
+            or path.suffix in {".pem", ".key"}
+        ):
+            return "secret-like files are not readable"
+        if not path.exists() or not path.is_file():
+            return f"file not found: {action.get('path')}"
+        data = path.read_bytes()
+        if b"\x00" in data:
+            return "binary file; not displayed"
+        return _cap(data.decode("utf-8", errors="replace"))
+    return f"unknown action: {kind}"
+
+
 def plan_project(
     settings: Settings,
     ledger: Ledger,
@@ -404,10 +512,6 @@ def plan_project(
         raise PlanningError("a milestone goal is required")
     max_tasks = max(1, min(int(max_tasks), MAX_TASKS))
     layout = ProjectLayout.detect(str(project["workspace"]))
-    if not layout.is_container:
-        raise PlanningError(
-            "planning requires a container project"
-        )
     policy = peak.project_policy(settings, layout.control)
     if peak.should_defer(policy, hours=settings.peak_hours):
         raise PlanningError(
@@ -430,12 +534,37 @@ def plan_project(
             f"Milestone goal:\n{goal}\n\n" + _context(layout, project, ledger),
         ),
     ]
-    try:
-        raw = model_client.complete(
-            messages, model=project_model_name(layout.control)
+    raw = ""
+    for step in range(MAX_RESEARCH_STEPS + 1):
+        try:
+            raw = model_client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError as exc:
+            raise PlanningError(
+                f"planner model call failed: {exc}"
+            ) from exc
+        data = _json_object(raw)
+        action = str(data.get("action", "")) if data else ""
+        if action not in {"list_files", "read_file"}:
+            break
+        if step == MAX_RESEARCH_STEPS:
+            raise PlanningError(
+                "the planner exceeded the research step limit"
+            )
+        try:
+            observation = _run_research(layout, repos, data)
+        except PlanningError as exc:
+            observation = f"error: {exc}"
+        messages.append(ModelMessage("assistant", raw.strip()))
+        messages.append(
+            ModelMessage(
+                "user",
+                "Observation:\n"
+                + _cap(observation)
+                + "\n\nReply with another action or the final plan JSON object.",
+            )
         )
-    except ModelError as exc:
-        raise PlanningError(f"planner model call failed: {exc}") from exc
     notes, items = _parse_plan(raw, known, default_repo, max_tasks)
     plan_id = _plan_id(goal)
     if dry_run:

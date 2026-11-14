@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from forgel.adopt import adopt_repository
 from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
@@ -235,6 +237,110 @@ class PlannerTest(unittest.TestCase):
             with self.assertRaises(PlanningError) as ctx:
                 self._plan()
         self.assertIn("paused", str(ctx.exception))
+
+    def test_plan_works_for_an_adopted_linked_project(self) -> None:
+        source = Path(self._tmp.name) / "linked-source"
+        source.mkdir()
+        (source / "README.md").write_text(
+            "# Linked\n\nMilestone: ship M1.\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=source, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-q",
+                "-m",
+                "initial",
+            ],
+            cwd=source,
+            check=True,
+        )
+        adopted = adopt_repository(
+            self.settings, self.ledger, str(source), name="linked"
+        )
+        project = self.ledger.get_project(adopted.project_id)
+        assert project is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {"action": "read_file", "path": "README.md"}
+                ),
+                json.dumps(PLAN),
+            ]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            project,
+            "Ship M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+        self.assertTrue(
+            (source / "docs" / "program" / "plans" / f"{result.plan_id}.md")
+            .exists()
+        )
+        self.assertTrue(
+            list((source / "docs" / "program" / "tasks").glob("*.json"))
+        )
+        observation = client.requests[1][-1].content
+        self.assertIn("Milestone: ship M1", observation)
+
+    def test_plan_research_cannot_escape_the_repository(self) -> None:
+        source = Path(self._tmp.name) / "linked-source"
+        source.mkdir()
+        (source / "README.md").write_text("hello\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=source, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=source, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-q",
+                "-m",
+                "initial",
+            ],
+            cwd=source,
+            check=True,
+        )
+        adopted = adopt_repository(
+            self.settings, self.ledger, str(source), name="linked"
+        )
+        project = self.ledger.get_project(adopted.project_id)
+        assert project is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "read_file",
+                        "path": "../../etc/passwd",
+                    }
+                ),
+                json.dumps(PLAN),
+            ]
+        )
+        plan_project(
+            self.settings,
+            self.ledger,
+            project,
+            "Ship M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        observation = client.requests[1][-1].content
+        self.assertIn("escapes the repository", observation)
+        self.assertNotIn("root:", observation)
 
 
 if __name__ == "__main__":
