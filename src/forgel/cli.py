@@ -1255,6 +1255,12 @@ def cmd_plan(args: argparse.Namespace) -> int:
                 f"[{item.get('repo_id') or 'sole'}] "
                 f"deps={depends} task={identifier}"
             )
+            checks = item.get("checks") or []
+            if checks:
+                print(
+                    "   checks: "
+                    + "; ".join(check["criterion"] for check in checks)
+                )
         if result.artifact:
             print(f"artifact: {result.artifact}")
         return 0
@@ -1636,5 +1642,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    arguments = list(argv) if argv is not None else sys.argv[1:]
+    if not arguments:
+        # `forgel` alone is the local client, like opening a chat.
+        arguments = ["chat"]
+    args = parser.parse_args(arguments)
     return int(args.func(args))

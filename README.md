@@ -4,6 +4,28 @@ Open-source autonomous software studio. Describe a product; get a working web ap
 
 **Status:** pre-alpha. The plan is in [PLAN.md](PLAN.md).
 
+## One Client
+
+Run `forgel` in the repository you want to hand over. It opens the local
+console; there are no separate utilities to remember.
+
+```bash
+cd /path/to/repo
+forgel
+forgel> /adopt .
+forgel> /plan Bring the project to M1
+# the daemon works; /task accept <id> when a review is ready
+forgel> /quit
+```
+
+- `/plan` needs a model key: set `FORGEL_MODEL_API_KEY` or
+  `/secret set model.api_key` inside the client.
+- After each command the daemon runs until it needs a human: a task awaiting
+  acceptance, a stalled or finished milestone, or a scheduled retry (it waits
+  through the backoff; Ctrl-C returns to the prompt).
+- The home defaults to `FORGEL_HOME` (usually `~/.forgel`).
+- Every console command also exists as `forgel <command>` for scripts.
+
 ## Try the M0 Skeleton
 
 Requires Python 3.11+.

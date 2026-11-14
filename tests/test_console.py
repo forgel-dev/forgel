@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.agent import ProjectAgent
 from forgel.config import Settings
@@ -130,6 +131,61 @@ class ConsoleTest(unittest.TestCase):
         self.assertIn("Bye.", text)
         text = self._run([])
         self.assertIn("Bye.", text)
+
+    def test_daemon_mode_returns_when_there_is_nothing_to_do(self) -> None:
+        output: list[str] = []
+        run_console(
+            self.settings,
+            self.ledger,
+            daemon=True,
+            input_fn=_feed(["/projects", "/quit"]),
+            output=output.append,
+        )
+        self.assertIn("Bye.", "\n".join(output))
+
+    def test_a_model_configured_after_start_enables_free_text(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Late model",
+            "A brief.",
+            mode="brownfield",
+        )
+        from forgel.program_manifest import set_entries
+
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project_id)["workspace"]
+        )
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        client = ScriptedModelClient(
+            [json.dumps({"kind": "answer", "reply": "late answer"})]
+        )
+        output: list[str] = []
+        with patch(
+            "forgel.console.build_model_client",
+            side_effect=[None, client],
+        ):
+            run_console(
+                self.settings,
+                self.ledger,
+                project_id=project_id,
+                daemon=False,
+                input_fn=_feed(["hello", "/quit"]),
+                output=output.append,
+            )
+        self.assertIn("late answer", "\n".join(output))
+        self.assertEqual(len(client.requests), 1)
 
     def test_help_lists_the_same_commands(self) -> None:
         text = self._run(["/help", "/quit"])

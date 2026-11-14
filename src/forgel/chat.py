@@ -1018,9 +1018,12 @@ class CommandRouter:
         if result.notes:
             lines.append(result.notes)
         for index, item in enumerate(result.tasks, 1):
+            checks = item.get("checks") or []
+            suffix = f" ({len(checks)} checks)" if checks else ""
             lines.append(
                 f"{index}. {item['title']} "
                 f"[{item.get('repo_id') or 'sole'}] -> {item['task_id']}"
+                f"{suffix}"
             )
         lines.append(
             "The daemon runs them in order; a task waits for its "

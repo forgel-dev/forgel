@@ -439,17 +439,8 @@ def run_once(
                 processed.append(project_id)
             continue
         if layout.metadata().get("mode") == "brownfield":
-            blocked = tasks.blocked_pending(layout)
-            if blocked:
-                log(
-                    f"[daemon] {project_id}: {len(blocked)} task(s) "
-                    "blocked by dependencies"
-                )
-            else:
-                log(
-                    f"[daemon] {project_id}: brownfield project has "
-                    "no executor yet"
-                )
+            # No pending task: idle. A blocked/retrying task is visible in
+            # the project state instead of a log line on every cycle.
             continue
         if awaits_approval(ledger, project_id):
             log(f"[daemon] {project_id}: waiting for staging approval")
@@ -467,7 +458,7 @@ def run_once(
     return processed
 
 
-def _next_retry_wait(ledger: Ledger) -> float | None:
+def next_retry_wait(ledger: Ledger) -> float | None:
     """Seconds until the earliest pending retry, if any."""
 
     now = datetime.now(timezone.utc)
@@ -504,7 +495,7 @@ def run_daemon(
             return cycles
         wait = interval
         if not processed:
-            retry_wait = _next_retry_wait(ledger)
+            retry_wait = next_retry_wait(ledger)
             if retry_wait is not None:
                 wait = retry_wait
             log(f"[daemon] idle; next poll in {wait:g}s")
