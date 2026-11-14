@@ -12,6 +12,7 @@ maintains it separately inside the same project.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import git_ops
 from .artifacts import ensure_dir, write_json, write_text
 from .config import Settings
 from .layout import ProjectLayout
@@ -34,9 +36,16 @@ from .program_manifest import (
     validate_dependencies,
     write_program,
 )
-from .project_config import ConfigError, load_project_config, render_project_config
+from .project_config import (
+    ConfigError,
+    GitConfig,
+    load_project_config,
+    render_project_config,
+)
 from .projects import NAME_RE, ProjectError, create_project
 from .providers import AuthReport, ProviderError, Remote, get_provider
+from .providers.github_api import GithubAPI, GithubAPIError
+from .providers.github_auth import DEFAULT_API_BASE, AuthToken, GithubAuth
 
 ADOPTED_CONTEXT = """# FORGEL.md
 
@@ -520,6 +529,360 @@ def add_repository(
         )
     finally:
         shutil.rmtree(temporary, ignore_errors=True)
+
+
+NEW_REPO_README = """# {name}
+
+{description}
+
+Managed by Forgel.
+"""
+
+NEW_REPO_FORGEL = """# FORGEL.md
+
+Native project instructions for {name}. Forgel reads this file first, then
+`AGENTS.md`.
+
+## Rules
+
+- This repository belongs to a Forgel project; changes go through the project
+  workflow.
+- Recorded assumptions and change reports live in the project control
+  repository.
+- Autonomy: finish reversible pre-release work without asking, record
+  assumptions, and stop only for a material fork, an irreversible or
+  production action, or missing access.
+"""
+
+NEW_REPO_AGENTS = """# AGENTS.md
+
+Canonical instructions for agents working on {name}.
+
+## Rules
+
+- Work autonomously: pre-release work proceeds without confirmation. Record
+  assumptions in the task and report. Ask only for a material fork, an
+  irreversible or production action, or missing access. Finish the result,
+  show the evidence, then rework on feedback.
+- Never weaken a test to make it pass; fix the product or the test's premise.
+- Do not add tool attribution lines to commits or pull requests.
+"""
+
+
+@dataclass(frozen=True)
+class RepoCreateResult:
+    project_id: str
+    entry: dict[str, Any]
+    url: str
+    created: bool
+
+
+def _github_client(
+    settings: Settings,
+    prefer: str,
+    auth: AuthToken | None,
+    api: Any | None,
+) -> tuple[Any, AuthToken]:
+    auth_client: GithubAuth | None = None
+    if auth is None:
+        auth_client = GithubAuth(settings.home)
+        auth = auth_client.resolve(prefer)
+    api_base = (
+        auth_client.api_base
+        if auth_client is not None
+        else DEFAULT_API_BASE
+    )
+    client = api or GithubAPI(auth.token, api_base=api_base)
+    return client, auth
+
+
+def _git_config(layout: ProjectLayout) -> GitConfig:
+    try:
+        config = load_project_config(layout.control)
+    except ConfigError:
+        config = None
+    return config.git if config is not None else GitConfig()
+
+
+def _init_local_repository(
+    layout: ProjectLayout, repo_id: str, description: str
+) -> Path:
+    local = layout.repo_path(repo_id)
+    if local.exists() and any(local.iterdir()):
+        raise AdoptError(f"local repository already exists: {local}")
+    ensure_dir(local)
+    write_text(
+        local / "README.md",
+        NEW_REPO_README.format(
+            name=repo_id, description=description or "Created by Forgel."
+        ),
+    )
+    write_text(local / "FORGEL.md", NEW_REPO_FORGEL.format(name=repo_id))
+    write_text(local / "AGENTS.md", NEW_REPO_AGENTS.format(name=repo_id))
+    write_text(local / ".gitignore", GITIGNORE)
+    result = subprocess.run(
+        ["git", "init", "-q", "-b", "main"],
+        cwd=local,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AdoptError(
+            "git init failed: " + (result.stderr or result.stdout).strip()
+        )
+    try:
+        git_ops.commit_all(local, f"Initialize {repo_id}")
+    except git_ops.GitOperationError as exc:
+        raise AdoptError(str(exc)) from exc
+    return local
+
+
+def _resolve_owner(
+    client: Any, auth: AuthToken, configured: str, org: str
+) -> str:
+    owner = (
+        org or configured or os.environ.get("FORGEL_GITHUB_ORG", "")
+    ).strip()
+    if owner:
+        return owner
+    if auth.kind != "pat":
+        raise AdoptError(
+            "set [git] org or --org when using GitHub App credentials"
+        )
+    user = client.user()
+    login = str(user.get("login", "")).strip()
+    if not login:
+        raise AdoptError(
+            "cannot determine the GitHub owner; set [git] org or --org"
+        )
+    return login
+
+
+def _create_remote(
+    client: Any,
+    name: str,
+    owner: str,
+    private: bool,
+    description: str,
+) -> tuple[str, str]:
+    try:
+        data = client.create_repo(
+            owner, name, private=private, description=description
+        )
+    except GithubAPIError as exc:
+        if exc.status == 422:
+            raise AdoptError(
+                f"GitHub repository {owner}/{name} already exists; use "
+                f"/repo add https://github.com/{owner}/{name}.git to adopt it"
+            ) from exc
+        raise AdoptError(str(exc)) from exc
+    full_name = str(data.get("full_name") or f"{owner}/{name}")
+    url = str(
+        data.get("clone_url") or f"https://github.com/{full_name}.git"
+    )
+    return full_name, url
+
+
+def _push_repository(local: Path, token: AuthToken, branch: str) -> None:
+    try:
+        git_ops.push(local, branch, token.token)
+    except git_ops.GitOperationError as exc:
+        raise AdoptError(str(exc)) from exc
+
+
+def _write_repo_doc(layout: ProjectLayout, entry: dict[str, Any]) -> None:
+    path = layout.artifact(f"docs/program/repos/{entry['id']}.md")
+    edges = ", ".join(entry.get("depends_on", [])) or "none"
+    write_text(
+        path,
+        f"""# Repository: {entry['id']}
+
+- Role: {entry.get('role', 'application')}
+- Provider: {entry.get('provider', '')}
+- URL: {entry.get('url') or '—'}
+- Depends on: {edges}
+""",
+    )
+
+
+def _update_entry(
+    layout: ProjectLayout, entry: dict[str, Any]
+) -> None:
+    updated = [
+        entry if item["id"] == entry["id"] else item
+        for item in entries(layout)
+    ]
+    set_entries(layout, updated)
+
+
+def create_repository(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    repo_id: str,
+    org: str = "",
+    private: bool = True,
+    depends_on: list[str] | None = None,
+    role: str = "application",
+    description: str = "",
+    api: Any | None = None,
+    auth: AuthToken | None = None,
+) -> RepoCreateResult:
+    """Create a repository on GitHub and register it in the project."""
+
+    layout = ProjectLayout.detect(project["workspace"])
+    if not layout.is_container:
+        raise AdoptError(
+            "this project uses the legacy flat layout; repositories can only "
+            "be created in a container project"
+        )
+    selected_id = slugify_repo_id(repo_id)
+    if not selected_id:
+        raise AdoptError("repository id must not be empty")
+    known = {entry["id"] for entry in entries(layout)}
+    if selected_id in known:
+        raise AdoptError(f"repository id already exists: {selected_id}")
+    dependencies = [
+        item.strip() for item in (depends_on or []) if item.strip()
+    ]
+    if selected_id in dependencies:
+        raise AdoptError("a repository cannot depend on itself")
+    try:
+        validate_dependencies(known, dependencies)
+    except ValueError as exc:
+        raise AdoptError(str(exc)) from exc
+    local = layout.repo_path(selected_id)
+    if local.exists() and any(local.iterdir()):
+        raise AdoptError(f"local repository already exists: {local}")
+
+    git_config = _git_config(layout)
+    client, token = _github_client(
+        settings, git_config.auth, auth, api
+    )
+    owner = _resolve_owner(client, token, git_config.org, org)
+    full_name, url = _create_remote(
+        client, selected_id, owner, private, description
+    )
+
+    _init_local_repository(layout, selected_id, description)
+    try:
+        git_ops.ensure_remote(local, url)
+    except git_ops.GitOperationError as exc:
+        raise AdoptError(str(exc)) from exc
+    entry = {
+        "id": selected_id,
+        "role": role.strip() or "application",
+        "provider": "github",
+        "url": url,
+        "depends_on": dependencies,
+    }
+    add_entry(layout, entry)
+    _write_repo_doc(layout, entry)
+    write_program(
+        layout,
+        str(project["name"]),
+        str(project.get("recipe_id") or ""),
+    )
+    _control_commit(layout.control, f"Create repository {selected_id}")
+    _push_repository(local, token, git_ops.current_branch(local) or "main")
+    _event(
+        ledger,
+        str(project["id"]),
+        "repo_create",
+        [
+            _artifact_ref(layout, "program.yaml"),
+            _artifact_ref(layout, f"docs/program/repos/{selected_id}.md"),
+        ],
+        {
+            "repo": selected_id,
+            "provider": "github",
+            "url": url,
+            "full_name": full_name,
+            "depends_on": dependencies,
+        },
+    )
+    return RepoCreateResult(
+        project_id=str(project["id"]),
+        entry=entry,
+        url=url,
+        created=True,
+    )
+
+
+def publish_repository(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    repo_id: str,
+    org: str = "",
+    private: bool = True,
+    description: str = "",
+    api: Any | None = None,
+    auth: AuthToken | None = None,
+) -> RepoCreateResult:
+    """Create the GitHub remote for an existing local repository and push it."""
+
+    layout = ProjectLayout.detect(project["workspace"])
+    if not layout.is_container:
+        raise AdoptError(
+            "this project uses the legacy flat layout; publishing requires a "
+            "container project"
+        )
+    entry = next(
+        (item for item in entries(layout) if item["id"] == repo_id), None
+    )
+    if entry is None:
+        raise AdoptError(f"unknown repository {repo_id!r}")
+    if "github.com" in str(entry.get("url", "")):
+        raise AdoptError(
+            f"repository {repo_id} already has a GitHub remote: {entry['url']}"
+        )
+    local = layout.repo_path(repo_id)
+    if not (local / ".git").exists():
+        raise AdoptError(f"repository {repo_id} has no git history")
+
+    git_config = _git_config(layout)
+    client, token = _github_client(
+        settings, git_config.auth, auth, api
+    )
+    owner = _resolve_owner(client, token, git_config.org, org)
+    full_name, url = _create_remote(
+        client, repo_id, owner, private, description
+    )
+    git_ops.ensure_remote(local, url)
+    _push_repository(local, token, git_ops.current_branch(local) or "main")
+    entry = dict(entry)
+    entry["provider"] = "github"
+    entry["url"] = url
+    _update_entry(layout, entry)
+    _write_repo_doc(layout, entry)
+    write_program(
+        layout,
+        str(project["name"]),
+        str(project.get("recipe_id") or ""),
+    )
+    _control_commit(layout.control, f"Publish repository {repo_id}")
+    _event(
+        ledger,
+        str(project["id"]),
+        "repo_publish",
+        [
+            _artifact_ref(layout, "program.yaml"),
+            _artifact_ref(layout, f"docs/program/repos/{repo_id}.md"),
+        ],
+        {
+            "repo": repo_id,
+            "url": url,
+            "full_name": full_name,
+        },
+    )
+    return RepoCreateResult(
+        project_id=str(project["id"]),
+        entry=entry,
+        url=url,
+        created=True,
+    )
 
 
 def set_dependencies(

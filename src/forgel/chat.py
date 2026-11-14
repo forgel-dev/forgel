@@ -20,6 +20,8 @@ from .adopt import (
     AdoptError,
     add_repository,
     adopt_repository,
+    create_repository,
+    publish_repository,
     set_dependencies,
 )
 from .agent import ProjectAgent
@@ -79,6 +81,8 @@ Projects
 /adopt <url> [| brief]  adopt an existing repository and select it
 /repo list              repositories and dependency edges
 /repo add <url> [id] [depends_on=<id>]
+/repo create <id> [org=<name>] [public] [depends_on=<id,id>] [| description]
+/repo publish [id] [org=<name>] [public]  create remotes for local repositories
 /repo link <id> depends_on=<id,id>   replace the edges of a repository
 /github                 GitHub auth, repositories and merge policy
 /github publish [repo] <title>   push a branch, open a PR, follow policy
@@ -343,10 +347,102 @@ class CommandRouter:
             return Reply(
                 f"Updated dependencies for {entry['id']}: {edges}."
             )
+        if action in {"create", "publish"}:
+            if len(tokens) < 2 and action == "create":
+                return Reply(
+                    "Usage: /repo create <id> [org=<name>] [public] "
+                    "[depends_on=<id,id>] [| description]"
+                )
+            payload, _, description = (
+                tokens[1] if len(tokens) > 1 else ""
+            ).partition("|")
+            parts = payload.split()
+            repo_id = ""
+            options = parts
+            is_option = (
+                lambda token: token.startswith(("org=", "depends_on="))
+                or token == "public"
+            )
+            if action == "create":
+                repo_id = parts[0]
+                options = parts[1:]
+            elif parts and not is_option(parts[0]):
+                repo_id = parts[0]
+                options = parts[1:]
+            org = ""
+            public = False
+            depends_on: list[str] = []
+            for token in options:
+                if token.startswith("org="):
+                    org = token.split("=", 1)[1]
+                elif token == "public":
+                    public = True
+                elif token.startswith("depends_on="):
+                    depends_on = [
+                        item
+                        for item in token.split("=", 1)[1].split(",")
+                        if item
+                    ]
+                else:
+                    return Reply(f"unexpected argument: {token}")
+            description = description.strip()
+            try:
+                if action == "create":
+                    created = create_repository(
+                        self.settings,
+                        self.ledger,
+                        project,
+                        repo_id,
+                        org=org,
+                        private=not public,
+                        depends_on=depends_on,
+                        description=description,
+                    )
+                    return Reply(
+                        f"Created {created.entry['id']} at {created.url} "
+                        f"and added it to {project['id']}."
+                    )
+                if repo_id:
+                    targets = [repo_id]
+                else:
+                    layout = ProjectLayout.detect(project["workspace"])
+                    targets = [
+                        entry["id"]
+                        for entry in manifest_entries(layout)
+                        if "github.com" not in (entry.get("url") or "")
+                    ]
+                if not targets:
+                    return Reply("Nothing to publish.")
+                lines: list[str] = []
+                for target in targets:
+                    published = publish_repository(
+                        self.settings,
+                        self.ledger,
+                        project,
+                        target,
+                        org=org,
+                        private=not public,
+                        description=description,
+                    )
+                    lines.append(
+                        f"{target}: {published.url}"
+                    )
+                return Reply(
+                    "Published repositories:\n" + "\n".join(lines)
+                )
+            except (
+                AdoptError,
+                ProviderError,
+                GithubAuthError,
+                GithubAPIError,
+            ) as exc:
+                hint = self._github_hint("github.com", str(exc))
+                return Reply(f"error: {exc}{hint}")
         if action != "add":
             return Reply(
                 "Usage: /repo list, /repo add <url> [id] "
-                "[depends_on=<id,id>] or /repo link <id> "
+                "[depends_on=<id,id>], /repo create <id>, "
+                "/repo publish [id] or /repo link <id> "
                 "depends_on=<id,id>"
             )
         if len(tokens) < 2:

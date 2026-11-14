@@ -43,6 +43,31 @@ def _http_error(code: int, message: str) -> urllib.error.HTTPError:
 
 
 class GithubAPITest(unittest.TestCase):
+    def test_create_repo_posts_to_the_org_endpoint(self) -> None:
+        seen: dict = {}
+
+        def recording(request, timeout: float = 0) -> Response:
+            seen["url"] = request.full_url
+            seen["method"] = request.get_method()
+            seen["body"] = json.loads(request.data.decode("utf-8"))
+            return Response(
+                {
+                    "full_name": "acme/billing",
+                    "clone_url": "https://github.com/acme/billing.git",
+                }
+            )
+
+        api = GithubAPI("tok", opener=recording)
+        created = api.create_repo(
+            "acme", "billing", private=True, description="Billing"
+        )
+        self.assertEqual(seen["url"], "https://api.github.com/orgs/acme/repos")
+        self.assertEqual(seen["method"], "POST")
+        self.assertEqual(seen["body"]["name"], "billing")
+        self.assertEqual(seen["body"]["private"], True)
+        self.assertEqual(seen["body"]["auto_init"], False)
+        self.assertEqual(created["full_name"], "acme/billing")
+
     def test_check_state_green_pending_failed(self) -> None:
         green = GithubAPI(
             "tok",

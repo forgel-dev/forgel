@@ -66,18 +66,31 @@ Reply in the language of the user's message. Return exactly one JSON object:
   "acceptance": ["criterion", "..."],
   "constraints": ["constraint", "..."],
   "repo_id": "one of the repositories in program.yaml, or empty",
-  "test_command": ["command", "arg"] or []
+  "test_command": ["command", "arg"] or [],
+  "assumptions": ["what you decided where the request was silent"]
 }
 
 Use kind=change_request when the user asks for a product or code change.
 Use kind=answer for questions and conversation.
 
+Autonomy (D-075):
+- Work autonomously. Do not interrogate the user and never ask for permission
+  to start or continue. The goal is a finished result the user can review.
+- If a detail is unspecified but reversible, decide, put it in "assumptions",
+  and continue. A wrong assumption is corrected in the next request.
+- Return kind=answer with a question only when two interpretations would
+  produce materially different products and a wrong choice wastes a full
+  cycle, when the request needs an irreversible or production action
+  (deleting data, production deploy, payments, secrets, legal), or when
+  required access is missing. Ask one consolidated question, not a dialogue.
+
 For a change request:
 - list the explicit requirements and acceptance criteria; do not guess
   unstated features;
-- set repo_id from program.yaml; if the project has several repositories and
-  the target is ambiguous, return kind=answer asking the user which repository
-  to use instead of guessing;
+- set repo_id from program.yaml. With several repositories, choose the one the
+  request most likely targets from the roles, dependency edges and recent
+  tasks, and record why in "assumptions"; do not ask which repository. Leave
+  repo_id empty only when nothing in the context points to one;
 - set test_command only when the project's test command is evident from the
   context, otherwise leave it empty;
 - the daemon will run the task with a separate coding agent; you cannot edit
@@ -258,6 +271,9 @@ def parse_answer(raw: str) -> dict[str, Any]:
     test_command = data.get("test_command")
     if not isinstance(test_command, list):
         test_command = []
+    assumptions = data.get("assumptions")
+    if not isinstance(assumptions, list):
+        assumptions = []
     return {
         "kind": kind,
         "reply": reply.strip(),
@@ -273,6 +289,9 @@ def parse_answer(raw: str) -> dict[str, Any]:
         "repo_id": str(data.get("repo_id", "")).strip(),
         "test_command": [
             str(item) for item in test_command if str(item).strip()
+        ],
+        "assumptions": [
+            str(item) for item in assumptions if str(item).strip()
         ],
     }
 
@@ -375,6 +394,9 @@ class ProjectAgent:
         constraints = "\n".join(
             f"- {item}" for item in (answer.get("constraints") or [])
         ) or "- None stated."
+        assumptions = "\n".join(
+            f"- {item}" for item in (answer.get("assumptions") or [])
+        ) or "- None; the request was explicit enough."
         write_text(
             layout.artifact(relative),
             f"""# Change Request: {title}
@@ -403,6 +425,10 @@ class ProjectAgent:
 ## Constraints
 
 {constraints}
+
+## Assumptions
+
+{assumptions}
 """,
         )
         generation = self.ledger.current_generation(project["id"])
@@ -462,6 +488,9 @@ class ProjectAgent:
             [str(item) for item in constraints],
             repo_id=repo_id,
             test_command=[str(item) for item in test_command],
+            assumptions=[
+                str(item) for item in (answer.get("assumptions") or [])
+            ],
         )
         tasks.commit_task(
             layout, str(task["id"]), f"Queue task {task['id']}"

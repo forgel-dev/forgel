@@ -7,6 +7,7 @@ runtime settings still win where they must.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -67,6 +68,7 @@ class RefactoringConfig:
 class GitConfig:
     provider: str = "github"
     auth: str = "auto"
+    org: str = ""
     base_branch: str = "main"
     branch_prefix: str = "forgel/"
     draft_pr: bool = True
@@ -109,6 +111,7 @@ def render_project_config(
     allow_auto_targeted: bool = True,
     git_provider: str = "github",
     git_auth: str = "auto",
+    git_org: str = "",
     git_base_branch: str = "main",
     git_branch_prefix: str = "forgel/",
     git_draft_pr: bool = True,
@@ -152,6 +155,7 @@ allow_auto_targeted = {str(allow_auto_targeted).lower()}
 [git]
 provider = "{git_provider}"
 auth = "{git_auth}"
+org = "{git_org}"
 base_branch = "{git_base_branch}"
 branch_prefix = "{git_branch_prefix}"
 draft_pr = {str(git_draft_pr).lower()}
@@ -238,6 +242,9 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     git_prefix = str(git.get("branch_prefix", "forgel/"))
     if " " in git_prefix:
         raise ConfigError("forgel.toml: git.branch_prefix must not contain spaces")
+    git_org = str(git.get("org", "")).strip()
+    if git_org and not re.fullmatch(r"[A-Za-z0-9_.-]+", git_org):
+        raise ConfigError("forgel.toml: git.org must be a GitHub owner name")
     git_draft = git.get("draft_pr", True)
     git_require_ci = git.get("require_ci", True)
     git_revert = git.get("auto_revert_on_failure", True)
@@ -278,6 +285,7 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
         git=GitConfig(
             provider=str(git.get("provider", "github")),
             auth=git_auth,
+            org=git_org,
             base_branch=git_base,
             branch_prefix=git_prefix,
             draft_pr=git_draft,

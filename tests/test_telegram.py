@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from forgel.agent import ProjectAgent
 from forgel.approvals import record_approval
@@ -451,6 +453,53 @@ class AdoptCommandsTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("depends_on: [main]", program)
+
+    def test_repo_create_and_publish_are_chat_commands(self) -> None:
+        project = create_project(
+            self.settings, self.ledger, "Git demo", "A demo brief."
+        )
+        self.ledger.set_session(7, project)
+        created = SimpleNamespace(
+            entry={"id": "billing"},
+            url="https://github.com/acme/billing.git",
+        )
+        with patch(
+            "forgel.chat.create_repository", return_value=created
+        ) as create:
+            reply = self.router.handle(
+                7,
+                "/repo create billing org=acme depends_on=main "
+                "| Billing service",
+                "@tester",
+            )
+        self.assertIn("Created billing", reply.text)
+        self.assertEqual(create.call_args.args[3], "billing")
+        self.assertEqual(create.call_args.kwargs["org"], "acme")
+        self.assertEqual(create.call_args.kwargs["depends_on"], ["main"])
+        self.assertEqual(
+            create.call_args.kwargs["description"], "Billing service"
+        )
+        self.assertTrue(create.call_args.kwargs["private"])
+
+        published = SimpleNamespace(
+            url="https://github.com/acme/api.git",
+        )
+        with patch(
+            "forgel.chat.publish_repository", return_value=published
+        ) as publish:
+            reply = self.router.handle(
+                7, "/repo publish api org=acme", "@tester"
+            )
+        self.assertIn("api: https://github.com/acme/api.git", reply.text)
+        self.assertEqual(publish.call_args.args[3], "api")
+        self.assertEqual(publish.call_args.kwargs["org"], "acme")
+
+        with patch(
+            "forgel.chat.publish_repository", return_value=published
+        ) as publish_all:
+            self.router.handle(7, "/repo publish public", "@tester")
+        self.assertEqual(publish_all.call_count, 4)
+        self.assertFalse(publish_all.call_args.kwargs["private"])
 
     def test_repo_add_requires_a_selected_project(self) -> None:
         reply = self.router.handle(

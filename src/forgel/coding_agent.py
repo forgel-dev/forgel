@@ -106,8 +106,21 @@ Reply with exactly one JSON object per turn. Available actions:
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
-{"action": "done", "summary": "what was implemented and how it was tested"}
+{"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"]}
 {"action": "fail", "reason": "why the task cannot be completed"}
+
+Autonomy (D-075):
+- Work autonomously. The task is the source of truth. You cannot ask the user
+  questions and must not stop for permission to start, continue or finish.
+- When a detail is unspecified but reversible, choose the simplest option
+  consistent with the requirements and record it in done.assumptions.
+- Use fail only when two interpretations would produce materially different
+  products and the wrong one wastes a full cycle, when the action is
+  irreversible or destructive (deleting data, rewriting history, force-push,
+  production deploy, payments, secrets, legal), or when required access is
+  missing. State the exact decision needed.
+- Before release, err on the side of doing and showing a finished result; in
+  production, treat product data conservatively.
 
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
@@ -235,6 +248,7 @@ class CodingAgent:
                 commands,
                 touched,
                 test_output,
+                assumptions,
             ) = self._converse(
                 layout, repo, repo_id, task, model, runner, environment
             )
@@ -267,6 +281,7 @@ class CodingAgent:
             actions,
             commands,
             test_output,
+            assumptions,
         )
         tasks.update_task(
             layout,
@@ -278,6 +293,7 @@ class CodingAgent:
                 "files_changed": files_changed,
                 "commands": commands,
                 "test_output": _cap(test_output, 6000),
+                "assumptions": assumptions,
                 "report": _ref(layout, report),
             },
         )
@@ -365,6 +381,7 @@ class CodingAgent:
         list[dict[str, Any]],
         set[str],
         str,
+        list[str],
     ]:
         """Run the model loop and the final test, returning the run state."""
 
@@ -378,6 +395,11 @@ class CodingAgent:
         actions: list[str] = []
         commands: list[dict[str, Any]] = []
         touched: set[str] = set()
+        assumptions = [
+            str(item).strip()
+            for item in task.get("assumptions", [])
+            if str(item).strip()
+        ]
         status = "failed"
         summary = "step limit reached"
         invalid = 0
@@ -416,6 +438,10 @@ class CodingAgent:
                 summary = str(action.get("summary", "")).strip() or (
                     "agent reported done"
                 )
+                for item in action.get("assumptions", []):
+                    value = str(item).strip()
+                    if value and value not in assumptions:
+                        assumptions.append(value)
                 break
             if kind == "fail":
                 status = "failed"
@@ -475,6 +501,7 @@ class CodingAgent:
             commands,
             touched,
             test_output,
+            assumptions,
         )
 
     # ------------------------------------------------------------- setup
@@ -520,6 +547,9 @@ class CodingAgent:
         constraints = "\n".join(
             f"- {item}" for item in task.get("constraints", [])
         ) or "- none"
+        assumptions = "\n".join(
+            f"- {item}" for item in task.get("assumptions", [])
+        ) or "- none"
         test_command = task.get("test_command") or []
         tree = self._list(repo)
         branch = git_ops.current_branch(repo)
@@ -533,6 +563,9 @@ Acceptance criteria:
 
 Constraints:
 {constraints}
+
+Assumptions already recorded at intake (do not re-ask):
+{assumptions}
 
 Final test command: {json.dumps(test_command)}
 Repository: {repo_id} at {repo} (branch {branch})
@@ -761,6 +794,7 @@ Files:
         actions: list[str],
         commands: list[dict[str, Any]],
         test_output: str,
+        assumptions: list[str],
     ) -> Path:
         path = layout.artifact(
             f"docs/program/agent/{task['id']}.md"
@@ -774,6 +808,9 @@ Files:
         constraints = "\n".join(
             f"- {item}" for item in task.get("constraints", [])
         ) or "- none"
+        assumption_lines = (
+            "\n".join(f"- {item}" for item in assumptions) or "- none"
+        )
         action_lines = "\n".join(f"- {item}" for item in actions) or "- none"
         command_lines = (
             "\n".join(
@@ -804,6 +841,10 @@ Files:
 ## Constraints
 
 {constraints}
+
+## Assumptions
+
+{assumption_lines}
 
 ## Summary
 

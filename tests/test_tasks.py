@@ -46,7 +46,9 @@ class TasksTest(unittest.TestCase):
             ["POST /posts creates a post"],
             constraints=["stdlib only"],
             test_command=["python", "-m", "unittest"],
+            assumptions=["SQLite is the storage"],
         )
+        self.assertEqual(task["assumptions"], ["SQLite is the storage"])
         self.assertEqual(task["status"], "pending")
         self.assertEqual(len(tasks.list_tasks(self.layout)), 1)
         self.assertEqual(

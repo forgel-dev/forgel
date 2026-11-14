@@ -32,6 +32,13 @@ approval is only accepted for a completed release and requires
 release is a digest of every repository state; the per-repository SHAs are in
 `docs/program/releases/g<generation>.json`.
 
+**Autonomy vs gates.** The agent does not ask questions while it works. Before
+a release it decides reversible details itself, records every assumption and
+shows a finished result with evidence. It stops only for a material fork, an
+irreversible or production action, or missing access. The staging and
+production approvals are checkpoints on a finished result, not an
+interrogation; production data, payments and secrets stay human-gated.
+
 Run the tests:
 
 ```bash
@@ -157,15 +164,27 @@ Add related repositories or change their edges:
 
 ```text
 /repo add <url> [id] [depends_on=<id>]
+/repo create <id> [org=<name>] [public] [depends_on=<id,id>] [| description]
+/repo publish [id] [org=<name>] [public]
 /repo link <id> depends_on=<id,id>
 /repo list
 ```
 
 ```text
 /repo add https://github.com/owner/frontend web depends_on=main
+/repo create billing org=acme depends_on=main | Billing service
+/repo publish                 # create GitHub remotes for the local repositories
 /repo add https://github.com/owner/infra infra
 /repo link web depends_on=main
 ```
+
+`repo create` creates the GitHub repository, initializes the local repository
+with `README.md`, `FORGEL.md` and `AGENTS.md`, registers it in `program.yaml`,
+pushes it and records a ledger event. `repo publish` creates remotes for
+existing local repositories. Both are private by default and never delete a
+repository or force-push. The organization comes from `[git] org`,
+`--org`/`org=`, or `FORGEL_GITHUB_ORG`; a PAT falls back to the account's
+login.
 
 Link repositories only when their code depends on each other: a frontend
 consumes a backend contract, an E2E suite exercises both, an infrastructure
@@ -177,13 +196,15 @@ grouping adds no coupling.
 
 1. **GitHub App** (preferred): short-lived installation tokens. Create an App
    with Contents read/write, Pull requests read/write, Checks read and
-   Metadata read, then install it. Set `FORGEL_GITHUB_APP_ID`,
+   Metadata read, plus Administration write when Forgel should create
+   repositories, then install it. Set `FORGEL_GITHUB_APP_ID`,
    `FORGEL_GITHUB_INSTALLATION_ID` (optional when there is one installation)
    and the private key as a mounted `0600` file
    (`FORGEL_GITHUB_APP_PRIVATE_KEY_PATH`) or an inline PEM. App auth needs
    `pip install 'forgel[github]'`; the Docker image includes it.
-2. **PAT** (M0.5 bootstrap): fine-grained Contents read/write or classic
-   `repo`, via `FORGEL_GITHUB_TOKEN`, `/secret set github.token`, or
+2. **PAT** (M0.5 bootstrap): fine-grained Contents read/write (plus
+   Administration write for repository creation) or classic `repo`, via
+   `FORGEL_GITHUB_TOKEN`, `/secret set github.token`, or
    `forgel secret set github.token`.
 3. **SSH/deploy key**: clone, fetch and push only; no API token, so pull
    requests need one of the first two.

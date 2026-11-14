@@ -19,6 +19,8 @@ from .adopt import (
     AdoptError,
     add_repository,
     adopt_repository,
+    create_repository,
+    publish_repository,
     set_dependencies,
 )
 from .approvals import ApprovalError, latest_approval, record_approval
@@ -799,6 +801,68 @@ def cmd_repo(args: argparse.Namespace) -> int:
                 )
             return 0
         depends = [item for item in args.depends_on.split(",") if item]
+        if args.action == "create":
+            if not args.id:
+                print(
+                    "error: repo create requires --id <repository-id>",
+                    file=sys.stderr,
+                )
+                return 2
+            try:
+                created = create_repository(
+                    settings,
+                    ledger,
+                    project,
+                    args.id,
+                    org=args.org,
+                    private=not args.public,
+                    depends_on=depends,
+                    role=args.role,
+                    description=args.description,
+                )
+            except (AdoptError, ProviderError, GithubAuthError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            print(
+                f"Created {created.entry['id']} at {created.url} "
+                f"and added it to {project['id']}."
+            )
+            return 0
+        if args.action == "publish":
+            targets = (
+                [args.id]
+                if args.id
+                else [
+                    entry["id"]
+                    for entry in manifest_entries(layout)
+                    if "github.com" not in (entry.get("url") or "")
+                ]
+            )
+            if not targets:
+                print("nothing to publish")
+                return 0
+            for repo_id in targets:
+                try:
+                    published = publish_repository(
+                        settings,
+                        ledger,
+                        project,
+                        repo_id,
+                        org=args.org,
+                        private=not args.public,
+                        description=args.description,
+                    )
+                except (
+                    AdoptError,
+                    ProviderError,
+                    GithubAuthError,
+                ) as exc:
+                    print(
+                        f"error: {repo_id}: {exc}", file=sys.stderr
+                    )
+                    return 1
+                print(f"Published {repo_id} to {published.url}")
+            return 0
         if args.action == "link":
             if not args.url:
                 print(
@@ -1298,14 +1362,19 @@ def build_parser() -> argparse.ArgumentParser:
     adopt.set_defaults(func=cmd_adopt)
 
     repo = subparsers.add_parser(
-        "repo", help="List or add repositories in a project"
+        "repo", help="List, add, create or publish project repositories"
     )
-    repo.add_argument("action", choices=["list", "add", "link"])
+    repo.add_argument(
+        "action", choices=["list", "add", "link", "create", "publish"]
+    )
     repo.add_argument("project_id")
     repo.add_argument("url", nargs="?", default="")
     repo.add_argument("--id", default="")
     repo.add_argument("--depends-on", dest="depends_on", default="")
     repo.add_argument("--role", default="application")
+    repo.add_argument("--org", default="")
+    repo.add_argument("--public", action="store_true")
+    repo.add_argument("--description", default="")
     repo.add_argument("--home", default=None)
     repo.set_defaults(func=cmd_repo)
 

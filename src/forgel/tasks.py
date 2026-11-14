@@ -45,6 +45,7 @@ def create_task(
     constraints: list[str] | None = None,
     repo_id: str = "",
     test_command: list[str] | None = None,
+    assumptions: list[str] | None = None,
 ) -> dict[str, Any]:
     title = title.strip()
     requirements = [item.strip() for item in requirements if item.strip()]
@@ -67,6 +68,9 @@ def create_task(
         ],
         "repo_id": repo_id,
         "test_command": list(test_command or []),
+        "assumptions": [
+            item.strip() for item in (assumptions or []) if item.strip()
+        ],
         "status": "pending",
         "created_at": _now(),
         "started_at": "",

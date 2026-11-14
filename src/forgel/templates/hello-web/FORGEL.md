@@ -15,3 +15,6 @@ then `AGENTS.md`.
 - Acceptance criteria live in `docs/program/features/`.
 - Run `forgel sync` after editing outside Forgel.
 - The product runs in Docker; QA runs through `docker/docker-compose.qa.yml`.
+- Autonomy: finish reversible pre-release work without asking, record
+  assumptions, and stop only for a material fork, an irreversible or
+  production action, or missing access.

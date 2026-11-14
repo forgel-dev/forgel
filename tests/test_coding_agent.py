@@ -156,6 +156,7 @@ class CodingAgentTest(unittest.TestCase):
                 {
                     "action": "done",
                     "summary": "added add and tests",
+                    "assumptions": ["The calculator is a plain module"],
                 }
             ),
         ]
@@ -175,6 +176,15 @@ class CodingAgentTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "done")
         self.assertIn("added add", stored["result"]["summary"])
+        self.assertEqual(
+            stored["result"]["assumptions"],
+            ["The calculator is a plain module"],
+        )
+        report = (self.layout.root / result.report).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Assumptions", report)
+        self.assertIn("plain module", report)
         log = _run(self.repo, "log", "-1", "--format=%s").stdout
         self.assertIn("Agent: Add a calculator", log)
         events = [

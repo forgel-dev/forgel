@@ -170,6 +170,8 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-072** | Official recipes cover common stacks as convenience templates; the coding agent may create or extend an environment definition for a missing stack, but only through the standard contract and with review | Maintaining every environment is impossible, and forbidding new ones caps the product; a standard, reviewable artifact avoids bespoke per-instance adapters | Recipes are small composable starting points; the agent writes a Dockerfile/Compose/Dev Container and `environment.yaml`; nothing language-specific enters the core |
 | **D-073** | Arbitrary environment code runs only inside a per-project sandbox: repo-only mount, no `/data` secrets, no host Docker socket, resource and network limits, configurable registry policy | Broad environment support is safe only behind an isolation boundary; CI runners solve the same problem the same way | The sandbox runtime builds/pulls and runs the project image; the daemon talks to it; a trusted single-user host may allow arbitrary images, while hosted mode uses an allowlist and pinned digests; `local` remains a single-tenant fallback. One labelled container per session mounts the working repository at `/workspace` and the declared sibling repositories read-only, runs as the daemon UID/GID with capabilities dropped, a read-only root and `/tmp`, CPU/memory/pid limits and `network=none` by default; the daemon reaches it over `DOCKER_HOST`, never the host socket. The bundled DinD sidecar is opt-in and privileged; a remote daemon is the multi-tenant choice |
 | **D-074** | The core moves to Apache-2.0; the moat is the brand, execution speed, the audit/benchmark data and the future hosted service, not copyleft | The project bets on adoption and virality: AGPL deters companies from embedding and extending the core, while a hosted clone is now unlikely to beat the original on trust, audit and distribution | All code is Apache-2.0 (DCO, no CLA); registry data stays CC0 and docs CC BY 4.0; the trademark and the `conformant` badge remain; a closed hosted clone is answered by brand, data and service quality. Supersedes the core-license part of D-018 |
+| **D-075** | Human involvement is an exception, not a step: agents work autonomously through pre-release work, show a finished result with evidence, and rework on feedback; they stop only for a material fork, an irreversible or destructive action, or missing access | Constant confirmation is the main bottleneck of agent-driven development, while the earlier safety over-correction now costs more than it protects; pre-release work is reversible, so doing and showing beats asking | Prompts and `AGENTS.md` state the policy; every assumption is recorded in the task and report; production, product data, payments, secrets and legal decisions stay human-gated; one consolidated question, never a dialogue |
+| **D-076** | Repository lifecycle is a Forgel command, not manual GitHub work: the project can create a repository in the configured organization and publish the existing local repositories from the CLI or chat | A project grows past ten repositories, and every manual creation step blocks the autonomous loop; the same operation is a deterministic, auditable API call | `repo create` creates the GitHub repository, initializes the local repository, registers it in `program.yaml`, pushes and records a ledger event; `repo publish` creates remotes for existing local repositories; private by default, no deletion and no force-push; the org comes from `[git] org`, `--org` or `FORGEL_GITHUB_ORG` |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1016,6 +1018,45 @@ This choice is (c) at the execution layer, (b) at the artifact layer and (a)
 for convenience: arbitrary environments are allowed, but only behind a
 sandbox; missing environments are authored as standard container definitions
 rather than adapters; official recipes cover the common cases.
+
+### 7.14 Autonomy Policy
+
+The product removes the human from the critical path. Human involvement is an
+exception, not a step (D-075).
+
+**Rule.** Work autonomously. The task is the source of truth. Do not ask for
+permission to start, continue or finish. When a detail is unspecified but the
+action is reversible, choose the simplest option consistent with the
+requirements, record it as an assumption and continue. Review is result-first:
+finish the whole requested result, present it with evidence, and rework on
+feedback.
+
+**Stop conditions — the only reasons to involve a human:**
+1. a material fork: two interpretations produce materially different products
+   and the wrong one wastes a full cycle;
+2. an irreversible or destructive action: deleting data, rewriting history,
+   force-push, production deploy, payments, secrets, legal decisions;
+3. missing access or credentials.
+
+Ask one consolidated question, never a dialogue. In the coding protocol, where
+the agent cannot ask, the same cases are a `fail` with the exact decision
+needed.
+
+**Pre-release vs production.** Before a release, err on the side of doing:
+staging is reversible, and showing a finished result is cheaper than an
+interrogation. In production, be conservative with product data, customer
+credentials, money and legal exposure; those actions are human-gated by
+default.
+
+**Evidence.** Every assumption is recorded in the task record and in the agent
+report. The human reviews assumptions and the result, not a stream of
+questions. A wrong assumption is a normal input to the next change, not a
+process failure.
+
+**Gates are not questions.** The staging and production approvals are
+checkpoints on a finished result, not a confirmation during work. Keeping the
+two apart is what makes the loop fast: the work runs to completion, then a
+human decides once.
 
 ---
 

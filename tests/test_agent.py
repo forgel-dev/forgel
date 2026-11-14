@@ -133,6 +133,7 @@ class AgentTest(unittest.TestCase):
             "constraints": ["standard library only"],
             "repo_id": "main",
             "test_command": ["python", "-m", "unittest"],
+            "assumptions": ["The toggle belongs to the main application"],
         }
         agent = ProjectAgent(
             self.settings,
@@ -147,7 +148,17 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(task["status"], "pending")
         self.assertEqual(task["repo_id"], "main")
         self.assertEqual(task["requirements"], ["Add a dark theme toggle"])
+        self.assertEqual(
+            task["assumptions"],
+            ["The toggle belongs to the main application"],
+        )
         self.assertIn("Queued task", result.text)
+        assert result.request is not None
+        request_text = layout.artifact(result.request).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Assumptions", request_text)
+        self.assertIn("main application", request_text)
 
     def test_non_json_answer_falls_back_to_text(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

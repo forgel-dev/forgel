@@ -124,6 +124,10 @@ Set `DEPLOY_APP_KEY_FILE=./github-app.pem`. The key is uploaded to
 `<DEPLOY_DIR>/secrets/forge-github-app.pem` with mode `0600`; the Compose file
 mounts `./secrets` read-only at `/run/secrets` and the runtime sets
 `FORGEL_GITHUB_APP_PRIVATE_KEY_PATH`. Do not put the key in the runtime env.
+If Forgel should create repositories (`repo create`, `repo publish`), the App
+needs **Administration: write** in addition to Contents, Pull requests, Checks
+and Metadata; a PAT needs the same repository-administration scope. Set
+`FORGEL_GITHUB_ORG` to the default owner.
 
 ## Container Rights and Project Environments
 

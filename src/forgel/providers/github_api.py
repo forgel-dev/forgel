@@ -120,6 +120,30 @@ class GithubAPI:
     def repo(self, full_name: str) -> dict[str, Any]:
         return self.request("GET", f"/repos/{full_name}")
 
+    def user(self) -> dict[str, Any]:
+        return self.request("GET", "/user")
+
+    def create_repo(
+        self,
+        owner: str,
+        name: str,
+        private: bool = True,
+        description: str = "",
+    ) -> dict[str, Any]:
+        """Create an empty repository in an organization or for the user."""
+
+        path = f"/orgs/{owner}/repos" if owner else "/user/repos"
+        return self.request(
+            "POST",
+            path,
+            {
+                "name": name,
+                "private": private,
+                "description": description,
+                "auto_init": False,
+            },
+        )
+
     # ------------------------------------------------------------ pull requests
 
     def find_open_pull(
