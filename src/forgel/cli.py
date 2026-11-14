@@ -7,6 +7,7 @@ import getpass
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ from .artifacts import read_json
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .context import effective_context, resolve_context
-from .control import set_paused
+from .control import is_paused, set_paused
 from .daemon import project_state, run_daemon
 from .github_flow import (
     GithubFlowError,
@@ -35,6 +36,7 @@ from .github_flow import (
 from .git_ops import GitOperationError
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .model import build_model_client
 from .project_config import (
     ConfigError,
     SimplicityConfig,
@@ -45,7 +47,7 @@ from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
 from .providers import ProviderError
 from .providers.github_api import GithubAPIError
-from .providers.github_auth import GithubAuthError
+from .providers.github_auth import GithubAuth, GithubAuthError
 from .orchestrator import Orchestrator, StageError
 from .secrets import (
     SecretError,
@@ -837,6 +839,94 @@ def cmd_repo(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    issues: list[str] = []
+
+    def report(label: str, value: str, ok: bool = True) -> None:
+        print(f"{'OK  ' if ok else 'WARN'} {label:<22} {value}")
+        if not ok:
+            issues.append(label)
+
+    print(f"home: {settings.home}")
+    try:
+        settings.home.mkdir(parents=True, exist_ok=True)
+        probe = settings.home / ".forgel-doctor"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        report("home writable", str(settings.home))
+    except OSError as exc:
+        report("home writable", str(exc), False)
+
+    report(
+        "registry",
+        str(settings.registry_path),
+        settings.registry_path.exists(),
+    )
+    report(
+        "jurisdictions",
+        str(settings.jurisdiction_path),
+        settings.jurisdiction_path.exists(),
+    )
+    report(
+        "templates",
+        str(settings.templates_path),
+        settings.templates_path.exists(),
+    )
+
+    try:
+        ledger = Ledger(settings.db_path)
+        try:
+            count = len(ledger.list_projects())
+        finally:
+            ledger.close()
+        report("ledger", f"{settings.db_path} ({count} projects)")
+    except Exception as exc:  # noqa: BLE001 - doctor reports, never crashes
+        report("ledger", str(exc), False)
+
+    paused = "paused" if is_paused(settings.home) else "running"
+    report("control", paused)
+
+    try:
+        telegram = TelegramConfig.from_env(home=settings.home)
+        report(
+            "telegram",
+            f"{len(telegram.allowed_chat_ids)} allowed chat(s), "
+            f"poll {telegram.poll_timeout}s",
+        )
+    except TelegramConfigError as exc:
+        report("telegram", str(exc), False)
+
+    model = build_model_client(settings.home, log=lambda _m: None)
+    if model is None:
+        report("model", "not configured; free text disabled", False)
+    else:
+        report("model", type(model).__name__)
+
+    github = GithubAuth(settings.home)
+    status = github.status()
+    report(
+        "github auth",
+        status,
+        status != "no GitHub credentials",
+    )
+
+    for tool in ("git", "docker", "node", "npm"):
+        path = shutil.which(tool)
+        report(tool, path or "not found", path is not None)
+    if shutil.which("git"):
+        version = subprocess.run(
+            ["git", "--version"], capture_output=True, text=True, check=False
+        ).stdout.strip()
+        report("git version", version)
+
+    if issues:
+        print("RESULT: ISSUES (" + ", ".join(issues) + ")")
+        return 1
+    print("RESULT: OK")
+    return 0
+
+
 def cmd_secret(args: argparse.Namespace) -> int:
     settings = _settings(args)
     if args.action == "list":
@@ -1139,6 +1229,12 @@ def build_parser() -> argparse.ArgumentParser:
     repo.add_argument("--role", default="application")
     repo.add_argument("--home", default=None)
     repo.set_defaults(func=cmd_repo)
+
+    doctor = subparsers.add_parser(
+        "doctor", help="Check the local installation and deployment prerequisites"
+    )
+    doctor.add_argument("--home", default=None)
+    doctor.set_defaults(func=cmd_doctor)
 
     secret = subparsers.add_parser(
         "secret", help="Manage secrets in the local 0600 store"

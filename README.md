@@ -302,7 +302,8 @@ docker compose --profile telegram up -d --build telegram
 
 The bot and the ledger share the `/data` volume, so state survives restarts.
 The daemon runs from the image; stopping the process is a deployment action,
-not a chat command.
+not a chat command. The full server guide, including secrets, backup, updates
+and `forgel doctor`, is in [docs/deploy.md](docs/deploy.md).
 
 ## Configuration
 
@@ -310,6 +311,7 @@ not a chat command.
 - `FORGEL.md` → `AGENTS.md` → `CLAUDE.md` — instruction files, read in that order.
 - `forgel config <project-id>` — show the effective project config.
 - `forgel context <project-id> [--raw]` — show the resolved context files and their priority.
+- `forgel doctor` — check the home, registry, ledger, Telegram, model, GitHub and tools before a deployment. See [docs/deploy.md](docs/deploy.md).
 
 ## Edit Outside Forgel
 
