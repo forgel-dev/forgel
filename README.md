@@ -11,6 +11,8 @@ console; there are no separate utilities to remember.
 
 ```bash
 cd /path/to/repo
+forgel setup            # creates .env.local (gitignored)
+# put FORGEL_MODEL_API_KEY in .env.local
 forgel
 forgel> /adopt .
 forgel> plan the milestone: bring the project to M1
@@ -26,8 +28,12 @@ task", "work in peak hours", "pause". The model chooses the operation; you do
 not need to remember commands. `/adopt`, `/new`, `/secret` and `/config` stay
 explicit because they are entry points or touch sensitive state.
 
-- `/plan` needs a model key: set `FORGEL_MODEL_API_KEY` or
+- `/plan` needs a model key: set `FORGEL_MODEL_API_KEY` in `.env.local` (the
+  client loads it automatically), in the environment, or with
   `/secret set model.api_key` inside the client.
+- `.env.local` is the local client setup (model, GitHub, task pipeline, peak
+  hours, sandbox). SSH and other deployment settings live only in
+  `.env.deploy` and are not needed locally; see `docs/deploy.md`.
 - After each command the daemon runs until it needs a human: a task awaiting
   acceptance, a stalled or finished milestone, or a scheduled retry (it waits
   through the backoff; Ctrl-C returns to the prompt).

@@ -50,6 +50,7 @@ from .github_flow import (
 from .git_ops import GitOperationError
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .local_env import LocalEnvError, init_local_env, load_local_env
 from .model import build_model_client
 from .planner import PlanningError, plan_project, plan_status
 from .project_config import (
@@ -78,7 +79,41 @@ from .telegram import TelegramConfig, TelegramConfigError, run_bot
 
 
 def _settings(args: argparse.Namespace) -> Settings:
+    """Build settings after loading local .env files.
+
+    The process environment wins; ``.env.local``/``.env`` in the working
+    directory and in the Forgel home fill the gaps.
+    """
+
+    try:
+        load_local_env(Path.cwd(), None)
+        home = (
+            Path(args.home)
+            if args.home
+            else Path(
+                os.environ.get("FORGEL_HOME", Path.home() / ".forgel")
+            )
+        )
+        load_local_env(None, home.expanduser())
+    except LocalEnvError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
     return Settings.from_env(args.home)
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    try:
+        path = init_local_env(Path.cwd(), force=args.force)
+    except LocalEnvError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Created {path}")
+    print(
+        "Fill FORGEL_MODEL_API_KEY (and GitHub credentials if you publish), "
+        "then run `forgel`."
+    )
+    print("`forgel doctor` shows anything still missing.")
+    return 0
 
 
 def _ledger(settings: Settings) -> Ledger:
@@ -1476,6 +1511,12 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--dry-run", action="store_true")
     plan.add_argument("--home", default=None)
     plan.set_defaults(func=cmd_plan)
+
+    setup = subparsers.add_parser(
+        "setup", help="Create a local .env.local setup file"
+    )
+    setup.add_argument("--force", action="store_true")
+    setup.set_defaults(func=cmd_setup)
 
     chat = subparsers.add_parser(
         "chat", help="Local console: the same commands without Telegram"

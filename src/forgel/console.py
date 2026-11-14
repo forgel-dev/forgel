@@ -13,6 +13,7 @@ prompt); an idle home returns immediately.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Callable
 
 from .agent import ProjectAgent
@@ -140,10 +141,24 @@ def run_console(
     if agent is None:
         client = build_model_client(settings.home, log=output)
         if client is None:
+            local_env = Path.cwd() / ".env.local"
+            output("Forgel is not fully configured:")
+            if local_env.exists():
+                output(
+                    f"  model: set FORGEL_MODEL_API_KEY in {local_env}"
+                )
+            else:
+                output(
+                    "  model: run `forgel setup` to create ./.env.local, "
+                    "then set FORGEL_MODEL_API_KEY"
+                )
             output(
-                "Model not configured: commands work, free text and planning "
-                "are disabled. Set FORGEL_MODEL_API_KEY or "
-                "/secret set model.api_key."
+                "  github: optional locally; needed to publish branches "
+                "or create repositories"
+            )
+            output(
+                "Commands and /adopt work; planning and code changes need "
+                "the model. `forgel doctor` checks the rest."
             )
         else:
             agent = ProjectAgent(settings, ledger, client)

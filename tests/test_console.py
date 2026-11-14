@@ -132,6 +132,25 @@ class ConsoleTest(unittest.TestCase):
         text = self._run([])
         self.assertIn("Bye.", text)
 
+    def test_a_missing_model_is_reported_with_the_setup_command(
+        self,
+    ) -> None:
+        output: list[str] = []
+        with patch(
+            "forgel.console.build_model_client", return_value=None
+        ):
+            run_console(
+                self.settings,
+                self.ledger,
+                daemon=False,
+                input_fn=_feed(["/quit"]),
+                output=output.append,
+            )
+        text = "\n".join(output)
+        self.assertIn("not fully configured", text)
+        self.assertIn("forgel setup", text)
+        self.assertIn("FORGEL_MODEL_API_KEY", text)
+
     def test_daemon_mode_returns_when_there_is_nothing_to_do(self) -> None:
         output: list[str] = []
         run_console(
