@@ -10,6 +10,7 @@ from forgel.adopt import (
     AdoptError,
     add_repository,
     adopt_repository,
+    extract_control,
     set_dependencies,
 )
 from forgel.config import Settings
@@ -266,6 +267,45 @@ class AdoptTest(unittest.TestCase):
                 "https://token@github.com/owner/repo",
             )
         self.assertEqual(self.ledger.list_projects(), [])
+
+    def test_state_can_move_to_a_separate_repository(self) -> None:
+        source = self._source("backend")
+        adopted = adopt_repository(
+            self.settings, self.ledger, str(source)
+        )
+        project = self.ledger.get_project(adopted.project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        self.assertEqual(layout.control.resolve(), source.resolve())
+        target = self.home / "program-state"
+        result = extract_control(
+            self.settings, self.ledger, project, str(target)
+        )
+        self.assertEqual(result.control, str(target.resolve()))
+        self.assertIn("forgel.toml", result.moved)
+        self.assertTrue((target / "forgel.toml").exists())
+        self.assertTrue((target / "docs" / "program").is_dir())
+        self.assertTrue((target / ".git").exists())
+        self.assertFalse((source / "forgel.toml").exists())
+        self.assertFalse((source / "docs" / "program").exists())
+        layout = ProjectLayout.detect(project["workspace"])
+        self.assertEqual(layout.control.resolve(), target.resolve())
+        metadata = json.loads(
+            (source / ".forgel" / "project.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(metadata["control"], str(target.resolve()))
+        program = (target / "program.yaml").read_text(encoding="utf-8")
+        self.assertIn("path: ../sources/backend", program)
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=source,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        self.assertEqual(status, "")
 
     def test_brownfield_sync_accept_and_rollback(self) -> None:
         source = self._source("backend")

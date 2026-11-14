@@ -449,6 +449,13 @@ def commit_control(layout: ProjectLayout, message: str) -> None:
     """Commit project artifacts, best effort, without touching product work."""
 
     if layout.is_linked:
+        if layout.control.resolve() != layout.root.resolve():
+            if (layout.control / ".git").exists():
+                try:
+                    git_ops.commit_all(layout.control, message)
+                except git_ops.GitOperationError:
+                    return
+            return
         paths = [
             item for item in CONTROL_PATHS if (layout.root / item).exists()
         ]

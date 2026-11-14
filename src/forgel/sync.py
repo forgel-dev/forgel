@@ -74,6 +74,8 @@ def _required_paths(workspace: Path) -> set[str]:
     if not layout.is_project:
         return set(REQUIRED_PATHS)
     if layout.is_linked:
+        if layout.control.resolve() != layout.root.resolve():
+            return set()
         return {
             "forgel.toml",
             "program.yaml",
@@ -112,7 +114,10 @@ def _required_paths(workspace: Path) -> set[str]:
 
 
 def _docs_prefix(workspace: Path) -> str:
-    return _docs(workspace).relative_to(_layout(workspace).root).as_posix()
+    layout = _layout(workspace)
+    if layout.is_linked:
+        return "docs/program"
+    return _docs(workspace).relative_to(layout.root).as_posix()
 
 
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -548,11 +553,15 @@ def _target_for(
     layout: ProjectLayout, path: str
 ) -> tuple[Path, str]:
     if layout.is_linked:
-        control = layout.control.relative_to(layout.root).as_posix()
-        if path == control:
-            return layout.control, ""
-        if path.startswith(control + "/"):
-            return layout.control, path[len(control) + 1 :]
+        try:
+            control = layout.control.relative_to(layout.root).as_posix()
+        except ValueError:
+            control = ""
+        if control:
+            if path == control:
+                return layout.control, ""
+            if path.startswith(control + "/"):
+                return layout.control, path[len(control) + 1 :]
         parts = path.split("/")
         if len(parts) >= 3 and parts[0] == "repos":
             return layout.repo_path(parts[1]), "/".join(parts[2:])

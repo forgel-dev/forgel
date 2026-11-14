@@ -21,6 +21,7 @@ from .adopt import (
     add_repository,
     adopt_repository,
     create_repository,
+    extract_control,
     publish_repository,
     set_dependencies,
 )
@@ -161,6 +162,7 @@ class CommandRouter:
             "/new": self._new,
             "/adopt": self._adopt,
             "/repo": self._repo,
+            "/control": self._control,
             "/github": self._github,
             "/plan": self._plan,
             "/tasks": self._tasks,
@@ -611,6 +613,26 @@ class CommandRouter:
         return Reply(
             f"{action.capitalize()}ed task {updated['id']} "
             f"({updated['status']})."
+        )
+
+    def _control(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        tokens = rest.split(maxsplit=1)
+        action = tokens[0].lower() if tokens else ""
+        if action != "extract":
+            return Reply("Usage: /control extract [path]")
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        path = tokens[1].strip() if len(tokens) > 1 else ""
+        try:
+            result = extract_control(
+                self.settings, self.ledger, project, path
+            )
+        except AdoptError as exc:
+            return Reply(f"error: {exc}")
+        return Reply(
+            f"Project state moved to {result.control}. "
+            "The product repository no longer tracks it."
         )
 
     def _github(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -1279,6 +1301,13 @@ class CommandRouter:
                 return Reply("Tell me the repository URL or path.")
             payload = f"{url} | {brief}" if brief else url
             return combine(self._adopt(chat_id, payload, actor))
+        if action == "control_extract":
+            path = str(args.get("path") or "").strip()
+            return combine(
+                self._control(
+                    chat_id, f"extract {path}".strip(), actor
+                )
+            )
         if action == "repo_add":
             url = str(args.get("url") or "").strip()
             if not url:

@@ -130,6 +130,9 @@ class ProjectLayout:
         if self.is_container:
             return self.root / CONTROL_DIR
         if self.is_linked:
+            stored = self.metadata().get("control")
+            if stored:
+                return Path(str(stored)).expanduser()
             return self.root
         return self.root
 

@@ -245,6 +245,12 @@ stays local. The folder is never added as a git remote. This is the normal
 way to hand over a repository you already work in: other tools keep using the
 same folder.
 
+When a single-folder project grows into a program, move its state into a
+separate repository with `/control extract [path]` (or ask in plain language):
+the process artifacts leave the product repository and get their own git
+history and remote. Projects created as multi-repository from the start
+(`/new`) keep their state in the separate `program/` control repository.
+
 **The first folder is the entry point, not a one-repository limit.** A linked
 project is a normal multi-repository project: add another local folder with
 `/repo add /srv/frontend web depends_on=main`, or create a new repository in a

@@ -20,6 +20,7 @@ from .adopt import (
     add_repository,
     adopt_repository,
     create_repository,
+    extract_control,
     publish_repository,
     set_dependencies,
 )
@@ -1323,6 +1324,30 @@ def cmd_plan(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+
+
+def cmd_control(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        project = resolve_project(ledger, args.project_id)
+        if args.action != "extract":
+            print("Usage: forgel control extract <project> [--path DIR]", file=sys.stderr)
+            return 2
+        result = extract_control(settings, ledger, project, args.path)
+        print(f"control:  {result.control}")
+        print("moved:    " + (", ".join(result.moved) or "nothing"))
+        print(
+            "The project state now lives in a separate repository; "
+            "the product repository no longer tracks it."
+        )
+        return 0
+    except (ProjectError, AdoptError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        ledger.close()
+
 def cmd_chat(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -1531,6 +1556,15 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--dry-run", action="store_true")
     plan.add_argument("--home", default=None)
     plan.set_defaults(func=cmd_plan)
+
+    control = subparsers.add_parser(
+        "control", help="Move a linked project's state into a separate repository"
+    )
+    control.add_argument("action", choices=["extract"])
+    control.add_argument("project_id")
+    control.add_argument("--path", default="")
+    control.add_argument("--home", default=None)
+    control.set_defaults(func=cmd_control)
 
     setup = subparsers.add_parser(
         "setup", help="Create a local .env.local setup file"

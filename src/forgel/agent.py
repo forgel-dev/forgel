@@ -60,6 +60,7 @@ AGENT_ACTIONS = {
     "repo_add",
     "repo_create",
     "repo_publish",
+    "control_extract",
     "peak",
     "pause",
     "resume",
@@ -107,6 +108,8 @@ the action cannot run without it):
 - repo_add {url, id?, depends_on?}: add an existing repository.
 - repo_create {id, org?, public?, depends_on?, description?}.
 - repo_publish {id?, org?, public?}.
+- control_extract {path?}: move the project state into a separate repository,
+  for a project that started with one folder and grew.
 - peak {policy?}: show or set the model peak policy ("always" or "off_peak").
 - pause {}, resume {}.
 - approve_staging {}: approve staging only.

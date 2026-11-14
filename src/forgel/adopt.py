@@ -33,6 +33,7 @@ from .program_manifest import (
     set_entries,
     slugify_repo_id,
     unique_repo_id,
+    update_metadata,
     validate_dependencies,
     write_program,
 )
@@ -223,6 +224,9 @@ def _commit_control(layout: ProjectLayout, message: str) -> None:
     if not layout.is_linked:
         _control_commit(layout.control, message)
         return
+    if layout.control.resolve() != layout.root.resolve():
+        _control_commit(layout.control, message)
+        return
     paths = [
         item for item in CONTROL_PATHS if (layout.root / item).exists()
     ]
@@ -377,7 +381,11 @@ def _write_state(layout: ProjectLayout, name: str) -> None:
 
 
 def _artifact_ref(layout: ProjectLayout, relative: str) -> str:
-    return str(layout.artifact(relative).relative_to(layout.root))
+    path = layout.artifact(relative)
+    try:
+        return str(path.relative_to(layout.root))
+    except ValueError:
+        return str(path)
 
 
 def _event(
@@ -1315,6 +1323,89 @@ def publish_repository(
         entry=entry,
         url=url,
         created=True,
+    )
+
+
+
+
+@dataclass(frozen=True)
+class ControlExtractResult:
+    project_id: str
+    control: str
+    moved: list[str]
+
+
+def extract_control(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    path: str = "",
+) -> ControlExtractResult:
+    """Move a linked project's state into a separate repository."""
+
+    layout = ProjectLayout.detect(project["workspace"])
+    if not layout.is_linked:
+        raise AdoptError(
+            "control extraction is only available for linked projects"
+        )
+    if layout.control.resolve() != layout.root.resolve():
+        raise AdoptError("the project state is already in a separate repository")
+    target = (
+        Path(path).expanduser().resolve()
+        if path.strip()
+        else (
+            layout.root.parent
+            / (slugify_repo_id(str(project["name"])) + "-program")
+        ).resolve()
+    )
+    if target.exists() and any(target.iterdir()):
+        raise AdoptError(f"target directory is not empty: {target}")
+    ensure_dir(target)
+    moved: list[str] = []
+    for name in CONTROL_PATHS:
+        if name == ".gitignore":
+            continue
+        source = layout.root / name
+        if not source.exists():
+            continue
+        shutil.move(str(source), str(target / name))
+        moved.append(name)
+    try:
+        git_ops.commit_paths(
+            layout.root,
+            moved,
+            f"Move project state to {target.name}",
+        )
+    except git_ops.GitOperationError:
+        pass
+    update_metadata(layout, {"control": str(target)})
+    layout = ProjectLayout.detect(layout.root)
+    write_program(
+        layout,
+        str(project["name"]),
+        str(project.get("recipe_id") or ""),
+    )
+    _control_commit(target, f"Extract project state for {project['name']}")
+    try:
+        _maybe_create_remote(
+            settings,
+            target,
+            f"{project['name']} program",
+            "Forgel project state",
+        )
+    except Exception:  # noqa: BLE001 - a local control repository is valid
+        pass
+    _event(
+        ledger,
+        str(project["id"]),
+        "control_extract",
+        [_artifact_ref(layout, "program.yaml")],
+        {"control": str(target), "moved": moved},
+    )
+    return ControlExtractResult(
+        project_id=str(project["id"]),
+        control=str(target),
+        moved=moved,
     )
 
 
