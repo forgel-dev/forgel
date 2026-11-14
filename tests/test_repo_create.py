@@ -318,7 +318,8 @@ class LinkedRepoCreateTest(unittest.TestCase):
             "commit", "-q", "-m", "initial",
         )
         self.adopted = adopt_repository(
-            self.settings, self.ledger, str(source), brief="Linked demo"
+            self.settings, self.ledger, str(source), brief="Linked demo",
+            name="linked-demo",
         )
         self.project = self.ledger.get_project(self.adopted.project_id)
         assert self.project is not None

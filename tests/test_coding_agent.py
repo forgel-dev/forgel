@@ -99,7 +99,8 @@ class CodingAgentTest(unittest.TestCase):
             "initial",
         )
         adopted = adopt_repository(
-            self.settings, self.ledger, str(source), brief="Test project"
+            self.settings, self.ledger, str(source), brief="Test project",
+            name="coding-agent",
         )
         self.project_id = adopted.project_id
         self.project = self.ledger.get_project(self.project_id)

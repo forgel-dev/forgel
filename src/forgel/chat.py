@@ -45,6 +45,7 @@ from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
 from .task_review import accept_task, reject_task
 from .program_manifest import entries as manifest_entries
+from .program_manifest import repo_location
 from .projects import ProjectError, create_project, derive_name, resolve_project
 from .proposals import summarize_proposals
 from .providers import ProviderError
@@ -333,7 +334,7 @@ class CommandRouter:
                 depends = ", ".join(entry["depends_on"]) or "none"
                 lines.append(
                     f"{entry['id']}  {entry['role']}  {entry['provider']}\n"
-                    f"  url: {entry['url'] or '—'}\n"
+                    f"  url: {repo_location(layout, entry) or '—'}\n"
                     f"  depends on: {depends}"
                 )
             return Reply("\n".join(lines))
@@ -513,7 +514,8 @@ class CommandRouter:
         entry = result.entry
         lines = [
             f"Added repository {entry['id']} to {project['id']}.",
-            f"Provider: {entry['provider']}; url: {entry['url']}.",
+            f"Provider: {entry['provider']}; "
+            f"url: {entry.get('path') or entry['url'] or '—'}.",
         ]
         if entry["depends_on"]:
             lines.append(

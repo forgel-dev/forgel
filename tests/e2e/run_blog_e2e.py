@@ -249,7 +249,7 @@ def main() -> int:
         source = home / "source"
         _make_source(source)
         adopted = adopt_repository(
-            settings, ledger, str(source), brief=TASK_BRIEF
+            settings, ledger, str(source), brief=TASK_BRIEF, name="blog"
         )
         project = ledger.get_project(adopted.project_id)
         assert project is not None

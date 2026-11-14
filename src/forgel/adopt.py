@@ -230,10 +230,50 @@ def _commit_control(layout: ProjectLayout, message: str) -> None:
     paths = [
         item for item in CONTROL_PATHS if (layout.root / item).exists()
     ]
+    _assert_no_local_environment(layout.root, paths)
     try:
         git_ops.commit_paths(layout.root, paths, message)
     except git_ops.GitOperationError:
         return
+
+
+LOCAL_ENVIRONMENT_MARKERS = (
+    "BEGIN OPENSSH PRIVATE KEY",
+    "BEGIN RSA PRIVATE KEY",
+    "FORGEL_MODEL_API_KEY=",
+    "FORGEL_GITHUB_TOKEN=",
+    "FORGEL_GITHUB_APP_PRIVATE_KEY=",
+)
+
+
+def _assert_no_local_environment(root: Path, paths: list[str]) -> None:
+    """Refuse to commit machine-specific paths or credentials."""
+
+    markers = (
+        str(Path.home()),
+        str(root.resolve()),
+    ) + LOCAL_ENVIRONMENT_MARKERS
+    leaks: list[str] = []
+    for item in paths:
+        target = root / item
+        if target.is_file():
+            files = [target]
+        elif target.is_dir():
+            files = [path for path in target.rglob("*") if path.is_file()]
+        else:
+            continue
+        for path in files:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if any(marker and marker in text for marker in markers):
+                leaks.append(str(path.relative_to(root)))
+    if leaks:
+        raise AdoptError(
+            "refusing to commit local environment data in: "
+            + ", ".join(sorted(leaks))
+        )
 
 
 def _default_base_branch(
@@ -283,7 +323,8 @@ def _write_brownfield_files(
         path = layout.control / filename
         if not path.exists():
             url = next(
-                (entry["url"] for entry in repos if entry.get("url")), "—"
+                (entry["url"] for entry in repos if entry.get("url")),
+                "a local folder",
             )
             write_text(path, template.format(name=name, url=url, repos=repo_ids))
     if not (layout.control / ".gitignore").exists():
@@ -312,7 +353,7 @@ def _write_brownfield_files(
 def _write_adoption_note(layout: ProjectLayout, name: str) -> None:
     repos = entries(layout)
     rows = "\n".join(
-        f"| {entry['id']} | {entry['provider']} | {entry['url'] or '—'} | "
+        f"| {entry['id']} | {entry['provider']} | {entry['url'] or 'local folder'} | "
         f"{', '.join(entry['depends_on']) or '—'} |"
         for entry in repos
     )
@@ -349,7 +390,7 @@ and recorded.
             f"""# Repo: {entry['id']}
 
 - Provider: `{entry['provider']}`
-- URL: {entry['url'] or '—'}
+- URL: {entry['url'] or 'local folder'}
 - Role: `{entry['role']}`
 - Depends on: {', '.join(f'`{item}`' for item in entry['depends_on']) or 'none'}
 """,
@@ -453,6 +494,13 @@ def _ensure_source_repository(root: Path) -> Path:
     head = _git(root, "rev-parse", "--verify", "HEAD")
     if head.returncode != 0:
         _git(root, "add", "-A")
+        staged = _git(root, "diff", "--cached", "--name-only").stdout.splitlines()
+        suspicious = git_ops.secret_like(staged)
+        if suspicious:
+            raise AdoptError(
+                "refusing to create the first commit: local environment files "
+                "would be included: " + ", ".join(suspicious)
+            )
         commit = _git(
             root,
             "-c", "user.name=Forgel",
@@ -483,8 +531,20 @@ def _source_remote(root: Path) -> tuple[str, str]:
     try:
         remote = get_provider(origin).parse(origin)
     except (ProviderError, ValueError):
-        return origin, "local"
+        return "", "local"
     return remote.url, remote.provider
+
+
+def _remote_name(url: str) -> str:
+    """Project name from the repository identity, never from the local path."""
+
+    if not url:
+        return ""
+    try:
+        remote = get_provider(url).parse(url)
+    except (ProviderError, ValueError):
+        return ""
+    return _project_name(remote.slug)
 
 
 def _maybe_create_remote(
@@ -579,14 +639,16 @@ def _adopt_linked(
             "this folder is already a Forgel project; select it with "
             "`/use <id>` or adopt from a copy"
         )
-    project_name = name.strip() or _project_name(root.name)
+    url, provider = _source_remote(root)
+    project_name = (
+        name.strip() or _remote_name(url) or _project_name(root.name)
+    )
     if not NAME_RE.fullmatch(project_name):
         raise AdoptError(
             "project name must be 1-64 characters of letters, digits, "
             "spaces, hyphens or underscores"
         )
-    project_brief = brief.strip() or f"Adopted in place from {root}."
-    url, provider = _source_remote(root)
+    project_brief = brief.strip() or f"Adopted in place: {project_name}."
     if url:
         auth = AuthReport(
             configured=True,
@@ -597,7 +659,7 @@ def _adopt_linked(
             settings, root, project_name, project_brief
         )
         if not url:
-            url = str(root)
+            url = ""
             provider = "local"
     project_id = new_project_id(project_name)
     ensure_dir(root / ".forgel")
@@ -769,6 +831,7 @@ def _add_linked_repository(
             raise AdoptError(
                 f"repository {entry['id']} already points at {root}"
             )
+    origin, provider = _source_remote(root)
     if repo_id:
         selected_id = slugify_repo_id(repo_id)
         if selected_id in known_ids:
@@ -776,7 +839,8 @@ def _add_linked_repository(
                 f"repository id already exists: {selected_id}"
             )
     else:
-        selected_id = unique_repo_id(layout, root.name)
+        remote_name = _remote_name(origin)
+        selected_id = unique_repo_id(layout, remote_name or root.name)
     dependencies = [
         item.strip() for item in (depends_on or []) if item.strip()
     ]
@@ -786,10 +850,6 @@ def _add_linked_repository(
         validate_dependencies(known_ids, dependencies)
     except ValueError as exc:
         raise AdoptError(str(exc)) from exc
-    origin, provider = _source_remote(root)
-    if not origin:
-        origin = str(root)
-        provider = "local"
     entry = {
         "id": selected_id,
         "role": role.strip() or "application",

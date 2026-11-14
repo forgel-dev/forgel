@@ -60,6 +60,7 @@ from .project_config import (
     load_project_config,
 )
 from .program_manifest import entries as manifest_entries
+from .program_manifest import repo_location
 from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
 from .sandbox import DockerSandbox
@@ -914,7 +915,8 @@ def cmd_repo(args: argparse.Namespace) -> int:
                 depends = ", ".join(entry["depends_on"]) or "none"
                 print(
                     f"{entry['id']:<12} {entry['role']:<16} "
-                    f"{entry['provider']:<8} {entry['url'] or '—'}"
+                    f"{entry['provider']:<8} "
+                    f"{repo_location(layout, entry) or '—'}"
                     f"  depends_on={depends}"
                 )
             return 0

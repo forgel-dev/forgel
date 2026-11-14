@@ -137,6 +137,14 @@ def repo_control_path(layout: ProjectLayout, repo_id: str) -> str:
     return f"./{repo_id}"
 
 
+def repo_location(layout: ProjectLayout, entry: dict[str, Any]) -> str:
+    """Runtime display location; local paths stay out of committed files."""
+
+    if entry.get("provider") == "local":
+        return str(layout.repo_path(entry["id"]))
+    return str(entry.get("url") or "")
+
+
 def repo_project_path(layout: ProjectLayout, repo_id: str) -> str:
     return layout.repo_ref(repo_id)
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from forgel.adopt import (
     AdoptError,
+    _assert_no_local_environment,
     add_repository,
     adopt_repository,
     extract_control,
@@ -72,6 +73,7 @@ class AdoptTest(unittest.TestCase):
             self.ledger,
             str(source),
             brief="Backend service",
+            name="backend",
         )
         project = self.ledger.get_project(result.project_id)
         assert project is not None
@@ -129,9 +131,75 @@ class AdoptTest(unittest.TestCase):
             {event["stage"] for event in self.ledger.events(result.project_id)},
         )
 
+    def test_project_name_comes_from_the_remote_not_the_folder(self) -> None:
+        source = self._source("local-folder")
+        subprocess.run(
+            [
+                "git",
+                "remote",
+                "add",
+                "origin",
+                "git@github.com:forgel-dev/forgel.git",
+            ],
+            cwd=source,
+            check=True,
+        )
+        adopted = adopt_repository(
+            self.settings, self.ledger, str(source)
+        )
+        project = self.ledger.get_project(adopted.project_id)
+        assert project is not None
+        self.assertEqual(project["name"], "forgel")
+        toml = (source / "forgel.toml").read_text(encoding="utf-8")
+        self.assertIn('name = "forgel"', toml)
+        program = (source / "program.yaml").read_text(encoding="utf-8")
+        self.assertIn("project: forgel", program)
+        diff = subprocess.run(
+            ["git", "show", "--format=", "HEAD"],
+            cwd=source,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertNotIn("local-folder", diff)
+        self.assertNotIn(str(source), diff)
+
+    def test_local_folder_name_is_the_default_without_origin(self) -> None:
+        source = self._source("local-folder")
+        adopted = adopt_repository(
+            self.settings, self.ledger, str(source)
+        )
+        project = self.ledger.get_project(adopted.project_id)
+        assert project is not None
+        self.assertEqual(project["name"], "local-folder")
+
+    def test_adopt_artifacts_do_not_contain_local_paths(self) -> None:
+        source = self._source("backend")
+        adopt_repository(
+            self.settings, self.ledger, str(source), brief="Backend service",
+            name="backend",
+        )
+        diff = subprocess.run(
+            ["git", "show", "--format=", "HEAD"],
+            cwd=source,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertNotIn(str(source), diff)
+        self.assertNotIn(str(Path.home()), diff)
+
+    def test_local_environment_content_is_refused(self) -> None:
+        source = self._source("backend")
+        leak = source / "leak.md"
+        leak.write_text(f"home: {Path.home()}\n", encoding="utf-8")
+        with self.assertRaises(AdoptError):
+            _assert_no_local_environment(source, ["leak.md"])
+
     def test_add_repository_records_dependencies(self) -> None:
         backend = adopt_repository(
-            self.settings, self.ledger, str(self._source("backend"))
+            self.settings, self.ledger, str(self._source("backend")),
+            name="backend",
         )
         project = self.ledger.get_project(backend.project_id)
         assert project is not None
@@ -190,7 +258,8 @@ class AdoptTest(unittest.TestCase):
 
     def test_dependency_edges_can_be_changed_and_cleared(self) -> None:
         backend = adopt_repository(
-            self.settings, self.ledger, str(self._source("backend"))
+            self.settings, self.ledger, str(self._source("backend")),
+            name="backend",
         )
         project = self.ledger.get_project(backend.project_id)
         assert project is not None
@@ -223,7 +292,8 @@ class AdoptTest(unittest.TestCase):
 
     def test_duplicate_or_self_dependency_is_rejected(self) -> None:
         backend = adopt_repository(
-            self.settings, self.ledger, str(self._source("backend"))
+            self.settings, self.ledger, str(self._source("backend")),
+            name="backend",
         )
         project = self.ledger.get_project(backend.project_id)
         assert project is not None
@@ -271,7 +341,7 @@ class AdoptTest(unittest.TestCase):
     def test_state_can_move_to_a_separate_repository(self) -> None:
         source = self._source("backend")
         adopted = adopt_repository(
-            self.settings, self.ledger, str(source)
+            self.settings, self.ledger, str(source), name="backend"
         )
         project = self.ledger.get_project(adopted.project_id)
         assert project is not None
@@ -310,7 +380,7 @@ class AdoptTest(unittest.TestCase):
     def test_brownfield_sync_accept_and_rollback(self) -> None:
         source = self._source("backend")
         adopted = adopt_repository(
-            self.settings, self.ledger, str(source)
+            self.settings, self.ledger, str(source), name="backend"
         )
         project = self.ledger.get_project(adopted.project_id)
         assert project is not None
@@ -359,7 +429,8 @@ class AdoptTest(unittest.TestCase):
 
     def test_linked_siblings_are_synced_and_rolled_back(self) -> None:
         backend = adopt_repository(
-            self.settings, self.ledger, str(self._source("backend"))
+            self.settings, self.ledger, str(self._source("backend")),
+            name="backend",
         )
         project = self.ledger.get_project(backend.project_id)
         assert project is not None
@@ -391,7 +462,8 @@ class AdoptTest(unittest.TestCase):
 
     def test_project_metadata_lists_both_repos(self) -> None:
         backend = adopt_repository(
-            self.settings, self.ledger, str(self._source("backend"))
+            self.settings, self.ledger, str(self._source("backend")),
+            name="backend",
         )
         project = self.ledger.get_project(backend.project_id)
         assert project is not None
