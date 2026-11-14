@@ -16,10 +16,16 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Mapping, Sequence
 
-DEFAULT_HOURS = "1-4,6-10"
-DEFAULT_POLICY = "off_peak"
+from .model_profiles import default_profile
+
+DEFAULT_HOURS = default_profile().peak_windows
+DEFAULT_POLICY = default_profile().peak_policy
 POLICIES = {"off_peak", "always"}
 UTC = timezone.utc
+
+
+def _windows(hours: str) -> list[tuple[int, int]]:
+    return parse_hours(hours) if hours.strip() else []
 
 
 def parse_hours(spec: str) -> list[tuple[int, int]]:
@@ -50,7 +56,7 @@ def hours_from_env(environ: Mapping[str, str] | None = None) -> str:
     return (
         env.get("FORGEL_PEAK_HOURS", "").strip()
         or env.get("DEEPSEEK_PEAK_HOURS", "").strip()
-        or DEFAULT_HOURS
+        or default_profile().peak_windows
     )
 
 
@@ -68,18 +74,19 @@ def is_off_peak(
     now: datetime | None = None, hours: str = DEFAULT_HOURS
 ) -> bool:
     moment = now or datetime.now(UTC)
-    if moment.weekday() >= 5:
+    windows = _windows(hours)
+    if not windows or moment.weekday() >= 5:
         return True
-    return not _in_peak(moment.hour, parse_hours(hours))
+    return not _in_peak(moment.hour, windows)
 
 
 def next_off_peak(
     now: datetime | None = None, hours: str = DEFAULT_HOURS
 ) -> datetime:
     moment = now or datetime.now(UTC)
-    if is_off_peak(moment, hours):
+    windows = _windows(hours)
+    if not windows or is_off_peak(moment, hours):
         return moment
-    windows = parse_hours(hours)
     for delta in range(1, 24 * 8):
         boundary = (moment + timedelta(hours=delta)).replace(
             minute=0, second=0, microsecond=0
@@ -102,7 +109,7 @@ def next_peak(
     now: datetime | None = None, hours: str = DEFAULT_HOURS
 ) -> datetime | None:
     moment = now or datetime.now(UTC)
-    windows = parse_hours(hours)
+    windows = _windows(hours)
     if not windows:
         return None
     hour = moment.replace(minute=0, second=0, microsecond=0)
@@ -170,9 +177,11 @@ def should_defer(
 
 
 def windows_text(hours: str = DEFAULT_HOURS) -> str:
+    windows = _windows(hours)
+    if not windows:
+        return "no configured peak windows"
     return ", ".join(
-        f"{start:02d}:00-{end:02d}:00 UTC"
-        for start, end in parse_hours(hours)
+        f"{start:02d}:00-{end:02d}:00 UTC" for start, end in windows
     )
 
 
@@ -185,8 +194,8 @@ def defer_message(
     boundary = next_off_peak(moment, hours)
     wait = humanize(seconds_until_off_peak(moment, hours))
     return (
-        "Model work is paused during DeepSeek peak hours "
-        f"({windows_text(hours)}, weekdays). The window closes at "
+        f"Model work is paused during {default_profile().display} peak "
+        f"hours ({windows_text(hours)}, weekdays). The window closes at "
         f"{_moment(boundary, tz_name)} (in {wait}); work resumes "
         "automatically. Override: /peak always or "
         '[models] peak_policy = "always".'
@@ -208,7 +217,7 @@ def status_text(
     boundary = next_off_peak(moment, hours)
     upcoming = next_peak(moment, hours)
     lines = [
-        f"Peak policy: {policy}",
+        f"Peak policy: {policy} ({default_profile().display})",
         f"Now: {state} ({_moment(moment, tz_name)})",
         f"Windows: {windows_text(hours)} (weekends off-peak)",
         action,

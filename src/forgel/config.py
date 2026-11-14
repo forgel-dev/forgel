@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import peak
+from .model_profiles import default_profile
 
 SANDBOX_MODES = {"local", "docker"}
 SANDBOX_NETWORKS = {"none", "bridge"}
@@ -54,12 +55,12 @@ class Settings:
     sandbox_images: tuple[str, ...] = ()
     sandbox_require_digest: bool = False
     sandbox_read_only: bool = True
-    context_window: int = 1_000_000
+    context_window: int = default_profile().context_window
     # The runtime reads the policy from the environment (off-peak by default).
     # Direct construction defaults to "always" so library and test code does
     # not become time-dependent.
     peak_policy: str = "always"
-    peak_hours: str = "1-4,6-10"
+    peak_hours: str = default_profile().peak_windows
     timezone: str = ""
 
     @classmethod
@@ -119,9 +120,12 @@ class Settings:
         )
         if not pids_raw.isdigit() or int(pids_raw) <= 0:
             raise ValueError("FORGEL_SANDBOX_PIDS must be a positive integer")
+        profile = default_profile()
         context_raw = (
-            os.environ.get("FORGEL_CONTEXT_WINDOW", "1000000").strip()
-            or "1000000"
+            os.environ.get(
+                "FORGEL_CONTEXT_WINDOW", str(profile.context_window)
+            ).strip()
+            or str(profile.context_window)
         )
         if not context_raw.isdigit() or int(context_raw) < 4096:
             raise ValueError(

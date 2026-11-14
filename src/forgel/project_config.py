@@ -12,6 +12,11 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import peak
+from .model_profiles import default_profile
+
+_DEFAULT_PROFILE = default_profile()
+
 VALID_QA_RUNTIMES = {"auto", "docker", "local"}
 VALID_GIT_AUTH = {"auto", "github_app", "pat", "deploy_key"}
 VALID_GIT_MERGE = {"auto", "human"}
@@ -33,10 +38,10 @@ class JurisdictionConfig:
 
 @dataclass(frozen=True)
 class ModelsConfig:
-    default: str = "deepseek-flash"
-    architecture: str = "deepseek-flash"
-    context_window: int = 1_000_000
-    peak_policy: str = "off_peak"
+    default: str = _DEFAULT_PROFILE.default_model
+    architecture: str = _DEFAULT_PROFILE.default_model
+    context_window: int = _DEFAULT_PROFILE.context_window
+    peak_policy: str = _DEFAULT_PROFILE.peak_policy
 
 
 @dataclass(frozen=True)
@@ -98,10 +103,10 @@ def render_project_config(
     recipe: str = "",
     qa_runtime: str = "auto",
     jurisdiction_pack: str = "ru",
-    model_default: str = "deepseek-flash",
-    model_architecture: str = "deepseek-flash",
-    model_context_window: int = 1_000_000,
-    model_peak_policy: str = "off_peak",
+    model_default: str = _DEFAULT_PROFILE.default_model,
+    model_architecture: str = _DEFAULT_PROFILE.default_model,
+    model_context_window: int = _DEFAULT_PROFILE.context_window,
+    model_peak_policy: str = _DEFAULT_PROFILE.peak_policy,
     per_feature_usd: float = 10.0,
     per_project_usd: float = 300.0,
     auto_patch: bool = False,
@@ -179,7 +184,9 @@ def _section(data: dict[str, object], name: str) -> dict[str, object]:
 
 
 def _context_window(models: dict[str, object]) -> int:
-    value = models.get("context_window", 1000000)
+    value = models.get(
+        "context_window", _DEFAULT_PROFILE.context_window
+    )
     if isinstance(value, bool):
         raise ConfigError("forgel.toml: models.context_window must be an integer")
     try:
@@ -196,8 +203,10 @@ def _context_window(models: dict[str, object]) -> int:
 
 
 def _peak_policy(models: dict[str, object]) -> str:
-    value = str(models.get("peak_policy", "off_peak")).strip().lower()
-    if value not in {"off_peak", "always"}:
+    value = str(
+        models.get("peak_policy", _DEFAULT_PROFILE.peak_policy)
+    ).strip().lower()
+    if value not in peak.POLICIES:
         raise ConfigError(
             "forgel.toml: models.peak_policy must be off_peak or always"
         )
@@ -292,8 +301,14 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
         qa=QAConfig(runtime=runtime),
         jurisdiction=JurisdictionConfig(pack=str(jurisdiction.get("pack", "ru"))),
         models=ModelsConfig(
-            default=str(models.get("default", "deepseek-flash")),
-            architecture=str(models.get("architecture", "deepseek-flash")),
+            default=str(
+                models.get("default", _DEFAULT_PROFILE.default_model)
+            ),
+            architecture=str(
+                models.get(
+                    "architecture", _DEFAULT_PROFILE.default_model
+                )
+            ),
             context_window=_context_window(models),
             peak_policy=_peak_policy(models),
         ),

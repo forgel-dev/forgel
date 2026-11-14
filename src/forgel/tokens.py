@@ -17,6 +17,8 @@ import math
 import os
 from typing import Any
 
+from .model_profiles import profile_for
+
 FALLBACK_CHARS_PER_TOKEN = 3.0
 DEFAULT_ENCODING = "cl100k_base"
 _ENCODERS: dict[str, Any] = {}
@@ -32,7 +34,8 @@ def _force_heuristic() -> bool:
 def _encoder(model: str = "") -> Any:
     if _force_heuristic():
         return None
-    key = model or DEFAULT_ENCODING
+    profile = profile_for(model)
+    key = f"{model or profile.id}:{profile.tokenizer_encoding}"
     if key in _ENCODERS:
         cached = _ENCODERS[key]
         return None if cached is _UNAVAILABLE else cached
@@ -41,13 +44,17 @@ def _encoder(model: str = "") -> Any:
     except ImportError:
         _ENCODERS[key] = _UNAVAILABLE
         return None
-    try:
-        encoding = tiktoken.encoding_for_model(model) if model else None
-    except Exception:
-        encoding = None
+    encoding = None
+    if model:
+        try:
+            encoding = tiktoken.encoding_for_model(model)
+        except Exception:
+            encoding = None
     if encoding is None:
         try:
-            encoding = tiktoken.get_encoding(DEFAULT_ENCODING)
+            encoding = tiktoken.get_encoding(
+                profile.tokenizer_encoding or DEFAULT_ENCODING
+            )
         except Exception:
             _ENCODERS[key] = _UNAVAILABLE
             return None

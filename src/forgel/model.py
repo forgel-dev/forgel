@@ -21,10 +21,11 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 from .artifacts import write_json
 
 from . import daemon_config
+from .model_profiles import default_profile
 from .project_config import ConfigError, load_project_config
 from .secrets import get_secret
 
-DEFAULT_MODEL = "deepseek-flash"
+DEFAULT_MODEL = default_profile().default_model
 
 
 class ModelError(RuntimeError):
