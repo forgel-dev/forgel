@@ -1186,7 +1186,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 completed = subprocess.run(
                     argv,
                     cwd=str(workdir),
-                    env={**os.environ},
+                    env={**os.environ, **environment.env_map},
                     capture_output=True,
                     text=True,
                     timeout=300,

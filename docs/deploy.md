@@ -170,7 +170,10 @@ It talks to a **separate** Docker daemon through `DOCKER_HOST`. Never point it
 at the host socket of the machine whose files it must protect.
 
 The environment contract is an OCI image or build context plus a small
-`environment.yaml` with `setup`, `test` and `e2e` commands. The core has no
+`environment.yaml` with `setup`, `test`, `e2e` commands and optional `env`
+variables. It lives in the project's control repository or, for a project with
+one repository, in that repository next to the code; `build` paths resolve
+against the file's directory. The core has no
 per-language adapters; official recipes are starting points, and the agent may
 author a standard environment definition for a missing stack with review. A
 malformed contract fails QA instead of falling back; a project without one

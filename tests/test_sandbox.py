@@ -251,6 +251,24 @@ class SessionTest(unittest.TestCase):
                     layout, Environment(image="python:3.12-slim"), "proj", ""
                 )
 
+    def test_contract_env_is_passed_to_the_container(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sandbox, layout, _repo = self._sandbox(root)
+            with sandbox.session(
+                layout,
+                Environment(
+                    image="python:3.12-slim",
+                    env=(("PYTHONPATH", "src"),),
+                ),
+                "proj",
+                "main",
+            ):
+                pass
+        run = sandbox.call("run")
+        self.assertIn("PYTHONPATH=src", run)
+        self.assertEqual(run[run.index("PYTHONPATH=src") - 1], "-e")
+
     def test_sibling_repositories_are_mounted_read_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

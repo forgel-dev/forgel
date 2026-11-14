@@ -324,7 +324,7 @@ not a chat command.
 ## Configuration
 
 - `forgel.toml` — project config: QA runtime, jurisdiction pack, model policy, budget.
-- `environment.yaml` — the project environment contract: image or build, and the `setup`, `test`, `e2e` commands Forgel runs. The core itself carries no per-language commands. See `PLAN.md` §7.13.
+- `environment.yaml` — the project environment contract: image or build, the `setup`, `test`, `e2e` commands Forgel runs, and optional `env`. It sits in the control repository, or in the repository itself for a single-repository project. The core carries no per-language commands. See `PLAN.md` §7.13.
 - `FORGEL.md` → `AGENTS.md` → `CLAUDE.md` — instruction files, read in that order.
 - `forgel config <project-id>` — show the effective project config.
 - `forgel context <project-id> [--raw]` — show the resolved context files and their priority.

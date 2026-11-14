@@ -6,16 +6,20 @@ never knows a language's test or e2e command; it reads this file and runs what
 it says inside the project sandbox.
 
 The file lives in the control repository (``program/environment.yaml`` for a
-container project, the project root for a legacy one). Paths in the contract
-are relative to the project root. Commands run in the repository named by
-``repo``; when it is omitted, the sole repository is used, otherwise the
-project root. ``mounts`` lists sibling repositories the commands need; the
-sandbox mounts them read-only, so a repository's e2e can inspect the product
-without exposing the rest of the project.
+container project, the project root for a legacy one), or in the sole
+repository of a brownfield project, where it is committed next to the code.
+``build`` and ``services`` paths are relative to the file's own directory.
+Commands run in the repository named by ``repo``; when it is omitted, the sole
+repository is used, otherwise the project root. ``mounts`` lists sibling
+repositories the commands need; the sandbox mounts them read-only, so a
+repository's e2e can inspect the product without exposing the rest of the
+project. ``env`` adds variables to every command, both in the sandbox and in
+the local fallback.
 
 Only a strict YAML subset is accepted: top-level ``key: value`` pairs, scalar
-values, flow lists (``[a, b]``) and block lists. That is the whole contract, so
-a richer document is a mistake worth reporting, not silently ignoring.
+values, flow lists (``[a, b]``), block lists and one level of nested mapping
+(for ``env``). That is the whole contract, so a richer document is a mistake
+worth reporting, not silently ignoring.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ import json
 import re
 import shlex
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -41,11 +45,14 @@ FIELDS = {
     "setup",
     "test",
     "e2e",
+    "env",
     "ports",
     "health",
 }
 COMMAND_FIELDS = ("setup", "test", "e2e")
 REPO_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
+ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
+RESERVED_ENV = {"HOME", "TMPDIR"}
 
 
 class EnvironmentError(ValueError):
@@ -64,8 +71,16 @@ class Environment:
     setup: tuple[str, ...] = ()
     test: tuple[str, ...] = ()
     e2e: tuple[str, ...] = ()
+    env: tuple[tuple[str, str], ...] = ()
     ports: tuple[int, ...] = ()
     health: str = ""
+    # The directory the contract was loaded from; build and services resolve
+    # against it. Not part of the contract's value or identity.
+    base: Path | None = field(default=None, compare=False, repr=False)
+
+    @property
+    def env_map(self) -> dict[str, str]:
+        return dict(self.env)
 
     def commands(self, name: str) -> tuple[str, ...]:
         if name not in COMMAND_FIELDS:
@@ -100,6 +115,8 @@ class Environment:
             values = getattr(self, key)
             if values:
                 data[key] = list(values)
+        if self.env:
+            data["env"] = self.env_map
         if self.ports:
             data["ports"] = list(self.ports)
         if self.health:
@@ -252,6 +269,9 @@ def parse_yaml(text: str) -> dict[str, Any]:
             data[key] = _scalar(value, number)
             continue
         items: list[Any] = []
+        mapping: dict[str, Any] = {}
+        indent: int | None = None
+        is_map = False
         while index < len(lines):
             nested_number = index + 1
             nested = _strip_comment(lines[index])
@@ -265,18 +285,40 @@ def parse_yaml(text: str) -> dict[str, Any]:
                     f"line {nested_number}: tabs are not allowed"
                 )
             stripped = nested.strip()
-            if not stripped.startswith("-"):
+            current = len(nested) - len(nested.lstrip())
+            if indent is None:
+                indent = current
+                is_map = not stripped.startswith("-")
+            elif current != indent:
                 raise EnvironmentError(
-                    f"line {nested_number}: expected a '- item' list entry"
+                    f"line {nested_number}: inconsistent indentation"
                 )
-            item = stripped[1:].strip()
-            if not item:
-                raise EnvironmentError(
-                    f"line {nested_number}: empty list entry"
+            if is_map:
+                nested_key, nested_value = _split_key(stripped, nested_number)
+                if nested_key in mapping:
+                    raise EnvironmentError(
+                        f"line {nested_number}: duplicate key {nested_key!r}"
+                    )
+                if not nested_value:
+                    raise EnvironmentError(
+                        f"line {nested_number}: nested values must be scalar"
+                    )
+                mapping[nested_key] = _scalar(
+                    nested_value, nested_number
                 )
-            items.append(_scalar(item, nested_number))
+            else:
+                if not stripped.startswith("-"):
+                    raise EnvironmentError(
+                        f"line {nested_number}: expected a '- item' list entry"
+                    )
+                item = stripped[1:].strip()
+                if not item:
+                    raise EnvironmentError(
+                        f"line {nested_number}: empty list entry"
+                    )
+                items.append(_scalar(item, nested_number))
             index += 1
-        data[key] = items
+        data[key] = mapping if is_map else items
     return data
 
 
@@ -318,13 +360,41 @@ def _project_path(value: str, key: str, source: str) -> str:
     path = Path(value)
     if path.is_absolute():
         raise EnvironmentError(
-            f"{source}: '{key}' must be relative to the project root"
+            f"{source}: '{key}' must be relative to the contract directory"
         )
     if ".." in path.parts:
         raise EnvironmentError(
-            f"{source}: '{key}' must not leave the project root"
+            f"{source}: '{key}' must not leave the contract directory"
         )
     return path.as_posix()
+
+
+def _env_map(data: dict[str, Any], source: str) -> tuple[tuple[str, str], ...]:
+    value = data.get("env", {})
+    if value in ({}, []):
+        return ()
+    if not isinstance(value, dict):
+        raise EnvironmentError(
+            f"{source}: 'env' must be a mapping of NAME: value"
+        )
+    items: list[tuple[str, str]] = []
+    for key, item in value.items():
+        if not ENV_NAME.fullmatch(str(key)):
+            raise EnvironmentError(f"{source}: invalid env name {key!r}")
+        if key in RESERVED_ENV:
+            raise EnvironmentError(
+                f"{source}: env cannot override {key}; the sandbox sets it"
+            )
+        if not isinstance(item, str):
+            raise EnvironmentError(
+                f"{source}: env value for {key} must be a string"
+            )
+        if "\x00" in item:
+            raise EnvironmentError(
+                f"{source}: env value for {key} contains a NUL byte"
+            )
+        items.append((str(key), item))
+    return tuple(items)
 
 
 def _ports(data: dict[str, Any], source: str) -> tuple[int, ...]:
@@ -351,7 +421,9 @@ def _ports(data: dict[str, Any], source: str) -> tuple[int, ...]:
     return tuple(dict.fromkeys(ports))
 
 
-def parse_environment(text: str, source: str = FILENAME) -> Environment:
+def parse_environment(
+    text: str, source: str = FILENAME, base: Path | None = None
+) -> Environment:
     """Parse and validate an environment contract."""
 
     data = parse_yaml(text)
@@ -404,8 +476,10 @@ def parse_environment(text: str, source: str = FILENAME) -> Environment:
         setup=_commands(data, "setup", source),
         test=_commands(data, "test", source),
         e2e=_commands(data, "e2e", source),
+        env=_env_map(data, source),
         ports=ports,
         health=health,
+        base=base,
     )
 
 
@@ -426,7 +500,22 @@ def command_argv(command: str) -> list[str]:
 
 
 def environment_path(layout: ProjectLayout) -> Path:
-    return layout.control / FILENAME
+    """Where the contract lives: the control repository, else the sole repo.
+
+    A brownfield project commits its environment next to the code, so a
+    project with one repository may keep ``environment.yaml`` there. The
+    control repository still wins when both exist.
+    """
+
+    control = layout.control / FILENAME
+    if control.is_file():
+        return control
+    known = entries(layout)
+    if len(known) == 1:
+        candidate = layout.repo_path(known[0]["id"]) / FILENAME
+        if candidate.is_file():
+            return candidate
+    return control
 
 
 def load_environment(layout: ProjectLayout) -> Environment | None:
@@ -444,7 +533,9 @@ def load_environment(layout: ProjectLayout) -> Environment | None:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise EnvironmentError(f"{path}: cannot read: {exc}") from exc
-    environment = parse_environment(text, source=str(path))
+    environment = parse_environment(
+        text, source=str(path), base=path.parent
+    )
     known = {entry["id"] for entry in entries(layout)}
     repo_id = environment.repository(layout)
     if environment.repo and repo_id not in known:
@@ -458,14 +549,15 @@ def load_environment(layout: ProjectLayout) -> Environment | None:
             f"{path}: unknown repository id(s) in 'mounts': "
             + ", ".join(unknown_mounts)
         )
+    base = path.parent
     if environment.build:
-        target = layout.root / environment.build
+        target = base / environment.build
         if not target.exists():
             raise EnvironmentError(
                 f"{path}: build path does not exist: {environment.build}"
             )
     for service in environment.services:
-        if not (layout.root / service).is_file():
+        if not (base / service).is_file():
             raise EnvironmentError(
                 f"{path}: service file does not exist: {service}"
             )
@@ -492,6 +584,12 @@ def render_environment(environment: Environment) -> str:
             continue
         lines.append(f"{key}:")
         lines.extend(f"  - {json.dumps(value)}" for value in values)
+    if "env" in data:
+        lines.append("env:")
+        lines.extend(
+            f"  {key}: {json.dumps(value)}"
+            for key, value in data["env"].items()
+        )
     if "ports" in data:
         lines.append("ports: [" + ", ".join(str(port) for port in data["ports"]) + "]")
     if "health" in data:

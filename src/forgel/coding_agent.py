@@ -26,7 +26,7 @@ from typing import Any, Callable, Mapping, Sequence
 from . import git_ops, tasks
 from .artifacts import write_text
 from .config import Settings
-from .environment import EnvironmentError, load_environment
+from .environment import Environment, EnvironmentError, load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import (
@@ -217,10 +217,16 @@ class CodingAgent:
         if not gitignore.exists():
             write_text(gitignore, DEFAULT_GITIGNORE)
 
+        try:
+            environment = load_environment(layout)
+        except EnvironmentError as exc:
+            raise AgentError(f"environment contract: {exc}") from exc
         model = project_model_name(layout.control)
         stack = ExitStack()
         try:
-            runner = self._open_runner(stack, layout, project, repo_id)
+            runner = self._open_runner(
+                stack, layout, project, repo_id, environment
+            )
             (
                 status,
                 summary,
@@ -229,7 +235,9 @@ class CodingAgent:
                 commands,
                 touched,
                 test_output,
-            ) = self._converse(layout, repo, repo_id, task, model, runner)
+            ) = self._converse(
+                layout, repo, repo_id, task, model, runner, environment
+            )
         finally:
             stack.close()
         if status == "done":
@@ -309,6 +317,7 @@ class CodingAgent:
         layout: ProjectLayout,
         project: Mapping[str, Any],
         repo_id: str,
+        environment: Environment | None,
     ) -> CommandRunner | None:
         """Enter the project sandbox when configured, or return ``None``.
 
@@ -319,10 +328,6 @@ class CodingAgent:
         sandbox = docker_runner(self.settings)
         if sandbox is None:
             return None
-        try:
-            environment = load_environment(layout)
-        except EnvironmentError as exc:
-            raise AgentError(f"environment contract: {exc}") from exc
         if environment is None and not self.settings.sandbox_image:
             raise AgentError(
                 "FORGEL_SANDBOX=docker requires environment.yaml or "
@@ -351,6 +356,7 @@ class CodingAgent:
         task: Mapping[str, Any],
         model: str,
         runner: CommandRunner | None,
+        environment: Environment | None,
     ) -> tuple[
         str,
         str,
@@ -418,7 +424,12 @@ class CodingAgent:
                 )
                 break
             observation, command = self._execute(
-                layout, repo, action, touched, runner
+                layout,
+                repo,
+                action,
+                touched,
+                runner,
+                environment.env_map if environment else None,
             )
             actions.append(self._action_summary(action))
             if command is not None:
@@ -438,7 +449,12 @@ class CodingAgent:
             ]
             if test_command:
                 code, output = self._run_command(
-                    layout, repo, test_command, timeout=120, runner=runner
+                    layout,
+                    repo,
+                    test_command,
+                    timeout=120,
+                    runner=runner,
+                    extra_env=environment.env_map if environment else None,
                 )
                 test_output = output
                 commands.append(
@@ -534,6 +550,7 @@ Files:
         action: Mapping[str, Any],
         touched: set[str],
         runner: CommandRunner | None = None,
+        extra_env: Mapping[str, str] | None = None,
     ) -> tuple[str, dict[str, Any] | None]:
         kind = str(action.get("action"))
         try:
@@ -588,6 +605,7 @@ Files:
                     command,
                     timeout=timeout_value,
                     runner=runner,
+                    extra_env=extra_env,
                 )
                 return (
                     f"exit code {code}\n{_cap(output)}",
@@ -660,6 +678,7 @@ Files:
         command: Sequence[str],
         timeout: float,
         runner: CommandRunner | None = None,
+        extra_env: Mapping[str, str] | None = None,
     ) -> tuple[int, str]:
         if runner is not None:
             try:
@@ -669,11 +688,14 @@ Files:
         argv = list(command)
         if argv and Path(argv[0]).name in {"python", "python3"}:
             argv[0] = sys.executable
+        env = _safe_env(layout)
+        if extra_env:
+            env.update(extra_env)
         try:
             completed = subprocess.run(
                 argv,
                 cwd=str(repo),
-                env=_safe_env(layout),
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=timeout,

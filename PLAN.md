@@ -964,22 +964,28 @@ an OCI image (or Dockerfile/Compose/Dev Container) plus a small contract for
 the commands Forgel needs.
 
 ```yaml
-# program/environment.yaml — a project artifact
-image: python:3.12-slim        # or: build: repos/api/environment
+# environment.yaml — a project artifact
+image: python:3.12-slim        # or: build: environment
 repo: api                      # commands run here; default: the sole repository
 mounts: [web]                  # sibling repositories, mounted read-only
 services: [compose.yaml]       # optional
 setup: ["pip install -r requirements.txt"]
 test: ["python -m unittest discover -s tests"]
 e2e: ["python e2e/check.py"]
+env:                           # optional, added to every command
+  PYTHONPATH: src
 ports: [8000]
 health: "/health"
 ```
 
-Paths in the contract are relative to the project root. `mounts` lists sibling
-repositories by id; the sandbox mounts them read-only at `/<id>`, so an e2e can
-inspect the product without exposing the rest of the project. The file is a
-strict YAML subset: top-level keys, scalar values, flow lists and block lists. A
+The contract lives in the control repository, or in the sole repository of a
+brownfield project next to the code; the control copy wins when both exist.
+`build` and `services` paths are relative to the file's own directory, so a
+repo-committed contract stays portable. `mounts` lists sibling repositories by
+id; the sandbox mounts them read-only at `/<id>`, so an e2e can inspect the
+product without exposing the rest of the project. The file is a strict YAML
+subset: top-level keys, scalar values, flow lists, block lists and one level of
+nested mapping (`env`). A
 malformed contract fails QA loudly; a project without one keeps the legacy
 fallback (the template e2e script), so existing projects are not broken. The
 local single-tenant fallback runs `test` and then `e2e` on the host and the

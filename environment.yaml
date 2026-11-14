@@ -1,0 +1,10 @@
+# environment.yaml — how Forgel builds and tests itself.
+#
+# This is the contract Forgel reads when it adopts its own repository. `build`
+# is relative to this file; commands run at the repository root. Tests import
+# the package from `src`, and the suite creates git repositories, so the image
+# carries git.
+build: environment
+test: ["python -m unittest discover -s tests"]
+env:
+  PYTHONPATH: src

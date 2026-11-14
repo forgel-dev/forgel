@@ -223,7 +223,8 @@ class DockerSandbox:
         environment: Environment,
         project_id: str,
     ) -> str:
-        context = (layout.root / environment.build).resolve()
+        base = environment.base or layout.root
+        context = (base / environment.build).resolve()
         dockerfile = context / "Dockerfile"
         if not dockerfile.is_file():
             raise SandboxError(
@@ -286,6 +287,7 @@ class DockerSandbox:
             raise SandboxError(f"repository not found: {repo}")
         image = self.ensure_image(layout, environment, project_id)
         setup = environment.setup if environment is not None else ()
+        env = environment.env if environment is not None else ()
         extra: list[tuple[str, str]] = []
         if environment is not None:
             for sibling in environment.mounts:
@@ -301,6 +303,7 @@ class DockerSandbox:
             image=image,
             mount=self.daemon_path(repo),
             setup=setup,
+            env=env,
             extra_mounts=extra,
             log=self.log,
         )
@@ -316,6 +319,7 @@ class DockerSession:
         image: str,
         mount: str,
         setup: Sequence[str] = (),
+        env: Sequence[tuple[str, str]] = (),
         extra_mounts: Sequence[tuple[str, str]] = (),
         log: Callable[[str], None] = print,
         name: str | None = None,
@@ -325,6 +329,7 @@ class DockerSession:
         self.image = image
         self.mount = mount
         self.setup = tuple(setup)
+        self.env = tuple(env)
         self.extra_mounts = tuple(extra_mounts)
         self.log = log
         self.name = name or (
@@ -390,11 +395,17 @@ class DockerSession:
             "HOME=/tmp",
             "-e",
             "TMPDIR=/tmp",
-            "--tmpfs",
-            "/tmp:rw,nosuid,nodev,size=256m",
-            "-v",
-            f"{self.mount}:{WORKDIR}:rw",
         ]
+        for key, value in self.env:
+            argv.extend(["-e", f"{key}={value}"])
+        argv.extend(
+            [
+                "--tmpfs",
+                "/tmp:rw,nosuid,nodev,size=256m",
+                "-v",
+                f"{self.mount}:{WORKDIR}:rw",
+            ]
+        )
         for source, destination in self.extra_mounts:
             argv.extend(["-v", f"{source}:{destination}:ro"])
         argv.extend(["-w", WORKDIR])

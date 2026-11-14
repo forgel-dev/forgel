@@ -85,6 +85,26 @@ class ParseEnvironmentTest(unittest.TestCase):
         self.assertEqual(data["setup"], ['pip install "a#b"'])
         self.assertEqual(data["image"], "x")
 
+    def test_env_mapping_is_parsed(self) -> None:
+        environment = parse_environment(
+            "image: x\nenv:\n  PYTHONPATH: src\n  FOO: bar\n"
+        )
+        self.assertEqual(
+            environment.env_map, {"PYTHONPATH": "src", "FOO": "bar"}
+        )
+
+    def test_env_cannot_override_the_sandbox_home(self) -> None:
+        with self.assertRaises(EnvironmentError):
+            parse_environment("image: x\nenv:\n  HOME: /root\n")
+
+    def test_invalid_env_name_is_rejected(self) -> None:
+        with self.assertRaises(EnvironmentError):
+            parse_environment("image: x\nenv:\n  1BAD: value\n")
+
+    def test_env_must_be_a_mapping(self) -> None:
+        with self.assertRaises(EnvironmentError):
+            parse_environment("image: x\nenv: PYTHONPATH=src\n")
+
     def test_empty_contract_is_rejected(self) -> None:
         with self.assertRaises(EnvironmentError):
             parse_environment("")
@@ -145,6 +165,7 @@ class ParseEnvironmentTest(unittest.TestCase):
             setup=("pip install -r requirements.txt",),
             test=("python -m unittest",),
             e2e=("python e2e/check.py",),
+            env=(("PYTHONPATH", "src"),),
             ports=(8000,),
             health="/health",
         )
@@ -250,6 +271,48 @@ class LoadEnvironmentTest(unittest.TestCase):
             assert environment is not None
             self.assertEqual(environment.repository(layout), "")
             self.assertEqual(environment.workdir(layout), root)
+
+    def test_a_single_repository_contract_is_discovered(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.json").write_text(
+                json.dumps({"repos": [{"id": "main"}]}), encoding="utf-8"
+            )
+            repo = root / "repos" / "main"
+            (repo / "environment").mkdir(parents=True)
+            (repo / "environment" / "Dockerfile").write_text("FROM scratch\n")
+            (repo / "environment.yaml").write_text(
+                "build: environment\n"
+                "test: python -m unittest\n"
+                "env:\n  PYTHONPATH: src\n",
+                encoding="utf-8",
+            )
+            (root / "program").mkdir()
+            layout = self._layout(root, "container")
+            environment = load_environment(layout)
+            assert environment is not None
+            self.assertEqual(environment.base, repo)
+            self.assertEqual(environment.env_map, {"PYTHONPATH": "src"})
+            self.assertEqual(environment.test, ("python -m unittest",))
+
+    def test_the_control_repository_contract_wins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.json").write_text(
+                json.dumps({"repos": [{"id": "main"}]}), encoding="utf-8"
+            )
+            repo = root / "repos" / "main"
+            repo.mkdir(parents=True)
+            (root / "program").mkdir()
+            (root / "program" / "environment.yaml").write_text(
+                "image: control\n", encoding="utf-8"
+            )
+            (repo / "environment.yaml").write_text(
+                "image: repo\n", encoding="utf-8"
+            )
+            environment = load_environment(self._layout(root, "container"))
+            assert environment is not None
+            self.assertEqual(environment.image, "control")
 
     def test_unknown_mount_repository_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
