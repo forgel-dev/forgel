@@ -335,6 +335,7 @@ def retry_task(
     if data.get("failure"):
         data["last_failure"] = data["failure"]
     data.pop("failure", None)
+    data.pop("retry_after", None)
     data["attempts"] = 0
     data["rework_count"] = 0
     data["manual_retries"] = int(data.get("manual_retries", 0)) + 1
@@ -350,14 +351,67 @@ def retry_task(
     return updated
 
 
-def next_pending_task(layout: ProjectLayout) -> dict[str, Any] | None:
+def retry_moment(task: dict[str, Any]) -> datetime | None:
+    """When a delayed retry becomes runnable, or ``None``."""
+
+    value = (task.get("result") or {}).get("retry_after")
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def waiting_pending(
+    layout: ProjectLayout, now: datetime | None = None
+) -> list[dict[str, Any]]:
+    """Pending tasks whose backoff has not elapsed yet."""
+
+    moment = now or datetime.now(timezone.utc)
+    return [
+        task
+        for task in list_tasks(layout)
+        if task.get("status") == "pending"
+        and (retry_moment(task) or moment) > moment
+    ]
+
+
+def retry_times(layout: ProjectLayout) -> list[datetime]:
+    return [
+        moment
+        for task in list_tasks(layout)
+        if task.get("status") == "pending"
+        for moment in [retry_moment(task)]
+        if moment is not None
+    ]
+
+
+def _retry_ready(
+    task: dict[str, Any], now: datetime | None = None
+) -> bool:
+    moment = retry_moment(task)
+    if moment is None:
+        return True
+    return (now or datetime.now(timezone.utc)) >= moment
+
+
+def next_pending_task(
+    layout: ProjectLayout, now: datetime | None = None
+) -> dict[str, Any] | None:
     tasks = list_tasks(layout)
     statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
     for task in tasks:
         if task.get("status") != "pending":
             continue
-        if not _dependency_blockers(task, statuses):
-            return task
+        if _dependency_blockers(task, statuses):
+            continue
+        if not _retry_ready(task, now):
+            continue
+        return task
     return None
 
 

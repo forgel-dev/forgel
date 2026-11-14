@@ -127,6 +127,42 @@ class TasksTest(unittest.TestCase):
         assert released is not None
         self.assertEqual(released["status"], "pending")
 
+    def test_a_delayed_retry_is_not_picked_until_its_time(self) -> None:
+        from datetime import datetime, timezone
+
+        task = tasks.create_task(
+            self.layout, "Retry later", ["A"], ["B"], repo_id="main"
+        )
+        now = datetime(2026, 11, 16, 10, 0, tzinfo=timezone.utc)
+        data = dict(task.get("result") or {})
+        data["retry_after"] = "2026-11-16T10:05:00+00:00"
+        tasks.update_task(self.layout, task["id"], result=data)
+        self.assertIsNone(tasks.next_pending_task(self.layout, now))
+        self.assertEqual(len(tasks.waiting_pending(self.layout, now)), 1)
+        later = datetime(2026, 11, 16, 10, 5, 1, tzinfo=timezone.utc)
+        self.assertEqual(
+            tasks.next_pending_task(self.layout, later)["id"],
+            task["id"],
+        )
+        self.assertEqual(tasks.waiting_pending(self.layout, later), [])
+
+    def test_manual_retry_clears_the_backoff(self) -> None:
+        task = tasks.create_task(
+            self.layout, "Retry me", ["A"], ["B"], repo_id="main"
+        )
+        data = {
+            "attempts": 2,
+            "retry_after": "2026-11-16T10:05:00+00:00",
+            "failure": {"kind": "infrastructure", "message": "x"},
+        }
+        tasks.update_task(
+            self.layout, task["id"], status="failed", result=data
+        )
+        retried = tasks.retry_task(self.layout, task["id"])
+        self.assertEqual(retried["status"], "pending")
+        self.assertNotIn("retry_after", retried["result"])
+        self.assertEqual(retried["result"]["attempts"], 0)
+
     def test_interrupted_tasks_are_requeued(self) -> None:
         task = tasks.create_task(
             self.layout,

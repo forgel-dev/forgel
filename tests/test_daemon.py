@@ -7,6 +7,7 @@ from pathlib import Path
 
 from unittest.mock import patch
 
+from forgel import tasks
 from forgel.approvals import awaits_approval, record_approval
 from forgel.config import Settings
 from forgel.daemon import project_is_done, run_daemon, run_once
@@ -130,6 +131,13 @@ class DaemonTest(unittest.TestCase):
             assert stored is not None
             self.assertEqual(stored["status"], "pending")
             self.assertEqual(stored["result"]["attempts"], 1)
+            self.assertTrue(stored["result"]["retry_after"])
+            # The backoff is not elapsed: the task is not picked up.
+            self.assertIsNone(tasks.next_pending_task(layout))
+            # Simulate the backoff elapsing.
+            data = dict(stored["result"])
+            data["retry_after"] = "2000-01-01T00:00:00+00:00"
+            tasks.update_task(layout, task["id"], result=data)
             run_once(settings, ledger, log=lambda _m: None, client=client)
             stored = get_task(layout, task["id"])
             assert stored is not None

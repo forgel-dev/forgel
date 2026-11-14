@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from datetime import datetime, timedelta, timezone
+
 from forgel.config import Settings
 from forgel.daemon import handle_failure
 from forgel.layout import ProjectLayout
@@ -52,6 +54,8 @@ class ArbiterTest(unittest.TestCase):
             "qa_runtime": "local",
             "task_reworks": 1,
             "task_arbiter": True,
+            "task_retries": 5,
+            "retry_backoff": (1, 5, 15, 30, 60),
             "task_accept": "auto",
         }
         values.update(overrides)
@@ -123,6 +127,49 @@ class ArbiterTest(unittest.TestCase):
         stored = get_task(layout, task["id"])
         assert stored is not None
         return stored
+
+    def test_infrastructure_backoff_grows(self) -> None:
+        project, layout = self._project()
+        fixed = datetime(2026, 11, 16, 10, 0, tzinfo=timezone.utc)
+        for attempts, minutes in enumerate((1, 5, 15, 30, 60)):
+            task = create_task(
+                layout,
+                f"Retry {attempts}",
+                ["A"],
+                ["B"],
+                repo_id="main",
+            )
+            update_task(
+                layout,
+                task["id"],
+                status="failed",
+                result={
+                    "attempts": attempts,
+                    "failure": {
+                        "kind": "infrastructure",
+                        "message": "network",
+                    },
+                },
+            )
+            handle_failure(
+                self.settings,
+                self.ledger,
+                project,
+                layout,
+                task["id"],
+                None,
+                log=lambda _m: None,
+                now=fixed,
+            )
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "pending")
+            expected = (
+                fixed + timedelta(minutes=minutes)
+            ).isoformat(timespec="seconds")
+            self.assertEqual(
+                stored["result"]["retry_after"], expected
+            )
 
     def test_a_review_failure_is_sent_back_with_feedback(self) -> None:
         project, layout = self._project()

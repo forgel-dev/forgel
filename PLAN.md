@@ -1138,8 +1138,8 @@ A failure is classified before it is answered (D-087):
 
 | Kind | Answer |
 |---|---|
-| `infrastructure` | retry within `FORGEL_TASK_RETRIES` |
-| `qa`, `review` | rework within `FORGEL_TASK_REWORKS`, with the feedback in the task |
+| `infrastructure` | retry within `FORGEL_TASK_RETRIES` (5 by default) with backoff 1/5/15/30/60 min |
+| `qa`, `review` | rework within `FORGEL_TASK_REWORKS` (5 by default), with the feedback in the task |
 | `external` | stop and ask a human (missing access, credentials, model) |
 | `agent` | quarantine: the task is too large or malformed; split or replan |
 | `criteria` | quarantine with the arbiter's proposed revision; the task must be re-specified |

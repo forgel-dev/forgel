@@ -70,6 +70,7 @@ class Settings:
     task_retries: int = 0
     task_reworks: int = 0
     task_arbiter: bool = False
+    retry_backoff: tuple[int, ...] = (1, 5, 15, 30, 60)
     plan_on_failure: str = "quarantine"  # quarantine | stop | continue
 
     @classmethod
@@ -156,19 +157,36 @@ class Settings:
                 "FORGEL_TASK_ACCEPT must be one of: auto, human"
             )
         retries_raw = (
-            os.environ.get("FORGEL_TASK_RETRIES", "2").strip() or "2"
+            os.environ.get("FORGEL_TASK_RETRIES", "5").strip() or "5"
         )
-        if not retries_raw.isdigit() or int(retries_raw) > 5:
+        if not retries_raw.isdigit() or int(retries_raw) > 10:
             raise ValueError(
-                "FORGEL_TASK_RETRIES must be an integer from 0 to 5"
+                "FORGEL_TASK_RETRIES must be an integer from 0 to 10"
             )
         reworks_raw = (
-            os.environ.get("FORGEL_TASK_REWORKS", "2").strip() or "2"
+            os.environ.get("FORGEL_TASK_REWORKS", "5").strip() or "5"
         )
-        if not reworks_raw.isdigit() or int(reworks_raw) > 5:
+        if not reworks_raw.isdigit() or int(reworks_raw) > 10:
             raise ValueError(
-                "FORGEL_TASK_REWORKS must be an integer from 0 to 5"
+                "FORGEL_TASK_REWORKS must be an integer from 0 to 10"
             )
+        backoff_raw = (
+            os.environ.get(
+                "FORGEL_TASK_RETRY_BACKOFF", "1,5,15,30,60"
+            ).strip()
+            or "1,5,15,30,60"
+        )
+        backoff: list[int] = []
+        for part in backoff_raw.split(","):
+            part = part.strip()
+            if not part.isdigit() or int(part) <= 0:
+                raise ValueError(
+                    "FORGEL_TASK_RETRY_BACKOFF must be positive "
+                    "minutes, e.g. 1,5,15,30,60"
+                )
+            backoff.append(int(part))
+        if not backoff:
+            raise ValueError("FORGEL_TASK_RETRY_BACKOFF must not be empty")
         plan_on_failure = (
             os.environ.get("FORGEL_PLAN_ON_FAILURE", "quarantine")
             .strip()
@@ -211,6 +229,7 @@ class Settings:
             task_retries=int(retries_raw),
             task_reworks=int(reworks_raw),
             task_arbiter=_env_bool("FORGEL_TASK_ARBITER", True),
+            retry_backoff=tuple(backoff),
             plan_on_failure=plan_on_failure,
         )
 

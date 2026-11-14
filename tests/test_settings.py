@@ -118,7 +118,8 @@ class SettingsTest(unittest.TestCase):
                 clear=False,
             ):
                 settings = Settings.from_env(tmp)
-        self.assertEqual(settings.task_retries, 2)
+        self.assertEqual(settings.task_retries, 5)
+        self.assertEqual(settings.task_reworks, 5)
         self.assertEqual(settings.plan_on_failure, "quarantine")
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
@@ -141,7 +142,7 @@ class SettingsTest(unittest.TestCase):
                 clear=False,
             ):
                 settings = Settings.from_env(tmp)
-        self.assertEqual(settings.task_reworks, 2)
+        self.assertEqual(settings.task_reworks, 5)
         self.assertTrue(settings.task_arbiter)
         direct = Settings(
             home=Path(tmp),
@@ -153,7 +154,7 @@ class SettingsTest(unittest.TestCase):
         self.assertFalse(direct.task_arbiter)
 
     def test_invalid_rework_limit_is_rejected(self) -> None:
-        for value in ("9", "x"):
+        for value in ("11", "x"):
             with self.subTest(value=value):
                 with tempfile.TemporaryDirectory() as tmp:
                     with patch.dict(
@@ -164,9 +165,35 @@ class SettingsTest(unittest.TestCase):
                         with self.assertRaises(ValueError):
                             Settings.from_env(tmp)
 
+    def test_retry_backoff_default_and_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ, {"FORGEL_TASK_RETRY_BACKOFF": ""}, clear=False
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.retry_backoff, (1, 5, 15, 30, 60))
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"FORGEL_TASK_RETRY_BACKOFF": "2,10"},
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.retry_backoff, (2, 10))
+        for value in ("0", "a", "1,,5"):
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as tmp:
+                    with patch.dict(
+                        os.environ,
+                        {"FORGEL_TASK_RETRY_BACKOFF": value},
+                        clear=False,
+                    ):
+                        with self.assertRaises(ValueError):
+                            Settings.from_env(tmp)
+
     def test_invalid_failure_policy_is_rejected(self) -> None:
         for case in (
-            {"FORGEL_TASK_RETRIES": "9"},
+            {"FORGEL_TASK_RETRIES": "11"},
             {"FORGEL_TASK_RETRIES": "x"},
             {"FORGEL_PLAN_ON_FAILURE": "sometimes"},
         ):

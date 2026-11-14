@@ -8,7 +8,7 @@ on again; new work starts a new iteration.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -51,6 +51,10 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
     if has_blocking_reconciliation(Path(project["workspace"])):
         return "reconciliation pending"
     task = tasks.latest_task(layout)
+    if task is not None and task.get("status") == "pending":
+        moment = tasks.retry_moment(task)
+        if moment is not None and moment > datetime.now(timezone.utc):
+            return f"task retry at {moment.strftime('%H:%M UTC')}"
     if task is not None and task.get("status") in {
         "pending",
         "running",
@@ -178,12 +182,14 @@ def handle_failure(
     task_id: str,
     client: ModelClient | None,
     log: Callable[[str], None],
+    now: datetime | None = None,
 ) -> None:
     """React to a failure by kind: retry, rework, arbitrate, quarantine."""
 
     task = tasks.get_task(layout, task_id)
     if task is None or task.get("status") != "failed":
         return
+    moment = now or datetime.now(timezone.utc)
     data = dict(task.get("result") or {})
     failure = dict(
         data.get("failure")
@@ -192,7 +198,13 @@ def handle_failure(
     kind = str(failure.get("kind") or "external")
     attempts = int(data.get("attempts", 0))
     if kind == "infrastructure" and attempts < settings.task_retries:
+        backoff = settings.retry_backoff or (1,)
+        delay = backoff[min(attempts, len(backoff) - 1)]
+        retry_at = (moment + timedelta(minutes=delay)).isoformat(
+            timespec="seconds"
+        )
         data["attempts"] = attempts + 1
+        data["retry_after"] = retry_at
         data["last_failure"] = failure
         data.pop("failure", None)
         tasks.update_task(
@@ -205,7 +217,8 @@ def handle_failure(
         )
         log(
             f"[retry] {project['id']}: task {task_id} infrastructure "
-            f"failure; retry {attempts + 1}/{settings.task_retries}"
+            f"failure; retry {attempts + 1}/{settings.task_retries} "
+            f"in {delay}m (at {retry_at})"
         )
         return
     if kind in {"qa", "review"}:
@@ -316,8 +329,14 @@ def _run_task(
             f"[daemon] {project['id']}: {peak.defer_message(hours=settings.peak_hours, tz_name=settings.timezone)}"
         )
         return False
+    stored = dict(task.get("result") or {})
+    stored.pop("retry_after", None)
     tasks.update_task(
-        layout, task_id, status="running", started_at=_now()
+        layout,
+        task_id,
+        status="running",
+        started_at=_now(),
+        result=stored,
     )
     log(f"[daemon] {project['id']}: starting task {task_id}")
     model = client or build_model_client(settings.home, log=log)
@@ -411,6 +430,8 @@ def run_once(
                 f"{task['id']} ({task['status']})"
             )
         task = tasks.next_pending_task(layout)
+        if task is None and tasks.waiting_pending(layout):
+            continue
         if task is not None:
             if _run_task(
                 settings, ledger, project, layout, task, client, log
@@ -446,6 +467,20 @@ def run_once(
     return processed
 
 
+def _next_retry_wait(ledger: Ledger) -> float | None:
+    """Seconds until the earliest pending retry, if any."""
+
+    now = datetime.now(timezone.utc)
+    moments: list[datetime] = []
+    for project in ledger.list_projects():
+        layout = ProjectLayout.detect(project["workspace"])
+        moments.extend(tasks.retry_times(layout))
+    future = [moment for moment in moments if moment > now]
+    if not future:
+        return None
+    return max(1.0, min((min(future) - now).total_seconds(), 3600.0))
+
+
 def run_daemon(
     settings: Settings,
     ledger: Ledger,
@@ -467,6 +502,10 @@ def run_daemon(
         cycles += 1
         if once or (max_cycles is not None and cycles >= max_cycles):
             return cycles
+        wait = interval
         if not processed:
-            log(f"[daemon] idle; next poll in {interval:g}s")
-        time.sleep(interval)
+            retry_wait = _next_retry_wait(ledger)
+            if retry_wait is not None:
+                wait = retry_wait
+            log(f"[daemon] idle; next poll in {wait:g}s")
+        time.sleep(wait)
