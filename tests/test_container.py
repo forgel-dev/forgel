@@ -6,11 +6,13 @@ import unittest
 from pathlib import Path
 
 from forgel.approvals import record_approval
+from forgel.artifacts import write_text
 from forgel.complexity import measure_patch
 from forgel.config import Settings
+from forgel.environment import Environment, render_environment
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
-from forgel.orchestrator import Orchestrator
+from forgel.orchestrator import Orchestrator, StageError
 from forgel.projects import create_project
 from forgel.sync import reconcile_project, sync_project
 
@@ -69,6 +71,11 @@ class ContainerProjectTest(unittest.TestCase):
         self.assertTrue((layout.control / "staging.json").exists())
         self.assertTrue((layout.control / "forgel.toml").exists())
         self.assertTrue((layout.control / "program.yaml").exists())
+        self.assertTrue((layout.control / "environment.yaml").exists())
+        qa_report = layout.artifact("docs/program/qa-report.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("local + environment.yaml", qa_report)
         self.assertTrue((layout.repo_path("api") / "app.py").exists())
         self.assertTrue((layout.repo_path("web") / "index.html").exists())
         self.assertTrue(
@@ -141,6 +148,42 @@ class ContainerProjectTest(unittest.TestCase):
         self.assertEqual(
             self.ledger.checkpoint_state(project_id), ("done", 2)
         )
+
+    def test_environment_contract_drives_qa(self) -> None:
+        project_id, root, layout = self._create()
+        orchestrator = Orchestrator(self.settings, self.ledger)
+        self._finish(orchestrator, project_id)
+
+        write_text(
+            layout.control / "environment.yaml",
+            render_environment(
+                Environment(
+                    image="python:3.12-slim",
+                    repo="e2e",
+                    e2e=('python -c "import sys; sys.exit(3)"',),
+                )
+            ),
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        with self.assertRaises(StageError) as ctx:
+            orchestrator.stage_qa(project)
+        self.assertIn("exit code 3", str(ctx.exception))
+
+    def test_malformed_environment_fails_qa(self) -> None:
+        project_id, root, layout = self._create()
+        orchestrator = Orchestrator(self.settings, self.ledger)
+        self._finish(orchestrator, project_id)
+
+        write_text(
+            layout.control / "environment.yaml",
+            "image: python:3.12-slim\ncommand: make test\n",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        with self.assertRaises(StageError) as ctx:
+            orchestrator.stage_qa(project)
+        self.assertIn("environment contract", str(ctx.exception))
 
     def test_complexity_aggregates_repository_patches(self) -> None:
         project_id, root, layout = self._create()

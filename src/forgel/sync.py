@@ -41,6 +41,7 @@ KNOWN_ROOT_FILES = {
     "Dockerfile",
     ".dockerignore",
     ".gitignore",
+    "environment.yaml",
     "program.yaml",
     "FORGEL.md",
     "AGENTS.md",

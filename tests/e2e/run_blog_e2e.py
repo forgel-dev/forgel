@@ -38,7 +38,16 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from forgel.adopt import adopt_repository  # noqa: E402
+from forgel.artifacts import write_text  # noqa: E402
 from forgel.config import Settings  # noqa: E402
+from forgel.environment import (  # noqa: E402
+    Environment,
+    EnvironmentError,
+    command_argv,
+    environment_path,
+    load_environment,
+    render_environment,
+)
 from forgel.layout import ProjectLayout  # noqa: E402
 from forgel.ledger import Ledger  # noqa: E402
 from forgel.tasks import create_task, get_task  # noqa: E402
@@ -113,8 +122,19 @@ def _checks(project: dict, layout: ProjectLayout, task: dict) -> list[tuple[str,
     report_ref = task.get("result", {}).get("report", "")
     report = layout.root / report_ref if report_ref else None
     state = str(task.get("status"))
+    try:
+        environment = load_environment(layout)
+        environment_detail = "" if environment else "not found"
+    except EnvironmentError as exc:
+        environment = None
+        environment_detail = str(exc)
     checks = [
         ("task record exists", bool(task.get("id")), ""),
+        (
+            "environment contract valid",
+            environment is not None and bool(environment.test),
+            environment_detail,
+        ),
         (
             "task reached a terminal state",
             state in {"done", "failed"},
@@ -229,14 +249,15 @@ def main() -> int:
         project = ledger.get_project(adopted.project_id)
         assert project is not None
         layout = ProjectLayout.detect(project["workspace"])
-        test_command = [
-            sys.executable,
-            "-m",
-            "unittest",
-            "discover",
-            "-s",
-            "tests",
-        ]
+        environment = Environment(
+            image="python:3.12-slim",
+            test=("python -m unittest discover -s tests",),
+        )
+        write_text(
+            environment_path(layout),
+            render_environment(environment),
+        )
+        test_command = command_argv(environment.test[0])
         task = create_task(
             layout,
             TASK_TITLE,

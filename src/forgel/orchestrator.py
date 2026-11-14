@@ -26,6 +26,12 @@ from .approvals import latest_approval
 from .artifacts import copy_template, read_json, write_json, write_text
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
+from .environment import (
+    Environment,
+    EnvironmentError,
+    command_argv,
+    load_environment,
+)
 from .intake import build_requirements
 from .jurisdiction import resolve_pack
 from .layout import ProjectLayout
@@ -753,6 +759,7 @@ See `docs/program/jurisdiction/requirements.md` and
             "Dockerfile",
             ".dockerignore",
             ".gitignore",
+            "environment.yaml",
             "FORGEL.md",
             "AGENTS.md",
         ):
@@ -801,6 +808,12 @@ See `docs/program/jurisdiction/requirements.md` and
                 template / "docker" / "docker-compose.qa.yml", substitutions
             ),
         )
+        write_text(
+            layout.control / "environment.yaml",
+            self._render_template_file(
+                template / "environment.yaml", substitutions
+            ),
+        )
         for name in ("FORGEL.md", "AGENTS.md"):
             write_text(
                 layout.control / name,
@@ -819,6 +832,7 @@ See `docs/program/jurisdiction/requirements.md` and
             layout.repo_ref("web"),
             layout.repo_ref("infra"),
             layout.repo_ref("e2e"),
+            f"{control_ref}/environment.yaml",
             f"{control_ref}/FORGEL.md",
             f"{control_ref}/AGENTS.md",
         ]
@@ -1037,6 +1051,11 @@ See `docs/program/jurisdiction/requirements.md` and
         return [self._ref(project, path), self._ref(project, complexity_path)]
 
     def stage_qa(self, project: dict[str, Any]) -> list[str]:
+        try:
+            environment = load_environment(self._layout(project))
+        except EnvironmentError as exc:
+            raise StageError(f"environment contract: {exc}") from exc
+
         runtime = self.settings.qa_runtime
         config = load_project_config(self._control(project))
         if runtime == "auto" and config is not None:
@@ -1046,6 +1065,11 @@ See `docs/program/jurisdiction/requirements.md` and
 
         if runtime == "docker":
             returncode, output, runtime_label = self._run_qa_docker(project)
+        elif environment is not None and environment.has_commands:
+            returncode, output = self._run_qa_environment(
+                project, environment
+            )
+            runtime_label = "local + environment.yaml"
         else:
             returncode, output = self._run_qa_local(project)
             runtime_label = "local"
@@ -1070,6 +1094,57 @@ See `docs/program/jurisdiction/requirements.md` and
         if returncode != 0:
             raise StageError(f"QA failed with exit code {returncode}: {output}")
         return [self._ref(project, path)]
+
+    def _run_qa_environment(
+        self, project: dict[str, Any], environment: Environment
+    ) -> tuple[int, str]:
+        """Run the contract's ``test`` and ``e2e`` commands in its workdir.
+
+        The local fallback is single-tenant and runs on the host. ``setup``
+        belongs to the environment image and is executed by the sandbox
+        runtime, not here; a report says so when the contract defines one.
+        """
+
+        layout = self._layout(project)
+        workdir = environment.workdir(layout)
+        if not workdir.is_dir():
+            raise StageError(
+                f"environment workdir not found: {workdir}"
+            )
+        output = ""
+        if environment.setup:
+            output += (
+                "setup commands run in the sandbox environment; "
+                "the local fallback skips them\n"
+            )
+        commands = list(environment.test) + list(environment.e2e)
+        for command in commands:
+            output += f"$ {command}\n"
+            try:
+                argv = command_argv(command)
+            except EnvironmentError as exc:
+                raise StageError(f"environment command: {exc}") from exc
+            try:
+                completed = subprocess.run(
+                    argv,
+                    cwd=str(workdir),
+                    env={**os.environ},
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                partial = (exc.stdout or "") + (exc.stderr or "")
+                output += f"timed out after 300s\n{partial}"
+                return 124, output
+            except (OSError, subprocess.SubprocessError) as exc:
+                output += f"cannot run command: {exc}\n"
+                return 127, output
+            output += completed.stdout + completed.stderr
+            if completed.returncode != 0:
+                return completed.returncode, output
+        return 0, output
 
     def _run_qa_local(self, project: dict[str, Any]) -> tuple[int, str]:
         layout = self._layout(project)

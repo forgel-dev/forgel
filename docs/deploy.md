@@ -156,10 +156,13 @@ shared installation. A per-project sandbox (a separate Docker daemon or remote
 sandbox, project-only mounts, labels, network and resource limits) is the next
 milestone; the core refuses `FORGEL_SANDBOX=docker` until it exists.
 
-The target environment contract is an OCI image or Compose definition plus a
-small `environment.yaml` with `setup`, `test` and `e2e` commands. The core has
-no per-language adapters; official recipes are starting points, and the agent
-may author a standard environment definition for a missing stack with review.
+The environment contract is an OCI image or build context plus a small
+`environment.yaml` with `setup`, `test` and `e2e` commands. The core has no
+per-language adapters; official recipes are starting points, and the agent may
+author a standard environment definition for a missing stack with review. In
+the local fallback QA runs the contract's `test` and `e2e` commands on the host
+and skips `setup`; a malformed contract fails QA instead of falling back, while
+a project without one keeps the legacy e2e script.
 
 Project environments that need containers (Postgres, Redis, a compose stack)
 require that future sandbox. The daemon never mounts the host

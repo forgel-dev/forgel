@@ -1,0 +1,14 @@
+# environment.yaml — the project environment contract (D-071).
+#
+# The core reads this file and runs the commands inside the project
+# environment; it contains no language-specific logic. Paths are relative to
+# the project root, and commands run in the repository named by `repo`.
+#
+# `image` or `build` describes the environment. `setup` installs dependencies
+# inside it, `test` and `e2e` are the gates QA runs. `ports` and `health`
+# describe the running service for the sandbox and the docker QA stand.
+image: python:3.12-slim
+repo: e2e
+e2e: ["python check.py"]
+ports: [8000]
+health: "/health"

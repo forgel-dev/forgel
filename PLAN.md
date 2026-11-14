@@ -302,6 +302,7 @@ repos:
 
 ```
 program.yaml
+environment.yaml
 lock.json
 docs/program/
   master-plan.md
@@ -586,6 +587,7 @@ In single-repo practice, "we only write what we do here" and "never wait for the
 
 ```
 program.yaml
+environment.yaml
 lock.json
 docs/program/
   master-plan.md
@@ -962,8 +964,9 @@ an OCI image (or Dockerfile/Compose/Dev Container) plus a small contract for
 the commands Forgel needs.
 
 ```yaml
-# environment.yaml — a project artifact
-image: python:3.12-slim        # or: build: ./environment
+# program/environment.yaml — a project artifact
+image: python:3.12-slim        # or: build: repos/api/environment
+repo: api                      # commands run here; default: the sole repository
 services: [compose.yaml]       # optional
 setup: ["pip install -r requirements.txt"]
 test: ["python -m unittest discover -s tests"]
@@ -971,6 +974,15 @@ e2e: ["python e2e/check.py"]
 ports: [8000]
 health: "/health"
 ```
+
+Paths in the contract are relative to the project root. The file is a strict
+YAML subset: top-level keys, scalar values, flow lists and block lists. A
+malformed contract fails QA loudly; a project without one keeps the legacy
+fallback (the template e2e script), so existing projects are not broken. The
+local single-tenant fallback runs `test` and then `e2e` on the host and the
+interpreter that runs Forgel; `setup` belongs to the environment image and is
+executed by the sandbox runtime. The docker QA stand still starts its compose
+file; routing it through the contract is part of the sandbox work.
 
 The core reads this contract and runs it inside the per-project sandbox. It
 does not know language-specific commands. Official recipes provide starting
