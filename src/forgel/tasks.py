@@ -46,6 +46,10 @@ def create_task(
     repo_id: str = "",
     test_command: list[str] | None = None,
     assumptions: list[str] | None = None,
+    plan_id: str = "",
+    plan_goal: str = "",
+    order: int = 0,
+    depends_on: list[str] | None = None,
 ) -> dict[str, Any]:
     title = title.strip()
     requirements = [item.strip() for item in requirements if item.strip()]
@@ -70,6 +74,12 @@ def create_task(
         "test_command": list(test_command or []),
         "assumptions": [
             item.strip() for item in (assumptions or []) if item.strip()
+        ],
+        "plan_id": plan_id,
+        "plan_goal": plan_goal,
+        "order": order,
+        "depends_on": [
+            item for item in (depends_on or []) if item
         ],
         "status": "pending",
         "created_at": _now(),
@@ -169,9 +179,36 @@ def recover_running(
     return recovered
 
 
+def _dependency_blockers(
+    task: dict[str, Any], statuses: dict[str, str]
+) -> list[str]:
+    return [
+        dep
+        for dep in (task.get("depends_on") or [])
+        if statuses.get(dep) != "done"
+    ]
+
+
+def blocked_pending(layout: ProjectLayout) -> list[dict[str, Any]]:
+    """Pending tasks whose dependencies are not done yet (or have failed)."""
+
+    tasks = list_tasks(layout)
+    statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
+    return [
+        task
+        for task in tasks
+        if task.get("status") == "pending"
+        and _dependency_blockers(task, statuses)
+    ]
+
+
 def next_pending_task(layout: ProjectLayout) -> dict[str, Any] | None:
-    for task in list_tasks(layout):
-        if task.get("status") == "pending":
+    tasks = list_tasks(layout)
+    statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
+    for task in tasks:
+        if task.get("status") != "pending":
+            continue
+        if not _dependency_blockers(task, statuses):
             return task
     return None
 

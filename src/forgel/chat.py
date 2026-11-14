@@ -40,6 +40,7 @@ from .github_flow import (
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .artifacts import write_text
+from .planner import PlanningError, plan_project
 from .project_config import ConfigError, render_project_config
 from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, derive_name, resolve_project
@@ -88,6 +89,7 @@ Projects
 /github publish [repo] <title>   push a branch, open a PR, follow policy
 /github merge [repo] [pr]        merge after checks
 
+/plan <goal>            turn a milestone goal into queued tasks
 /tasks                  coding-agent tasks for the selected project
 /task cancel <id>       cancel a pending task
 /projects              projects, state and the selected one
@@ -170,6 +172,7 @@ class CommandRouter:
             "/adopt": self._adopt,
             "/repo": self._repo,
             "/github": self._github,
+            "/plan": self._plan,
             "/tasks": self._tasks,
             "/task": self._task,
             "/projects": self._projects,
@@ -912,6 +915,35 @@ class CommandRouter:
         )
 
     # ------------------------------------------------------------ config
+
+    def _plan(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        goal = rest.strip()
+        if not goal:
+            return Reply("Usage: /plan <milestone goal>")
+        try:
+            result = plan_project(
+                self.settings, self.ledger, project, goal
+            )
+        except PlanningError as exc:
+            return Reply(f"error: {exc}")
+        lines = [
+            f"Plan {result.plan_id}: {len(result.tasks)} task(s)."
+        ]
+        if result.notes:
+            lines.append(result.notes)
+        for index, item in enumerate(result.tasks, 1):
+            lines.append(
+                f"{index}. {item['title']} "
+                f"[{item.get('repo_id') or 'sole'}] -> {item['task_id']}"
+            )
+        lines.append(
+            "The daemon runs them in order; a task waits for its "
+            "dependencies."
+        )
+        return Reply("\n".join(lines))
 
     def _peak(self, chat_id: int, rest: str, _actor: str) -> Reply:
         project = self._selected(chat_id)

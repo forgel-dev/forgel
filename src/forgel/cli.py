@@ -51,6 +51,7 @@ from .git_ops import GitOperationError
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
+from .planner import PlanningError, plan_project
 from .project_config import (
     ConfigError,
     SimplicityConfig,
@@ -1123,6 +1124,50 @@ def cmd_secret(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_plan(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            result = plan_project(
+                settings,
+                ledger,
+                project,
+                args.goal,
+                max_tasks=args.max_tasks,
+                dry_run=args.dry_run,
+            )
+        except PlanningError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(
+            f"Plan {result.plan_id}: {len(result.tasks)} task(s)"
+            + (" (dry run)" if result.dry_run else "")
+        )
+        if result.notes:
+            print(result.notes)
+        for index, item in enumerate(result.tasks, 1):
+            depends = ", ".join(
+                str(value) for value in item["depends_on"]
+            ) or "none"
+            identifier = item.get("task_id") or "-"
+            print(
+                f"{index}. {item['title']} "
+                f"[{item.get('repo_id') or 'sole'}] "
+                f"deps={depends} task={identifier}"
+            )
+        if result.artifact:
+            print(f"artifact: {result.artifact}")
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_chat(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -1320,6 +1365,16 @@ def build_parser() -> argparse.ArgumentParser:
     resume = subparsers.add_parser("resume", help="Resume daemon iterations")
     resume.add_argument("--home", default=None)
     resume.set_defaults(func=cmd_resume)
+
+    plan = subparsers.add_parser(
+        "plan", help="Turn a milestone goal into queued tasks"
+    )
+    plan.add_argument("project_id")
+    plan.add_argument("--goal", required=True)
+    plan.add_argument("--max-tasks", type=int, default=8)
+    plan.add_argument("--dry-run", action="store_true")
+    plan.add_argument("--home", default=None)
+    plan.set_defaults(func=cmd_plan)
 
     chat = subparsers.add_parser(
         "chat", help="Local console: the same commands without Telegram"

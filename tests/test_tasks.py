@@ -64,6 +64,30 @@ class TasksTest(unittest.TestCase):
             tasks.task_path(self.layout, task["id"]).exists()
         )
 
+    def test_dependencies_gate_the_next_task(self) -> None:
+        first = tasks.create_task(
+            self.layout, "First", ["A"], ["B"], repo_id="main"
+        )
+        second = tasks.create_task(
+            self.layout,
+            "Second",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            depends_on=[first["id"]],
+        )
+        self.assertEqual(
+            tasks.next_pending_task(self.layout)["id"], first["id"]
+        )
+        tasks.update_task(self.layout, first["id"], status="done")
+        self.assertEqual(
+            tasks.next_pending_task(self.layout)["id"], second["id"]
+        )
+        tasks.update_task(self.layout, first["id"], status="failed")
+        self.assertIsNone(tasks.next_pending_task(self.layout))
+        blocked = tasks.blocked_pending(self.layout)
+        self.assertEqual([item["id"] for item in blocked], [second["id"]])
+
     def test_interrupted_tasks_are_requeued(self) -> None:
         task = tasks.create_task(
             self.layout,

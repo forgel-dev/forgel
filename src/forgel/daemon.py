@@ -15,6 +15,7 @@ from typing import Any, Callable
 from . import peak, tasks
 from .approvals import awaits_approval, latest_approval
 from .coding_agent import CodingAgent
+from .task_qa import run_task_qa
 from .config import Settings
 from .control import is_paused
 from .layout import ProjectLayout
@@ -56,6 +57,11 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
         "failed",
     }:
         return f"task {task['status']}"
+    if (
+        tasks.next_pending_task(layout) is None
+        and tasks.blocked_pending(layout)
+    ):
+        return "task blocked"
     state = ledger.checkpoint_state(project_id)
     if state is None:
         if task is not None and task.get("status") == "done":
@@ -116,7 +122,25 @@ def _run_task(
         log(f"[daemon] {project['id']}: task {task_id} has no model client")
         return True
     try:
-        CodingAgent(settings, ledger, model).run(project, task, log)
+        result = CodingAgent(settings, ledger, model).run(
+            project, task, log
+        )
+        if result.status == "done" and settings.task_qa:
+            try:
+                run_task_qa(settings, ledger, project, task, log)
+            except Exception as exc:  # noqa: BLE001 - QA must not crash the daemon
+                tasks.update_task(
+                    layout,
+                    task_id,
+                    status="failed",
+                    result={
+                        **dict(task.get("result") or {}),
+                        "summary": f"task QA crashed: {exc}",
+                    },
+                )
+                log(
+                    f"[qa] {project['id']}: task {task_id} crashed: {exc}"
+                )
     except Exception as exc:  # noqa: BLE001 - one task must not kill the daemon
         tasks.update_task(
             layout,
@@ -157,7 +181,17 @@ def run_once(
                 processed.append(project_id)
             continue
         if layout.metadata().get("mode") == "brownfield":
-            log(f"[daemon] {project_id}: brownfield project has no executor yet")
+            blocked = tasks.blocked_pending(layout)
+            if blocked:
+                log(
+                    f"[daemon] {project_id}: {len(blocked)} task(s) "
+                    "blocked by dependencies"
+                )
+            else:
+                log(
+                    f"[daemon] {project_id}: brownfield project has "
+                    "no executor yet"
+                )
             continue
         if awaits_approval(ledger, project_id):
             log(f"[daemon] {project_id}: waiting for staging approval")

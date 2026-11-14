@@ -179,6 +179,8 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-081** | Autonomous model work defaults to DeepSeek off-peak hours: during a peak window the daemon holds the work and a chat request gets the window close time and an override; peak is opt-in per project | Peak rates are double, the work is not urgent enough to pay for by default, and a human should decide when to spend more; waiting is a plain setting, not a failure | `FORGEL_PEAK_POLICY` (`off_peak` default) and `[models] peak_policy`; windows `1-4,6-10` UTC on weekdays (weekends off-peak), overridable via `FORGEL_PEAK_HOURS`; `/peak`, `/config set models.peak_policy`, `always`; the gate applies when a task starts and when free text calls the model |
 | **D-082** | `deepseek-flash` is the default model for every role; a more expensive model is always an explicit choice, and the default context window is 1M tokens | The current flash generation is cheaper and better than the older expensive one; most current models expose a 1M window, and smaller local windows are not the main scenario | `[models] default` and `architecture` both default to `deepseek-flash`; `context_window` and `FORGEL_CONTEXT_WINDOW` default to 1,000,000; the peak policy applies to flash by default |
 | **D-083** | Everything tied to one model family — default model, context window, tokenizer encoding, peak schedule and its messages — lives in a model profile; the core only asks a profile for those values | The peak schedule and tokenizer are DeepSeek-specific and may change with the next generation; scattering them through config, daemon and chat makes a model change a core change | `src/forgel/model_profiles.py` defines the profile interface and the DeepSeek profile; `tokens`, `peak`, `config`, `project_config` and `model` read defaults from it; an unknown family gets a neutral profile with no peak gating; a future model plugin can expose the same fields |
+| **D-084** | A completed coding task gets an independent QA pass: the project's environment contract runs again after the agent, and the verdict is authoritative | The agent's own final test is self-reported; a green task with a red project gate must not look accepted, and the template pipeline already separates developer work from QA | `task_qa` runs `test` then `e2e` (sandbox or local), writes `docs/program/agent/<task>.qa.md`, records the verdict in the task and ledger; a red verdict fails the task; no command means `skipped`, never a false pass; `FORGEL_TASK_QA` turns it off |
+| **D-085** | A milestone goal becomes an ordered backlog in one planner call; tasks carry a plan id, order and dependencies, and the daemon runs only tasks whose dependencies are done | Hand-decomposing a milestone is the remaining human bottleneck; a small, reviewable plan artifact keeps the decomposition visible and correctable | `forgel plan` and `/plan` ask the model for 1–20 small tasks with explicit requirements, acceptance, repository and test command; `--dry-run` previews them; the plan is committed as `docs/program/plans/<id>.md`; dependency edges gate execution; a failed dependency leaves its dependents pending and reported as blocked |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1095,6 +1097,13 @@ conversation; it is a sequence of bounded sessions.
 - **Recovery.** A task left `running` by a crashed daemon is requeued at the
   next start and continues from its state file. The task record counts resumes
   and stops after three with a clear failure, so a crash loop cannot spin.
+
+**Task QA and planning.** A coding task that reports done is followed by an
+independent QA pass over the project's environment contract (D-084): the
+verdict is authoritative, and a red gate fails the task with a QA report. A
+milestone goal is turned into an ordered backlog of tasks in one planner call
+(D-085); each task names its repository, dependencies and test command, and
+the daemon runs a task only after its dependencies are done.
 
 ### 7.16 Peak-Hour Policy
 

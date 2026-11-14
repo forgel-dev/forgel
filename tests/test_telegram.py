@@ -294,6 +294,38 @@ class SelectionAndAgentTest(unittest.TestCase):
         reply = router.handle(7, "What is this project?", "@tester")
         self.assertEqual(reply.text, "project answer")
 
+    def test_plan_command_queues_a_backlog(self) -> None:
+        router = self._router()
+        project = self._project("Plan", "A brief.")
+        self.ledger.set_session(7, project)
+        planned = SimpleNamespace(
+            plan_id="plan-1",
+            notes="Two steps.",
+            tasks=[
+                {
+                    "title": "First",
+                    "repo_id": "main",
+                    "task_id": "task-1",
+                },
+                {
+                    "title": "Second",
+                    "repo_id": "main",
+                    "task_id": "task-2",
+                },
+            ],
+        )
+        with patch(
+            "forgel.chat.plan_project", return_value=planned
+        ) as plan:
+            reply = router.handle(
+                7, "/plan Bring the project to M1", "@tester"
+            )
+        self.assertIn("Plan plan-1: 2 task(s)", reply.text)
+        self.assertIn("task-1", reply.text)
+        self.assertEqual(
+            plan.call_args.args[3], "Bring the project to M1"
+        )
+
     def test_peak_hours_hold_free_text(self) -> None:
         client = ScriptedModelClient(
             ['{"kind": "answer", "reply": "should not run"}']

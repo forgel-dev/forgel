@@ -62,6 +62,9 @@ class Settings:
     peak_policy: str = "always"
     peak_hours: str = default_profile().peak_windows
     timezone: str = ""
+    # Independent task QA: on in the runtime, off for direct construction so
+    # library and test code does not spawn extra test processes by accident.
+    task_qa: bool = False
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -163,6 +166,7 @@ class Settings:
             peak_policy=peak_policy,
             peak_hours=peak_hours,
             timezone=os.environ.get("FORGEL_TIMEZONE", "").strip(),
+            task_qa=_env_bool("FORGEL_TASK_QA", True),
         )
 
     @property

@@ -67,6 +67,15 @@ fallback otherwise. A task left `running` by a crash is requeued at the next
 daemon start and continues from its state file, up to three resumes. See
 `PLAN.md` §7.15.
 
+**Task QA and milestones.** A task that the coding agent reports done is
+followed by an independent QA pass over the project's `environment.yaml`
+(`test`, then `e2e`) in the sandbox; a red gate fails the task with
+`docs/program/agent/<task>.qa.md`. `forgel plan` (or `/plan`) turns a
+milestone goal into an ordered backlog of tasks with explicit requirements,
+acceptance and dependencies; `--dry-run` previews it, and the daemon runs a
+task only after its dependencies are done. The plan is committed as
+`docs/program/plans/<id>.md`. See `PLAN.md` §7.15.
+
 **Models and cost.** `deepseek-flash` is the default for every role; a more
 expensive model is an explicit configuration choice. Autonomous work defaults
 to DeepSeek's off-peak hours, when the rate is half the peak rate. During a
@@ -304,10 +313,17 @@ forgel task list <project>
 
 A plain chat message is not just conversation: the project agent classifies it,
 and a change request becomes a pending task with explicit requirements,
-acceptance criteria, a target repository, optional constraints and a test
-command. The bot reports the task id, and `/tasks` lists it. An ambiguous
-request in a multi-repository project is answered with a question instead of a
-guess. Cancel a queued task with `/task cancel <id>`.
+acceptance criteria, a target repository, optional constraints, a test command
+and recorded assumptions. In a multi-repository project the agent picks the
+most likely repository and states why instead of asking; a wrong assumption is
+corrected by the next request. The bot reports the task id, and `/tasks` lists
+it. Cancel a queued task with `/task cancel <id>`.
+
+For a milestone, `forgel plan <project> --goal "..."` (or `/plan <goal>` in the
+chat) asks the model for an ordered backlog of small tasks with explicit
+requirements, acceptance and dependency edges; `--dry-run` previews it. The
+plan is committed as `docs/program/plans/<id>.md`, and the daemon runs a task
+only after its dependencies are done.
 
 The daemon picks up pending tasks and runs the coding agent inside the
 project's repository. The model returns one JSON action per turn (list, read,
@@ -315,10 +331,13 @@ write, delete, run, done, fail). The runtime keeps paths inside the repository,
 uses a small command allowlist, strips secret environment variables, caps the
 step count, runs the final test command, commits with a bot message, writes
 `docs/program/agent/<task>.md` and records a ledger event. It refuses to commit
-secret-looking files.
+secret-looking files. After a done task the independent QA pass runs the
+environment contract again (sandbox or local); a red gate fails the task and
+writes `docs/program/agent/<task>.qa.md`.
 
 From the chat: send a plain message to the selected project to queue a change;
-`/tasks` shows the queue; `/task cancel <id>` cancels a pending task.
+`/plan` decomposes a milestone; `/tasks` shows the queue; `/task cancel <id>`
+cancels a pending task.
 
 Free local runs can use a scripted model or a subagent bridge instead of a
 provider key; a production run uses `FORGEL_MODEL_API_KEY`. The manual blog e2e
