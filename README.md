@@ -391,7 +391,7 @@ responsibility. See [PLAN.md](PLAN.md) and [jurisdiction/README.md](jurisdiction
 
 ## License
 
-Core: AGPL-3.0-or-later. Plugin SDK, official plugins and templates: Apache-2.0. Generated project code belongs to the user. See [LICENSE](LICENSE).
+Core, plugin SDK, official plugins and templates: Apache-2.0. Generated project code belongs to the user. See [LICENSE](LICENSE).
 
 ## Agent Instructions
 

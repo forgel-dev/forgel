@@ -16,8 +16,7 @@ All public artifacts are in English (D-025): issues, pull requests, commit messa
 
 ## Licensing and DCO
 
-- The core is **AGPL-3.0-or-later**.
-- The plugin SDK, official plugins, templates and schemas are **Apache-2.0**.
+- The core, plugin SDK, official plugins, templates and schemas are **Apache-2.0**.
 - Inbound contributions are licensed under the same terms as the component they touch (inbound = outbound).
 - Every commit must be signed off: `git commit -s`. This certifies the [Developer Certificate of Origin 1.1](https://developercertificate.org/). There is no CLA.
 

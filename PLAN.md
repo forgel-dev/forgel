@@ -169,6 +169,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-071** | A project environment is a declarative container artifact (OCI image or Dockerfile/Compose/Dev Container) plus a small contract for `setup`, `test` and `e2e` commands; the core contains no per-language command adapters | Knowing every toolchain's current commands in the core goes stale and creates permanent maintenance, while per-instance scripts fragment the ecosystem | The environment is a committed project artifact; Forgel reads the contract and runs it in the sandbox; official recipes are only starting points |
 | **D-072** | Official recipes cover common stacks as convenience templates; the coding agent may create or extend an environment definition for a missing stack, but only through the standard contract and with review | Maintaining every environment is impossible, and forbidding new ones caps the product; a standard, reviewable artifact avoids bespoke per-instance adapters | Recipes are small composable starting points; the agent writes a Dockerfile/Compose/Dev Container and `environment.yaml`; nothing language-specific enters the core |
 | **D-073** | Arbitrary environment code runs only inside a per-project sandbox: repo-only mount, no `/data` secrets, no host Docker socket, resource and network limits, configurable registry policy | Broad environment support is safe only behind an isolation boundary; CI runners solve the same problem the same way | The sandbox runtime builds/pulls and runs the project image; the daemon talks to it; a trusted single-user host may allow arbitrary images, while hosted mode uses an allowlist and pinned digests; `local` remains a single-tenant fallback. One labelled container per session mounts the working repository at `/workspace` and the declared sibling repositories read-only, runs as the daemon UID/GID with capabilities dropped, a read-only root and `/tmp`, CPU/memory/pid limits and `network=none` by default; the daemon reaches it over `DOCKER_HOST`, never the host socket. The bundled DinD sidecar is opt-in and privileged; a remote daemon is the multi-tenant choice |
+| **D-074** | The core moves to Apache-2.0; the moat is the brand, execution speed, the audit/benchmark data and the future hosted service, not copyleft | The project bets on adoption and virality: AGPL deters companies from embedding and extending the core, while a hosted clone is now unlikely to beat the original on trust, audit and distribution | All code is Apache-2.0 (DCO, no CLA); registry data stays CC0 and docs CC BY 4.0; the trademark and the `conformant` badge remain; a closed hosted clone is answered by brand, data and service quality. Supersedes the core-license part of D-018 |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -176,13 +177,13 @@ Business-model and jurisdiction decisions are not part of this public document. 
 
 | Component | License | Why |
 |---|---|---|
-| Core (orchestrator, runtime, ledger) | AGPL-3.0 | Deters closed hosted clones; modifications are published when hosted |
+| Core (orchestrator, runtime, ledger) | Apache-2.0 | Maximum adoption and embedding; the moat is brand, speed, data and the hosted service (D-074) |
 | Plugin SDK, API schemas | Apache-2.0 | Plugin authors are not forced to open their code |
 | Official plugins and templates | Apache-2.0 | Studios can use and modify them without output contamination |
 | Recipe registry | CC0-1.0 | Data should be free |
 | Documentation | CC BY 4.0 | Maximum distribution |
 | Generated code | The user | An explicit Output License: no copyleft on the customer's product |
-| Hosted control plane (later) | AGPL-3.0 — proposal, Q3 | Monetization is hosting and support, not closed code |
+| Hosted control plane (later) | Apache-2.0 — proposal, Q3 | Consistency with the core; monetization is hosting, support and the managed experience |
 
 **Trademark:** the Forgel name and logo are protected; a fork must rename itself. The `conformant` badge is issued only to plugins that pass the conformance kit.
 
@@ -1169,7 +1170,7 @@ Cost per feature and human minutes are measured from day one and capped by the p
 |---|---|---|---|
 | Q1 | Held-out test isolation | separate repo, separate namespace, ACL | A separate repo with no dev-agent access |
 | Q2 | Secrets in self-host | env, vault, cloud KMS | Start with env + instructions; KMS in M3 |
-| Q3 | Openness of the hosted control plane | open AGPL, closed, open-core | Open AGPL: monetization is hosting and support, not code |
+| Q3 | Openness of the hosted control plane | open Apache, closed, open-core | Open Apache: monetization is hosting and support, not code |
 | Q4 | How to source and maintain jurisdiction packs | in-house legal, partner counsel, community + maintainer sign-off | Open data + a named reviewer when available; drafts are acceptable and carry the disclaimer |
 | Q5 | Default browser engine | Playwright/Chromium, Lightpanda | Chromium for visual checks; Lightpanda experimental for non-visual CDP checks |
 | Q6 | How to reconcile external changes | git diff + drift report + human approval | Record and reconcile, never regenerate; update the spec and acceptance only after review |

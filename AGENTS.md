@@ -14,8 +14,8 @@ shim and is not part of the public repository.
 ## Project Rules
 
 - Public artifacts are in English (D-025). Code identifiers are English.
-- The core is AGPL-3.0-or-later. The SDK, official plugins and templates are
-  Apache-2.0. Generated project code belongs to the user.
+- The core, SDK, official plugins, templates and schemas are Apache-2.0.
+  Generated project code belongs to the user.
 - The orchestrator is deterministic; the LLM works only inside a step.
 - Roles have clean context: spec writer, developer, reviewer, QA, acceptor.
 - Artifacts in git are the source of truth; memory is an index.
