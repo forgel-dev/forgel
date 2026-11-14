@@ -1,0 +1,15 @@
+{
+  "project": "forgel",
+  "brief": "Adopted in place: forgel.",
+  "mode": "brownfield",
+  "repos": [
+    "main"
+  ],
+  "requires": [],
+  "excludes": [],
+  "region": "unspecified",
+  "jurisdiction": "unspecified",
+  "entity": "unspecified",
+  "payments": false,
+  "constraints": []
+}

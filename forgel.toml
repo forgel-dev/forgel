@@ -1,0 +1,45 @@
+[project]
+name = "forgel"
+recipe = ""
+
+[qa]
+runtime = "auto"
+
+[jurisdiction]
+pack = "ru"
+
+[models]
+default = "deepseek-flash"
+architecture = "deepseek-flash"
+context_window = 1000000
+peak_policy = "off_peak"
+
+[budget]
+per_feature_usd = 10
+per_project_usd = 300
+
+[release]
+auto_patch = false
+propose_minor = false
+
+[simplicity]
+enabled = true
+max_added_lines = 400
+max_new_config_keys = 2
+max_compat_markers = 0
+
+[refactoring]
+enabled = true
+budget_percent = 10
+allow_auto_targeted = true
+
+[git]
+provider = "github"
+auth = "auto"
+org = ""
+base_branch = "main"
+branch_prefix = "forgel/"
+draft_pr = true
+require_ci = true
+merge = "auto"
+auto_revert_on_failure = true

@@ -1,0 +1,10 @@
+# program.yaml
+project: forgel
+recipe: ""
+repos:
+  - id: main
+    role: application
+    path: .
+    provider: github
+    url: "git@github.com:forgel-dev/forgel.git"
+    depends_on: []
