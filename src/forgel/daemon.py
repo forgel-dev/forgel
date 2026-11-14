@@ -406,6 +406,10 @@ def _run_task(
     handle_failure(
         settings, ledger, project, layout, task_id, model, log
     )
+    try:
+        tasks.commit_control(layout, f"Task {task_id}: result")
+    except Exception:  # noqa: BLE001 - a commit must not stop the daemon
+        pass
     return True
 
 

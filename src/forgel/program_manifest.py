@@ -131,7 +131,7 @@ def repo_control_path(layout: ProjectLayout, repo_id: str) -> str:
     if layout.is_linked:
         target = layout.repo_path(repo_id)
         try:
-            return os.path.relpath(target, layout.control)
+            return os.path.relpath(target, layout.root)
         except ValueError:
             return str(target)
     return f"./{repo_id}"

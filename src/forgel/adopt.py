@@ -205,6 +205,33 @@ def _control_commit(control: Path, message: str) -> None:
     _git(control, "tag", "-f", "forgel-baseline")
 
 
+
+
+CONTROL_PATHS = (
+    "forgel.toml",
+    "program.yaml",
+    "FORGEL.md",
+    "AGENTS.md",
+    ".gitignore",
+    "docs/program",
+)
+
+
+def _commit_control(layout: ProjectLayout, message: str) -> None:
+    """Version control artifacts, without touching the user's other work."""
+
+    if not layout.is_linked:
+        _control_commit(layout.control, message)
+        return
+    paths = [
+        item for item in CONTROL_PATHS if (layout.root / item).exists()
+    ]
+    try:
+        git_ops.commit_paths(layout.root, paths, message)
+    except git_ops.GitOperationError:
+        return
+
+
 def _default_base_branch(
     layout: ProjectLayout, repos: list[dict[str, Any]]
 ) -> str:
@@ -565,7 +592,7 @@ def _adopt_linked(
             url = str(root)
             provider = "local"
     project_id = new_project_id(project_name)
-    ensure_dir(root / ".forgel" / "program")
+    ensure_dir(root / ".forgel")
     entry = {
         "id": "main",
         "role": "application",
@@ -590,8 +617,8 @@ def _adopt_linked(
     )
     layout = ProjectLayout.detect(root)
     _write_brownfield_files(layout, project_name, project_brief)
+    _commit_control(layout, f"Adopt {project_name}")
     _tag_baseline(root)
-    _control_commit(layout.control, f"Adopt {project_name}")
     _event(
         ledger,
         project_id,
@@ -770,7 +797,7 @@ def _add_linked_repository(
         str(project["name"]),
         str(project.get("recipe_id") or ""),
     )
-    _control_commit(layout.control, f"Add repository {selected_id}")
+    _commit_control(layout, f"Add repository {selected_id}")
     _tag_baseline(root)
     _event(
         ledger,
@@ -1187,7 +1214,7 @@ def create_repository(
         str(project["name"]),
         str(project.get("recipe_id") or ""),
     )
-    _control_commit(layout.control, f"Create repository {selected_id}")
+    _commit_control(layout, f"Create repository {selected_id}")
     _push_repository(local, token, git_ops.current_branch(local) or "main")
     _event(
         ledger,
@@ -1268,7 +1295,7 @@ def publish_repository(
         str(project["name"]),
         str(project.get("recipe_id") or ""),
     )
-    _control_commit(layout.control, f"Publish repository {repo_id}")
+    _commit_control(layout, f"Publish repository {repo_id}")
     _event(
         ledger,
         str(project["id"]),
@@ -1331,7 +1358,7 @@ def set_dependencies(
     if layout.metadata().get("mode") == "brownfield":
         _write_adoption_note(layout, str(project["name"]))
         _write_state(layout, str(project["name"]))
-    _control_commit(layout.control, f"Link repository {repo_id}")
+    _commit_control(layout, f"Link repository {repo_id}")
     refs = [_artifact_ref(layout, "program.yaml")]
     if layout.metadata().get("mode") == "brownfield":
         refs.append(

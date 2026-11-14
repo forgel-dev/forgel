@@ -92,9 +92,18 @@ class ProjectLayout:
 
         if not self.is_project:
             return [self.root]
-        return [self.control] + [
+        targets = [self.control] + [
             self.repo_path(repo_id) for repo_id in self.repo_ids()
         ]
+        unique: list[Path] = []
+        seen: set[Path] = set()
+        for target in targets:
+            resolved = target.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            unique.append(target)
+        return unique
 
     def git_roots(self) -> list[Path]:
         return [target for target in self.git_targets() if (target / ".git").exists()]
@@ -121,7 +130,7 @@ class ProjectLayout:
         if self.is_container:
             return self.root / CONTROL_DIR
         if self.is_linked:
-            return self.root / LINKED_DIR / CONTROL_DIR
+            return self.root
         return self.root
 
     @property

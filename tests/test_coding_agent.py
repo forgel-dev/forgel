@@ -193,7 +193,7 @@ class CodingAgentTest(unittest.TestCase):
         )
         self.assertIn("## Assumptions", report)
         self.assertIn("plain module", report)
-        log = _run(self.repo, "log", "-1", "--format=%s").stdout
+        log = _run(self.repo, "log", "--format=%s").stdout
         self.assertIn("Agent: Add a calculator", log)
         events = [
             event
@@ -289,7 +289,7 @@ class CodingAgentTest(unittest.TestCase):
         self.assertEqual(result.status, "done", result.summary)
         self.assertTrue((web / "page.py").exists())
         self.assertFalse((self.repo / "page.py").exists())
-        log = _run(web, "log", "-1", "--format=%s").stdout
+        log = _run(web, "log", "--format=%s").stdout
         self.assertIn("Agent: Add a web page", log)
 
     def test_test_removals_are_recorded(self) -> None:

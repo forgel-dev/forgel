@@ -226,6 +226,41 @@ def commit_all(repo: Path, message: str) -> str:
     return head_sha(repo)
 
 
+def commit_paths(repo: Path, paths: list[str], message: str) -> str:
+    """Commit only the given paths, leaving other worktree changes alone."""
+
+    existing = [item for item in paths if item]
+    if not existing:
+        return head_sha(repo)
+    suspicious = secret_like(existing)
+    if suspicious:
+        raise GitOperationError(
+            "refusing to commit files that look like secrets: "
+            + ", ".join(suspicious)
+        )
+    _ok(repo, "add", "--", *existing)
+    result = _run(
+        repo,
+        "-c",
+        "user.name=Forgel",
+        "-c",
+        "user.email=forgel@localhost",
+        "commit",
+        "-q",
+        "-m",
+        message,
+        "--",
+        *existing,
+    )
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).lower()
+        if "nothing to commit" not in detail and "no changes added" not in detail:
+            raise GitOperationError(
+                "commit failed: " + (result.stderr or result.stdout).strip()
+            )
+    return head_sha(repo)
+
+
 def push(repo: Path, branch: str, token: str | None = None) -> None:
     env = auth_env(token) if is_https(origin_url(repo)) else None
     result = _run(

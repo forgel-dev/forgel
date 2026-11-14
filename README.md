@@ -235,10 +235,11 @@ A bare `owner/repo` is treated as a GitHub shorthand; for a local path use an
 absolute path or prefix it with `./`.
 
 A **local path** is adopted in place: the folder stays the repository, Forgel
-does not clone or copy it, and `.forgel/` inside it holds the project state
-(`project.json`, the control repository `program/`, adoption notes). `.forgel/`
-is added to the folder's `.gitignore` and the control repository has its own
-history. The existing `origin` is used; if there is none, Forgel creates a
+does not clone or copy it, and the process artifacts (`forgel.toml`,
+`program.yaml`, `FORGEL.md`, `AGENTS.md`, `docs/program/`) are written into the
+repository root and committed to it. `.forgel/` is added to the folder's
+`.gitignore` and holds only local state (`project.json`, chat history, agent
+home, staging state, caches). The existing `origin` is used; if there is none, Forgel creates a
 repository under `FORGEL_GITHUB_ORG` and pushes, or reports that the folder
 stays local. The folder is never added as a git remote. This is the normal
 way to hand over a repository you already work in: other tools keep using the
@@ -428,19 +429,19 @@ A local adoption links the folder in place:
 
 ```
 my-repo/                 the source folder — the single source of truth
-  .forgel/               gitignored by the source repository
+  forgel.toml            process config (committed)
+  program.yaml           repository graph (committed)
+  FORGEL.md · AGENTS.md  process canon (committed)
+  docs/program/...       features, tasks, plans, QA/review evidence (committed)
+  .forgel/               gitignored local state only
     project.json         layout, mode, repository ids and paths
-    program/             control repository: specs, config, approvals
-      program.yaml
-      forgel.toml
-      FORGEL.md · AGENTS.md
-      docs/program/...
+    conversation.jsonl · agent-home/ · staging.json
   README.md · src/ · ...  the product, untouched and shared with your tools
 ```
 
-The control directory is hidden inside the folder, has its own git history and
-is not committed to the product. `program.yaml` points at the repository with
-a relative path (`../..` for the folder itself). No copy of the code exists.
+The process artifacts are part of the repository history; `.forgel` is local
+state and is never committed. `program.yaml` points at the repository with a
+relative path (`.` for the folder itself). No copy of the code exists.
 
 Remote adoption and template projects use a container:
 

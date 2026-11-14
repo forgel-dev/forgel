@@ -317,8 +317,8 @@ it with the coding agent. `/tasks` shows the queue.
 
 ### Linked (in-place) projects
 
-A local adoption keeps the repository in its own folder; the project state is
-in `.forgel/` inside it. A Docker sandbox must see that absolute path on its
+A local adoption keeps the repository in its own folder; process artifacts are
+committed at its root and `.forgel/` holds only local state. A Docker sandbox must see that absolute path on its
 daemon: on a local engine it works as is, while a remote or DinD daemon needs
 the folder mounted at the same path (or the local sandbox for that project).
 `FORGEL_SANDBOX_PROJECTS_ROOT` only maps `$FORGEL_HOME/projects`, so it does

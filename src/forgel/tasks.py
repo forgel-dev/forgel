@@ -17,6 +17,14 @@ from .artifacts import read_json, write_json
 from .layout import ProjectLayout
 
 TASKS_DIR = "docs/program/tasks"
+CONTROL_PATHS = (
+    "forgel.toml",
+    "program.yaml",
+    "FORGEL.md",
+    "AGENTS.md",
+    ".gitignore",
+    "docs/program",
+)
 VALID_STATUSES = {
     "pending",
     "running",
@@ -437,11 +445,36 @@ def cancel_task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
     )
 
 
+def commit_control(layout: ProjectLayout, message: str) -> None:
+    """Commit project artifacts, best effort, without touching product work."""
+
+    if layout.is_linked:
+        paths = [
+            item for item in CONTROL_PATHS if (layout.root / item).exists()
+        ]
+        if not paths:
+            return
+        try:
+            git_ops.commit_paths(layout.root, paths, message)
+        except git_ops.GitOperationError:
+            return
+        return
+    if not (layout.control / ".git").exists():
+        return
+    try:
+        git_ops.commit_all(layout.control, message)
+    except git_ops.GitOperationError:
+        return
+
+
 def commit_task(
     layout: ProjectLayout, task_id: str, message: str
 ) -> None:
     """Commit a task file to the control repository, best effort."""
 
+    if layout.is_linked:
+        commit_control(layout, message)
+        return
     if not (layout.control / ".git").exists():
         return
     try:

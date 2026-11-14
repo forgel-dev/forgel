@@ -151,11 +151,11 @@ def _checks(project: dict, layout: ProjectLayout, task: dict) -> list[tuple[str,
         ),
     ]
     if state == "done":
-        commit = _git(repo, "log", "-1", "--format=%s").stdout.strip()
+        commits = _git(repo, "log", "--format=%s").stdout
         worktree = _git(repo, "status", "--porcelain").stdout.strip()
         checks.extend(
             [
-                ("agent commit present", "Agent:" in commit, commit),
+                ("agent commit present", "Agent:" in commits, commits[:300]),
                 ("code worktree clean after commit", worktree == "", worktree[:300]),
             ]
         )

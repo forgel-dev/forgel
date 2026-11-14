@@ -273,6 +273,7 @@ class CodingAgent:
         base_sha = str(previous_git.get("base") or "") or git_ops.head_sha(
             repo
         )
+        preexisting = set(git_ops.status_paths(repo))
         gitignore = repo / ".gitignore"
         if not gitignore.exists():
             write_text(gitignore, DEFAULT_GITIGNORE)
@@ -304,23 +305,25 @@ class CodingAgent:
             )
         finally:
             stack.close()
+        changed: list[str] = []
         if status == "done":
             try:
                 changed = sorted(
-                    set(touched) | set(git_ops.status_paths(repo))
+                    (set(git_ops.status_paths(repo)) - preexisting)
+                    | set(touched)
                 )
                 if changed:
-                    git_ops.commit_all(
-                        repo, f"Agent: {task['title']}"
+                    git_ops.commit_paths(
+                        repo, changed, f"Agent: {task['title']}"
                     )
             except git_ops.GitOperationError as exc:
                 status = "failed"
                 failure_kind = "infrastructure"
                 summary += f"; commit failed: {exc}"
+        if not changed:
+            changed = sorted(set(touched))
 
-        files_changed = sorted(
-            set(touched) | set(git_ops.status_paths(repo))
-        )
+        files_changed = changed
         report = self._write_report(
             layout,
             task,
@@ -364,10 +367,27 @@ class CodingAgent:
         )
         try:
             if (layout.control / ".git").exists():
-                git_ops.commit_all(
-                    layout.control, f"Agent report: {task['title']}"
-                )
-                git_ops.tag_baseline(layout.control)
+                if layout.is_linked:
+                    task_path = tasks.task_path(
+                        layout, str(task["id"])
+                    )
+                    refs = [_ref(layout, report)]
+                    try:
+                        refs.append(
+                            str(task_path.relative_to(layout.root))
+                        )
+                    except ValueError:
+                        pass
+                    git_ops.commit_paths(
+                        layout.root,
+                        refs,
+                        f"Agent report: {task['title']}",
+                    )
+                else:
+                    git_ops.commit_all(
+                        layout.control, f"Agent report: {task['title']}"
+                    )
+                    git_ops.tag_baseline(layout.control)
         except git_ops.GitOperationError:
             pass
         self._record_event(

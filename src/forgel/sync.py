@@ -73,6 +73,13 @@ def _required_paths(workspace: Path) -> set[str]:
     layout = _layout(workspace)
     if not layout.is_project:
         return set(REQUIRED_PATHS)
+    if layout.is_linked:
+        return {
+            "forgel.toml",
+            "program.yaml",
+            "FORGEL.md",
+            "AGENTS.md",
+        }
     control = layout.control.relative_to(layout.root).as_posix()
     required = {
         f"{control}/program.yaml",
@@ -271,7 +278,20 @@ def _detect_linked(layout: ProjectLayout) -> dict[str, Any]:
         info = _detect_git(repo)
         is_main = repo.resolve() == layout.root.resolve()
         prefix = "" if is_main else f"repos/{repo_id}/"
-        files.update(f"{prefix}{name}" for name in info["files"])
+        for name in info["files"]:
+            if is_main and (
+                name in {
+                    "forgel.toml",
+                    "program.yaml",
+                    "FORGEL.md",
+                    "AGENTS.md",
+                    ".gitignore",
+                }
+                or name.startswith("docs/program/")
+                or name.startswith(".forgel/")
+            ):
+                continue
+            files.add(f"{prefix}{name}")
         label = prefix.rstrip("/") or "."
         if info["diffstat"]:
             diffstat.append(f"## {label}\n{info['diffstat']}")
