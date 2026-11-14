@@ -26,6 +26,13 @@ from typing import Any, Callable, Mapping, Sequence
 from . import git_ops, tasks
 from .artifacts import write_text
 from .config import Settings
+from .session_context import (
+    MAX_OBSERVATION_CHARS,
+    ContextBudget,
+    SessionState,
+    budget_for,
+    handoff_prompt,
+)
 from .environment import Environment, EnvironmentError, load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -35,9 +42,11 @@ from .model import (
     ModelMessage,
     project_model_name,
 )
+from .project_config import ConfigError, load_project_config
 from .sandbox import CommandRunner, SandboxError, docker_runner
 
 MAX_STEPS = 24
+MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_READ_CHARS = 12_000
 MAX_OBSERVATION = 4_000
@@ -108,6 +117,12 @@ Reply with exactly one JSON object per turn. Available actions:
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
 {"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"]}
 {"action": "fail", "reason": "why the task cannot be completed"}
+
+Context:
+- The runtime owns the context window. It may end this session and hand your
+  state to a new session. Do not estimate tokens, warn about context limits or
+  ask to continue; just keep working from the task, the repository and any
+  SESSION HANDOFF you receive.
 
 Autonomy (D-075):
 - Work autonomously. The task is the source of truth. You cannot ask the user
@@ -213,6 +228,22 @@ class CodingAgent:
         env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
         steps = max_steps or (int(env_steps) if env_steps.isdigit() else MAX_STEPS)
         self.max_steps = max(4, min(steps, 60))
+        env_sessions = os.environ.get(
+            "FORGEL_AGENT_MAX_SESSIONS", ""
+        ).strip()
+        sessions = (
+            int(env_sessions) if env_sessions.isdigit() else MAX_SESSIONS
+        )
+        self.max_sessions = max(1, min(sessions, 20))
+
+    def _context_window(self, layout: ProjectLayout) -> int:
+        try:
+            config = load_project_config(layout.control)
+        except ConfigError:
+            config = None
+        if config is not None:
+            return config.models.context_window
+        return self.settings.context_window
 
     # ------------------------------------------------------------------ run
 
@@ -249,6 +280,7 @@ class CodingAgent:
                 touched,
                 test_output,
                 assumptions,
+                context_stats,
             ) = self._converse(
                 layout, repo, repo_id, task, model, runner, environment
             )
@@ -282,6 +314,7 @@ class CodingAgent:
             commands,
             test_output,
             assumptions,
+            context_stats,
         )
         tasks.update_task(
             layout,
@@ -294,6 +327,7 @@ class CodingAgent:
                 "commands": commands,
                 "test_output": _cap(test_output, 6000),
                 "assumptions": assumptions,
+                "context": context_stats,
                 "report": _ref(layout, report),
             },
         )
@@ -382,19 +416,36 @@ class CodingAgent:
         set[str],
         str,
         list[str],
+        dict[str, Any],
     ]:
-        """Run the model loop and the final test, returning the run state."""
+        """Run the model loop and the final test, returning the run state.
 
+        The loop is session-based: when the estimated prompt size approaches
+        the context budget, or a session hits its step cap, the run writes a
+        durable state file and starts a new session from it. The model never
+        manages token counts or asks a human to continue.
+        """
+
+        window = self._context_window(layout)
+        budget: ContextBudget = budget_for(window)
+        state_path = layout.artifact(
+            f"docs/program/agent/{task['id']}.state.md"
+        )
+        state_ref = _ref(layout, state_path) if state_path.exists() else ""
+        task_prompt = self._task_prompt(layout, task, repo_id, repo)
+        if state_path.exists():
+            previous = state_path.read_text(encoding="utf-8")
+            task_prompt += (
+                "\n\n## Previous session state\n\n" + previous
+            )
         messages: list[ModelMessage] = [
             ModelMessage("system", SYSTEM_PROMPT),
-            ModelMessage(
-                "user",
-                self._task_prompt(layout, task, repo_id, repo),
-            ),
+            ModelMessage("user", task_prompt),
         ]
         actions: list[str] = []
         commands: list[dict[str, Any]] = []
         touched: set[str] = set()
+        recent: list[str] = []
         assumptions = [
             str(item).strip()
             for item in task.get("assumptions", [])
@@ -404,69 +455,151 @@ class CodingAgent:
         summary = "step limit reached"
         invalid = 0
         steps = 0
+        sessions = 0
+        compactions = 0
 
-        for step in range(1, self.max_steps + 1):
-            steps = step
-            try:
-                raw = self.client.complete(messages, model=model)
-            except ModelError as exc:
-                status = "failed"
-                summary = f"model call failed: {exc}"
-                break
-            action = parse_action(raw)
-            if action is None:
-                invalid += 1
-                messages.append(ModelMessage("assistant", raw))
+        def handoff(session: int) -> tuple[list[ModelMessage], str]:
+            changed = sorted(
+                set(touched) | set(git_ops.status_paths(repo))
+            )
+            state = SessionState(
+                task_id=str(task["id"]),
+                title=str(task["title"]),
+                session=session,
+                requirements=[
+                    str(item) for item in task.get("requirements", [])
+                ],
+                acceptance=[
+                    str(item) for item in task.get("acceptance", [])
+                ],
+                constraints=[
+                    str(item) for item in task.get("constraints", [])
+                ],
+                assumptions=list(assumptions),
+                files_changed=changed,
+                actions=list(actions),
+                commands=list(commands),
+                observations=list(recent),
+            )
+            write_text(state_path, state.to_markdown())
+            return (
+                [
+                    ModelMessage("system", SYSTEM_PROMPT),
+                    ModelMessage("user", self._task_prompt(
+                        layout, task, repo_id, repo
+                    ) + "\n\n" + handoff_prompt(state)),
+                ],
+                _ref(layout, state_path),
+            )
+
+        terminal = False
+        for session in range(1, self.max_sessions + 1):
+            sessions = session
+            handed_off = False
+            for _step in range(1, self.max_steps + 1):
+                steps += 1
+                try:
+                    raw = self.client.complete(messages, model=model)
+                except ModelError as exc:
+                    status = "failed"
+                    summary = f"model call failed: {exc}"
+                    terminal = True
+                    break
+                action = parse_action(raw)
+                if action is None:
+                    invalid += 1
+                    messages.append(ModelMessage("assistant", raw))
+                    messages.append(
+                        ModelMessage(
+                            "user",
+                            "Invalid reply. Return exactly one JSON action "
+                            "object.",
+                        )
+                    )
+                    if invalid >= 3:
+                        status = "failed"
+                        summary = "the model did not return a valid action"
+                        terminal = True
+                        break
+                    continue
+                invalid = 0
+                kind = str(action["action"])
                 messages.append(
                     ModelMessage(
-                        "user",
-                        "Invalid reply. Return exactly one JSON action object.",
+                        "assistant",
+                        json.dumps(action, ensure_ascii=False),
                     )
                 )
-                if invalid >= 3:
-                    status = "failed"
-                    summary = "the model did not return a valid action"
+                if kind == "done":
+                    status = "done"
+                    summary = str(action.get("summary", "")).strip() or (
+                        "agent reported done"
+                    )
+                    for item in action.get("assumptions", []):
+                        value = str(item).strip()
+                        if value and value not in assumptions:
+                            assumptions.append(value)
+                    terminal = True
                     break
-                continue
-            invalid = 0
-            kind = str(action["action"])
-            messages.append(
-                ModelMessage("assistant", json.dumps(action, ensure_ascii=False))
-            )
-            if kind == "done":
-                status = "done"
-                summary = str(action.get("summary", "")).strip() or (
-                    "agent reported done"
+                if kind == "fail":
+                    status = "failed"
+                    summary = str(action.get("reason", "")).strip() or (
+                        "agent reported failure"
+                    )
+                    terminal = True
+                    break
+                observation, command = self._execute(
+                    layout,
+                    repo,
+                    action,
+                    touched,
+                    runner,
+                    environment.env_map if environment else None,
                 )
-                for item in action.get("assumptions", []):
-                    value = str(item).strip()
-                    if value and value not in assumptions:
-                        assumptions.append(value)
+                actions.append(self._action_summary(action))
+                if command is not None:
+                    commands.append(command)
+                recent.append(_cap(observation, MAX_OBSERVATION_CHARS))
+                recent = recent[-6:]
+                messages.append(
+                    ModelMessage(
+                        "user", f"OBSERVATION:\n{_cap(observation)}"
+                    )
+                )
+                messages = self._trim(messages)
+                if (
+                    budget.should_compact(messages)
+                    and session < self.max_sessions
+                ):
+                    used = budget.usage(messages)
+                    messages, state_ref = handoff(session)
+                    invalid = 0
+                    compactions += 1
+                    handed_off = True
+                    print(
+                        f"[agent] {task['id']}: context handoff to "
+                        f"session {session + 1} "
+                        f"(~{used}/{budget.usable} tokens)"
+                    )
+                    break
+            if terminal:
                 break
-            if kind == "fail":
+            if not handed_off:
+                if session < self.max_sessions:
+                    messages, state_ref = handoff(session)
+                    invalid = 0
+                    compactions += 1
+                    print(
+                        f"[agent] {task['id']}: step cap, handoff to "
+                        f"session {session + 1}"
+                    )
+                    continue
                 status = "failed"
-                summary = str(action.get("reason", "")).strip() or (
-                    "agent reported failure"
+                summary = (
+                    f"step limit reached ({self.max_steps} per session x "
+                    f"{sessions} sessions)"
                 )
                 break
-            observation, command = self._execute(
-                layout,
-                repo,
-                action,
-                touched,
-                runner,
-                environment.env_map if environment else None,
-            )
-            actions.append(self._action_summary(action))
-            if command is not None:
-                commands.append(command)
-            messages.append(
-                ModelMessage("user", f"OBSERVATION:\n{_cap(observation)}")
-            )
-            messages = self._trim(messages)
-        else:
-            status = "failed"
-            summary = f"step limit reached ({self.max_steps})"
 
         test_output = ""
         if status == "done":
@@ -493,6 +626,14 @@ class CodingAgent:
                 if code != 0:
                     status = "failed"
                     summary += f"; final test command exited {code}"
+        context_stats = {
+            "window": window,
+            "usable": budget.usable,
+            "sessions": sessions,
+            "compactions": compactions,
+            "estimated_tokens": budget.usage(messages),
+            "state": state_ref if compactions else "",
+        }
         return (
             status,
             summary,
@@ -502,6 +643,7 @@ class CodingAgent:
             touched,
             test_output,
             assumptions,
+            context_stats,
         )
 
     # ------------------------------------------------------------- setup
@@ -795,6 +937,7 @@ Files:
         commands: list[dict[str, Any]],
         test_output: str,
         assumptions: list[str],
+        context_stats: dict[str, Any],
     ) -> Path:
         path = layout.artifact(
             f"docs/program/agent/{task['id']}.md"
@@ -845,6 +988,14 @@ Files:
 ## Assumptions
 
 {assumption_lines}
+
+## Context
+
+- Window: {context_stats.get('window', 0)} tokens (usable {context_stats.get('usable', 0)})
+- Sessions: {context_stats.get('sessions', 1)}
+- Handoffs: {context_stats.get('compactions', 0)}
+- Estimated prompt at the end: {context_stats.get('estimated_tokens', 0)} tokens
+{('- State: `' + str(context_stats.get('state')) + '`') if context_stats.get('state') else '- State: not needed'}
 
 ## Summary
 

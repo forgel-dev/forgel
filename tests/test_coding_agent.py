@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,12 +12,14 @@ from unittest.mock import patch
 
 from forgel.adopt import adopt_repository
 from forgel.agent import ProjectAgent
+from forgel.artifacts import write_text
 from forgel.coding_agent import CodingAgent
 from forgel.config import Settings
 from forgel.daemon import run_daemon
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
+from forgel.project_config import render_project_config
 from forgel.tasks import create_task, get_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -277,11 +280,61 @@ class CodingAgentTest(unittest.TestCase):
         client = ScriptedModelClient(
             [json.dumps({"action": "list_files", "path": "."})] * 5
         )
-        result = CodingAgent(
-            self.settings, self.ledger, client, max_steps=4
-        ).run(self.project, task, log=lambda _m: None)
+        with patch.dict(
+            os.environ, {"FORGEL_AGENT_MAX_SESSIONS": "1"}, clear=False
+        ):
+            result = CodingAgent(
+                self.settings, self.ledger, client, max_steps=4
+            ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "failed")
         self.assertIn("step limit", result.summary)
+
+    def test_context_handoff_writes_state_and_continues(self) -> None:
+        write_text(
+            self.layout.control / "forgel.toml",
+            render_project_config("Test project", model_context_window=16384),
+        )
+        task = create_task(
+            self.layout,
+            "Inspect and finish",
+            ["Inspect the repository", "Report completion"],
+            ["The task is done"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps({"action": "list_files", "path": "."})
+            for _ in range(8)
+        ] + [
+            json.dumps(
+                {"action": "done", "summary": "inspected and done"}
+            )
+        ]
+        result = CodingAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(responses),
+            max_steps=6,
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        context = stored["result"]["context"]
+        self.assertGreaterEqual(context["sessions"], 2)
+        self.assertGreaterEqual(context["compactions"], 1)
+        state = self.layout.artifact(
+            f"docs/program/agent/{task['id']}.state.md"
+        )
+        self.assertTrue(state.exists())
+        text = state.read_text(encoding="utf-8")
+        self.assertIn("Session State", text)
+        self.assertIn("Inspect the repository", text)
+        self.assertIn("list_files", text)
+        report = (self.layout.root / result.report).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Context", report)
+        self.assertIn("Handoffs:", report)
 
     def test_free_text_queues_a_task_the_daemon_runs(self) -> None:
         request = {

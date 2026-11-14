@@ -15,6 +15,8 @@ Canonical instructions for agents working on __PROJECT_NAME__.
   irreversible or production action, or missing access. Finish the result,
   show the evidence, then rework on feedback. Production data, payments,
   secrets and legal decisions stay human-gated.
+- The runtime owns the context window: do not estimate tokens or ask to
+  continue; a session may hand off durable state to the next one.
 - Keep the `Dockerfile` and `docker/docker-compose.qa.yml` working.
 - Add a QA scenario for every automatically checkable change.
 - Do not add tool attribution lines to commits or pull requests.

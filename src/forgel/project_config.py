@@ -35,6 +35,7 @@ class JurisdictionConfig:
 class ModelsConfig:
     default: str = "deepseek-flash"
     architecture: str = "deepseek-v4-pro"
+    context_window: int = 131072
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,7 @@ def render_project_config(
     jurisdiction_pack: str = "ru",
     model_default: str = "deepseek-flash",
     model_architecture: str = "deepseek-v4-pro",
+    model_context_window: int = 131072,
     per_feature_usd: float = 10.0,
     per_project_usd: float = 300.0,
     auto_patch: bool = False,
@@ -132,6 +134,7 @@ pack = "{jurisdiction_pack}"
 [models]
 default = "{model_default}"
 architecture = "{model_architecture}"
+context_window = {model_context_window}
 
 [budget]
 per_feature_usd = {per_feature_usd:g}
@@ -170,6 +173,23 @@ def _section(data: dict[str, object], name: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ConfigError(f"forgel.toml: [{name}] must be a table")
     return value
+
+
+def _context_window(models: dict[str, object]) -> int:
+    value = models.get("context_window", 131072)
+    if isinstance(value, bool):
+        raise ConfigError("forgel.toml: models.context_window must be an integer")
+    try:
+        window = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(
+            "forgel.toml: models.context_window must be an integer"
+        ) from exc
+    if window < 4096:
+        raise ConfigError(
+            "forgel.toml: models.context_window must be at least 4096"
+        )
+    return window
 
 
 def load_project_config(workspace: Path) -> ProjectConfig | None:
@@ -262,6 +282,7 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
         models=ModelsConfig(
             default=str(models.get("default", "deepseek-flash")),
             architecture=str(models.get("architecture", "deepseek-v4-pro")),
+            context_window=_context_window(models),
         ),
         budget=BudgetConfig(
             per_feature_usd=per_feature,

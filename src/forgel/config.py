@@ -52,6 +52,7 @@ class Settings:
     sandbox_images: tuple[str, ...] = ()
     sandbox_require_digest: bool = False
     sandbox_read_only: bool = True
+    context_window: int = 131072
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -110,6 +111,14 @@ class Settings:
         )
         if not pids_raw.isdigit() or int(pids_raw) <= 0:
             raise ValueError("FORGEL_SANDBOX_PIDS must be a positive integer")
+        context_raw = (
+            os.environ.get("FORGEL_CONTEXT_WINDOW", "131072").strip()
+            or "131072"
+        )
+        if not context_raw.isdigit() or int(context_raw) < 4096:
+            raise ValueError(
+                "FORGEL_CONTEXT_WINDOW must be an integer of at least 4096"
+            )
         return cls(
             home=home_path.expanduser().resolve(),
             registry_path=registry_path.expanduser().resolve(),
@@ -131,6 +140,7 @@ class Settings:
                 "FORGEL_SANDBOX_REQUIRE_DIGEST", False
             ),
             sandbox_read_only=_env_bool("FORGEL_SANDBOX_READ_ONLY", True),
+            context_window=int(context_raw),
         )
 
     @property

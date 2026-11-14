@@ -23,6 +23,12 @@ make chat
 # forgel> /approve <project-id> staging
 ```
 
+For continuous work without a prompt, run the daemon in another terminal:
+
+```bash
+PYTHONPATH=src python3 -m forgel daemon --home .forgel-demo
+```
+
 The pipeline parks at the staging approval gate; nothing reaches `done`
 without a human decision:
 
@@ -48,6 +54,13 @@ shows a finished result with evidence. It stops only for a material fork, an
 irreversible or production action, or missing access. The staging and
 production approvals are checkpoints on a finished result, not an
 interrogation; production data, payments and secrets stay human-gated.
+
+**Context and handoff.** The runtime owns the context window. A long task runs
+in sessions; when the estimated prompt approaches the budget or a session
+hits its step cap, Forgel writes durable state to
+`docs/program/agent/<task>.state.md` and starts a new session from it. The
+model is told not to estimate tokens or ask to continue. The report shows the
+session count, handoffs and estimated usage. See `PLAN.md` §7.15.
 
 Run the tests:
 

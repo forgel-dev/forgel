@@ -173,6 +173,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-075** | Human involvement is an exception, not a step: agents work autonomously through pre-release work, show a finished result with evidence, and rework on feedback; they stop only for a material fork, an irreversible or destructive action, or missing access | Constant confirmation is the main bottleneck of agent-driven development, while the earlier safety over-correction now costs more than it protects; pre-release work is reversible, so doing and showing beats asking | Prompts and `AGENTS.md` state the policy; every assumption is recorded in the task and report; production, product data, payments, secrets and legal decisions stay human-gated; one consolidated question, never a dialogue |
 | **D-076** | Repository lifecycle is a Forgel command, not manual GitHub work: the project can create a repository in the configured organization and publish the existing local repositories from the CLI or chat | A project grows past ten repositories, and every manual creation step blocks the autonomous loop; the same operation is a deterministic, auditable API call | `repo create` creates the GitHub repository, initializes the local repository, registers it in `program.yaml`, pushes and records a ledger event; `repo publish` creates remotes for existing local repositories; private by default, no deletion and no force-push; the org comes from `[git] org`, `--org` or `FORGEL_GITHUB_ORG` |
 | **D-077** | Channels are adapters over one command router; the local console is the first-class first-run channel, Telegram is a remote adapter, and a VPS is not required to try or use Forgel | A bot token, a public bot and a server are a large first-run tax; the viral funnel must start on a laptop with one command, while the always-on studio is a power mode | `forgel chat` and `forgel telegram` share `CommandRouter`; the local run needs no bot token and no network round-trip; Telegram remains for remote control of an always-on daemon; the launch gate includes a local run in minutes |
+| **D-078** | Context is a runtime budget, not a model concern: the agent works in sessions, and when the prompt approaches the window or a session hits its step cap, the runtime writes durable state and starts a new session from it | Models cannot reliably count tokens, hard truncation loses information, and asking a human to continue breaks autonomy; the runtime can estimate, persist and hand off deterministically | The window is configurable (`[models] context_window`, `FORGEL_CONTEXT_WINDOW`); compaction triggers at ~70% of the usable budget; state lands in `docs/program/agent/<task>.state.md`; the report and task record show sessions, handoffs and estimated tokens; no human handoff |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1058,6 +1059,29 @@ process failure.
 checkpoints on a finished result, not a confirmation during work. Keeping the
 two apart is what makes the loop fast: the work runs to completion, then a
 human decides once.
+
+### 7.15 Context Budget and Session Handoff
+
+The runtime owns the context window (D-078). A coding task is not one endless
+conversation; it is a sequence of bounded sessions.
+
+- **Budget.** `[models] context_window` (or `FORGEL_CONTEXT_WINDOW`) declares
+  the window. An output reserve is kept; compaction triggers at roughly 70% of
+  the usable budget. The estimate is deliberately conservative (~3 characters
+  per token) and dependency-free; a tokenizer plugin can replace it later.
+- **Sessions.** A session ends when the model reports done or failure, when
+  the budget is near, or after its step cap (default 24). A handoff writes a
+  durable `SessionState` to `docs/program/agent/<task>.state.md`: goal,
+  requirements, acceptance, constraints, assumptions, files changed, actions,
+  commands and the last observations. The next session starts from the task
+  and that state, and the repository on disk stays the source of truth.
+- **No human handoff.** The model is told that the runtime may end the session
+  and that it must not estimate tokens, warn about the window or ask to
+  continue. A handoff is logged, counted and visible in the report and the
+  task result (`sessions`, `compactions`, `estimated_tokens`, `state`).
+- **Limits.** A task allows a bounded number of sessions (default 6) so a
+  looping agent cannot run forever. Hitting the global limit is a failure with
+  a clear summary, not a silent truncation.
 
 ---
 

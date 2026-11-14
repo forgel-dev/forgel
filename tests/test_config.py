@@ -39,6 +39,30 @@ class ProjectConfigTest(unittest.TestCase):
             self.assertEqual(config.simplicity.max_added_lines, 400)
             self.assertTrue(config.refactoring.enabled)
             self.assertEqual(config.refactoring.budget_percent, 10)
+            self.assertEqual(config.models.context_window, 131072)
+
+    def test_context_window_is_configurable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "forgel.toml").write_text(
+                render_project_config("demo", model_context_window=32768),
+                encoding="utf-8",
+            )
+            config = load_project_config(Path(tmp))
+            assert config is not None
+            self.assertEqual(config.models.context_window, 32768)
+
+    def test_invalid_context_window_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "forgel.toml").write_text(
+                "[models]\ncontext_window = 1000\n", encoding="utf-8"
+            )
+            with self.assertRaises(ConfigError):
+                load_project_config(Path(tmp))
+            (Path(tmp) / "forgel.toml").write_text(
+                '[models]\ncontext_window = "big"\n', encoding="utf-8"
+            )
+            with self.assertRaises(ConfigError):
+                load_project_config(Path(tmp))
 
     def test_missing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

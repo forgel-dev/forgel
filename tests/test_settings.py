@@ -52,6 +52,22 @@ class SettingsTest(unittest.TestCase):
         self.assertTrue(settings.sandbox_require_digest)
         self.assertFalse(settings.sandbox_read_only)
 
+    def test_context_window_is_read_from_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ, {"FORGEL_CONTEXT_WINDOW": "65536"}, clear=False
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.context_window, 65536)
+
+    def test_invalid_context_window_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ, {"FORGEL_CONTEXT_WINDOW": "100"}, clear=False
+            ):
+                with self.assertRaises(ValueError):
+                    Settings.from_env(tmp)
+
     def test_invalid_sandbox_limits_are_rejected(self) -> None:
         cases = (
             {"FORGEL_SANDBOX_NETWORK": "host"},

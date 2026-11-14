@@ -24,6 +24,9 @@ shim and is not part of the public repository.
   record every assumption in the task and report. Ask only for a material
   fork, an irreversible or production action, or missing access. Finish the
   result, show the evidence, then rework on feedback.
+- The runtime owns the context window (D-078). Do not estimate tokens, warn
+  about context limits or ask to continue; a session may hand off durable
+  state and a new session continues from it.
 - Jurisdiction packs are advisory. Never claim legal compliance; the user is
   responsible. The production gate requires the compliance acknowledgement.
 - Do not add tool attribution lines or session references to commits, pull
