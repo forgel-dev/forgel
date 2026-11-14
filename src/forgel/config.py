@@ -80,13 +80,23 @@ class Settings:
         home_path = Path(home) if home is not None else Path(
             os.environ.get("FORGEL_HOME", Path.home() / ".forgel")
         )
-        repo_root = Path(__file__).resolve().parents[2]
+        package_dir = Path(__file__).resolve().parent
+        repo_root = package_dir.parents[1]
+        # The wheel carries the data under ``forgel/data``; a source checkout
+        # keeps it at the repository root.
+        data_dir = package_dir / "data"
+        default_registry = data_dir / "registry" / "recipes.json"
+        if not default_registry.exists():
+            default_registry = repo_root / "registry" / "recipes.json"
         registry_path = Path(
-            os.environ.get("FORGEL_REGISTRY", repo_root / "registry" / "recipes.json")
+            os.environ.get("FORGEL_REGISTRY", default_registry)
         )
         templates_path = Path(__file__).resolve().parent / "templates"
+        default_jurisdictions = data_dir / "jurisdiction"
+        if not default_jurisdictions.exists():
+            default_jurisdictions = repo_root / "jurisdiction"
         jurisdiction_path = Path(
-            os.environ.get("FORGEL_JURISDICTIONS", repo_root / "jurisdiction")
+            os.environ.get("FORGEL_JURISDICTIONS", default_jurisdictions)
         )
         qa_runtime = os.environ.get("FORGEL_QA_RUNTIME", "auto").lower()
         if qa_runtime not in {"auto", "docker", "local"}:

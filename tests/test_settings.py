@@ -28,6 +28,13 @@ class SettingsTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     Settings.from_env(tmp)
 
+    def test_bundled_registry_and_jurisdictions_are_found(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {}, clear=True):
+                settings = Settings.from_env(tmp)
+            self.assertTrue(settings.registry_path.is_file())
+            self.assertTrue(settings.jurisdiction_path.is_dir())
+
     def test_sandbox_limits_and_policy_are_read_from_env(self) -> None:
         env = {
             "FORGEL_SANDBOX": "docker",
