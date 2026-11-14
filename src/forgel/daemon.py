@@ -60,6 +60,8 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
     if state is None:
         if task is not None and task.get("status") == "done":
             return "task done"
+        if task is not None and task.get("status") == "cancelled":
+            return "task cancelled"
         return "adopted" if layout.metadata().get("mode") == "brownfield" else "queued"
     stage, generation = state
     if stage == "approval":

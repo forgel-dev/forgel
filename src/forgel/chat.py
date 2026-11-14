@@ -59,7 +59,7 @@ from .sync import (
     reconciliation_status_path,
     sync_project,
 )
-from .tasks import latest_task
+from .tasks import cancel_task, commit_task, latest_task, list_tasks
 
 DECISIONS = {"accept", "fix", "rollback", "ignore"}
 SCOPES = {"staging", "production"}
@@ -83,6 +83,9 @@ Projects
 /github                 GitHub auth, repositories and merge policy
 /github publish [repo] <title>   push a branch, open a PR, follow policy
 /github merge [repo] [pr]        merge after checks
+
+/tasks                  coding-agent tasks for the selected project
+/task cancel <id>       cancel a pending task
 /projects              projects, state and the selected one
 /use <id>              select the current project
 /status [id]           state, staging, approvals, recent stages
@@ -161,6 +164,8 @@ class CommandRouter:
             "/adopt": self._adopt,
             "/repo": self._repo,
             "/github": self._github,
+            "/tasks": self._tasks,
+            "/task": self._task,
             "/projects": self._projects,
             "/list": self._projects,
             "/use": self._use,
@@ -398,6 +403,43 @@ class CommandRouter:
             )
         return Reply("\n".join(lines))
 
+    def _tasks(self, chat_id: int, _rest: str, _actor: str) -> Reply:
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        layout = ProjectLayout.detect(project["workspace"])
+        entries = list_tasks(layout)
+        if not entries:
+            return Reply(
+                "No tasks. A change request sent as a plain message queues one."
+            )
+        lines = [f"Tasks: {len(entries)}"]
+        for task in entries:
+            summary = str(task.get("result", {}).get("summary", ""))
+            lines.append(
+                f"{task['id']}  {task['status']}  {task['title']}"
+            )
+            if summary:
+                lines.append(f"  {summary}")
+        return Reply("\n".join(lines))
+
+    def _task(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        tokens = rest.split()
+        if not tokens or tokens[0].lower() != "cancel":
+            return Reply("Usage: /task cancel <task-id>")
+        if len(tokens) < 2:
+            return Reply("Usage: /task cancel <task-id>")
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        layout = ProjectLayout.detect(project["workspace"])
+        try:
+            task = cancel_task(layout, tokens[1])
+        except ValueError as exc:
+            return Reply(f"error: {exc}")
+        commit_task(layout, task["id"], f"Cancel task {task['id']}")
+        return Reply(f"Cancelled task {task['id']}.")
+
     def _github(self, chat_id: int, rest: str, _actor: str) -> Reply:
         project = self._selected(chat_id)
         if isinstance(project, Reply):
@@ -573,6 +615,8 @@ class CommandRouter:
         if is_paused(self.settings.home):
             return Reply("The daemon is paused. Send /resume first.")
         state = project_state(self.ledger, project)
+        if state == "task cancelled":
+            return Reply(f"{project_id}: the task was cancelled.")
         if state.startswith("task "):
             return Reply(
                 f"{project_id}: {state}. The daemon will process queued tasks."

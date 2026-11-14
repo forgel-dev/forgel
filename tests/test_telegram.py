@@ -17,6 +17,7 @@ from forgel.model import ScriptedModelClient
 from forgel.project_config import render_project_config
 from forgel.projects import create_project
 from forgel.secrets import get_secret, set_secret
+from forgel.tasks import create_task
 from forgel.telegram import (
     HELP,
     CommandRouter,
@@ -456,6 +457,26 @@ class AdoptCommandsTest(unittest.TestCase):
             7, f"/repo add {self._repo('x')}", "@tester"
         )
         self.assertIn("No project selected", reply.text)
+
+    def test_tasks_can_be_listed_and_cancelled(self) -> None:
+        backend = self._repo("backend")
+        self.router.handle(7, f"/adopt {backend}", "@tester")
+        project = self.ledger.list_projects()[0]
+        layout = ProjectLayout.detect(project["workspace"])
+        task = create_task(
+            layout,
+            "Add a page",
+            ["Add /page"],
+            ["The page exists"],
+            repo_id="main",
+        )
+        listing = self.router.handle(7, "/tasks", "@tester")
+        self.assertIn(task["id"], listing.text)
+        self.assertIn("pending", listing.text)
+        cancelled = self.router.handle(
+            7, f"/task cancel {task['id']}", "@tester"
+        )
+        self.assertIn("Cancelled", cancelled.text)
 
     def test_github_status_reports_the_project_repositories(self) -> None:
         backend = self._repo("backend")

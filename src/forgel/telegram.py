@@ -474,6 +474,8 @@ class TelegramGateway:
                 f"Agent finished {title} for {project_id}.\n"
                 f"Details: /status {project_id}"
             )
+        if state == "task cancelled":
+            return f"Task cancelled for {project_id}."
         if state == "task failed":
             task = latest_task(ProjectLayout.detect(project["workspace"]))
             reason = ""

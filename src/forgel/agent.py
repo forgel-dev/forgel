@@ -19,10 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from . import tasks
 from .artifacts import write_text
 from .config import Settings
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .program_manifest import entries as manifest_entries
 from .model import (
     ModelClient,
     ModelError,
@@ -60,11 +62,26 @@ Reply in the language of the user's message. Return exactly one JSON object:
   "reply": "text for the user",
   "title": "short title, change_request only",
   "summary": "one paragraph, change_request only",
-  "acceptance": ["criterion", "..."]
+  "requirements": ["explicit requirement", "..."],
+  "acceptance": ["criterion", "..."],
+  "constraints": ["constraint", "..."],
+  "repo_id": "one of the repositories in program.yaml, or empty",
+  "test_command": ["command", "arg"] or []
 }
 
 Use kind=change_request when the user asks for a product or code change.
 Use kind=answer for questions and conversation.
+
+For a change request:
+- list the explicit requirements and acceptance criteria; do not guess
+  unstated features;
+- set repo_id from program.yaml; if the project has several repositories and
+  the target is ambiguous, return kind=answer asking the user which repository
+  to use instead of guessing;
+- set test_command only when the project's test command is evident from the
+  context, otherwise leave it empty;
+- the daemon will run the task with a separate coding agent; you cannot edit
+  code yourself.
 """
 
 
@@ -77,6 +94,7 @@ class AgentResult:
     text: str
     kind: str
     request: str | None = None
+    task_id: str | None = None
 
 
 def conversation_path(layout: ProjectLayout) -> Path:
@@ -231,12 +249,31 @@ def parse_answer(raw: str) -> dict[str, Any]:
     acceptance = data.get("acceptance")
     if not isinstance(acceptance, list):
         acceptance = []
+    requirements = data.get("requirements")
+    if not isinstance(requirements, list):
+        requirements = []
+    constraints = data.get("constraints")
+    if not isinstance(constraints, list):
+        constraints = []
+    test_command = data.get("test_command")
+    if not isinstance(test_command, list):
+        test_command = []
     return {
         "kind": kind,
         "reply": reply.strip(),
         "title": str(data.get("title", "")).strip(),
         "summary": str(data.get("summary", "")).strip(),
+        "requirements": [
+            str(item) for item in requirements if str(item).strip()
+        ],
         "acceptance": [str(item) for item in acceptance if str(item).strip()],
+        "constraints": [
+            str(item) for item in constraints if str(item).strip()
+        ],
+        "repo_id": str(data.get("repo_id", "")).strip(),
+        "test_command": [
+            str(item) for item in test_command if str(item).strip()
+        ],
     }
 
 
@@ -288,19 +325,36 @@ class ProjectAgent:
         answer = parse_answer(raw)
         result_text = answer["reply"]
         request = None
+        task_id = None
         if answer["kind"] == "change_request":
             request = self._record_request(
                 layout, project, text, actor, answer
             )
-            result_text += (
-                f"\n\nRecorded as `{request}`. This build records the "
-                "request; implementing it is the next stage."
-            )
+            task = self._queue_task(layout, text, answer)
+            if task is not None:
+                task_id = str(task["id"])
+                result_text += (
+                    f"\n\nRecorded as `{request}`. Queued task "
+                    f"`{task_id}` for repository `{task['repo_id']}`; the "
+                    "daemon will start it and report back."
+                )
+            else:
+                result_text += (
+                    f"\n\nRecorded as `{request}`. I did not queue a task: "
+                    "the project has several repositories and I could not "
+                    "choose one. Mention the target repository in your "
+                    "message, or use `/repo list`."
+                )
 
         append_history(layout, "user", text, actor)
         append_history(layout, "assistant", result_text)
         self._record_call(project, model, answer["kind"])
-        return AgentResult(text=result_text, kind=answer["kind"], request=request)
+        return AgentResult(
+            text=result_text,
+            kind=answer["kind"],
+            request=request,
+            task_id=task_id,
+        )
 
     def _record_request(
         self,
@@ -315,6 +369,12 @@ class ProjectAgent:
         relative = f"docs/program/requests/{timestamp}_{_slug(title)}.md"
         acceptance = answer.get("acceptance") or []
         criteria = "\n".join(f"- {item}" for item in acceptance) or "- Not stated."
+        requirements = "\n".join(
+            f"- {item}" for item in (answer.get("requirements") or [])
+        ) or "- See the request."
+        constraints = "\n".join(
+            f"- {item}" for item in (answer.get("constraints") or [])
+        ) or "- None stated."
         write_text(
             layout.artifact(relative),
             f"""# Change Request: {title}
@@ -332,9 +392,17 @@ class ProjectAgent:
 
 {answer.get('summary') or '—'}
 
+## Requirements
+
+{requirements}
+
 ## Acceptance Criteria
 
 {criteria}
+
+## Constraints
+
+{constraints}
 """,
         )
         generation = self.ledger.current_generation(project["id"])
@@ -351,6 +419,54 @@ class ProjectAgent:
             generation=generation,
         )
         return relative
+
+    def _queue_task(
+        self,
+        layout: ProjectLayout,
+        text: str,
+        answer: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+        repos = manifest_entries(layout)
+        if not repos:
+            return None
+        known = {entry["id"] for entry in repos}
+        repo_id = str(answer.get("repo_id") or "").strip()
+        if repo_id and repo_id not in known:
+            repo_id = ""
+        if not repo_id and len(repos) == 1:
+            repo_id = repos[0]["id"]
+        if not repo_id:
+            return None
+        title = (
+            str(answer.get("title") or "").strip()
+            or text.strip().splitlines()[0][:80]
+            or "Change request"
+        )
+        requirements = answer.get("requirements") or [
+            answer.get("summary") or text.strip()
+        ]
+        acceptance = answer.get("acceptance") or [
+            "The explicit requirements are implemented",
+            "The project tests pass",
+        ]
+        constraints = answer.get("constraints") or [
+            "Keep the change inside the selected repository",
+            "Do not add unrequested features",
+        ]
+        test_command = answer.get("test_command") or []
+        task = tasks.create_task(
+            layout,
+            title,
+            [str(item) for item in requirements],
+            [str(item) for item in acceptance],
+            [str(item) for item in constraints],
+            repo_id=repo_id,
+            test_command=[str(item) for item in test_command],
+        )
+        tasks.commit_task(
+            layout, str(task["id"]), f"Queue task {task['id']}"
+        )
+        return task
 
     def _record_call(
         self, project: Mapping[str, Any], model: str, kind: str

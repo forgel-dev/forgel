@@ -18,7 +18,10 @@ from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger, new_project_id
 from forgel.model import ScriptedModelClient
+from forgel.program_manifest import set_entries
 from forgel.project_config import render_project_config
+from forgel.projects import create_project
+from forgel.tasks import get_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -84,6 +87,7 @@ class AgentTest(unittest.TestCase):
 
         self.assertEqual(result.kind, "change_request")
         self.assertIsNotNone(result.request)
+        self.assertIsNone(result.task_id)
         assert result.request is not None
         artifact = Path(project["workspace"]) / result.request
         self.assertTrue(artifact.exists())
@@ -93,6 +97,57 @@ class AgentTest(unittest.TestCase):
         stages = [event["stage"] for event in self.ledger.events(project["id"])]
         self.assertIn("request", stages)
         self.assertIn("agent", stages)
+
+    def test_change_request_queues_a_task(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Beta",
+            "A beta brief.",
+            mode="brownfield",
+        )
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project_id)["workspace"]
+        )
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        response = {
+            "kind": "change_request",
+            "reply": "Queued.",
+            "title": "Add dark mode",
+            "summary": "Add a dark theme toggle.",
+            "requirements": ["Add a dark theme toggle"],
+            "acceptance": ["The toggle is visible"],
+            "constraints": ["standard library only"],
+            "repo_id": "main",
+            "test_command": ["python", "-m", "unittest"],
+        }
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(response)]),
+        )
+        result = agent.handle(project, "Add dark mode", "@tester")
+        self.assertIsNotNone(result.task_id)
+        assert result.task_id is not None
+        task = get_task(layout, result.task_id)
+        assert task is not None
+        self.assertEqual(task["status"], "pending")
+        self.assertEqual(task["repo_id"], "main")
+        self.assertEqual(task["requirements"], ["Add a dark theme toggle"])
+        self.assertIn("Queued task", result.text)
 
     def test_non_json_answer_falls_back_to_text(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

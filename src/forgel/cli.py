@@ -615,6 +615,20 @@ def cmd_task(args: argparse.Namespace) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
+        if args.action == "cancel":
+            if not args.task_id:
+                print("error: task cancel requires --task", file=sys.stderr)
+                return 2
+            try:
+                task = tasks.cancel_task(layout, args.task_id)
+            except ValueError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            tasks.commit_task(
+                layout, task["id"], f"Cancel task {task['id']}"
+            )
+            print(f"Cancelled {task['id']}.")
+            return 0
         if args.action == "list":
             entries = tasks.list_tasks(layout)
             if not entries:
@@ -1063,8 +1077,9 @@ def build_parser() -> argparse.ArgumentParser:
     task = subparsers.add_parser(
         "task", help="Queue or list coding-agent tasks"
     )
-    task.add_argument("action", choices=["add", "list"])
+    task.add_argument("action", choices=["add", "list", "cancel"])
     task.add_argument("project_id")
+    task.add_argument("--task", dest="task_id", default="")
     task.add_argument("--title", default="")
     task.add_argument("--require", action="append", default=[])
     task.add_argument("--accept", action="append", default=[])

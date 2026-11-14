@@ -70,6 +70,16 @@ class TasksTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             tasks.create_task(self.layout, "", ["a"], ["b"])
 
+    def test_cancel_a_pending_task(self) -> None:
+        task = tasks.create_task(
+            self.layout, "Build", ["a"], ["b"]
+        )
+        cancelled = tasks.cancel_task(self.layout, task["id"])
+        self.assertEqual(cancelled["status"], "cancelled")
+        self.assertIsNone(tasks.next_pending_task(self.layout))
+        with self.assertRaises(ValueError):
+            tasks.cancel_task(self.layout, task["id"])
+
     def test_project_state_tracks_tasks(self) -> None:
         self.assertEqual(
             project_state(self.ledger, self.project), "adopted"

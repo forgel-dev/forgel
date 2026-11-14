@@ -244,6 +244,13 @@ forgel task add <project> \
 forgel task list <project>
 ```
 
+A plain chat message is not just conversation: the project agent classifies it,
+and a change request becomes a pending task with explicit requirements,
+acceptance criteria, a target repository, optional constraints and a test
+command. The bot reports the task id, and `/tasks` lists it. An ambiguous
+request in a multi-repository project is answered with a question instead of a
+guess. Cancel a queued task with `/task cancel <id>`.
+
 The daemon picks up pending tasks and runs the coding agent inside the
 project's repository. The model returns one JSON action per turn (list, read,
 write, delete, run, done, fail). The runtime keeps paths inside the repository,
@@ -251,6 +258,9 @@ uses a small command allowlist, strips secret environment variables, caps the
 step count, runs the final test command, commits with a bot message, writes
 `docs/program/agent/<task>.md` and records a ledger event. It refuses to commit
 secret-looking files.
+
+From the chat: send a plain message to the selected project to queue a change;
+`/tasks` shows the queue; `/task cancel <id>` cancels a pending task.
 
 Free local runs can use a scripted model or a subagent bridge instead of a
 provider key; a production run uses `FORGEL_MODEL_API_KEY`. The manual blog e2e

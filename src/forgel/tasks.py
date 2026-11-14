@@ -12,11 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import git_ops
 from .artifacts import read_json, write_json
 from .layout import ProjectLayout
 
 TASKS_DIR = "docs/program/tasks"
-VALID_STATUSES = {"pending", "running", "done", "failed"}
+VALID_STATUSES = {"pending", "running", "done", "failed", "cancelled"}
 
 
 def _now() -> str:
@@ -127,3 +128,34 @@ def next_pending_task(layout: ProjectLayout) -> dict[str, Any] | None:
 def latest_task(layout: ProjectLayout) -> dict[str, Any] | None:
     tasks = list_tasks(layout)
     return tasks[-1] if tasks else None
+
+
+def cancel_task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
+    task = get_task(layout, task_id)
+    if task is None:
+        raise ValueError(f"unknown task {task_id!r}")
+    if task.get("status") != "pending":
+        raise ValueError(
+            f"only pending tasks can be cancelled (status: {task.get('status')})"
+        )
+    return update_task(
+        layout,
+        task_id,
+        status="cancelled",
+        finished_at=_now(),
+        result={"summary": "cancelled by the user"},
+    )
+
+
+def commit_task(
+    layout: ProjectLayout, task_id: str, message: str
+) -> None:
+    """Commit a task file to the control repository, best effort."""
+
+    if not (layout.control / ".git").exists():
+        return
+    try:
+        git_ops.commit_all(layout.control, message)
+        git_ops.tag_baseline(layout.control)
+    except git_ops.GitOperationError:
+        return

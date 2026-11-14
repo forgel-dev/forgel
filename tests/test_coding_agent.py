@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from forgel.adopt import adopt_repository
+from forgel.agent import ProjectAgent
 from forgel.coding_agent import CodingAgent
 from forgel.config import Settings
 from forgel.daemon import run_daemon
@@ -212,6 +213,55 @@ class CodingAgentTest(unittest.TestCase):
         ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "failed")
         self.assertIn("step limit", result.summary)
+
+    def test_free_text_queues_a_task_the_daemon_runs(self) -> None:
+        request = {
+            "kind": "change_request",
+            "reply": "I will add a feature module.",
+            "title": "Add a feature module",
+            "summary": "Add feature.py.",
+            "requirements": ["Create feature.py"],
+            "acceptance": ["feature.py exists"],
+            "constraints": ["standard library only"],
+            "repo_id": "main",
+            "test_command": [],
+        }
+        intake = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(request)]),
+        )
+        result = intake.handle(
+            self.project, "Please add a feature module", "@tester"
+        )
+        self.assertIsNotNone(result.task_id)
+        assert result.task_id is not None
+
+        coding = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "feature.py",
+                        "content": "VALUE = 1\n",
+                    }
+                ),
+                json.dumps(
+                    {"action": "done", "summary": "added feature.py"}
+                ),
+            ]
+        )
+        run_daemon(
+            self.settings,
+            self.ledger,
+            once=True,
+            log=lambda _m: None,
+            client=coding,
+        )
+        stored = get_task(self.layout, result.task_id)
+        assert stored is not None
+        self.assertEqual(stored["status"], "done")
+        self.assertTrue((self.repo / "feature.py").exists())
 
     def test_daemon_processes_a_pending_task(self) -> None:
         task = self._task()
