@@ -1,5 +1,9 @@
 # Deploying the Forgel Daemon
 
+A server is not required to try Forgel: `forgel chat` runs the same commands
+and the same daemon on a laptop with no bot token. This deployment is the
+always-on mode, where Telegram becomes a remote control.
+
 The recommended path is one local command. `forgel deploy` reads
 `.env.deploy`, talks to the server over SSH, prepares the image, writes the
 production Compose file and a `0600` runtime `.env`, starts the service and

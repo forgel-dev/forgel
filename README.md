@@ -13,6 +13,16 @@ make demo
 ```
 
 This creates `.forgel-demo/` and runs the full pipeline from brief to staging.
+The same commands are available in a local console — no Telegram bot, no token
+and no server:
+
+```bash
+make chat
+# forgel> /new My app | A minimal SaaS with a landing page and a health check
+# forgel> /status
+# forgel> /approve <project-id> staging
+```
+
 The pipeline parks at the staging approval gate; nothing reaches `done`
 without a human decision:
 

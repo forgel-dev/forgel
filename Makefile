@@ -1,7 +1,7 @@
 PYTHON ?= python3
 export PYTHONPATH := src
 
-.PHONY: test lint demo clean e2e-blog
+.PHONY: test lint demo chat clean e2e-blog
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
@@ -11,6 +11,10 @@ lint:
 
 demo:
 	$(PYTHON) -m forgel demo --home .forgel-demo
+
+# Local console: the same commands as Telegram, no bot token and no server.
+chat:
+	$(PYTHON) -m forgel chat --home .forgel-demo
 
 # Manual, free harness check. The bridge/API modes are documented in
 # tests/e2e/README.md and are run only on explicit instruction.

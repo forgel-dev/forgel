@@ -27,6 +27,7 @@ from .approvals import ApprovalError, latest_approval, record_approval
 from .artifacts import read_json
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
+from .console import run_console
 from .context import effective_context, resolve_context
 from .control import is_paused, set_paused
 from .daemon import project_state, run_daemon
@@ -1102,6 +1103,22 @@ def cmd_secret(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_chat(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        run_console(
+            settings,
+            ledger,
+            project_id=args.project,
+            daemon=not args.no_daemon,
+            actor=args.actor,
+        )
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_telegram(args: argparse.Namespace) -> int:
     settings = _settings(args)
     try:
@@ -1283,6 +1300,15 @@ def build_parser() -> argparse.ArgumentParser:
     resume = subparsers.add_parser("resume", help="Resume daemon iterations")
     resume.add_argument("--home", default=None)
     resume.set_defaults(func=cmd_resume)
+
+    chat = subparsers.add_parser(
+        "chat", help="Local console: the same commands without Telegram"
+    )
+    chat.add_argument("--project", default="")
+    chat.add_argument("--no-daemon", action="store_true")
+    chat.add_argument("--actor", default="local")
+    chat.add_argument("--home", default=None)
+    chat.set_defaults(func=cmd_chat)
 
     telegram = subparsers.add_parser(
         "telegram", help="Run the Telegram gateway and the daemon"

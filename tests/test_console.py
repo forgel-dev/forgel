@@ -1,0 +1,141 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from forgel.agent import ProjectAgent
+from forgel.config import Settings
+from forgel.console import run_console
+from forgel.layout import ProjectLayout
+from forgel.ledger import Ledger
+from forgel.model import ScriptedModelClient
+from forgel.projects import create_project
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _feed(lines: list[str]):
+    remaining = list(lines)
+
+    def read(_prompt: str) -> str:
+        if not remaining:
+            raise EOFError
+        return remaining.pop(0)
+
+    return read
+
+
+class ConsoleTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        self.settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+        )
+        self.ledger = Ledger(self.settings.db_path)
+        self.addCleanup(self.ledger.close)
+
+    def _run(self, lines: list[str], agent=None):
+        output: list[str] = []
+        run_console(
+            self.settings,
+            self.ledger,
+            daemon=False,
+            input_fn=_feed(lines),
+            output=output.append,
+            agent=agent,
+        )
+        return "\n".join(output)
+
+    def test_new_project_and_selection_work_without_telegram(self) -> None:
+        text = self._run(["/new Demo | A demo brief.", "/projects", "/quit"])
+        self.assertIn("Forgel console", text)
+        projects = self.ledger.list_projects()
+        self.assertEqual(len(projects), 1)
+        self.assertEqual(projects[0]["name"], "Demo")
+        self.assertEqual(self.ledger.get_session(0), projects[0]["id"])
+        self.assertIn(projects[0]["id"], text)
+
+    def test_starts_with_a_selected_project(self) -> None:
+        project_id = create_project(
+            self.settings, self.ledger, "Selected", "A brief."
+        )
+        output: list[str] = []
+        run_console(
+            self.settings,
+            self.ledger,
+            project_id=project_id,
+            daemon=False,
+            input_fn=_feed(["/status", "/quit"]),
+            output=output.append,
+        )
+        self.assertIn(f"Selected {project_id}", "\n".join(output))
+        self.assertEqual(self.ledger.get_session(0), project_id)
+
+    def test_free_text_records_a_change_request(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Console agent",
+            "A brief.",
+            mode="brownfield",
+        )
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project_id)["workspace"]
+        )
+        from forgel.program_manifest import set_entries
+
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        self.ledger.set_session(0, project_id)
+        response = {
+            "kind": "change_request",
+            "reply": "Recorded.",
+            "title": "Add a page",
+            "requirements": ["Add a page"],
+            "acceptance": ["The page exists"],
+            "repo_id": "main",
+            "assumptions": ["The page goes in the main app"],
+        }
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(response)]),
+        )
+        text = self._run(
+            ["Add a page to the app", "/tasks", "/quit"], agent=agent
+        )
+        self.assertIn("Recorded.", text)
+        self.assertIn("Add a page", text)
+
+    def test_quit_and_eof_end_the_console(self) -> None:
+        text = self._run(["/quit"])
+        self.assertIn("Bye.", text)
+        text = self._run([])
+        self.assertIn("Bye.", text)
+
+    def test_help_lists_the_same_commands(self) -> None:
+        text = self._run(["/help", "/quit"])
+        self.assertIn("/repo create", text)
+        self.assertIn("/adopt", text)
+
+
+if __name__ == "__main__":
+    unittest.main()
