@@ -1410,7 +1410,14 @@ class CommandRouter:
         except Exception as exc:  # noqa: BLE001 - answer instead of crashing
             return Reply(f"Agent error: {exc}")
         if result.kind == "action" and result.action:
-            return self._execute_action(chat_id, actor, result)
+            reply = self._execute_action(chat_id, actor, result)
+            if result.action in {"status", "tasks"} and self.agent is not None:
+                narration = self.agent.narrate(
+                    project, text, reply.text
+                ).strip()
+                if narration:
+                    return Reply(narration)
+            return reply
         return Reply(result.text)
 
     # -------------------------------------------------------------- helpers

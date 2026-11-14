@@ -294,6 +294,32 @@ class SelectionAndAgentTest(unittest.TestCase):
         reply = router.handle(7, "What is this project?", "@tester")
         self.assertEqual(reply.text, "project answer")
 
+    def test_status_question_is_answered_in_natural_language(self) -> None:
+        router = self._router(
+            [
+                json.dumps(
+                    {
+                        "kind": "action",
+                        "reply": "",
+                        "action": "status",
+                        "action_args": {},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "kind": "answer",
+                        "reply": "Проект принят в работу, задач пока нет.",
+                    }
+                ),
+            ]
+        )
+        project = self._project("Alpha", "Alpha brief marker.")
+        self.ledger.set_session(7, project)
+        reply = router.handle(7, "Какой статус проекта?", "@tester")
+        self.assertEqual(
+            reply.text, "Проект принят в работу, задач пока нет."
+        )
+
     def test_task_accept_command_finalizes_a_review(self) -> None:
         router = self._router()
         project = self._project("Accept", "A brief.")

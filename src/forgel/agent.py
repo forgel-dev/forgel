@@ -365,6 +365,48 @@ class ProjectAgent:
         self.ledger = ledger
         self.client = client
 
+    def narrate(
+        self,
+        project: Mapping[str, Any],
+        question: str,
+        observation: str,
+    ) -> str:
+        """Turn a runtime status dump into a natural-language answer."""
+
+        layout = ProjectLayout.detect(project["workspace"])
+        messages = [
+            ModelMessage(
+                role="system",
+                content=(
+                    "You are Forgel's project agent. The runtime executed "
+                    "the action the user asked for. Turn the observation "
+                    "into a short natural-language answer in the user's "
+                    "language. Use only facts from the observation; never "
+                    "invent state. Do not dump raw key:value fields or "
+                    "internal identifiers unless they help. Return plain "
+                    "text, not JSON."
+                ),
+            ),
+            ModelMessage(
+                role="user",
+                content=(
+                    f"Project: {project['name']} ({project['id']})\n\n"
+                    f"User question:\n{question}\n\n"
+                    f"Runtime observation:\n{observation}\n\n"
+                    "Answer the user naturally and briefly."
+                ),
+            ),
+        ]
+        try:
+            raw = self.client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError:
+            return observation
+        answer = parse_answer(raw)
+        reply = str(answer.get("reply", "")).strip()
+        return reply or observation
+
     def handle(
         self, project: Mapping[str, Any], text: str, actor: str
     ) -> AgentResult:
