@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -155,6 +156,35 @@ class RepoCreateTest(unittest.TestCase):
         self.assertEqual(api.user_calls, 1)
         self.assertEqual(api.created[0]["owner"], "octocat")
         self.assertEqual(result.entry["provider"], "github")
+
+    def test_the_project_github_owner_is_inferred(self) -> None:
+        current = entries(self.layout)
+        set_entries(
+            self.layout,
+            [
+                dict(
+                    current[0],
+                    provider="github",
+                    url="https://github.com/forgel-dev/api.git",
+                ),
+                *current[1:],
+            ],
+        )
+        api = FakeAPI()
+        with patch.dict(
+            os.environ, {"FORGEL_GITHUB_ORG": ""}, clear=False
+        ):
+            with patch("forgel.adopt.git_ops.push"):
+                create_repository(
+                    self.settings,
+                    self.ledger,
+                    self.project,
+                    "notes",
+                    api=api,
+                    auth=self.auth,
+                )
+        self.assertEqual(api.created[0]["owner"], "forgel-dev")
+        self.assertEqual(api.user_calls, 0)
 
     def test_an_existing_remote_name_is_reported(self) -> None:
         api = FakeAPI(existing=True)

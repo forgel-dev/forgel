@@ -183,8 +183,9 @@ with `README.md`, `FORGEL.md` and `AGENTS.md`, registers it in `program.yaml`,
 pushes it and records a ledger event. `repo publish` creates remotes for
 existing local repositories. Both are private by default and never delete a
 repository or force-push. The organization comes from `[git] org`,
-`--org`/`org=`, or `FORGEL_GITHUB_ORG`; a PAT falls back to the account's
-login.
+`--org`/`org=`, or `FORGEL_GITHUB_ORG`; otherwise Forgel uses the single
+GitHub owner already present in the project, and a PAT falls back to the
+account's login.
 
 Link repositories only when their code depends on each other: a frontend
 consumes a backend contract, an E2E suite exercises both, an infrastructure

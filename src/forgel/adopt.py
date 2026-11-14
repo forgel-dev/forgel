@@ -460,8 +460,9 @@ def add_repository(
         )
     if layout.metadata().get("mode") != "brownfield":
         raise AdoptError(
-            "adding repositories is supported for adopted (brownfield) "
-            "projects; template projects already define their repositories"
+            "adopting an existing repository into an existing project is "
+            "supported for brownfield projects; use 'repo create' for a new "
+            "repository or '/adopt' for a new project"
         )
     temporary, clone, remote, auth = _clone_temp(settings, url)
     try:
@@ -638,11 +639,33 @@ def _init_local_repository(
     return local
 
 
+def _project_owner(layout: ProjectLayout) -> str:
+    """The single GitHub owner already used by the project's repositories."""
+
+    owners = {
+        match.group(1)
+        for entry in entries(layout)
+        if (
+            match := re.search(
+                r"github\.com[/:]([^/]+)/", str(entry.get("url") or "")
+            )
+        )
+    }
+    return next(iter(owners)) if len(owners) == 1 else ""
+
+
 def _resolve_owner(
-    client: Any, auth: AuthToken, configured: str, org: str
+    layout: ProjectLayout,
+    client: Any,
+    auth: AuthToken,
+    configured: str,
+    org: str,
 ) -> str:
     owner = (
-        org or configured or os.environ.get("FORGEL_GITHUB_ORG", "")
+        org
+        or configured
+        or os.environ.get("FORGEL_GITHUB_ORG", "")
+        or _project_owner(layout)
     ).strip()
     if owner:
         return owner
@@ -760,7 +783,7 @@ def create_repository(
     client, token = _github_client(
         settings, git_config.auth, auth, api
     )
-    owner = _resolve_owner(client, token, git_config.org, org)
+    owner = _resolve_owner(layout, client, token, git_config.org, org)
     full_name, url = _create_remote(
         client, selected_id, owner, private, description
     )
@@ -846,7 +869,7 @@ def publish_repository(
     client, token = _github_client(
         settings, git_config.auth, auth, api
     )
-    owner = _resolve_owner(client, token, git_config.org, org)
+    owner = _resolve_owner(layout, client, token, git_config.org, org)
     full_name, url = _create_remote(
         client, repo_id, owner, private, description
     )
