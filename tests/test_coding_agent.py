@@ -10,7 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from forgel.adopt import adopt_repository
+from forgel.adopt import add_repository, adopt_repository
 from forgel.agent import ProjectAgent
 from forgel.artifacts import write_text
 from forgel.coding_agent import CodingAgent
@@ -236,6 +236,61 @@ class CodingAgentTest(unittest.TestCase):
         stored = get_task(self.layout, task["id"])
         assert stored is not None
         self.assertEqual(stored["result"]["resume_count"], 1)
+
+    def test_a_linked_project_runs_tasks_in_another_repository(
+        self,
+    ) -> None:
+        web = self.home / "sources" / "web"
+        web.mkdir(parents=True)
+        (web / "README.md").write_text("web\n", encoding="utf-8")
+        _run(web, "init", "-q", "-b", "main")
+        _run(web, "add", "-A")
+        _run(
+            web,
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "initial",
+        )
+        added = add_repository(
+            self.settings,
+            self.ledger,
+            self.project,
+            str(web),
+            repo_id="web",
+        )
+        self.assertEqual(added.entry["id"], "web")
+        self.assertEqual(
+            self.layout.repo_path("web").resolve(), web.resolve()
+        )
+        task = create_task(
+            self.layout,
+            "Add a web page",
+            ["Create page.py"],
+            ["The file exists"],
+            repo_id="web",
+            test_command=[],
+        )
+        responses = [
+            json.dumps(
+                {
+                    "action": "write_file",
+                    "path": "page.py",
+                    "content": "value = 1\n",
+                }
+            ),
+            json.dumps(
+                {"action": "done", "summary": "added the page"}
+            ),
+        ]
+        result = CodingAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(responses),
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertTrue((web / "page.py").exists())
+        self.assertFalse((self.repo / "page.py").exists())
+        log = _run(web, "log", "-1", "--format=%s").stdout
+        self.assertIn("Agent: Add a web page", log)
 
     def test_test_removals_are_recorded(self) -> None:
         task = create_task(

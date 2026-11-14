@@ -317,6 +317,38 @@ class AdoptTest(unittest.TestCase):
             project_state(self.ledger, project), "adopted"
         )
 
+    def test_linked_siblings_are_synced_and_rolled_back(self) -> None:
+        backend = adopt_repository(
+            self.settings, self.ledger, str(self._source("backend"))
+        )
+        project = self.ledger.get_project(backend.project_id)
+        assert project is not None
+        frontend = self._source("frontend")
+        add_repository(
+            self.settings,
+            self.ledger,
+            project,
+            str(frontend),
+            repo_id="web",
+            depends_on=["main"],
+        )
+        layout = ProjectLayout.detect(project["workspace"])
+        readme = frontend / "README.md"
+        readme.write_text("changed\n", encoding="utf-8")
+        result = sync_project(
+            Path(project["workspace"]), self.ledger, project["id"]
+        )
+        self.assertIn("repos/web/README.md", result["files"])
+        self.assertEqual(result["analysis"]["violations"], [])
+        rolled_back = reconcile_project(
+            Path(project["workspace"]),
+            self.ledger,
+            project["id"],
+            decision="rollback",
+        )
+        self.assertEqual(rolled_back["status"], "rolled_back")
+        self.assertEqual(readme.read_text(encoding="utf-8"), "hello\n")
+
     def test_project_metadata_lists_both_repos(self) -> None:
         backend = adopt_repository(
             self.settings, self.ledger, str(self._source("backend"))

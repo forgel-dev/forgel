@@ -936,6 +936,7 @@ def cmd_repo(args: argparse.Namespace) -> int:
                     depends_on=depends,
                     role=args.role,
                     description=args.description,
+                    path=args.path,
                 )
             except (AdoptError, ProviderError, GithubAuthError) as exc:
                 print(f"error: {exc}", file=sys.stderr)
@@ -1642,6 +1643,7 @@ def build_parser() -> argparse.ArgumentParser:
     repo.add_argument("--org", default="")
     repo.add_argument("--public", action="store_true")
     repo.add_argument("--description", default="")
+    repo.add_argument("--path", default="")
     repo.add_argument("--home", default=None)
     repo.set_defaults(func=cmd_repo)
 

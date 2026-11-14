@@ -978,9 +978,8 @@ def _git_config(layout: ProjectLayout) -> GitConfig:
 
 
 def _init_local_repository(
-    layout: ProjectLayout, repo_id: str, description: str
+    local: Path, repo_id: str, description: str
 ) -> Path:
-    local = layout.repo_path(repo_id)
     if local.exists() and any(local.iterdir()):
         raise AdoptError(f"local repository already exists: {local}")
     ensure_dir(local)
@@ -1121,16 +1120,17 @@ def create_repository(
     depends_on: list[str] | None = None,
     role: str = "application",
     description: str = "",
+    path: str = "",
     api: Any | None = None,
     auth: AuthToken | None = None,
 ) -> RepoCreateResult:
     """Create a repository on GitHub and register it in the project."""
 
     layout = ProjectLayout.detect(project["workspace"])
-    if not layout.is_container:
+    if not layout.is_project:
         raise AdoptError(
             "this project uses the legacy flat layout; repositories can only "
-            "be created in a container project"
+            "be created in a project"
         )
     selected_id = slugify_repo_id(repo_id)
     if not selected_id:
@@ -1147,7 +1147,13 @@ def create_repository(
         validate_dependencies(known, dependencies)
     except ValueError as exc:
         raise AdoptError(str(exc)) from exc
-    local = layout.repo_path(selected_id)
+    if layout.is_linked:
+        if path.strip():
+            local = Path(path).expanduser().resolve()
+        else:
+            local = (layout.root.parent / selected_id).resolve()
+    else:
+        local = layout.repo_path(selected_id)
     if local.exists() and any(local.iterdir()):
         raise AdoptError(f"local repository already exists: {local}")
 
@@ -1160,7 +1166,7 @@ def create_repository(
         client, selected_id, owner, private, description
     )
 
-    _init_local_repository(layout, selected_id, description)
+    _init_local_repository(local, selected_id, description)
     try:
         git_ops.ensure_remote(local, url)
     except git_ops.GitOperationError as exc:
@@ -1172,6 +1178,8 @@ def create_repository(
         "url": url,
         "depends_on": dependencies,
     }
+    if layout.is_linked:
+        entry["path"] = str(local)
     add_entry(layout, entry)
     _write_repo_doc(layout, entry)
     write_program(
@@ -1219,10 +1227,10 @@ def publish_repository(
     """Create the GitHub remote for an existing local repository and push it."""
 
     layout = ProjectLayout.detect(project["workspace"])
-    if not layout.is_container:
+    if not layout.is_project:
         raise AdoptError(
             "this project uses the legacy flat layout; publishing requires a "
-            "container project"
+            "project"
         )
     entry = next(
         (item for item in entries(layout) if item["id"] == repo_id), None
@@ -1242,8 +1250,11 @@ def publish_repository(
         settings, git_config.auth, auth, api
     )
     owner = _resolve_owner(layout, client, token, git_config.org, org)
+    remote_name = repo_id
+    if layout.is_linked and repo_id == "main":
+        remote_name = slugify_repo_id(str(project["name"]))
     full_name, url = _create_remote(
-        client, repo_id, owner, private, description
+        client, remote_name, owner, private, description
     )
     git_ops.ensure_remote(local, url)
     _push_repository(local, token, git_ops.current_branch(local) or "main")

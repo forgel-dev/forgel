@@ -255,11 +255,51 @@ def _detect_container(layout: ProjectLayout) -> dict[str, Any]:
     }
 
 
+
+
+def _detect_linked(layout: ProjectLayout) -> dict[str, Any]:
+    """Changes across linked repositories; siblings get a repos/<id>/ label."""
+
+    files: set[str] = set()
+    diffstat: list[str] = []
+    commits: list[str] = []
+    statuses: list[str] = []
+    for repo_id in layout.repo_ids():
+        repo = layout.repo_path(repo_id)
+        if not (repo / ".git").exists():
+            continue
+        info = _detect_git(repo)
+        is_main = repo.resolve() == layout.root.resolve()
+        prefix = "" if is_main else f"repos/{repo_id}/"
+        files.update(f"{prefix}{name}" for name in info["files"])
+        label = prefix.rstrip("/") or "."
+        if info["diffstat"]:
+            diffstat.append(f"## {label}\n{info['diffstat']}")
+        if info["commits"]:
+            commits.append(f"## {label}\n{info['commits']}")
+        if info["status"]:
+            statuses.append(f"## {label}\n{info['status']}")
+    return {
+        "kind": "git",
+        "baseline": "multi-repo",
+        "files": sorted(files),
+        "count": len(files),
+        "status": "\n".join(statuses),
+        "diffstat": "\n\n".join(diffstat),
+        "commits": "\n\n".join(commits),
+        "note": "",
+    }
+
+
 def detect_external_changes(workspace: Path) -> dict[str, Any]:
     layout = _layout(workspace)
     if layout.is_container:
         if layout.git_roots():
             return _detect_container(layout)
+        return _detect_manifest(layout.control)
+    if layout.is_linked:
+        if layout.git_roots():
+            return _detect_linked(layout)
         return _detect_manifest(layout.control)
     if (workspace / ".git").exists():
         return _detect_git(workspace)
@@ -487,6 +527,16 @@ def _mark_fix(path: Path, analysis: dict[str, list[str]], notes: str) -> None:
 def _target_for(
     layout: ProjectLayout, path: str
 ) -> tuple[Path, str]:
+    if layout.is_linked:
+        control = layout.control.relative_to(layout.root).as_posix()
+        if path == control:
+            return layout.control, ""
+        if path.startswith(control + "/"):
+            return layout.control, path[len(control) + 1 :]
+        parts = path.split("/")
+        if len(parts) >= 3 and parts[0] == "repos":
+            return layout.repo_path(parts[1]), "/".join(parts[2:])
+        return layout.root, path
     if not layout.is_container:
         return layout.root, path
     control = layout.control.relative_to(layout.root).as_posix()

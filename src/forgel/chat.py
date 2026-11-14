@@ -381,7 +381,9 @@ class CommandRouter:
             repo_id = ""
             options = parts
             is_option = (
-                lambda token: token.startswith(("org=", "depends_on="))
+                lambda token: token.startswith(
+                    ("org=", "depends_on=", "path=")
+                )
                 or token == "public"
             )
             if action == "create":
@@ -391,11 +393,14 @@ class CommandRouter:
                 repo_id = parts[0]
                 options = parts[1:]
             org = ""
+            path = ""
             public = False
             depends_on: list[str] = []
             for token in options:
                 if token.startswith("org="):
                     org = token.split("=", 1)[1]
+                elif token.startswith("path="):
+                    path = token.split("=", 1)[1]
                 elif token == "public":
                     public = True
                 elif token.startswith("depends_on="):
@@ -418,6 +423,7 @@ class CommandRouter:
                         private=not public,
                         depends_on=depends_on,
                         description=description,
+                        path=path,
                     )
                     return Reply(
                         f"Created {created.entry['id']} at {created.url} "
@@ -1304,6 +1310,9 @@ class CommandRouter:
                 deps = [item for item in deps.split(",") if item]
             if deps:
                 parts.append("depends_on=" + ",".join(str(d) for d in deps))
+            path = str(args.get("path") or "").strip()
+            if path:
+                parts.append(f"path={path}")
             rest = "create " + " ".join(parts)
             description = str(args.get("description") or "").strip()
             if description:

@@ -8,7 +8,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from forgel import git_ops
-from forgel.adopt import AdoptError, create_repository, publish_repository
+from forgel.adopt import (
+    AdoptError,
+    adopt_repository,
+    create_repository,
+    publish_repository,
+)
 from forgel.artifacts import write_text
 from forgel.config import Settings
 from forgel.layout import ProjectLayout
@@ -286,6 +291,69 @@ class RepoCreateTest(unittest.TestCase):
                 api=FakeAPI(),
                 auth=self.auth,
             )
+
+
+class LinkedRepoCreateTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        self.settings = Settings(
+            home=self.home / "forgel-home",
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+        )
+        self.ledger = Ledger(self.settings.db_path)
+        self.addCleanup(self.ledger.close)
+        source = self.home / "main-repo"
+        source.mkdir()
+        (source / "README.md").write_text("main\n", encoding="utf-8")
+        _git(source, "init", "-q", "-b", "main")
+        _git(source, "add", "-A")
+        _git(
+            source,
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "initial",
+        )
+        self.adopted = adopt_repository(
+            self.settings, self.ledger, str(source), brief="Linked demo"
+        )
+        self.project = self.ledger.get_project(self.adopted.project_id)
+        assert self.project is not None
+        self.layout = ProjectLayout.detect(self.project["workspace"])
+        self.auth = AuthToken(token="tok", kind="pat")
+
+    def test_a_linked_project_can_create_new_repositories(self) -> None:
+        api = FakeAPI()
+        target = self.home / "billing"
+        with patch("forgel.adopt.git_ops.push"):
+            created = create_repository(
+                self.settings,
+                self.ledger,
+                self.project,
+                "billing",
+                org="acme",
+                path=str(target),
+                description="Billing service",
+                api=api,
+                auth=self.auth,
+            )
+        self.assertEqual(api.created[0]["owner"], "acme")
+        self.assertTrue((target / ".git").is_dir())
+        self.assertEqual(created.entry["path"], str(target.resolve()))
+        self.assertEqual(
+            self.layout.repo_path("billing").resolve(), target.resolve()
+        )
+        self.assertEqual(
+            sorted(self.layout.repo_ids()), ["billing", "main"]
+        )
+        program = (self.layout.control / "program.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("id: billing", program)
+        self.assertIn("id: main", program)
 
 
 if __name__ == "__main__":

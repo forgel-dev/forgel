@@ -244,6 +244,14 @@ stays local. The folder is never added as a git remote. This is the normal
 way to hand over a repository you already work in: other tools keep using the
 same folder.
 
+**The first folder is the entry point, not a one-repository limit.** A linked
+project is a normal multi-repository project: add another local folder with
+`/repo add /srv/frontend web depends_on=main`, or create a new repository in a
+sibling folder with `/repo create billing path=/srv/billing`. Each entry keeps
+its own absolute path in `project.json`, its own git history, its own baseline
+and its own environment contract. Tasks, plans and the daemon address a
+repository by id exactly as in a container project.
+
 A **remote URL** (`https://…`, `git@…`, `owner/repo`) is cloned into a project
 container as before. Either way the repository receives a `forgel-baseline`
 tag, the control repository gets `forgel.toml`, `program.yaml`, `FORGEL.md`,
