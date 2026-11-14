@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
+
+from .artifacts import write_json
 
 from . import daemon_config
 from .project_config import ConfigError, load_project_config
@@ -110,6 +114,96 @@ class OpenAICompatibleClient:
         return message
 
 
+class BridgeModelClient:
+    """File bridge for local runs driven by an external subagent.
+
+    Each call writes a request file and waits for a response file. The driver
+    is outside Forgel; it can be a Claude Code subagent, another harness or a
+    human. This keeps a local run from spending provider budget.
+    """
+
+    def __init__(
+        self,
+        directory: Path,
+        timeout: float = 900.0,
+        poll_interval: float = 0.5,
+    ) -> None:
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.timeout = timeout
+        self.poll_interval = poll_interval
+
+    def complete(
+        self,
+        messages: Sequence[ModelMessage],
+        model: str | None = None,
+    ) -> str:
+        request_id = (
+            datetime_stamp()
+            + "-"
+            + uuid.uuid4().hex[:8]
+        )
+        request = {
+            "id": request_id,
+            "model": model or "",
+            "messages": [
+                {"role": message.role, "content": message.content}
+                for message in messages
+            ],
+            "created_at": unix_now(),
+        }
+        write_json(self.directory / f"{request_id}.request.json", request)
+        response_path = self.directory / f"{request_id}.response.json"
+        error_path = self.directory / f"{request_id}.error.json"
+        deadline = time.monotonic() + self.timeout
+        while time.monotonic() < deadline:
+            if response_path.exists():
+                try:
+                    data = json.loads(
+                        response_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ModelError(
+                        f"bridge response is invalid: {exc}"
+                    ) from exc
+                content = (
+                    data.get("content")
+                    if isinstance(data, dict)
+                    else data
+                )
+                if not isinstance(content, str) or not content.strip():
+                    raise ModelError("bridge response is empty")
+                return content
+            if error_path.exists():
+                try:
+                    data = json.loads(
+                        error_path.read_text(encoding="utf-8")
+                    )
+                    detail = (
+                        data.get("error", data)
+                        if isinstance(data, dict)
+                        else data
+                    )
+                except (OSError, json.JSONDecodeError):
+                    detail = "driver reported an error"
+                raise ModelError(f"bridge driver error: {detail}")
+            time.sleep(self.poll_interval)
+        raise ModelError(
+            f"bridge timed out after {self.timeout:g}s; "
+            f"request {request_id} is in {self.directory}"
+        )
+
+
+def datetime_stamp() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+
+
+def unix_now() -> float:
+    return time.time()
+
+
 class ScriptedModelClient:
     """Return canned responses and record the prompts for inspection."""
 
@@ -155,6 +249,11 @@ def build_model_client(
     mode = env.get("FORGEL_MODEL_MODE", "auto").strip().lower()
     if mode == "off":
         return None
+    if mode in {"bridge", "subagent"}:
+        directory = Path(
+            env.get("FORGEL_MODEL_BRIDGE_DIR", home / "model-bridge")
+        )
+        return BridgeModelClient(directory)
     if mode == "script":
         path = home / "model-script.json"
         if not path.exists():

@@ -6,12 +6,13 @@ import argparse
 import getpass
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 from typing import Sequence
 
-from . import __version__
+from . import __version__, git_ops, tasks
 from .adopt import (
     AdoptError,
     add_repository,
@@ -604,6 +605,62 @@ def cmd_resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_task(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        layout = ProjectLayout.detect(project["workspace"])
+        if args.action == "list":
+            entries = tasks.list_tasks(layout)
+            if not entries:
+                print("no tasks")
+                return 0
+            for task in entries:
+                result = task.get("result", {})
+                summary = result.get("summary", "") if result else ""
+                print(
+                    f"{task['id']:<40} {task['status']:<8} "
+                    f"{task['title']}"
+                )
+                if summary:
+                    print(f"  {summary}")
+            return 0
+        try:
+            task = tasks.create_task(
+                layout,
+                title=args.title,
+                requirements=args.require,
+                acceptance=args.accept,
+                constraints=args.constraint,
+                repo_id=args.repo,
+                test_command=(
+                    shlex.split(args.test_command)
+                    if args.test_command
+                    else []
+                ),
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            if (layout.control / ".git").exists():
+                git_ops.commit_all(
+                    layout.control, f"Add task {task['id']}"
+                )
+                git_ops.tag_baseline(layout.control)
+        except GitOperationError:
+            pass
+        print(task["id"])
+        return 0
+    finally:
+        ledger.close()
+
+
 def cmd_github(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -1002,6 +1059,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Serve commands only; do not run iterations",
     )
     telegram.set_defaults(func=cmd_telegram)
+
+    task = subparsers.add_parser(
+        "task", help="Queue or list coding-agent tasks"
+    )
+    task.add_argument("action", choices=["add", "list"])
+    task.add_argument("project_id")
+    task.add_argument("--title", default="")
+    task.add_argument("--require", action="append", default=[])
+    task.add_argument("--accept", action="append", default=[])
+    task.add_argument("--constraint", action="append", default=[])
+    task.add_argument("--repo", default="")
+    task.add_argument(
+        "--test-command",
+        dest="test_command",
+        default="",
+        help="Command the agent must pass, e.g. 'python -m unittest discover -s tests'",
+    )
+    task.add_argument("--home", default=None)
+    task.set_defaults(func=cmd_task)
 
     github = subparsers.add_parser(
         "github", help="Publish a branch and manage pull requests"

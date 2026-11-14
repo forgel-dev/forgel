@@ -88,6 +88,23 @@ def head_sha(repo: Path) -> str:
     return _ok(repo, "rev-parse", "HEAD").stdout.strip()
 
 
+def status_paths(repo: Path) -> list[str]:
+    result = _run(repo, "status", "--porcelain")
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) <= 3:
+            continue
+        value = line[3:].strip().strip('"')
+        if " -> " in value:
+            value = value.split(" -> ", 1)[1].strip('"')
+        paths.append(value)
+    return paths
+
+
+def tag_baseline(repo: Path) -> None:
+    _ok(repo, "tag", "-f", "forgel-baseline")
+
+
 def origin_url(repo: Path) -> str:
     result = _run(repo, "remote", "get-url", "origin")
     return result.stdout.strip() if result.returncode == 0 else ""

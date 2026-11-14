@@ -8,14 +8,18 @@ on again; new work starts a new iteration.
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from . import tasks
 from .approvals import awaits_approval, latest_approval
+from .coding_agent import CodingAgent
 from .config import Settings
 from .control import is_paused
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .model import ModelClient, build_model_client
 from .orchestrator import Orchestrator
 from .state import STAGES
 
@@ -45,8 +49,17 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
     layout = ProjectLayout.detect(project["workspace"])
     if has_blocking_reconciliation(Path(project["workspace"])):
         return "reconciliation pending"
+    task = tasks.latest_task(layout)
+    if task is not None and task.get("status") in {
+        "pending",
+        "running",
+        "failed",
+    }:
+        return f"task {task['status']}"
     state = ledger.checkpoint_state(project_id)
     if state is None:
+        if task is not None and task.get("status") == "done":
+            return "task done"
         return "adopted" if layout.metadata().get("mode") == "brownfield" else "queued"
     stage, generation = state
     if stage == "approval":
@@ -65,10 +78,53 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
     return stage
 
 
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _run_task(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task: dict[str, Any],
+    client: ModelClient | None,
+    log: Callable[[str], None],
+) -> None:
+    task_id = str(task["id"])
+    tasks.update_task(
+        layout, task_id, status="running", started_at=_now()
+    )
+    log(f"[daemon] {project['id']}: starting task {task_id}")
+    model = client or build_model_client(settings.home, log=log)
+    if model is None:
+        tasks.update_task(
+            layout,
+            task_id,
+            status="failed",
+            finished_at=_now(),
+            result={"summary": "no model configured for the coding agent"},
+        )
+        log(f"[daemon] {project['id']}: task {task_id} has no model client")
+        return
+    try:
+        CodingAgent(settings, ledger, model).run(project, task, log)
+    except Exception as exc:  # noqa: BLE001 - one task must not kill the daemon
+        tasks.update_task(
+            layout,
+            task_id,
+            status="failed",
+            finished_at=_now(),
+            result={"summary": f"agent crashed: {exc}"},
+        )
+        log(f"[daemon] {project['id']}: task {task_id} crashed: {exc}")
+
+
 def run_once(
     settings: Settings,
     ledger: Ledger,
     log: Callable[[str], None] = print,
+    client: ModelClient | None = None,
 ) -> list[str]:
     """Run every project that has pending work. Returns processed project ids."""
 
@@ -78,6 +134,11 @@ def run_once(
         if project_is_done(ledger, project_id):
             continue
         layout = ProjectLayout.detect(project["workspace"])
+        task = tasks.next_pending_task(layout)
+        if task is not None:
+            _run_task(settings, ledger, project, layout, task, client, log)
+            processed.append(project_id)
+            continue
         if layout.metadata().get("mode") == "brownfield":
             log(f"[daemon] {project_id}: brownfield project has no executor yet")
             continue
@@ -104,6 +165,7 @@ def run_daemon(
     once: bool = False,
     max_cycles: int | None = None,
     log: Callable[[str], None] = print,
+    client: ModelClient | None = None,
 ) -> int:
     """Run the control-plane loop. Returns the number of cycles executed."""
 
@@ -113,7 +175,7 @@ def run_daemon(
             processed = []
             log("[daemon] paused")
         else:
-            processed = run_once(settings, ledger, log)
+            processed = run_once(settings, ledger, log, client)
         cycles += 1
         if once or (max_cycles is not None and cycles >= max_cycles):
             return cycles

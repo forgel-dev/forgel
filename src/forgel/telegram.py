@@ -33,6 +33,7 @@ from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
 from .secrets import get_secret
+from .tasks import latest_task
 
 MESSAGE_LIMIT = 4000
 
@@ -460,6 +461,28 @@ class TelegramGateway:
             return (
                 f"{project_id} stopped at stage {stage}.\n"
                 f"Check /status {project_id} and the daemon log."
+            )
+        if state == "task pending":
+            return (
+                f"A task is queued for {project['name']} ({project_id}). "
+                "The daemon will start it in this cycle."
+            )
+        if state == "task done":
+            task = latest_task(ProjectLayout.detect(project["workspace"]))
+            title = task["title"] if task else "task"
+            return (
+                f"Agent finished {title} for {project_id}.\n"
+                f"Details: /status {project_id}"
+            )
+        if state == "task failed":
+            task = latest_task(ProjectLayout.detect(project["workspace"]))
+            reason = ""
+            if task:
+                reason = str(task.get("result", {}).get("summary", ""))
+            return (
+                f"Agent task failed for {project_id}."
+                + (f"\n{reason}" if reason else "")
+                + f"\nDetails: /status {project_id}"
             )
         if state == "done":
             return self._done_message(project)

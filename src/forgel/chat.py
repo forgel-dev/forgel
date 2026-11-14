@@ -59,6 +59,7 @@ from .sync import (
     reconciliation_status_path,
     sync_project,
 )
+from .tasks import latest_task
 
 DECISIONS = {"accept", "fix", "rollback", "ignore"}
 SCOPES = {"staging", "production"}
@@ -507,6 +508,7 @@ class CommandRouter:
         generation = self.ledger.current_generation(project_id)
         checkpoint = self.ledger.checkpoint(project_id) or "none"
         layout = ProjectLayout.detect(project["workspace"])
+        task = latest_task(layout)
         lines = [
             f"project: {project_id}",
             f"name: {project['name']}",
@@ -516,6 +518,10 @@ class CommandRouter:
             f"checkpoint: {checkpoint}",
             f"state: {project_state(self.ledger, project)}",
         ]
+        if task is not None:
+            lines.append(
+                f"task: {task['title']} ({task['status']})"
+            )
         staging_path = layout.artifact("staging.json")
         if staging_path.exists():
             try:
@@ -567,6 +573,10 @@ class CommandRouter:
         if is_paused(self.settings.home):
             return Reply("The daemon is paused. Send /resume first.")
         state = project_state(self.ledger, project)
+        if state.startswith("task "):
+            return Reply(
+                f"{project_id}: {state}. The daemon will process queued tasks."
+            )
         if state == "adopted":
             return Reply(
                 f"{project_id} is a brownfield project: the template pipeline "

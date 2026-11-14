@@ -230,6 +230,33 @@ and records it in `docs/program/git/report.md` and the ledger. With
 the pull request open. Post-merge smoke and auto-revert are not implemented
 yet; the config field is reserved.
 
+## Coding Agent
+
+Queue a task for a project:
+
+```bash
+forgel task add <project> \
+  --title "Minimal blog platform" \
+  --require "Build a blog in Python with the standard library" \
+  --require "Tests run with python -m unittest discover -s tests" \
+  --accept "The external validator exits 0" \
+  --test-command "python -m unittest discover -s tests"
+forgel task list <project>
+```
+
+The daemon picks up pending tasks and runs the coding agent inside the
+project's repository. The model returns one JSON action per turn (list, read,
+write, delete, run, done, fail). The runtime keeps paths inside the repository,
+uses a small command allowlist, strips secret environment variables, caps the
+step count, runs the final test command, commits with a bot message, writes
+`docs/program/agent/<task>.md` and records a ledger event. It refuses to commit
+secret-looking files.
+
+Free local runs can use a scripted model or a subagent bridge instead of a
+provider key; a production run uses `FORGEL_MODEL_API_KEY`. The manual blog e2e
+and its acceptance criteria are in [tests/e2e/README.md](tests/e2e/README.md);
+it is run on explicit instruction and not part of `make test`.
+
 ## Project Layout
 
 New projects use a container:
