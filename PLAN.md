@@ -160,6 +160,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-062** | Repository hosting is a provider plugin; GitHub is the first implementation | Other teams use GitLab, Gitea or a private server, and the core must not depend on one host | A provider contract covers auth, clone, branch, push, pull request and merge; the in-tree GitHub provider is the reference implementation |
 | **D-063** | A project can be created by adopting an existing repository, and repositories can be added later; control files live outside the code repositories | Users already have code, and a project often grows a repository after it starts | Adoption clones into `repos/<id>/`, initializes `program/` (`forgel.toml`, `program.yaml`, context files) and never regenerates code; `repo add` extends the container |
 | **D-064** | Repositories are grouped in a project by dependency edges, not by theme | The value of a multi-repo project is that a change in one repository has a contract consequence in another; unrelated repositories gain nothing from grouping | `program.yaml` records `depends_on`; `/repo add` and `/repo link` set edges; independent repositories are allowed and maintained separately, and the UI says the grouping adds no coupling |
+| **D-065** | GitHub auth resolves a GitHub App installation token first, then a PAT; the App path is an optional crypto extra, and deploy keys are clone/push-only | App tokens are short-lived and the right production default, but a PAT keeps the M0.5 self-host bootstrap free of extra dependencies; a deploy key cannot open a pull request | `github.auth = auto` tries the App when configured and falls back to a PAT; `cryptography` is imported lazily from the `github` extra; a deploy-key setup refuses pull-request operations |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -684,7 +685,7 @@ allow_auto_targeted = true
 
 [git]
 provider = "github"
-auth = "github_app"
+auth = "auto"                # auto | github_app | pat | deploy_key
 base_branch = "main"
 branch_prefix = "forgel/"
 draft_pr = true
@@ -900,7 +901,7 @@ Forgel currently uses local git per project: `git init`, a baseline commit, the 
 ```toml
 [git]
 provider = "github"
-auth = "github_app"          # github_app | deploy_key | pat
+auth = "auto"                # auto | github_app | pat | deploy_key
 base_branch = "main"
 branch_prefix = "forgel/"
 draft_pr = true

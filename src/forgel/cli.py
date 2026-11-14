@@ -25,6 +25,13 @@ from .config import Settings
 from .context import effective_context, resolve_context
 from .control import set_paused
 from .daemon import project_state, run_daemon
+from .github_flow import (
+    GithubFlowError,
+    merge_pr,
+    publish,
+    status_text,
+)
+from .git_ops import GitOperationError
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .project_config import (
@@ -36,6 +43,8 @@ from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
 from .providers import ProviderError
+from .providers.github_api import GithubAPIError
+from .providers.github_auth import GithubAuthError
 from .orchestrator import Orchestrator, StageError
 from .secrets import (
     SecretError,
@@ -595,6 +604,67 @@ def cmd_resume(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_github(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        if args.action == "status":
+            print(status_text(settings, project))
+            return 0
+        try:
+            if args.action == "publish":
+                result = publish(
+                    settings,
+                    ledger,
+                    project,
+                    repo_id=args.repo,
+                    title=args.title,
+                    body=args.body,
+                    base_branch=args.base_branch,
+                    branch=args.branch,
+                    commit_message=args.commit_message,
+                    wait=not args.no_wait,
+                    merge=args.merge,
+                )
+            else:
+                result = merge_pr(
+                    settings,
+                    ledger,
+                    project,
+                    repo_id=args.repo,
+                    number=args.pr,
+                    base_branch=args.base_branch,
+                    branch=args.branch,
+                    wait=not args.no_wait,
+                    require_ci=False if args.no_require_ci else None,
+                )
+        except (
+            GithubFlowError,
+            GithubAPIError,
+            GithubAuthError,
+            GitOperationError,
+        ) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"repository: {result.repo_id} ({result.full_name})")
+        print(f"branch:     {result.branch} -> {result.base}")
+        print(f"pull:       #{result.pr_number} {result.pr_url}")
+        print(f"checks:     {result.checks}")
+        print(
+            f"merged:     {str(result.merged).lower()}"
+            + (f" ({result.merge_sha})" if result.merge_sha else "")
+        )
+        print(f"status:     {result.status}")
+        return 0 if result.status not in {"checks_failed", "merge_failed"} else 1
+    finally:
+        ledger.close()
+
+
 def cmd_adopt(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -932,6 +1002,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="Serve commands only; do not run iterations",
     )
     telegram.set_defaults(func=cmd_telegram)
+
+    github = subparsers.add_parser(
+        "github", help="Publish a branch and manage pull requests"
+    )
+    github.add_argument("action", choices=["status", "publish", "merge"])
+    github.add_argument("project_id")
+    github.add_argument("--repo", default="")
+    github.add_argument("--title", default="")
+    github.add_argument("--body", default="")
+    github.add_argument("--base", dest="base_branch", default="")
+    github.add_argument("--branch", default="")
+    github.add_argument(
+        "--commit",
+        dest="commit_message",
+        default="",
+        help="Commit all changes with this message before publishing",
+    )
+    github.add_argument(
+        "--merge", choices=["auto", "human"], default=""
+    )
+    github.add_argument("--pr", type=int, default=None)
+    github.add_argument("--no-wait", action="store_true")
+    github.add_argument("--no-require-ci", action="store_true")
+    github.add_argument("--home", default=None)
+    github.set_defaults(func=cmd_github)
 
     adopt = subparsers.add_parser(
         "adopt", help="Adopt an existing repository as a project"

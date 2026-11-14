@@ -8,10 +8,12 @@ runtime settings still win where they must.
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 VALID_QA_RUNTIMES = {"auto", "docker", "local"}
+VALID_GIT_AUTH = {"auto", "github_app", "pat", "deploy_key"}
+VALID_GIT_MERGE = {"auto", "human"}
 
 
 class ConfigError(RuntimeError):
@@ -62,6 +64,18 @@ class RefactoringConfig:
 
 
 @dataclass(frozen=True)
+class GitConfig:
+    provider: str = "github"
+    auth: str = "auto"
+    base_branch: str = "main"
+    branch_prefix: str = "forgel/"
+    draft_pr: bool = True
+    require_ci: bool = True
+    merge: str = "auto"
+    auto_revert_on_failure: bool = True
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str | None
     recipe: str | None
@@ -72,6 +86,7 @@ class ProjectConfig:
     release: ReleaseConfig
     simplicity: SimplicityConfig
     refactoring: RefactoringConfig
+    git: GitConfig = field(default_factory=GitConfig)
 
 
 def render_project_config(
@@ -92,6 +107,14 @@ def render_project_config(
     refactoring_enabled: bool = True,
     refactor_budget_percent: int = 10,
     allow_auto_targeted: bool = True,
+    git_provider: str = "github",
+    git_auth: str = "auto",
+    git_base_branch: str = "main",
+    git_branch_prefix: str = "forgel/",
+    git_draft_pr: bool = True,
+    git_require_ci: bool = True,
+    git_merge: str = "auto",
+    git_auto_revert_on_failure: bool = True,
 ) -> str:
     return f"""[project]
 name = "{name}"
@@ -125,6 +148,16 @@ max_compat_markers = {max_compat_markers}
 enabled = {str(refactoring_enabled).lower()}
 budget_percent = {refactor_budget_percent}
 allow_auto_targeted = {str(allow_auto_targeted).lower()}
+
+[git]
+provider = "{git_provider}"
+auth = "{git_auth}"
+base_branch = "{git_base_branch}"
+branch_prefix = "{git_branch_prefix}"
+draft_pr = {str(git_draft_pr).lower()}
+require_ci = {str(git_require_ci).lower()}
+merge = "{git_merge}"
+auto_revert_on_failure = {str(git_auto_revert_on_failure).lower()}
 """
 
 
@@ -152,6 +185,7 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     release = _section(data, "release")
     simplicity = _section(data, "simplicity")
     refactoring = _section(data, "refactoring")
+    git = _section(data, "git")
 
     runtime = str(qa.get("runtime", "auto"))
     if runtime not in VALID_QA_RUNTIMES:
@@ -188,6 +222,31 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
     if refactor_budget_percent < 0:
         raise ConfigError("forgel.toml: refactoring.budget_percent must be non-negative")
 
+    git_auth = str(git.get("auth", "auto"))
+    if git_auth not in VALID_GIT_AUTH:
+        raise ConfigError(
+            f"forgel.toml: git.auth must be one of {sorted(VALID_GIT_AUTH)}"
+        )
+    git_merge = str(git.get("merge", "auto"))
+    if git_merge not in VALID_GIT_MERGE:
+        raise ConfigError(
+            f"forgel.toml: git.merge must be one of {sorted(VALID_GIT_MERGE)}"
+        )
+    git_base = str(git.get("base_branch", "main")).strip()
+    if not git_base or any(char.isspace() for char in git_base):
+        raise ConfigError("forgel.toml: git.base_branch must be a branch name")
+    git_prefix = str(git.get("branch_prefix", "forgel/"))
+    if " " in git_prefix:
+        raise ConfigError("forgel.toml: git.branch_prefix must not contain spaces")
+    git_draft = git.get("draft_pr", True)
+    git_require_ci = git.get("require_ci", True)
+    git_revert = git.get("auto_revert_on_failure", True)
+    if not all(
+        isinstance(value, bool)
+        for value in (git_draft, git_require_ci, git_revert)
+    ):
+        raise ConfigError("forgel.toml: [git] flags must be booleans")
+
     return ProjectConfig(
         name=str(project["name"]) if "name" in project else None,
         recipe=str(project["recipe"]) if "recipe" in project else None,
@@ -215,5 +274,15 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
             enabled=refactoring_enabled,
             budget_percent=refactor_budget_percent,
             allow_auto_targeted=allow_auto_targeted,
+        ),
+        git=GitConfig(
+            provider=str(git.get("provider", "github")),
+            auth=git_auth,
+            base_branch=git_base,
+            branch_prefix=git_prefix,
+            draft_pr=git_draft,
+            require_ci=git_require_ci,
+            merge=git_merge,
+            auto_revert_on_failure=git_revert,
         ),
     )

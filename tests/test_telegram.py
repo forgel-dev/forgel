@@ -457,6 +457,15 @@ class AdoptCommandsTest(unittest.TestCase):
         )
         self.assertIn("No project selected", reply.text)
 
+    def test_github_status_reports_the_project_repositories(self) -> None:
+        backend = self._repo("backend")
+        self.router.handle(7, f"/adopt {backend}", "@tester")
+        status = self.router.handle(7, "/github", "@tester")
+        self.assertIn("merge policy: auto", status.text)
+        self.assertIn("main: local", status.text)
+        usage = self.router.handle(7, "/github nope", "@tester")
+        self.assertIn("Usage:", usage.text)
+
 
 class GatewayTest(unittest.TestCase):
     def setUp(self) -> None:

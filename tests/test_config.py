@@ -98,6 +98,41 @@ class ProjectConfigTest(unittest.TestCase):
             self.assertFalse(config.simplicity.enabled)
             self.assertEqual(config.simplicity.max_added_lines, 50)
 
+    def test_git_defaults_and_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "forgel.toml"
+            path.write_text(render_project_config("demo"), encoding="utf-8")
+            config = load_project_config(Path(tmp))
+            assert config is not None
+            self.assertEqual(config.git.provider, "github")
+            self.assertEqual(config.git.auth, "auto")
+            self.assertEqual(config.git.base_branch, "main")
+            self.assertEqual(config.git.merge, "auto")
+            self.assertTrue(config.git.require_ci)
+            self.assertTrue(config.git.draft_pr)
+
+            path.write_text(
+                "[git]\nmerge = \"human\"\nrequire_ci = false\n"
+                "auth = \"pat\"\nbase_branch = \"develop\"\n",
+                encoding="utf-8",
+            )
+            config = load_project_config(Path(tmp))
+            assert config is not None
+            self.assertEqual(config.git.merge, "human")
+            self.assertFalse(config.git.require_ci)
+            self.assertEqual(config.git.auth, "pat")
+            self.assertEqual(config.git.base_branch, "develop")
+
+    def test_invalid_git_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "forgel.toml"
+            path.write_text("[git]\nmerge = \"sometimes\"\n", encoding="utf-8")
+            with self.assertRaises(ConfigError):
+                load_project_config(Path(tmp))
+            path.write_text("[git]\nauth = \"magic\"\n", encoding="utf-8")
+            with self.assertRaises(ConfigError):
+                load_project_config(Path(tmp))
+
     def test_refactoring_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "forgel.toml").write_text(

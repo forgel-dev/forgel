@@ -27,6 +27,9 @@ dev = [
   "mypy>=1.11",
   "coverage>=7.6",
 ]
+github = [
+  "cryptography>=42",
+]
 
 [project.scripts]
 forgel = "forgel.cli:main"

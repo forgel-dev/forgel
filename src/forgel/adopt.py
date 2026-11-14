@@ -191,6 +191,20 @@ def _control_commit(control: Path, message: str) -> None:
     _git(control, "tag", "-f", "forgel-baseline")
 
 
+def _default_base_branch(
+    layout: ProjectLayout, repos: list[dict[str, Any]]
+) -> str:
+    for entry in repos:
+        repository = layout.repo_path(entry["id"])
+        if not (repository / ".git").exists():
+            continue
+        result = _git(repository, "rev-parse", "--abbrev-ref", "HEAD")
+        branch = result.stdout.strip()
+        if result.returncode == 0 and branch and branch != "HEAD":
+            return branch
+    return "main"
+
+
 def _recipe(project: dict[str, Any], layout: ProjectLayout) -> str:
     if project.get("recipe_id"):
         return str(project["recipe_id"])
@@ -210,7 +224,10 @@ def _write_brownfield_files(
     if not (layout.control / "forgel.toml").exists():
         write_text(
             layout.control / "forgel.toml",
-            render_project_config(name),
+            render_project_config(
+                name,
+                git_base_branch=_default_base_branch(layout, repos),
+            ),
         )
     write_program(layout, name, _recipe({"recipe_id": ""}, layout))
     repo_ids = ", ".join(entry["id"] for entry in repos)

@@ -303,6 +303,8 @@ class TelegramGateway:
             not text.startswith("/")
             or text.startswith("/adopt")
             or text.startswith("/repo add")
+            or text.startswith("/github publish")
+            or text.startswith("/github merge")
         ):
             try:
                 self.api.send_chat_action(chat_id, "typing")

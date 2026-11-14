@@ -18,8 +18,11 @@ from typing import Any
 
 from . import daemon_config
 from .project_config import (
+    VALID_GIT_AUTH,
+    VALID_GIT_MERGE,
     BudgetConfig,
     ConfigError,
+    GitConfig,
     JurisdictionConfig,
     ModelsConfig,
     ProjectConfig,
@@ -47,6 +50,13 @@ PROJECT_KINDS: dict[str, str] = {
     "refactoring.enabled": "bool",
     "refactoring.budget_percent": "int",
     "refactoring.allow_auto_targeted": "bool",
+    "git.base_branch": "str",
+    "git.branch_prefix": "str",
+    "git.auth": "auth",
+    "git.merge": "merge",
+    "git.require_ci": "bool",
+    "git.draft_pr": "bool",
+    "git.auto_revert_on_failure": "bool",
 }
 
 
@@ -61,6 +71,7 @@ def _default_config() -> ProjectConfig:
         release=ReleaseConfig(),
         simplicity=SimplicityConfig(),
         refactoring=RefactoringConfig(),
+        git=GitConfig(),
     )
 
 
@@ -84,6 +95,13 @@ def project_values(control: Path) -> dict[str, Any]:
         "refactoring.allow_auto_targeted": (
             config.refactoring.allow_auto_targeted
         ),
+        "git.base_branch": config.git.base_branch,
+        "git.branch_prefix": config.git.branch_prefix,
+        "git.auth": config.git.auth,
+        "git.merge": config.git.merge,
+        "git.require_ci": config.git.require_ci,
+        "git.draft_pr": config.git.draft_pr,
+        "git.auto_revert_on_failure": config.git.auto_revert_on_failure,
     }
 
 
@@ -134,6 +152,18 @@ def parse_project_value(key: str, raw: str) -> Any:
     if kind == "runtime":
         if raw not in {"auto", "docker", "local"}:
             raise ConfigError("qa.runtime must be auto, docker or local")
+        return raw
+    if kind == "auth":
+        if raw not in VALID_GIT_AUTH:
+            raise ConfigError(
+                f"{key} must be one of {sorted(VALID_GIT_AUTH)}"
+            )
+        return raw
+    if kind == "merge":
+        if raw not in VALID_GIT_MERGE:
+            raise ConfigError(
+                f"{key} must be one of {sorted(VALID_GIT_MERGE)}"
+            )
         return raw
     if kind == "bool":
         lowered = raw.lower()

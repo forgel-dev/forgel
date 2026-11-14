@@ -148,9 +148,10 @@ absolute path or prefix it with `./`.
 
 The repository is cloned into `repos/main`, receives a `forgel-baseline` tag,
 and the control repository `program/` gets `forgel.toml`, `program.yaml`,
-`FORGEL.md`, `AGENTS.md` and `docs/program/adoption.md`. The project is
-brownfield: the template pipeline never runs and Forgel never regenerates the
-code.
+`FORGEL.md`, `AGENTS.md` and `docs/program/adoption.md`. The adopted
+repository's current branch becomes `git.base_branch`, so a `master` repository
+publishes to `master` without extra configuration. The project is brownfield:
+the template pipeline never runs and Forgel never regenerates the code.
 
 Add related repositories or change their edges:
 
@@ -172,20 +173,62 @@ repository deploys a specific backend. Independent repositories can be added
 to one project; nothing breaks, but Forgel maintains them separately and the
 grouping adds no coupling.
 
-**GitHub authentication.** Public HTTPS clones need no credentials. Private
-repositories and later push/pull requests need a token with Contents
-read/write (fine-grained) or `repo` (classic):
+**GitHub authentication.** Three sources, resolved in this order:
 
-```bash
-export FORGEL_GITHUB_TOKEN=...
-# or, for the MVP, from the chat (the message is deleted; no E2E):
-/secret set github.token <token>
+1. **GitHub App** (preferred): short-lived installation tokens. Create an App
+   with Contents read/write, Pull requests read/write, Checks read and
+   Metadata read, then install it. Set `FORGEL_GITHUB_APP_ID`,
+   `FORGEL_GITHUB_INSTALLATION_ID` (optional when there is one installation)
+   and the private key as a mounted `0600` file
+   (`FORGEL_GITHUB_APP_PRIVATE_KEY_PATH`) or an inline PEM. App auth needs
+   `pip install 'forgel[github]'`; the Docker image includes it.
+2. **PAT** (M0.5 bootstrap): fine-grained Contents read/write or classic
+   `repo`, via `FORGEL_GITHUB_TOKEN`, `/secret set github.token`, or
+   `forgel secret set github.token`.
+3. **SSH/deploy key**: clone, fetch and push only; no API token, so pull
+   requests need one of the first two.
+
+Public HTTPS clones need no credentials, and credential-bearing URLs are
+rejected. Hosting sits behind a provider contract, so GitLab, Gitea or a
+private server can be added without touching the core.
+
+### Publish and Merge
+
+Forgel publishes through a feature branch and a pull request. It never pushes
+to the base branch and never force-pushes. `[git]` in `forgel.toml` controls
+the policy:
+
+```toml
+[git]
+provider = "github"
+auth = "auto"            # auto | github_app | pat | deploy_key
+base_branch = "main"
+branch_prefix = "forgel/"
+draft_pr = true
+require_ci = true
+merge = "auto"           # auto | human
+auto_revert_on_failure = true
 ```
 
-SSH remotes use the host key. A GitHub App with short-lived installation
-tokens is the target production auth; repository hosting sits behind a
-provider contract, so GitLab, Gitea or a private server can be added without
-touching the core.
+```bash
+forgel github status <project>
+forgel github publish <project> --title "Add dark mode" [--repo api] [--commit "message"]
+forgel github merge <project> [--pr 12]
+```
+
+```text
+/github
+/github publish [repo] <title>
+/github merge [repo] [pr]
+```
+
+`publish` fetches, rebases onto `origin/<base>` (a conflict stops the run),
+commits when a message is given, pushes the feature branch, opens a draft PR
+and records it in `docs/program/git/report.md` and the ledger. With
+`merge=auto` it waits for checks and merges only when they are green; with
+`require_ci=true` and no CI checks it stops at `no_ci`. `merge=human` leaves
+the pull request open. Post-merge smoke and auto-revert are not implemented
+yet; the config field is reserved.
 
 ## Project Layout
 

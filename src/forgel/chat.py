@@ -28,6 +28,13 @@ from .artifacts import read_json
 from .config import Settings
 from .control import is_paused, set_paused
 from .daemon import project_is_done, project_state
+from .git_ops import GitOperationError
+from .github_flow import (
+    GithubFlowError,
+    merge_pr,
+    publish,
+    status_text,
+)
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .artifacts import write_text
@@ -36,6 +43,8 @@ from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, derive_name, resolve_project
 from .proposals import summarize_proposals
 from .providers import ProviderError
+from .providers.github_api import GithubAPIError
+from .providers.github_auth import GithubAuthError
 from .secrets import (
     SECRETS_FILENAME,
     SECRET_KEYS,
@@ -70,6 +79,9 @@ Projects
 /repo list              repositories and dependency edges
 /repo add <url> [id] [depends_on=<id>]
 /repo link <id> depends_on=<id,id>   replace the edges of a repository
+/github                 GitHub auth, repositories and merge policy
+/github publish [repo] <title>   push a branch, open a PR, follow policy
+/github merge [repo] [pr]        merge after checks
 /projects              projects, state and the selected one
 /use <id>              select the current project
 /status [id]           state, staging, approvals, recent stages
@@ -119,11 +131,13 @@ class CommandRouter:
         ledger: Ledger,
         daemon_enabled: bool = True,
         agent: ProjectAgent | None = None,
+        github_api: Any | None = None,
     ) -> None:
         self.settings = settings
         self.ledger = ledger
         self.daemon_enabled = daemon_enabled
         self.agent = agent
+        self.github_api = github_api
         self._production_tokens: dict[str, tuple[str, float]] = {}
         self._token_ttl = 900.0
 
@@ -145,6 +159,7 @@ class CommandRouter:
             "/new": self._new,
             "/adopt": self._adopt,
             "/repo": self._repo,
+            "/github": self._github,
             "/projects": self._projects,
             "/list": self._projects,
             "/use": self._use,
@@ -380,6 +395,76 @@ class CommandRouter:
                 "No dependency edges recorded: this repository is maintained "
                 "separately inside the project."
             )
+        return Reply("\n".join(lines))
+
+    def _github(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        tokens = rest.split(maxsplit=1)
+        action = tokens[0].lower() if tokens else "status"
+        if action == "status":
+            return Reply(status_text(self.settings, project))
+        if action not in {"publish", "merge"}:
+            return Reply(
+                "Usage: /github, /github publish [repo] <title>, "
+                "/github merge [repo] [pr]"
+            )
+        payload = tokens[1].strip() if len(tokens) > 1 else ""
+        known = {entry["id"] for entry in manifest_entries(
+            ProjectLayout.detect(project["workspace"])
+        )}
+        repo_id = ""
+        parts = payload.split()
+        if parts and parts[0] in known:
+            repo_id = parts.pop(0)
+        try:
+            if action == "publish":
+                title = " ".join(parts)
+                result = publish(
+                    self.settings,
+                    self.ledger,
+                    project,
+                    repo_id=repo_id,
+                    title=title,
+                    wait=True,
+                    api=self.github_api,
+                )
+            else:
+                number = None
+                for part in parts:
+                    if part.isdigit():
+                        number = int(part)
+                    else:
+                        return Reply(
+                            f"unexpected argument: {part}; usage: "
+                            "/github merge [repo] [pr]"
+                        )
+                result = merge_pr(
+                    self.settings,
+                    self.ledger,
+                    project,
+                    repo_id=repo_id,
+                    number=number,
+                    wait=True,
+                    api=self.github_api,
+                )
+        except (
+            GithubFlowError,
+            GithubAPIError,
+            GithubAuthError,
+            GitOperationError,
+        ) as exc:
+            return Reply(f"error: {exc}")
+        lines = [
+            f"repository: {result.repo_id} ({result.full_name})",
+            f"branch: {result.branch} -> {result.base}",
+            f"pull request: #{result.pr_number} {result.pr_url}",
+            f"checks: {result.checks}",
+            f"merged: {'yes' if result.merged else 'no'}"
+            + (f" ({result.merge_sha})" if result.merge_sha else ""),
+            f"status: {result.status}",
+        ]
         return Reply("\n".join(lines))
 
     def _projects(self, chat_id: int, _rest: str, _actor: str) -> Reply:

@@ -25,6 +25,10 @@ SECRET_KEYS: dict[str, tuple[str, ...]] = {
     "github.token": ("FORGEL_GITHUB_TOKEN", "GITHUB_TOKEN"),
     "github.app_id": ("FORGEL_GITHUB_APP_ID", "GITHUB_APP_ID"),
     "github.app_private_key": ("FORGEL_GITHUB_APP_PRIVATE_KEY",),
+    "github.app_private_key_path": (
+        "FORGEL_GITHUB_APP_PRIVATE_KEY_PATH",
+    ),
+    "github.installation_id": ("FORGEL_GITHUB_INSTALLATION_ID",),
 }
 
 SECRETS_FILENAME = "secrets.toml"
