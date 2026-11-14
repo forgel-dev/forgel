@@ -6,6 +6,35 @@ production Compose file and a `0600` runtime `.env`, starts the service and
 runs `forgel doctor`. No manual server configuration and no env editing over
 SSH.
 
+## Server Requirements
+
+The server needs only:
+
+- SSH access with a key;
+- Docker Engine;
+- Docker Compose v2 (v1 is detected as a fallback).
+
+Nothing else is required. The SSH user should be root, or have passwordless
+sudo for installation and Docker access (directly or through `sudo -n`).
+
+`forgel deploy up` checks this before doing anything:
+
+- if Docker or Compose is missing, it prints a warning and asks permission to
+  install them;
+- with root or passwordless `sudo -n`, it installs from `get.docker.com` or
+  the distribution package manager, starts the daemon and adds the SSH user to
+  the `docker` group where appropriate;
+- without those privileges it stops and prints the exact commands for the
+  detected distribution or asks the administrator to install Docker manually.
+
+Flags: `--yes` allows installation without a prompt; `--no-install` never
+installs and only reports. Without a TTY, the command asks for `--yes` instead
+of hanging on a prompt.
+
+The same check runs for `status`, `logs`, `restart` and `backup` with
+installation disabled: they report a missing Docker/Compose instead of
+installing it.
+
 ## One Command (Recommended)
 
 ```bash
@@ -63,7 +92,7 @@ the registry credentials.
 
 ### What `forgel deploy up` Does
 
-1. Checks SSH, remote Docker and Compose.
+1. Checks SSH, remote Docker and Compose; offers the install described above.
 2. Builds remotely or builds/pushes locally.
 3. Uploads `compose.yaml`, the filtered `.env` and an optional App private key
    through an SSH tar stream; the remote directory is `0700`, `.env` is

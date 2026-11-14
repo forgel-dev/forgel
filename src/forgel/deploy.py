@@ -23,6 +23,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass, field
@@ -132,6 +133,50 @@ class DeployConfig:
         return f"{self.user}@{self.host}"
 
 
+@dataclass(frozen=True)
+class RemoteEnv:
+    docker: tuple[str, ...] = ("docker",)
+    compose: tuple[str, ...] = ("docker", "compose")
+    root: bool = False
+    sudo: bool = False
+    os_id: str = ""
+    daemon: bool = False
+
+    @property
+    def privilege(self) -> tuple[str, ...]:
+        return () if self.root else (("sudo", "-n") if self.sudo else ())
+
+
+def _manual_instructions(
+    os_id: str, can_install: bool, user: str
+) -> str:
+    lines = [
+        "Install Docker Engine and Docker Compose v2 on the server, then "
+        "rerun `forgel deploy up`.",
+    ]
+    if os_id in {"ubuntu", "debian"}:
+        lines.append(
+            "  sudo apt-get update && sudo apt-get install -y docker.io "
+            "docker-compose-v2"
+        )
+    elif os_id in {"fedora", "rhel", "centos", "rocky", "almalinux"}:
+        lines.append(
+            "  sudo dnf install -y docker docker-compose-plugin"
+        )
+    elif os_id == "alpine":
+        lines.append("  sudo apk add docker docker-cli-compose")
+    else:
+        lines.append("  use your distribution's Docker package")
+    lines.append("  sudo systemctl enable --now docker")
+    if not can_install:
+        lines.append(
+            f"The SSH user {user!r} has no root or passwordless sudo; ask "
+            "the server administrator to install Docker, or grant that user "
+            "passwordless sudo / docker-group access."
+        )
+    return "\n".join(lines)
+
+
 class Runner:
     """SSH and local command runner. Injectable for tests."""
 
@@ -142,6 +187,7 @@ class Runner:
     ) -> None:
         self.config = config
         self.log = log
+        self.env = RemoteEnv()
 
     def _ssh_args(self) -> list[str]:
         args = [
@@ -239,6 +285,281 @@ class Runner:
         )
         self.ssh(command, input_data=buffer.getvalue(), binary=True)
 
+    # -------------------------------------------------------- environment
+
+    def docker_command(self, *args: str) -> str:
+        return shlex.join(list(self.env.docker) + list(args))
+
+    def compose_command(self, *args: str) -> str:
+        return shlex.join(list(self.env.compose) + list(args))
+
+    def _probe(
+        self, command: str, timeout: float = 30.0
+    ) -> tuple[int, str]:
+        result = self.ssh(command, allow_fail=True, timeout=timeout)
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode("utf-8", "replace")
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", "replace")
+        return result.returncode, stdout + stderr
+
+    def _command_exists(self, name: str) -> bool:
+        return self._probe(f"command -v {shlex.quote(name)}")[0] == 0
+
+    @staticmethod
+    def _compose_v1_prefix(
+        docker_prefix: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if docker_prefix[:2] == ("sudo", "-n"):
+            return ("sudo", "-n", "docker-compose")
+        return ("docker-compose",)
+
+    def _daemon_ok(self, prefix: tuple[str, ...]) -> bool:
+        return self._probe(
+            shlex.join(list(prefix) + ["info"]), timeout=60
+        )[0] == 0
+
+    def _compose_ok(self, prefix: tuple[str, ...]) -> bool:
+        return self._probe(
+            shlex.join(list(prefix) + ["version"])
+        )[0] == 0
+
+    def ensure(
+        self,
+        allow_install: bool = True,
+        assume_yes: bool = False,
+        interactive: bool | None = None,
+    ) -> None:
+        """Check SSH, Docker and Compose; offer an installation if missing."""
+
+        self.ssh("true", timeout=30)
+        root = self._probe("id -u")[1].strip() == "0"
+        sudo = self._probe("sudo -n true")[0] == 0
+        os_id = ""
+        release_rc, release = self._probe("cat /etc/os-release")
+        if release_rc == 0:
+            for line in release.splitlines():
+                if line.startswith("ID="):
+                    os_id = line.split("=", 1)[1].strip().strip('"')
+        can_install = root or sudo
+        self.env = RemoteEnv(root=root, sudo=sudo, os_id=os_id)
+        manual = _manual_instructions(os_id, can_install, self.config.user)
+
+        if not self._command_exists("docker"):
+            self.log(
+                f"warning: Docker is not installed on {self.config.target} "
+                f"({os_id or 'unknown OS'})"
+            )
+            self._offer_install(
+                "Docker and Docker Compose",
+                allow_install,
+                assume_yes,
+                interactive,
+                can_install,
+                manual,
+                need_docker=True,
+                os_id=os_id,
+            )
+            if not self._command_exists("docker"):
+                raise DeployError(
+                    "Docker is still not available after installation\n"
+                    + manual
+                )
+
+        prefix: tuple[str, ...] = ("docker",)
+        if not self._daemon_ok(prefix):
+            privileged = tuple(self.env.privilege) + ("docker",)
+            if sudo and not root and self._daemon_ok(privileged):
+                prefix = privileged
+            else:
+                self._start_daemon()
+                if root and self._daemon_ok(("docker",)):
+                    prefix = ("docker",)
+                elif sudo and self._daemon_ok(privileged):
+                    prefix = privileged
+                else:
+                    raise DeployError(
+                        "Docker is installed but the SSH user cannot access "
+                        "the daemon\n" + manual
+                    )
+
+        compose = prefix + ("compose",)
+        if not self._compose_ok(compose):
+            compose = self._compose_v1_prefix(prefix)
+            if not self._compose_ok(compose):
+                self.log(
+                    f"warning: Docker Compose is not installed on "
+                    f"{self.config.target}"
+                )
+                self._offer_install(
+                    "Docker Compose",
+                    allow_install,
+                    assume_yes,
+                    interactive,
+                    can_install,
+                    manual,
+                    need_docker=False,
+                    os_id=os_id,
+                )
+                compose = prefix + ("compose",)
+                if not self._compose_ok(compose):
+                    compose = self._compose_v1_prefix(prefix)
+                    if not self._compose_ok(compose):
+                        raise DeployError(
+                            "Docker Compose is still not available\n"
+                            + manual
+                        )
+        self.env = RemoteEnv(
+            docker=prefix,
+            compose=compose,
+            root=root,
+            sudo=sudo,
+            os_id=os_id,
+            daemon=True,
+        )
+
+    def _offer_install(
+        self,
+        label: str,
+        allow_install: bool,
+        assume_yes: bool,
+        interactive: bool | None,
+        can_install: bool,
+        manual: str,
+        need_docker: bool,
+        os_id: str,
+    ) -> None:
+        if not can_install:
+            raise DeployError(
+                f"{label} is missing and the SSH user has no root or "
+                "passwordless sudo\n" + manual
+            )
+        if not allow_install:
+            raise DeployError(
+                f"{label} is missing and --no-install was given\n" + manual
+            )
+        if not assume_yes:
+            if interactive is None:
+                interactive = sys.stdin.isatty()
+            if not interactive:
+                raise DeployError(
+                    f"{label} is missing; rerun with --yes to allow the "
+                    "installer, or install it manually\n" + manual
+                )
+            answer = input(
+                f"Install {label} on {self.config.target}? [y/N] "
+            )
+            if answer.strip().lower() not in {"y", "yes"}:
+                raise DeployError(
+                    f"installation of {label} was declined\n" + manual
+                )
+        self.log(f"installing {label} on {self.config.target}")
+        self._install(need_docker=need_docker, os_id=os_id)
+        self._start_daemon()
+        self.log("installer finished")
+
+    def _install(self, need_docker: bool, os_id: str) -> None:
+        privilege = "" if self.env.root else "sudo -n "
+        if need_docker and self._command_exists("curl"):
+            script = (
+                "curl -fsSL https://get.docker.com "
+                "-o /tmp/forgel-get-docker.sh && "
+                "sh /tmp/forgel-get-docker.sh"
+            )
+        elif need_docker and self._command_exists("wget"):
+            script = (
+                "wget -qO /tmp/forgel-get-docker.sh "
+                "https://get.docker.com && sh /tmp/forgel-get-docker.sh"
+            )
+        else:
+            script = self._package_install(need_docker)
+        self.ssh(
+            privilege + "sh -c " + shlex.quote(script),
+            timeout=1800,
+        )
+
+    def _package_install(self, need_docker: bool) -> str:
+        if self._command_exists("apt-get"):
+            packages = "docker.io docker-compose-v2"
+            fallback = "docker.io docker-compose"
+            if not need_docker:
+                packages = "docker-compose-v2"
+                fallback = "docker-compose"
+            return (
+                "apt-get update && DEBIAN_FRONTEND=noninteractive "
+                f"apt-get install -y {packages} || "
+                "DEBIAN_FRONTEND=noninteractive "
+                f"apt-get install -y {fallback}"
+            )
+        for manager in ("dnf", "yum"):
+            if self._command_exists(manager):
+                packages = "docker docker-compose-plugin"
+                fallback = "docker docker-compose"
+                if not need_docker:
+                    packages = "docker-compose-plugin"
+                    fallback = "docker-compose"
+                return (
+                    f"{manager} install -y {packages} || "
+                    f"{manager} install -y {fallback}"
+                )
+        if self._command_exists("apk"):
+            packages = "docker docker-cli-compose"
+            if not need_docker:
+                packages = "docker-cli-compose"
+            return f"apk add --no-cache {packages}"
+        if self._command_exists("zypper"):
+            packages = "docker docker-compose"
+            if not need_docker:
+                packages = "docker-compose"
+            return f"zypper --non-interactive install {packages}"
+        raise DeployError(
+            "no supported package manager found; install Docker manually"
+        )
+
+    def _start_daemon(self) -> None:
+        privilege = list(self.env.privilege)
+        if not self.env.root and self.env.sudo:
+            self.ssh(
+                shlex.join(
+                    privilege + ["usermod", "-aG", "docker", self.config.user]
+                ),
+                allow_fail=True,
+                timeout=60,
+            )
+        if self._command_exists("systemctl"):
+            result = self.ssh(
+                shlex.join(
+                    privilege + ["systemctl", "enable", "--now", "docker"]
+                ),
+                allow_fail=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                return
+        if self._command_exists("service"):
+            result = self.ssh(
+                shlex.join(privilege + ["service", "docker", "start"]),
+                allow_fail=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                return
+        if self.env.os_id == "alpine":
+            self.ssh(
+                shlex.join(
+                    privilege + ["rc-update", "add", "docker", "default"]
+                ),
+                allow_fail=True,
+                timeout=60,
+            )
+            self.ssh(
+                shlex.join(privilege + ["service", "docker", "start"]),
+                allow_fail=True,
+                timeout=120,
+            )
+
 
 def _resolve_image(config: DeployConfig) -> tuple[str, str]:
     image = config.image or (
@@ -265,6 +586,7 @@ def _registry(image: str) -> str:
 def _runtime_env(config: DeployConfig, image: str) -> dict[str, str]:
     env = dict(config.env)
     env["FORGEL_IMAGE"] = image
+    env.setdefault("COMPOSE_PROJECT_NAME", "forgel")
     if config.app_key_file:
         env["FORGEL_GITHUB_APP_PRIVATE_KEY_PATH"] = (
             "/run/secrets/forge-github-app.pem"
@@ -319,16 +641,33 @@ def _context_files() -> dict[str, tuple[bytes, int]]:
     return files
 
 
+def _use_runner(
+    config: DeployConfig,
+    runner: Runner | None,
+    log: Callable[[str], None],
+) -> Runner:
+    if runner is None:
+        return Runner(config, log=log)
+    runner.config = config
+    runner.log = log
+    return runner
+
+
 def deploy_up(
     config: DeployConfig,
     runner: Runner | None = None,
     log: Callable[[str], None] = print,
+    assume_yes: bool = False,
+    allow_install: bool = True,
+    interactive: bool | None = None,
 ) -> None:
-    runner = runner or Runner(config, log=log)
+    runner = _use_runner(config, runner, log)
     log(f"target: {config.target}:{config.directory}")
-    runner.ssh("true", timeout=30)
-    runner.ssh("docker version --format '{{.Server.Version}}'", timeout=30)
-    runner.ssh("docker compose version", timeout=30)
+    runner.ensure(
+        allow_install=allow_install,
+        assume_yes=assume_yes,
+        interactive=interactive,
+    )
 
     image, mode = _resolve_image(config)
     log(f"image: {image} ({mode} build)")
@@ -372,35 +711,43 @@ def deploy_up(
     if mode == "remote":
         runner.ssh(
             f"cd {shlex.quote(config.directory)} && "
-            f"docker build -t {shlex.quote(image)} context",
+            + runner.docker_command("build", "-t", image, "context"),
             timeout=3600,
         )
     elif config.registry_token:
         runner.ssh(
-            f"docker login {shlex.quote(_registry(image))} -u "
-            f"{shlex.quote(config.registry_user)} --password-stdin",
+            runner.docker_command(
+                "login",
+                _registry(image),
+                "-u",
+                config.registry_user,
+                "--password-stdin",
+            ),
             input_data=config.registry_token,
             timeout=60,
         )
         runner.ssh(
             f"cd {shlex.quote(config.directory)} && "
-            "docker compose pull --quiet",
+            + runner.compose_command("pull", "--quiet"),
             timeout=600,
         )
 
     runner.ssh(
         f"cd {shlex.quote(config.directory)} && chmod 700 . && "
-        "chmod 600 .env && docker compose up -d --remove-orphans",
+        "chmod 600 .env && " + runner.compose_command("up", "-d", "--remove-orphans"),
         timeout=900,
     )
     status = runner.ssh(
-        f"cd {shlex.quote(config.directory)} && docker compose ps"
+        f"cd {shlex.quote(config.directory)} && "
+        + runner.compose_command("ps")
     )
     if status.stdout:
         log(status.stdout.strip())
     doctor = runner.ssh(
         f"cd {shlex.quote(config.directory)} && "
-        "docker compose exec -T forgel forgel doctor",
+        + runner.compose_command(
+            "exec", "-T", "forgel", "forgel", "doctor"
+        ),
         allow_fail=True,
         timeout=120,
     )
@@ -414,9 +761,11 @@ def deploy_status(
     runner: Runner | None = None,
     log: Callable[[str], None] = print,
 ) -> None:
-    runner = runner or Runner(config, log=log)
+    runner = _use_runner(config, runner, log)
+    runner.ensure(allow_install=False, assume_yes=True)
     completed = runner.ssh(
-        f"cd {shlex.quote(config.directory)} && docker compose ps"
+        f"cd {shlex.quote(config.directory)} && "
+        + runner.compose_command("ps")
     )
     print(completed.stdout.rstrip() if completed.stdout else "")
 
@@ -427,11 +776,15 @@ def deploy_logs(
     runner: Runner | None = None,
     log: Callable[[str], None] = print,
 ) -> None:
-    runner = runner or Runner(config, log=log)
-    suffix = " -f" if follow else ""
+    runner = _use_runner(config, runner, log)
+    runner.ensure(allow_install=False, assume_yes=True)
+    args = ["logs", "--tail=200"]
+    if follow:
+        args.append("-f")
+    args.append("forgel")
     command = (
         f"cd {shlex.quote(config.directory)} && "
-        f"docker compose logs --tail=200{suffix} forgel"
+        + runner.compose_command(*args)
     )
     completed = runner.ssh(command, stream=follow, timeout=3600)
     if not follow and completed.stdout:
@@ -443,10 +796,11 @@ def deploy_restart(
     runner: Runner | None = None,
     log: Callable[[str], None] = print,
 ) -> None:
-    runner = runner or Runner(config, log=log)
+    runner = _use_runner(config, runner, log)
+    runner.ensure(allow_install=False, assume_yes=True)
     completed = runner.ssh(
         f"cd {shlex.quote(config.directory)} && "
-        "docker compose restart forgel"
+        + runner.compose_command("restart", "forgel")
     )
     if completed.stdout:
         print(completed.stdout.rstrip())
@@ -459,10 +813,13 @@ def deploy_backup(
     runner: Runner | None = None,
     log: Callable[[str], None] = print,
 ) -> Path:
-    runner = runner or Runner(config, log=log)
+    runner = _use_runner(config, runner, log)
+    runner.ensure(allow_install=False, assume_yes=True)
     completed = runner.ssh(
         f"cd {shlex.quote(config.directory)} && "
-        "docker compose exec -T forgel tar czf - -C /data .",
+        + runner.compose_command(
+            "exec", "-T", "forgel", "tar", "czf", "-", "-C", "/data", "."
+        ),
         binary=True,
         timeout=900,
     )

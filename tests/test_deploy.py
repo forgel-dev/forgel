@@ -8,6 +8,7 @@ from pathlib import Path
 from forgel.deploy import (
     DeployConfig,
     DeployError,
+    RemoteEnv,
     Runner,
     deploy_backup,
     deploy_init,
@@ -53,6 +54,157 @@ class FakeRunner(Runner):
 
     def upload(self, files, directory: str) -> None:
         self.uploads.append({"files": files, "directory": directory})
+
+
+class ScriptedRunner(Runner):
+    """Remote shell double for the environment preflight."""
+
+    def __init__(
+        self,
+        root: bool = False,
+        sudo: bool = False,
+        docker: bool = False,
+        compose: bool = False,
+        direct_docker: bool = True,
+        os_id: str = "ubuntu",
+        curl: bool = True,
+    ) -> None:
+        self.state = {
+            "root": root,
+            "sudo": sudo,
+            "docker": docker,
+            "compose": compose,
+            "direct_docker": direct_docker,
+            "daemon": False,
+            "os": os_id,
+            "curl": curl,
+        }
+        self.commands: list[str] = []
+        self.config = DeployConfig(host="h", user="u")
+        self.log = lambda _m: None
+        self.env = RemoteEnv()
+
+    def ssh(
+        self,
+        command: str,
+        input_data=None,
+        binary: bool = False,
+        stream: bool = False,
+        allow_fail: bool = False,
+        timeout: float = 300.0,
+    ) -> subprocess.CompletedProcess:
+        self.commands.append(command)
+        code, output = self._respond(command)
+        return subprocess.CompletedProcess(["ssh"], code, output, "")
+
+    def _respond(self, command: str) -> tuple[int, str]:
+        state = self.state
+        if command == "true":
+            return 0, ""
+        if command == "id -u":
+            return 0, "0" if state["root"] else "1000"
+        if command == "sudo -n true":
+            return (0, "") if state["sudo"] else (1, "")
+        if "etc/os-release" in command:
+            return 0, "ID=" + state["os"] + "\n"
+        if command.startswith("command -v "):
+            name = command.split()[-1]
+            if name == "docker":
+                present = state["docker"]
+            elif name in {"curl", "wget"}:
+                present = state["curl"]
+            elif name in {"systemctl", "service", "apt-get", "dnf", "apk"}:
+                present = True
+            else:
+                present = False
+            return (0, "/usr/bin/" + name) if present else (1, "")
+        if command == "docker info":
+            return (
+                (0, "")
+                if state["docker"] and state["daemon"] and state["direct_docker"]
+                else (1, "")
+            )
+        if command == "sudo -n docker info":
+            return (
+                (0, "")
+                if state["docker"] and state["daemon"] and state["sudo"]
+                else (1, "")
+            )
+        if command in {"docker compose version", "docker-compose version",
+                       "sudo -n docker compose version"}:
+            return (0, "") if state["compose"] else (1, "")
+        if any(
+            marker in command
+            for marker in (
+                "get.docker.com",
+                "apt-get",
+                "dnf ",
+                "apk ",
+                "docker-compose",
+            )
+        ):
+            state["docker"] = True
+            state["compose"] = True
+            state["daemon"] = True
+            return 0, ""
+        if "systemctl" in command or "service docker start" in command:
+            state["daemon"] = True
+            return 0, ""
+        return 0, ""
+
+
+class EnvironmentTest(unittest.TestCase):
+    def test_installs_docker_with_consent(self) -> None:
+        runner = ScriptedRunner(root=True, docker=False, compose=False)
+        runner.ensure(assume_yes=True, interactive=False)
+        self.assertTrue(
+            any("get.docker.com" in item for item in runner.commands)
+        )
+        self.assertEqual(runner.env.docker, ("docker",))
+        self.assertEqual(runner.env.compose, ("docker", "compose"))
+        self.assertEqual(runner.state["docker"], True)
+
+    def test_refuses_without_privileges(self) -> None:
+        runner = ScriptedRunner(root=False, sudo=False, docker=False)
+        with self.assertRaises(DeployError) as raised:
+            runner.ensure(assume_yes=True, interactive=False)
+        self.assertIn("root or passwordless sudo", str(raised.exception))
+        self.assertFalse(
+            any("get.docker.com" in item for item in runner.commands)
+        )
+
+    def test_requires_consent_without_a_tty(self) -> None:
+        runner = ScriptedRunner(root=True, docker=False, compose=False)
+        with self.assertRaises(DeployError) as raised:
+            runner.ensure(assume_yes=False, interactive=False)
+        self.assertIn("--yes", str(raised.exception))
+        self.assertFalse(
+            any("get.docker.com" in item for item in runner.commands)
+        )
+
+    def test_uses_sudo_for_docker_access(self) -> None:
+        runner = ScriptedRunner(
+            root=False,
+            sudo=True,
+            docker=True,
+            compose=True,
+            direct_docker=False,
+        )
+        runner.state["daemon"] = True
+        runner.ensure(allow_install=False)
+        self.assertEqual(runner.env.docker, ("sudo", "-n", "docker"))
+        self.assertEqual(
+            runner.env.compose, ("sudo", "-n", "docker", "compose")
+        )
+
+    def test_installs_compose_only(self) -> None:
+        runner = ScriptedRunner(root=True, docker=True, compose=False)
+        runner.state["daemon"] = True
+        runner.ensure(assume_yes=True, interactive=False)
+        self.assertTrue(
+            any("docker-compose" in item for item in runner.commands)
+        )
+        self.assertEqual(runner.env.compose, ("docker", "compose"))
 
 
 class DeployConfigTest(unittest.TestCase):

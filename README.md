@@ -303,10 +303,12 @@ forgel deploy up
 
 The utility reads `.env.deploy`, talks to the server over SSH, builds the image
 remotely or pushes it to a registry, uploads the production Compose file and a
-`0600` runtime `.env`, starts the service and runs the doctor. Edit the same
-file and run `forgel deploy up` to change configuration; `status`, `logs`,
-`restart` and `backup` are available too. Image publishing to GHCR is optional;
-see [docs/deploy.md](docs/deploy.md).
+`0600` runtime `.env`, starts the service and runs the doctor. The server needs
+only SSH, Docker and Compose: if they are missing, the utility warns and asks
+permission to install (root or passwordless sudo); otherwise it prints the
+manual commands. Edit the same file and run `forgel deploy up` to change
+configuration; `status`, `logs`, `restart` and `backup` are available too.
+Image publishing to GHCR is optional; see [docs/deploy.md](docs/deploy.md).
 
 The manual Compose path is still available:
 

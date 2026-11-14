@@ -1,6 +1,7 @@
 # Production deployment of the Forgel Telegram daemon.
 # Written to the remote server by `forgel deploy`; do not edit it there.
-name: forgel
+# The Compose project name comes from COMPOSE_PROJECT_NAME in .env (v1/v2).
+version: "3.9"
 
 services:
   forgel:

@@ -868,7 +868,12 @@ def cmd_deploy(args: argparse.Namespace) -> int:
         except OSError:
             pass
         if args.action == "up":
-            deploy_up(config)
+            deploy_up(
+                config,
+                assume_yes=args.yes,
+                allow_install=not args.no_install,
+                interactive=sys.stdin.isatty(),
+            )
         elif args.action == "status":
             deploy_status(config)
         elif args.action == "logs":
@@ -1292,6 +1297,16 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument("--file", default=".env.deploy")
     deploy.add_argument("--follow", action="store_true")
     deploy.add_argument("--output", default="")
+    deploy.add_argument(
+        "--yes",
+        action="store_true",
+        help="Allow installing Docker/Compose without prompting",
+    )
+    deploy.add_argument(
+        "--no-install",
+        action="store_true",
+        help="Never install remotely; report missing Docker/Compose",
+    )
     deploy.set_defaults(func=cmd_deploy)
 
     doctor = subparsers.add_parser(
