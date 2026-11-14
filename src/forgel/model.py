@@ -154,9 +154,14 @@ class BridgeModelClient:
         }
         write_json(self.directory / f"{request_id}.request.json", request)
         response_path = self.directory / f"{request_id}.response.json"
+        text_path = self.directory / f"{request_id}.response.txt"
         error_path = self.directory / f"{request_id}.error.json"
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
+            if text_path.exists():
+                content = text_path.read_text(encoding="utf-8")
+                if content.strip():
+                    return content
             if response_path.exists():
                 try:
                     data = json.loads(

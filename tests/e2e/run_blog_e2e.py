@@ -182,6 +182,12 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--yes", action="store_true")
     parser.add_argument("--clean", action="store_true")
+    parser.add_argument(
+        "--home",
+        type=Path,
+        default=None,
+        help="Use an explicit empty FORGEL_HOME (useful for manual bridge runs)",
+    )
     args = parser.parse_args()
 
     if args.mode == "api":
@@ -197,7 +203,15 @@ def main() -> int:
             )
             return 3
 
-    home = Path(tempfile.mkdtemp(prefix="forgel-e2e-blog-"))
+    if args.home is not None:
+        home = args.home.expanduser().resolve()
+        if home.exists() and any(home.iterdir()):
+            print(f"error: --home is not empty: {home}", file=sys.stderr)
+            return 3
+        home.mkdir(parents=True, exist_ok=True)
+    else:
+        home = Path(tempfile.mkdtemp(prefix="forgel-e2e-blog-"))
+    print(f"home:      {home}", flush=True)
     settings = Settings(
         home=home,
         registry_path=ROOT / "registry" / "recipes.json",
@@ -253,6 +267,12 @@ def main() -> int:
         )
     if args.mode == "bridge":
         env["FORGEL_MODEL_BRIDGE_DIR"] = str(home / "model-bridge")
+        Path(env["FORGEL_MODEL_BRIDGE_DIR"]).mkdir(
+            parents=True, exist_ok=True
+        )
+        print(
+            f"bridge:    {env['FORGEL_MODEL_BRIDGE_DIR']}", flush=True
+        )
 
     driver: subprocess.Popen[str] | None = None
     if args.mode == "bridge" and args.driver_command:

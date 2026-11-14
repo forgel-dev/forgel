@@ -48,8 +48,11 @@ python tests/e2e/run_blog_e2e.py --mode bridge --strict \
 
 The bridge protocol is files: `<id>.request.json` in
 `$FORGEL_HOME/model-bridge`, answered with `<id>.response.json`
-(`{"content": "..."}`) or `<id>.error.json`. `subagent_driver.py` implements the
-watching loop. `scripted_responder.py` is a bridge test double, not a model.
+(`{"content": "..."}`), a raw `<id>.response.txt`, or `<id>.error.json`.
+`subagent_driver.py` implements the watching loop. `scripted_responder.py` is a
+bridge test double, not a model. A manual run can start the e2e with
+`--home <empty-dir> --mode bridge` and write `response.txt` files itself (for
+example, a Claude Code subagent can write one per request).
 
 API mode: a real OpenAI-compatible model. Requires a key and explicit `--yes`:
 
