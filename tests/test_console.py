@@ -187,10 +187,11 @@ class ConsoleTest(unittest.TestCase):
         self.assertIn("late answer", "\n".join(output))
         self.assertEqual(len(client.requests), 1)
 
-    def test_help_lists_the_same_commands(self) -> None:
+    def test_help_puts_plain_language_first(self) -> None:
         text = self._run(["/help", "/quit"])
-        self.assertIn("/repo create", text)
+        self.assertIn("Talk in plain language", text)
         self.assertIn("/adopt", text)
+        self.assertIn("accept the latest task", text)
 
 
 if __name__ == "__main__":

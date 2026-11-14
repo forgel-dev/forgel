@@ -83,53 +83,30 @@ SECRET_PATTERNS = (
     re.compile(r"(^|[^A-Za-z0-9])AKIA[0-9A-Z]{16}([^A-Za-z0-9]|$)"),
 )
 
-HELP = """Forgel gateway
+HELP = """Forgel
 
-Projects
-/new <name> | <brief>  create a project and select it
-/adopt <url> [| brief]  adopt an existing repository and select it
-/repo list              repositories and dependency edges
-/repo add <url> [id] [depends_on=<id>]
-/repo create <id> [org=<name>] [public] [depends_on=<id,id>] [| description]
-/repo publish [id] [org=<name>] [public]  create remotes for local repositories
-/repo link <id> depends_on=<id,id>   replace the edges of a repository
-/github                 GitHub auth, repositories and merge policy
-/github publish [repo] <title>   push a branch, open a PR, follow policy
-/github merge [repo] [pr]        merge after checks
+Talk in plain language. I decide what to do: answer, queue a code change,
+plan a milestone, show the state, accept or send work back, retry, pause, or
+adopt a repository. You do not need to remember commands.
 
-/plan <goal>            turn a milestone goal into queued tasks
-/plan --dry-run <goal>  preview the backlog without creating tasks
-/plan status            show the latest milestone state
-/tasks                  coding-agent tasks for the selected project
-/task cancel <id>       cancel a pending task
-/task retry <id>        requeue a failed task and release its dependents
-/task accept <id> [note]   accept a task awaiting review
-/task reject <id> [note]   reject a task awaiting review
-/projects              projects, state and the selected one
-/use <id>              select the current project
-/status [id]           state, staging, approvals, recent stages
+Examples
+  adopt this repository
+  plan the milestone: bring the project to M1
+  what is happening?
+  accept the latest task
+  send it back: the header is wrong
+  retry the failed task
+  work in peak hours / only off-peak
+  pause / resume
 
-Work on the selected project
-/run [id]              ask the daemon to run it now
-/sync [id]             detect external changes
-/reconcile [id] accept|fix|rollback|ignore [notes]
-/proposals [id]        post-release proposals
-/approve [id] [staging|production] [notes]
-/reject [id] [staging|production] [notes]
-
-Configuration
-/config                effective daemon and project settings
-/config set <key> <value>
-/peak                  peak/off-peak model schedule and policy
-/peak always|off_peak  allow or defer model work during peak hours
-/secret                secret names and where they are set
-/secret set <key> <value>
-/secret delete <key>
-
-/pause, /resume        control the daemon
+Entry points and sensitive operations stay explicit
+/adopt <url> [| brief]   adopt a repository and select it
+/new <name> | <brief>    create a template project
+/secret ...              secret names, set, delete
+/config [set ...]        effective settings
 /help
+/quit                    exit the console
 
-A message without a command goes to the agent of the selected project.
 Project ids can be shortened to any unique prefix. Secrets sent to a bot pass
 through Telegram, which has no end-to-end encryption for bots; prefer
 environment variables or `forgel secret set` over SSH in production."""
@@ -302,8 +279,8 @@ class CommandRouter:
                     "fine-grained token needs Contents read/write."
                 )
         lines.append(
-            "Add a related repository: /repo add <url> [id] "
-            "[depends_on=<id>]"
+            "If a related repository belongs here, tell me to add it and "
+            "which repository it depends on."
         )
         lines.append(
             "Link repositories only when their code depends on each other "
@@ -1197,11 +1174,144 @@ class CommandRouter:
 
     def _pause(self, _chat_id: int, _rest: str, _actor: str) -> Reply:
         set_paused(self.settings.home, True)
-        return Reply("The daemon is paused. /resume starts new iterations again.")
+        return Reply(
+            "The daemon is paused. Tell me to resume when you want it "
+            "running again."
+        )
 
     def _resume(self, _chat_id: int, _rest: str, _actor: str) -> Reply:
         set_paused(self.settings.home, False)
         return Reply("The daemon is running again.")
+
+    # --------------------------------------------------------------- actions
+
+    def _execute_action(
+        self, chat_id: int, actor: str, result: Any
+    ) -> Reply:
+        """Run a control action chosen by the model from the whitelist."""
+
+        def combine(reply: Reply) -> Reply:
+            text = str(getattr(result, "text", "") or "").strip()
+            if text and text not in reply.text:
+                return Reply(
+                    f"{text}\n\n{reply.text}",
+                    reply.reply_markup,
+                    reply.callback_text,
+                )
+            return reply
+
+        action = result.action
+        args = dict(result.args or {})
+        if action == "plan":
+            goal = str(args.get("goal") or "").strip()
+            if not goal:
+                return Reply("Tell me the milestone goal.")
+            return combine(self._plan(chat_id, goal, actor))
+        if action == "status":
+            return combine(self._status(chat_id, "", actor))
+        if action == "tasks":
+            return combine(self._tasks(chat_id, "", actor))
+        if action == "run":
+            return combine(self._run(chat_id, "", actor))
+        if action in {"accept", "reject", "retry"}:
+            project = self._selected(chat_id)
+            if isinstance(project, Reply):
+                return project
+            layout = ProjectLayout.detect(project["workspace"])
+            task_id = str(args.get("task_id") or "").strip()
+            if not task_id:
+                wanted = {
+                    "accept": "review",
+                    "reject": "review",
+                    "retry": "failed",
+                }[action]
+                task = next(
+                    (
+                        item
+                        for item in reversed(list_tasks(layout))
+                        if item.get("status") == wanted
+                    ),
+                    None,
+                )
+                if task is None:
+                    return Reply(
+                        "There is no task waiting for that decision."
+                    )
+                task_id = str(task["id"])
+            notes = str(args.get("notes") or "").strip()
+            rest = f"{action} {task_id} {notes}".strip()
+            return combine(self._task(chat_id, rest, actor))
+        if action == "adopt":
+            url = str(args.get("url") or "").strip()
+            brief = str(args.get("brief") or "").strip()
+            if not url:
+                return Reply("Tell me the repository URL or path.")
+            payload = f"{url} | {brief}" if brief else url
+            return combine(self._adopt(chat_id, payload, actor))
+        if action == "repo_add":
+            url = str(args.get("url") or "").strip()
+            if not url:
+                return Reply("Tell me the repository URL.")
+            parts = [url]
+            repo_id = str(args.get("id") or "").strip()
+            if repo_id:
+                parts.append(repo_id)
+            deps = args.get("depends_on") or []
+            if isinstance(deps, str):
+                deps = [item for item in deps.split(",") if item]
+            if deps:
+                parts.append("depends_on=" + ",".join(str(d) for d in deps))
+            return combine(
+                self._repo(chat_id, "add " + " ".join(parts), actor)
+            )
+        if action == "repo_create":
+            repo_id = str(args.get("id") or "").strip()
+            if not repo_id:
+                return Reply("Tell me the new repository id.")
+            parts = [repo_id]
+            org = str(args.get("org") or "").strip()
+            if org:
+                parts.append(f"org={org}")
+            if args.get("public"):
+                parts.append("public")
+            deps = args.get("depends_on") or []
+            if isinstance(deps, str):
+                deps = [item for item in deps.split(",") if item]
+            if deps:
+                parts.append("depends_on=" + ",".join(str(d) for d in deps))
+            rest = "create " + " ".join(parts)
+            description = str(args.get("description") or "").strip()
+            if description:
+                rest += " | " + description
+            return combine(self._repo(chat_id, rest, actor))
+        if action == "repo_publish":
+            parts = []
+            repo_id = str(args.get("id") or "").strip()
+            if repo_id:
+                parts.append(repo_id)
+            org = str(args.get("org") or "").strip()
+            if org:
+                parts.append(f"org={org}")
+            if args.get("public"):
+                parts.append("public")
+            return combine(
+                self._repo(
+                    chat_id, "publish " + " ".join(parts), actor
+                )
+            )
+        if action == "peak":
+            policy = str(args.get("policy") or "").strip()
+            return combine(self._peak(chat_id, policy, actor))
+        if action == "pause":
+            return combine(self._pause(chat_id, "", actor))
+        if action == "resume":
+            return combine(self._resume(chat_id, "", actor))
+        if action == "approve_staging":
+            return combine(self._approve(chat_id, "staging", actor))
+        return Reply(
+            "I can't perform that action. Configuration, secrets and "
+            "production approval stay explicit."
+        )
 
     # ------------------------------------------------------------- agent
 
@@ -1234,6 +1344,8 @@ class CommandRouter:
             result = self.agent.handle(project, text, actor)
         except Exception as exc:  # noqa: BLE001 - answer instead of crashing
             return Reply(f"Agent error: {exc}")
+        if result.kind == "action" and result.action:
+            return self._execute_action(chat_id, actor, result)
         return Reply(result.text)
 
     # -------------------------------------------------------------- helpers

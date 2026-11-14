@@ -48,18 +48,40 @@ SKIP_DIRS = {
     "coverage",
 }
 
+AGENT_ACTIONS = {
+    "adopt",
+    "plan",
+    "status",
+    "tasks",
+    "accept",
+    "reject",
+    "retry",
+    "run",
+    "repo_add",
+    "repo_create",
+    "repo_publish",
+    "peak",
+    "pause",
+    "resume",
+    "approve_staging",
+}
+
 SYSTEM_PROMPT = """You are Forgel's project agent for exactly one project.
 You must use only the context and conversation of the current project. Never
 mention, infer or request information about any other project.
 
-You are the intake and planning stage. You can answer questions about the
-project and turn change requests into a structured request record. You cannot
-edit code, run tests, commit or deploy, and you must never claim that you did.
+You are the control plane. The user speaks naturally; you decide whether to
+answer, to turn the request into a coding task, or to perform a process
+action. Perform the action yourself — never tell the user to type a slash
+command. You cannot edit code, run tests, commit or deploy, and you must
+never claim that you did.
 
 Reply in the language of the user's message. Return exactly one JSON object:
 {
-  "kind": "answer" | "change_request",
+  "kind": "answer" | "change_request" | "action",
   "reply": "text for the user",
+  "action": "one of the actions below, action only",
+  "action_args": {"...": "action parameters"},
   "title": "short title, change_request only",
   "summary": "one paragraph, change_request only",
   "requirements": ["explicit requirement", "..."],
@@ -70,6 +92,27 @@ Reply in the language of the user's message. Return exactly one JSON object:
   "assumptions": ["what you decided where the request was silent"]
 }
 
+Actions (ask for the missing required argument instead of guessing only when
+the action cannot run without it):
+- adopt {url, brief?}: adopt a repository as a new project and select it;
+  "this repository" means the working directory shown in the message.
+- plan {goal, max_tasks?}: turn a milestone goal into an ordered backlog.
+- status {}: project, milestone and task state.
+- tasks {}: list the task queue.
+- accept {task_id?}: accept the task awaiting review (the runtime picks the
+  latest when omitted).
+- reject {task_id?, notes?}: reject it and send the work back.
+- retry {task_id?}: requeue a failed or blocked task.
+- run {}: let the daemon work now.
+- repo_add {url, id?, depends_on?}: add an existing repository.
+- repo_create {id, org?, public?, depends_on?, description?}.
+- repo_publish {id?, org?, public?}.
+- peak {policy?}: show or set the model peak policy ("always" or "off_peak").
+- pause {}, resume {}.
+- approve_staging {}: approve staging only.
+
+Never change configuration or secrets, grant production approval, or perform
+a destructive action; for those, answer that the user must do it explicitly.
 Use kind=change_request when the user asks for a product or code change.
 Use kind=answer for questions and conversation.
 
@@ -108,6 +151,8 @@ class AgentResult:
     kind: str
     request: str | None = None
     task_id: str | None = None
+    action: str = ""
+    args: dict[str, Any] | None = None
 
 
 def conversation_path(layout: ProjectLayout) -> Path:
@@ -254,8 +299,16 @@ def parse_answer(raw: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         return {"kind": "answer", "reply": raw.strip()}
     kind = data.get("kind")
-    if kind not in {"answer", "change_request"}:
+    if kind not in {"answer", "change_request", "action"}:
         kind = "answer"
+    action = str(data.get("action", "")).strip()
+    action_args = data.get("action_args")
+    if not isinstance(action_args, dict):
+        action_args = {}
+    if kind == "action" and action not in AGENT_ACTIONS:
+        kind = "answer"
+        action = ""
+        action_args = {}
     reply = data.get("reply")
     if not isinstance(reply, str) or not reply.strip():
         reply = raw.strip()
@@ -277,6 +330,8 @@ def parse_answer(raw: str) -> dict[str, Any]:
     return {
         "kind": kind,
         "reply": reply.strip(),
+        "action": action,
+        "action_args": action_args,
         "title": str(data.get("title", "")).strip(),
         "summary": str(data.get("summary", "")).strip(),
         "requirements": [
@@ -327,6 +382,7 @@ class ProjectAgent:
             ModelMessage(
                 role="user",
                 content=(
+                    f"Working directory: {os.getcwd()}\n\n"
                     f"Context:\n{context}\n\n"
                     f"Conversation:\n{history_text or '(none)'}\n\n"
                     f"New message:\n{text}"
@@ -361,8 +417,7 @@ class ProjectAgent:
                 result_text += (
                     f"\n\nRecorded as `{request}`. I did not queue a task: "
                     "the project has several repositories and I could not "
-                    "choose one. Mention the target repository in your "
-                    "message, or use `/repo list`."
+                    "choose one. Tell me which repository to use."
                 )
 
         append_history(layout, "user", text, actor)
@@ -373,6 +428,12 @@ class ProjectAgent:
             kind=answer["kind"],
             request=request,
             task_id=task_id,
+            action=answer.get("action", "") if answer["kind"] == "action" else "",
+            args=(
+                answer.get("action_args") or {}
+                if answer["kind"] == "action"
+                else None
+            ),
         )
 
     def _record_request(

@@ -341,6 +341,61 @@ class SelectionAndAgentTest(unittest.TestCase):
             plan.call_args.args[3], "Bring it to M1"
         )
 
+    def test_plain_language_plan_action(self) -> None:
+        response = {
+            "kind": "action",
+            "reply": "Planning the milestone.",
+            "action": "plan",
+            "action_args": {"goal": "Bring it to M1"},
+        }
+        router = self._router([json.dumps(response)])
+        project = self._project("Plain", "A brief.")
+        self.ledger.set_session(7, project)
+        planned = SimpleNamespace(
+            plan_id="plan-nl",
+            notes="",
+            dry_run=False,
+            tasks=[
+                {
+                    "title": "First",
+                    "repo_id": "main",
+                    "task_id": "task-1",
+                    "checks": [{"criterion": "It works"}],
+                }
+            ],
+        )
+        with patch(
+            "forgel.chat.plan_project", return_value=planned
+        ) as plan:
+            reply = router.handle(7, "доведи до M1", "@tester")
+        self.assertIn("Plan plan-nl", reply.text)
+        self.assertEqual(plan.call_args.args[3], "Bring it to M1")
+
+    def test_plain_language_accept_action(self) -> None:
+        response = {
+            "kind": "action",
+            "reply": "Accepting the task.",
+            "action": "accept",
+            "action_args": {},
+        }
+        router = self._router([json.dumps(response)])
+        project = self._project("Plain", "A brief.")
+        self.ledger.set_session(7, project)
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project)["workspace"]
+        )
+        task = create_task(
+            layout, "Review me", ["A"], ["B"], repo_id="api"
+        )
+        update_task(layout, task["id"], status="review")
+        reply = router.handle(
+            7, "прими последнюю задачу", "@tester"
+        )
+        self.assertIn("Accepted", reply.text)
+        stored = get_task(layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "done")
+
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()
         project = self._project("Plan", "A brief.")

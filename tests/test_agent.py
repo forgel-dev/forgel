@@ -160,6 +160,43 @@ class AgentTest(unittest.TestCase):
         self.assertIn("## Assumptions", request_text)
         self.assertIn("main application", request_text)
 
+    def test_a_control_action_is_parsed_and_returned(self) -> None:
+        project = self._project("Actions", "A brief.")
+        response = {
+            "kind": "action",
+            "reply": "Planning the milestone.",
+            "action": "plan",
+            "action_args": {"goal": "Bring it to M1"},
+        }
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(response)]),
+        )
+        result = agent.handle(project, "доведи до M1", "@tester")
+        self.assertEqual(result.kind, "action")
+        self.assertEqual(result.action, "plan")
+        assert result.args is not None
+        self.assertEqual(result.args["goal"], "Bring it to M1")
+        self.assertIsNone(result.task_id)
+
+    def test_an_unknown_action_falls_back_to_an_answer(self) -> None:
+        project = self._project("Actions", "A brief.")
+        response = {
+            "kind": "action",
+            "reply": "I cannot change secrets.",
+            "action": "secret",
+            "action_args": {},
+        }
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(response)]),
+        )
+        result = agent.handle(project, "set the key", "@tester")
+        self.assertEqual(result.kind, "answer")
+        self.assertEqual(result.action, "")
+
     def test_non_json_answer_falls_back_to_text(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         client = ScriptedModelClient(["Just a plain answer."])

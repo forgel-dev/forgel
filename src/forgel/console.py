@@ -28,7 +28,7 @@ from .projects import ProjectError, resolve_project
 from .tasks import latest_task, retry_moment
 
 PROMPT = "forgel> "
-QUIT = {"/quit", "/exit"}
+QUIT = {"/quit", "/exit", "quit", "exit", "bye"}
 
 
 def _report_state(
@@ -52,8 +52,8 @@ def _report_state(
     status = task.get("status")
     if status == "review":
         output(
-            f"Task {task['id']} awaits acceptance: "
-            f"/task accept {task['id']}"
+            f"Task {task['id']} awaits your decision: say \"accept\" "
+            "or tell me what to change."
         )
     elif status == "pending":
         moment = retry_moment(task)

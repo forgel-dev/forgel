@@ -13,11 +13,18 @@ console; there are no separate utilities to remember.
 cd /path/to/repo
 forgel
 forgel> /adopt .
-forgel> /plan --dry-run Bring the project to M1   # preview the backlog
-forgel> /plan Bring the project to M1
-# the daemon works; /task accept <id> when a review is ready
-forgel> /quit
+forgel> plan the milestone: bring the project to M1
+# the daemon works; then:
+forgel> what is happening?
+forgel> accept the latest task
+forgel> quit
 ```
+
+After adoption the client is driven in plain language: describe a change, ask
+what is happening, say "accept" or "send it back: <reason>", "retry the failed
+task", "work in peak hours", "pause". The model chooses the operation; you do
+not need to remember commands. `/adopt`, `/new`, `/secret` and `/config` stay
+explicit because they are entry points or touch sensitive state.
 
 - `/plan` needs a model key: set `FORGEL_MODEL_API_KEY` or
   `/secret set model.api_key` inside the client.
