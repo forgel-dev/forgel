@@ -286,6 +286,8 @@ def main() -> int:
         "FORGEL_HOME": str(home),
         "FORGEL_MODEL_MODE": mode,
         "FORGEL_SANDBOX": args.sandbox,
+        # The harness must not depend on the wall clock or DeepSeek pricing.
+        "FORGEL_PEAK_POLICY": "always",
     }
     if args.mode == "script":
         (home / "model-script.json").write_text(

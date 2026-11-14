@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
-from . import __version__, git_ops, tasks
+from . import __version__, git_ops, peak, tasks
 from .adopt import (
     AdoptError,
     add_repository,
@@ -60,6 +60,7 @@ from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
 from .sandbox import DockerSandbox
+from .tokens import tokenizer_name
 from .providers import ProviderError
 from .providers.github_api import GithubAPIError
 from .providers.github_auth import GithubAuth, GithubAuthError
@@ -1010,6 +1011,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     paused = "paused" if is_paused(settings.home) else "running"
     report("control", paused)
+    report(
+        "context window",
+        str(settings.context_window),
+    )
+    report("tokenizer", tokenizer_name())
+    if peak.should_defer(
+        settings.peak_policy, hours=settings.peak_hours
+    ):
+        boundary = peak.next_off_peak(hours=settings.peak_hours)
+        report(
+            "model schedule",
+            f"{settings.peak_policy}; peak until "
+            f"{boundary.strftime('%H:%M UTC')}",
+        )
+    else:
+        report(
+            "model schedule",
+            f"{settings.peak_policy}; off-peak now",
+        )
     if settings.sandbox == "docker":
         sandbox = DockerSandbox(settings)
         available, detail = sandbox.available()

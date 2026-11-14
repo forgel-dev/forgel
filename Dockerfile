@@ -10,7 +10,8 @@ COPY src ./src
 COPY registry ./registry
 COPY jurisdiction ./jurisdiction
 
-RUN pip install --no-cache-dir ".[github]"
+RUN pip install --no-cache-dir ".[github,tokens]" && \
+    python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')" || true
 
 # The Docker CLI is used only by the per-project sandbox: it talks to a
 # separate daemon over DOCKER_HOST. The host socket is never mounted.

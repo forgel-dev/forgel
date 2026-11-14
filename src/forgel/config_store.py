@@ -16,7 +16,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from . import daemon_config
+from . import daemon_config, peak
 from .project_config import (
     VALID_GIT_AUTH,
     VALID_GIT_MERGE,
@@ -39,6 +39,7 @@ PROJECT_KINDS: dict[str, str] = {
     "jurisdiction.pack": "str",
     "models.default": "str",
     "models.architecture": "str",
+    "models.peak_policy": "peak",
     "budget.per_feature_usd": "float",
     "budget.per_project_usd": "float",
     "release.auto_patch": "bool",
@@ -82,6 +83,7 @@ def project_values(control: Path) -> dict[str, Any]:
         "jurisdiction.pack": config.jurisdiction.pack,
         "models.default": config.models.default,
         "models.architecture": config.models.architecture,
+        "models.peak_policy": config.models.peak_policy,
         "budget.per_feature_usd": config.budget.per_feature_usd,
         "budget.per_project_usd": config.budget.per_project_usd,
         "release.auto_patch": config.release.auto_patch,
@@ -165,6 +167,13 @@ def parse_project_value(key: str, raw: str) -> Any:
                 f"{key} must be one of {sorted(VALID_GIT_MERGE)}"
             )
         return raw
+    if kind == "peak":
+        lowered = raw.lower()
+        if lowered not in peak.POLICIES:
+            raise ConfigError(
+                f"{key} must be one of {sorted(peak.POLICIES)}"
+            )
+        return lowered
     if kind == "bool":
         lowered = raw.lower()
         if lowered in {"true", "1", "yes", "on"}:

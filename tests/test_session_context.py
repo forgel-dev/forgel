@@ -7,17 +7,17 @@ from forgel.session_context import (
     MAX_STATE_CHARS,
     SessionState,
     budget_for,
-    estimate_tokens,
     handoff_prompt,
     messages_tokens,
 )
+from forgel.tokens import heuristic_tokens
 
 
 class EstimateTest(unittest.TestCase):
     def test_estimate_is_conservative_and_monotonic(self) -> None:
-        self.assertGreaterEqual(estimate_tokens("a" * 300), 100)
+        self.assertGreaterEqual(heuristic_tokens("a" * 300), 100)
         self.assertGreater(
-            estimate_tokens("longer text"), estimate_tokens("short")
+            heuristic_tokens("longer text"), heuristic_tokens("short")
         )
 
     def test_messages_tokens_sums_content(self) -> None:

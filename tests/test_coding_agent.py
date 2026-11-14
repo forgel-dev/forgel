@@ -20,7 +20,12 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.project_config import render_project_config
-from forgel.tasks import create_task, get_task
+from forgel.tasks import (
+    create_task,
+    get_task,
+    recover_running,
+    update_task,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -196,6 +201,41 @@ class CodingAgentTest(unittest.TestCase):
             if event["stage"] == "agent_run"
         ]
         self.assertEqual(events[-1]["status"], "done")
+
+    def test_resumed_task_reads_previous_state(self) -> None:
+        task = create_task(
+            self.layout,
+            "Resume after a crash",
+            ["Finish the work"],
+            ["The work is finished"],
+            repo_id="main",
+            test_command=[],
+        )
+        write_text(
+            self.layout.artifact(
+                f"docs/program/agent/{task['id']}.state.md"
+            ),
+            "# Session State: previous\n\n- Task: finish the work\n",
+        )
+        update_task(self.layout, task["id"], status="running")
+        recovered = recover_running(self.layout)
+        self.assertEqual(recovered[0]["status"], "pending")
+        resumed = get_task(self.layout, task["id"])
+        assert resumed is not None
+        task = resumed
+        client = ScriptedModelClient(
+            [json.dumps({"action": "done", "summary": "resumed"})]
+        )
+        result = CodingAgent(self.settings, self.ledger, client).run(
+            self.project, task, log=lambda _m: None
+        )
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertIn(
+            "Previous session state", client.requests[0][1].content
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["result"]["resume_count"], 1)
 
     def test_commands_run_in_the_sandbox_when_configured(self) -> None:
         settings = replace(

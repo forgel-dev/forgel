@@ -60,7 +60,20 @@ in sessions; when the estimated prompt approaches the budget or a session
 hits its step cap, Forgel writes durable state to
 `docs/program/agent/<task>.state.md` and starts a new session from it. The
 model is told not to estimate tokens or ask to continue. The report shows the
-session count, handoffs and estimated usage. See `PLAN.md` §7.15.
+session count, handoffs and estimated usage. The window defaults to 1M tokens;
+tokens are counted with `tiktoken` when installed (`pip install
+'forgel[tokens]'`, included in the Docker image) and with a conservative
+fallback otherwise. A task left `running` by a crash is requeued at the next
+daemon start and continues from its state file, up to three resumes. See
+`PLAN.md` §7.15.
+
+**Models and cost.** `deepseek-flash` is the default for every role; a more
+expensive model is an explicit configuration choice. Autonomous work defaults
+to DeepSeek's off-peak hours, when the rate is half the peak rate. During a
+peak window the daemon holds model-using work and free text answers with the
+window close time; `/peak` shows the schedule, `/peak always` and `/peak
+off_peak` set the policy, and `FORGEL_PEAK_HOURS` overrides the windows. See
+`PLAN.md` §7.16.
 
 Run the tests:
 
@@ -125,7 +138,7 @@ refactoring policy. `/config` shows every value with its source.
 ```text
 /config set qa.runtime docker
 /config set budget.per_feature_usd 20
-/config set models.default deepseek-chat
+/config set models.default deepseek-flash
 /config set models.base_url https://api.deepseek.com/v1
 ```
 
@@ -137,7 +150,7 @@ key and URL come from the environment or the local secret store:
 ```bash
 export FORGEL_MODEL_API_KEY=...
 export FORGEL_MODEL_BASE_URL=https://api.deepseek.com/v1   # optional
-export FORGEL_MODEL_NAME=deepseek-chat                     # optional
+export FORGEL_MODEL_NAME=deepseek-flash                     # optional
 ```
 
 The current agent is the intake stage: it answers from the project context and
@@ -368,7 +381,7 @@ not a chat command.
 
 ## Configuration
 
-- `forgel.toml` — project config: QA runtime, jurisdiction pack, model policy, budget.
+- `forgel.toml` — project config: QA runtime, jurisdiction pack, model policy, context window, peak policy, budget.
 - `environment.yaml` — the project environment contract: image or build, the `setup`, `test`, `e2e` commands Forgel runs, and optional `env`. It sits in the control repository, or in the repository itself for a single-repository project. The core carries no per-language commands. See `PLAN.md` §7.13.
 - `FORGEL.md` → `AGENTS.md` → `CLAUDE.md` — instruction files, read in that order.
 - `forgel config <project-id>` — show the effective project config.

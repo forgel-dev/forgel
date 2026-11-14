@@ -322,6 +322,7 @@ class CodingAgent:
             status="done" if status == "done" else "failed",
             finished_at=_now(),
             result={
+                **dict(task.get("result") or {}),
                 "summary": summary,
                 "files_changed": files_changed,
                 "commands": commands,
@@ -568,10 +569,10 @@ class CodingAgent:
                 )
                 messages = self._trim(messages)
                 if (
-                    budget.should_compact(messages)
+                    budget.should_compact(messages, model)
                     and session < self.max_sessions
                 ):
-                    used = budget.usage(messages)
+                    used = budget.usage(messages, model)
                     messages, state_ref = handoff(session)
                     invalid = 0
                     compactions += 1
@@ -631,7 +632,7 @@ class CodingAgent:
             "usable": budget.usable,
             "sessions": sessions,
             "compactions": compactions,
-            "estimated_tokens": budget.usage(messages),
+            "estimated_tokens": budget.usage(messages, model),
             "state": state_ref if compactions else "",
         }
         return (

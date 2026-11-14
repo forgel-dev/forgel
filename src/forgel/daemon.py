@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import tasks
+from . import peak, tasks
 from .approvals import awaits_approval, latest_approval
 from .coding_agent import CodingAgent
 from .config import Settings
@@ -92,8 +92,14 @@ def _run_task(
     task: dict[str, Any],
     client: ModelClient | None,
     log: Callable[[str], None],
-) -> None:
+) -> bool:
     task_id = str(task["id"])
+    policy = peak.project_policy(settings, layout.control)
+    if peak.should_defer(policy, hours=settings.peak_hours):
+        log(
+            f"[daemon] {project['id']}: {peak.defer_message(hours=settings.peak_hours, tz_name=settings.timezone)}"
+        )
+        return False
     tasks.update_task(
         layout, task_id, status="running", started_at=_now()
     )
@@ -108,7 +114,7 @@ def _run_task(
             result={"summary": "no model configured for the coding agent"},
         )
         log(f"[daemon] {project['id']}: task {task_id} has no model client")
-        return
+        return True
     try:
         CodingAgent(settings, ledger, model).run(project, task, log)
     except Exception as exc:  # noqa: BLE001 - one task must not kill the daemon
@@ -120,6 +126,7 @@ def _run_task(
             result={"summary": f"agent crashed: {exc}"},
         )
         log(f"[daemon] {project['id']}: task {task_id} crashed: {exc}")
+    return True
 
 
 def run_once(
@@ -136,10 +143,18 @@ def run_once(
         if project_is_done(ledger, project_id):
             continue
         layout = ProjectLayout.detect(project["workspace"])
+        recovered = tasks.recover_running(layout)
+        for task in recovered:
+            log(
+                f"[daemon] {project_id}: recovered interrupted task "
+                f"{task['id']} ({task['status']})"
+            )
         task = tasks.next_pending_task(layout)
         if task is not None:
-            _run_task(settings, ledger, project, layout, task, client, log)
-            processed.append(project_id)
+            if _run_task(
+                settings, ledger, project, layout, task, client, log
+            ):
+                processed.append(project_id)
             continue
         if layout.metadata().get("mode") == "brownfield":
             log(f"[daemon] {project_id}: brownfield project has no executor yet")

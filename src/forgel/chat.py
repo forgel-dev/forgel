@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import config_store, daemon_config
+from . import config_store, daemon_config, peak
 from .adopt import (
     AdoptError,
     add_repository,
@@ -105,6 +105,8 @@ Work on the selected project
 Configuration
 /config                effective daemon and project settings
 /config set <key> <value>
+/peak                  peak/off-peak model schedule and policy
+/peak always|off_peak  allow or defer model work during peak hours
 /secret                secret names and where they are set
 /secret set <key> <value>
 /secret delete <key>
@@ -181,6 +183,7 @@ class CommandRouter:
             "/approve": self._approve,
             "/reject": self._reject,
             "/config": self._config,
+            "/peak": self._peak,
             "/secret": self._secret,
             "/pause": self._pause,
             "/resume": self._resume,
@@ -910,6 +913,32 @@ class CommandRouter:
 
     # ------------------------------------------------------------ config
 
+    def _peak(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        layout = ProjectLayout.detect(project["workspace"])
+        argument = rest.strip().lower()
+        if argument in {"always", "off_peak"}:
+            try:
+                config_store.set_project_value(
+                    layout.control, "models.peak_policy", argument
+                )
+            except ConfigError as exc:
+                return Reply(f"error: {exc}")
+            policy = argument
+        elif argument in {"", "status"}:
+            policy = peak.project_policy(self.settings, layout.control)
+        else:
+            return Reply("Usage: /peak [always|off_peak]")
+        return Reply(
+            peak.status_text(
+                policy,
+                hours=self.settings.peak_hours,
+                tz_name=self.settings.timezone,
+            )
+        )
+
     def _config(self, chat_id: int, rest: str, _actor: str) -> Reply:
         tokens = rest.split(maxsplit=2)
         if not tokens:
@@ -1054,6 +1083,15 @@ class CommandRouter:
         project = self._selected(chat_id)
         if isinstance(project, Reply):
             return project
+        layout = ProjectLayout.detect(project["workspace"])
+        policy = peak.project_policy(self.settings, layout.control)
+        if peak.should_defer(policy, hours=self.settings.peak_hours):
+            return Reply(
+                peak.defer_message(
+                    hours=self.settings.peak_hours,
+                    tz_name=self.settings.timezone,
+                )
+            )
         if self.agent is None:
             return Reply(
                 "The project agent is not configured. Set "

@@ -122,6 +122,53 @@ def update_task(
     return task
 
 
+def recover_running(
+    layout: ProjectLayout, max_resumes: int = 3
+) -> list[dict[str, Any]]:
+    """Requeue tasks left running by an interrupted process.
+
+    A single daemon is assumed. The durable agent state file, when present, is
+    read by the next coding-agent session; the task record keeps the resume
+    count so a crash loop stops after ``max_resumes`` attempts.
+    """
+
+    recovered: list[dict[str, Any]] = []
+    for task in list_tasks(layout):
+        if task.get("status") != "running":
+            continue
+        result = dict(task.get("result") or {})
+        count = int(result.get("resume_count", 0)) + 1
+        if count > max_resumes:
+            result["summary"] = (
+                f"interrupted {count - 1} times; not retried again"
+            )
+            recovered.append(
+                update_task(
+                    layout,
+                    str(task["id"]),
+                    status="failed",
+                    finished_at=_now(),
+                    result=result,
+                )
+            )
+            continue
+        result["resume_count"] = count
+        result["resumed_at"] = _now()
+        if result.get("summary"):
+            result["last_summary"] = result["summary"]
+        recovered.append(
+            update_task(
+                layout,
+                str(task["id"]),
+                status="pending",
+                started_at="",
+                finished_at="",
+                result=result,
+            )
+        )
+    return recovered
+
+
 def next_pending_task(layout: ProjectLayout) -> dict[str, Any] | None:
     for task in list_tasks(layout):
         if task.get("status") == "pending":

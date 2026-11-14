@@ -64,6 +64,28 @@ class TasksTest(unittest.TestCase):
             tasks.task_path(self.layout, task["id"]).exists()
         )
 
+    def test_interrupted_tasks_are_requeued(self) -> None:
+        task = tasks.create_task(
+            self.layout,
+            "Resume me",
+            ["Do work"],
+            ["Work is done"],
+            repo_id="main",
+        )
+        tasks.update_task(self.layout, task["id"], status="running")
+        recovered = tasks.recover_running(self.layout)
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(recovered[0]["status"], "pending")
+        self.assertEqual(recovered[0]["result"]["resume_count"], 1)
+
+        for _ in range(4):
+            tasks.update_task(self.layout, task["id"], status="running")
+            recovered = tasks.recover_running(self.layout)
+        stored = tasks.get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "failed")
+        self.assertIn("interrupted", stored["result"]["summary"])
+
     def test_task_requires_requirements_and_acceptance(self) -> None:
         with self.assertRaises(ValueError):
             tasks.create_task(self.layout, "x", [], ["a"])

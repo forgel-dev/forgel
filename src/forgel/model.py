@@ -24,7 +24,7 @@ from . import daemon_config
 from .project_config import ConfigError, load_project_config
 from .secrets import get_secret
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-flash"
 
 
 class ModelError(RuntimeError):

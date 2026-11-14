@@ -246,6 +246,13 @@ and point the project at them, or wait for a dedicated services sandbox.
   is not a boundary against project code in the local sandbox.
 - SSH keys, the provider key and the GitHub App key are the valuable assets;
   rotate them if the laptop or server is compromised.
+- Autonomous model work defaults to DeepSeek off-peak hours, when the rate is
+  half the peak rate. In a peak window the daemon holds model-using work and
+  resumes automatically; set `FORGEL_PEAK_POLICY=always` in `.env.deploy` to
+  allow peak rates, and `FORGEL_PEAK_HOURS` to override the windows.
+  `FORGEL_TIMEZONE` makes `/peak` show local times.
+- The Docker image includes `tiktoken`, so context budgets use a real
+  tokenizer; a minimal install falls back to a conservative count.
 - The bot uses outbound long polling; no inbound port is needed. Restrict SSH
   and keep the host patched.
 - Budget enforcement is not implemented yet (M1). Use a scoped, prepaid model

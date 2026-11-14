@@ -12,11 +12,12 @@ and dependency-free. A real tokenizer belongs to the model plugin later.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
-DEFAULT_WINDOW = 131_072
+from .tokens import count_tokens
+
+DEFAULT_WINDOW = 1_000_000
 MAX_RESERVE = 8_192
 COMPACT_AT = 0.7
 KEEP_RECENT = 3
@@ -24,13 +25,13 @@ MAX_STATE_CHARS = 12_000
 MAX_OBSERVATION_CHARS = 1_200
 
 
-def estimate_tokens(text: str) -> int:
-    return max(1, math.ceil(len(text) / 3))
+def estimate_tokens(text: str, model: str = "") -> int:
+    return count_tokens(text, model)
 
 
-def messages_tokens(messages: Sequence[Any]) -> int:
+def messages_tokens(messages: Sequence[Any], model: str = "") -> int:
     return sum(
-        estimate_tokens(str(getattr(message, "content", message))) + 4
+        count_tokens(str(getattr(message, "content", message)), model) + 4
         for message in messages
     )
 
@@ -51,11 +52,13 @@ class ContextBudget:
     def threshold(self) -> int:
         return int(self.usable * self.compact_at)
 
-    def usage(self, messages: Sequence[Any]) -> int:
-        return messages_tokens(messages)
+    def usage(self, messages: Sequence[Any], model: str = "") -> int:
+        return messages_tokens(messages, model)
 
-    def should_compact(self, messages: Sequence[Any]) -> bool:
-        return self.usage(messages) >= self.threshold
+    def should_compact(
+        self, messages: Sequence[Any], model: str = ""
+    ) -> bool:
+        return self.usage(messages, model) >= self.threshold
 
 
 def budget_for(window: int) -> ContextBudget:

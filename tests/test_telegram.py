@@ -294,6 +294,37 @@ class SelectionAndAgentTest(unittest.TestCase):
         reply = router.handle(7, "What is this project?", "@tester")
         self.assertEqual(reply.text, "project answer")
 
+    def test_peak_hours_hold_free_text(self) -> None:
+        client = ScriptedModelClient(
+            ['{"kind": "answer", "reply": "should not run"}']
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+        router = CommandRouter(self.settings, self.ledger, agent=agent)
+        project = self._project("Peak", "A brief.")
+        self.ledger.set_session(7, project)
+        with patch("forgel.chat.peak.should_defer", return_value=True):
+            reply = router.handle(7, "Build a page", "@tester")
+        self.assertIn("paused", reply.text)
+        self.assertEqual(client.requests, [])
+
+    def test_peak_command_shows_and_sets_the_policy(self) -> None:
+        router = self._router()
+        project = self._project("Peak", "A brief.")
+        self.ledger.set_session(7, project)
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project)["workspace"]
+        )
+        write_text(
+            layout.control / "forgel.toml",
+            render_project_config("Peak"),
+        )
+        status = router.handle(7, "/peak", "@tester")
+        self.assertIn("Peak policy: off_peak", status.text)
+        changed = router.handle(7, "/peak always", "@tester")
+        self.assertIn("Peak policy: always", changed.text)
+        text = (layout.control / "forgel.toml").read_text(encoding="utf-8")
+        self.assertIn('peak_policy = "always"', text)
+
     def test_agent_prompts_are_isolated_between_projects(self) -> None:
         client = ScriptedModelClient(
             [

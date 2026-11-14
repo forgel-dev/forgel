@@ -30,6 +30,9 @@ dev = [
 github = [
   "cryptography>=42",
 ]
+tokens = [
+  "tiktoken>=0.7",
+]
 
 [project.scripts]
 forgel = "forgel.cli:main"

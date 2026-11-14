@@ -34,8 +34,9 @@ class JurisdictionConfig:
 @dataclass(frozen=True)
 class ModelsConfig:
     default: str = "deepseek-flash"
-    architecture: str = "deepseek-v4-pro"
-    context_window: int = 131072
+    architecture: str = "deepseek-flash"
+    context_window: int = 1_000_000
+    peak_policy: str = "off_peak"
 
 
 @dataclass(frozen=True)
@@ -98,8 +99,9 @@ def render_project_config(
     qa_runtime: str = "auto",
     jurisdiction_pack: str = "ru",
     model_default: str = "deepseek-flash",
-    model_architecture: str = "deepseek-v4-pro",
-    model_context_window: int = 131072,
+    model_architecture: str = "deepseek-flash",
+    model_context_window: int = 1_000_000,
+    model_peak_policy: str = "off_peak",
     per_feature_usd: float = 10.0,
     per_project_usd: float = 300.0,
     auto_patch: bool = False,
@@ -135,6 +137,7 @@ pack = "{jurisdiction_pack}"
 default = "{model_default}"
 architecture = "{model_architecture}"
 context_window = {model_context_window}
+peak_policy = "{model_peak_policy}"
 
 [budget]
 per_feature_usd = {per_feature_usd:g}
@@ -176,7 +179,7 @@ def _section(data: dict[str, object], name: str) -> dict[str, object]:
 
 
 def _context_window(models: dict[str, object]) -> int:
-    value = models.get("context_window", 131072)
+    value = models.get("context_window", 1000000)
     if isinstance(value, bool):
         raise ConfigError("forgel.toml: models.context_window must be an integer")
     try:
@@ -190,6 +193,15 @@ def _context_window(models: dict[str, object]) -> int:
             "forgel.toml: models.context_window must be at least 4096"
         )
     return window
+
+
+def _peak_policy(models: dict[str, object]) -> str:
+    value = str(models.get("peak_policy", "off_peak")).strip().lower()
+    if value not in {"off_peak", "always"}:
+        raise ConfigError(
+            "forgel.toml: models.peak_policy must be off_peak or always"
+        )
+    return value
 
 
 def load_project_config(workspace: Path) -> ProjectConfig | None:
@@ -281,8 +293,9 @@ def load_project_config(workspace: Path) -> ProjectConfig | None:
         jurisdiction=JurisdictionConfig(pack=str(jurisdiction.get("pack", "ru"))),
         models=ModelsConfig(
             default=str(models.get("default", "deepseek-flash")),
-            architecture=str(models.get("architecture", "deepseek-v4-pro")),
+            architecture=str(models.get("architecture", "deepseek-flash")),
             context_window=_context_window(models),
+            peak_policy=_peak_policy(models),
         ),
         budget=BudgetConfig(
             per_feature_usd=per_feature,

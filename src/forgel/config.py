@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import peak
+
 SANDBOX_MODES = {"local", "docker"}
 SANDBOX_NETWORKS = {"none", "bridge"}
 MEMORY_LIMIT = re.compile(r"\d+(\.\d+)?[bkmgBKMG]?")
@@ -52,7 +54,13 @@ class Settings:
     sandbox_images: tuple[str, ...] = ()
     sandbox_require_digest: bool = False
     sandbox_read_only: bool = True
-    context_window: int = 131072
+    context_window: int = 1_000_000
+    # The runtime reads the policy from the environment (off-peak by default).
+    # Direct construction defaults to "always" so library and test code does
+    # not become time-dependent.
+    peak_policy: str = "always"
+    peak_hours: str = "1-4,6-10"
+    timezone: str = ""
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -112,13 +120,20 @@ class Settings:
         if not pids_raw.isdigit() or int(pids_raw) <= 0:
             raise ValueError("FORGEL_SANDBOX_PIDS must be a positive integer")
         context_raw = (
-            os.environ.get("FORGEL_CONTEXT_WINDOW", "131072").strip()
-            or "131072"
+            os.environ.get("FORGEL_CONTEXT_WINDOW", "1000000").strip()
+            or "1000000"
         )
         if not context_raw.isdigit() or int(context_raw) < 4096:
             raise ValueError(
                 "FORGEL_CONTEXT_WINDOW must be an integer of at least 4096"
             )
+        peak_policy = peak.policy_from_env()
+        if peak_policy not in peak.POLICIES:
+            raise ValueError(
+                "FORGEL_PEAK_POLICY must be one of: off_peak, always"
+            )
+        peak_hours = peak.hours_from_env()
+        peak.parse_hours(peak_hours)
         return cls(
             home=home_path.expanduser().resolve(),
             registry_path=registry_path.expanduser().resolve(),
@@ -141,6 +156,9 @@ class Settings:
             ),
             sandbox_read_only=_env_bool("FORGEL_SANDBOX_READ_ONLY", True),
             context_window=int(context_raw),
+            peak_policy=peak_policy,
+            peak_hours=peak_hours,
+            timezone=os.environ.get("FORGEL_TIMEZONE", "").strip(),
         )
 
     @property

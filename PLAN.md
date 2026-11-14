@@ -174,6 +174,10 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-076** | Repository lifecycle is a Forgel command, not manual GitHub work: the project can create a repository in the configured organization and publish the existing local repositories from the CLI or chat | A project grows past ten repositories, and every manual creation step blocks the autonomous loop; the same operation is a deterministic, auditable API call | `repo create` creates the GitHub repository, initializes the local repository, registers it in `program.yaml`, pushes and records a ledger event; `repo publish` creates remotes for existing local repositories; private by default, no deletion and no force-push; the org comes from `[git] org`, `--org` or `FORGEL_GITHUB_ORG` |
 | **D-077** | Channels are adapters over one command router; the local console is the first-class first-run channel, Telegram is a remote adapter, and a VPS is not required to try or use Forgel | A bot token, a public bot and a server are a large first-run tax; the viral funnel must start on a laptop with one command, while the always-on studio is a power mode | `forgel chat` and `forgel telegram` share `CommandRouter`; the local run needs no bot token and no network round-trip; Telegram remains for remote control of an always-on daemon; the launch gate includes a local run in minutes |
 | **D-078** | Context is a runtime budget, not a model concern: the agent works in sessions, and when the prompt approaches the window or a session hits its step cap, the runtime writes durable state and starts a new session from it | Models cannot reliably count tokens, hard truncation loses information, and asking a human to continue breaks autonomy; the runtime can estimate, persist and hand off deterministically | The window is configurable (`[models] context_window`, `FORGEL_CONTEXT_WINDOW`); compaction triggers at ~70% of the usable budget; state lands in `docs/program/agent/<task>.state.md`; the report and task record show sessions, handoffs and estimated tokens; no human handoff |
+| **D-079** | Context tokens are counted with a real tokenizer when one is installed (`tiktoken`, included in the Docker image); the dependency-free conservative fallback remains for minimal installs | A character heuristic misjudges code and non-English text; a real BPE encoding is a small optional dependency, and the budget only needs to be safe, not exact | `pip install 'forgel[tokens]'` enables `tiktoken`; `FORGEL_TOKENIZER=heuristic` forces the fallback; `forgel doctor` names the backend; provider usage remains the billing truth |
+| **D-080** | A task left `running` by an interrupted process is requeued at daemon start, and the coding agent continues from the durable session state; a crash loop stops after a bounded number of resumes | A crash must not lose work or require a human; the state file and the task record already carry everything needed to continue | Recovery increments `resume_count`; after three resumes the task fails with a clear summary; a single daemon is assumed; the state file is read by the next session |
+| **D-081** | Autonomous model work defaults to DeepSeek off-peak hours: during a peak window the daemon holds the work and a chat request gets the window close time and an override; peak is opt-in per project | Peak rates are double, the work is not urgent enough to pay for by default, and a human should decide when to spend more; waiting is a plain setting, not a failure | `FORGEL_PEAK_POLICY` (`off_peak` default) and `[models] peak_policy`; windows `1-4,6-10` UTC on weekdays (weekends off-peak), overridable via `FORGEL_PEAK_HOURS`; `/peak`, `/config set models.peak_policy`, `always`; the gate applies when a task starts and when free text calls the model |
+| **D-082** | `deepseek-flash` is the default model for every role; a more expensive model is always an explicit choice, and the default context window is 1M tokens | The current flash generation is cheaper and better than the older expensive one; most current models expose a 1M window, and smaller local windows are not the main scenario | `[models] default` and `architecture` both default to `deepseek-flash`; `context_window` and `FORGEL_CONTEXT_WINDOW` default to 1,000,000; the peak policy applies to flash by default |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -672,7 +676,9 @@ pack = "ru"
 
 [models]
 default = "deepseek-flash"
-architecture = "deepseek-v4-pro"
+architecture = "deepseek-flash"
+context_window = 1000000
+peak_policy = "off_peak"   # or "always"
 
 [budget]
 per_feature_usd = 10
@@ -1066,9 +1072,12 @@ The runtime owns the context window (D-078). A coding task is not one endless
 conversation; it is a sequence of bounded sessions.
 
 - **Budget.** `[models] context_window` (or `FORGEL_CONTEXT_WINDOW`) declares
-  the window. An output reserve is kept; compaction triggers at roughly 70% of
-  the usable budget. The estimate is deliberately conservative (~3 characters
-  per token) and dependency-free; a tokenizer plugin can replace it later.
+  the window, 1M by default. An output reserve is kept; compaction triggers at
+  roughly 70% of the usable budget. Tokens are counted with the optional
+  `tiktoken` backend (`pip install 'forgel[tokens]'`, included in the Docker
+  image); a conservative ~3 characters/token fallback is used without it, and
+  `FORGEL_TOKENIZER=heuristic` forces it. Provider usage remains the billing
+  truth.
 - **Sessions.** A session ends when the model reports done or failure, when
   the budget is near, or after its step cap (default 24). A handoff writes a
   durable `SessionState` to `docs/program/agent/<task>.state.md`: goal,
@@ -1082,6 +1091,24 @@ conversation; it is a sequence of bounded sessions.
 - **Limits.** A task allows a bounded number of sessions (default 6) so a
   looping agent cannot run forever. Hitting the global limit is a failure with
   a clear summary, not a silent truncation.
+- **Recovery.** A task left `running` by a crashed daemon is requeued at the
+  next start and continues from its state file. The task record counts resumes
+  and stops after three with a clear failure, so a crash loop cannot spin.
+
+### 7.16 Peak-Hour Policy
+
+DeepSeek charges double during its peak windows. Autonomous work defaults to
+off-peak: `FORGEL_PEAK_POLICY=off_peak` (or `[models] peak_policy`) holds a
+model-using task when it starts inside a peak window, and a free-text request
+gets an explanation of when the window closes instead of a model call. The
+daemon keeps the task pending; no work is lost.
+
+The windows are DeepSeek's published schedule: 01:00–04:00 and 06:00–10:00
+UTC on weekdays, weekends off-peak. `FORGEL_PEAK_HOURS=1-4,6-10` overrides
+them. `/peak` shows the state and windows, `/peak always` and `/peak
+off_peak` set the project policy, and `/config set models.peak_policy ...`
+does the same from the settings screen. A task that starts off-peak is allowed
+to finish; the gate applies at task start and to free-text model calls.
 
 ---
 

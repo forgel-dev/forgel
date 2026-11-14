@@ -60,6 +60,43 @@ class SettingsTest(unittest.TestCase):
                 settings = Settings.from_env(tmp)
         self.assertEqual(settings.context_window, 65536)
 
+    def test_peak_settings_are_read_from_env(self) -> None:
+        env = {
+            "FORGEL_PEAK_POLICY": "always",
+            "FORGEL_PEAK_HOURS": "2-3",
+            "FORGEL_TIMEZONE": "Europe/Moscow",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, env, clear=False):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.peak_policy, "always")
+        self.assertEqual(settings.peak_hours, "2-3")
+        self.assertEqual(settings.timezone, "Europe/Moscow")
+
+    def test_peak_policy_defaults_to_off_peak(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"FORGEL_PEAK_POLICY": "", "FORGEL_PEAK_HOURS": ""},
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertEqual(settings.peak_policy, "off_peak")
+        self.assertEqual(settings.peak_hours, "1-4,6-10")
+
+    def test_invalid_peak_settings_are_rejected(self) -> None:
+        cases = (
+            {"FORGEL_PEAK_POLICY": "sometimes"},
+            {"FORGEL_PEAK_HOURS": "4-1"},
+            {"FORGEL_PEAK_HOURS": "nope"},
+        )
+        for case in cases:
+            with self.subTest(case=case):
+                with tempfile.TemporaryDirectory() as tmp:
+                    with patch.dict(os.environ, case, clear=False):
+                        with self.assertRaises(ValueError):
+                            Settings.from_env(tmp)
+
     def test_invalid_context_window_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
