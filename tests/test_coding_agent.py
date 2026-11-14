@@ -5,7 +5,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.adopt import adopt_repository
 from forgel.agent import ProjectAgent
@@ -18,6 +20,38 @@ from forgel.model import ScriptedModelClient
 from forgel.tasks import create_task, get_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+class _SandboxSession:
+    def __init__(self) -> None:
+        self.commands: list[list[str]] = []
+        self.repo_id = ""
+        self.closed = False
+
+    def __enter__(self) -> _SandboxSession:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.closed = True
+
+    def run(self, command, timeout: float = 120.0):  # type: ignore[no-untyped-def]
+        self.commands.append(list(command))
+        return 0, "sandbox ok\n"
+
+
+class _Sandbox:
+    def __init__(self) -> None:
+        self.session_obj = _SandboxSession()
+
+    def available(self) -> tuple[bool, str]:
+        return True, "27.5.1"
+
+    def ensure_image(self, layout, environment, project_id):  # type: ignore[no-untyped-def]
+        return "python:3.12-slim"
+
+    def session(self, layout, environment, project_id, repo_id):  # type: ignore[no-untyped-def]
+        self.session_obj.repo_id = repo_id
+        return self.session_obj
 
 
 def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -149,6 +183,31 @@ class CodingAgentTest(unittest.TestCase):
             if event["stage"] == "agent_run"
         ]
         self.assertEqual(events[-1]["status"], "done")
+
+    def test_commands_run_in_the_sandbox_when_configured(self) -> None:
+        settings = replace(
+            self.settings,
+            sandbox="docker",
+            sandbox_image="python:3.12-slim",
+        )
+        sandbox = _Sandbox()
+        task = self._task()
+        client = ScriptedModelClient(self._responses())
+        with patch(
+            "forgel.coding_agent.docker_runner", return_value=sandbox
+        ):
+            result = CodingAgent(settings, self.ledger, client).run(
+                self.project, task, log=lambda _m: None
+            )
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertTrue((self.repo / "calc.py").exists())
+        self.assertEqual(sandbox.session_obj.repo_id, "main")
+        self.assertEqual(len(sandbox.session_obj.commands), 2)
+        self.assertEqual(
+            sandbox.session_obj.commands[1][:3],
+            [sys.executable, "-m", "unittest"],
+        )
+        self.assertTrue(sandbox.session_obj.closed)
 
     def test_invalid_actions_fail_the_task(self) -> None:
         task = self._task()

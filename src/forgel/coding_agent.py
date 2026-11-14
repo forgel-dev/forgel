@@ -16,6 +16,8 @@ import json
 import os
 import shlex
 import subprocess
+import sys
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +26,7 @@ from typing import Any, Callable, Mapping, Sequence
 from . import git_ops, tasks
 from .artifacts import write_text
 from .config import Settings
+from .environment import EnvironmentError, load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import (
@@ -32,6 +35,7 @@ from .model import (
     ModelMessage,
     project_model_name,
 )
+from .sandbox import CommandRunner, SandboxError, docker_runner
 
 MAX_STEPS = 24
 MAX_FILE_BYTES = 200_000
@@ -214,95 +218,20 @@ class CodingAgent:
             write_text(gitignore, DEFAULT_GITIGNORE)
 
         model = project_model_name(layout.control)
-        messages: list[ModelMessage] = [
-            ModelMessage("system", SYSTEM_PROMPT),
-            ModelMessage(
-                "user",
-                self._task_prompt(layout, task, repo_id, repo),
-            ),
-        ]
-        actions: list[str] = []
-        commands: list[dict[str, Any]] = []
-        touched: set[str] = set()
-        status = "failed"
-        summary = "step limit reached"
-        invalid = 0
-        steps = 0
-
-        for step in range(1, self.max_steps + 1):
-            steps = step
-            try:
-                raw = self.client.complete(messages, model=model)
-            except ModelError as exc:
-                status = "failed"
-                summary = f"model call failed: {exc}"
-                break
-            action = parse_action(raw)
-            if action is None:
-                invalid += 1
-                messages.append(ModelMessage("assistant", raw))
-                messages.append(
-                    ModelMessage(
-                        "user",
-                        "Invalid reply. Return exactly one JSON action object.",
-                    )
-                )
-                if invalid >= 3:
-                    status = "failed"
-                    summary = "the model did not return a valid action"
-                    break
-                continue
-            invalid = 0
-            kind = str(action["action"])
-            messages.append(
-                ModelMessage("assistant", json.dumps(action, ensure_ascii=False))
-            )
-            if kind == "done":
-                status = "done"
-                summary = str(action.get("summary", "")).strip() or (
-                    "agent reported done"
-                )
-                break
-            if kind == "fail":
-                status = "failed"
-                summary = str(action.get("reason", "")).strip() or (
-                    "agent reported failure"
-                )
-                break
-            observation, command = self._execute(
-                layout, repo, action, touched
-            )
-            actions.append(self._action_summary(action))
-            if command is not None:
-                commands.append(command)
-            messages.append(
-                ModelMessage("user", f"OBSERVATION:\n{_cap(observation)}")
-            )
-            messages = self._trim(messages)
-        else:
-            status = "failed"
-            summary = f"step limit reached ({self.max_steps})"
-
-        test_output = ""
-        if status == "done":
-            test_command = [
-                str(item) for item in task.get("test_command", [])
-            ]
-            if test_command:
-                code, output = self._run_command(
-                    layout, repo, test_command, timeout=120
-                )
-                test_output = output
-                commands.append(
-                    {
-                        "command": test_command,
-                        "exit_code": code,
-                        "final_test": True,
-                    }
-                )
-                if code != 0:
-                    status = "failed"
-                    summary += f"; final test command exited {code}"
+        stack = ExitStack()
+        try:
+            runner = self._open_runner(stack, layout, project, repo_id)
+            (
+                status,
+                summary,
+                steps,
+                actions,
+                commands,
+                touched,
+                test_output,
+            ) = self._converse(layout, repo, repo_id, task, model, runner)
+        finally:
+            stack.close()
         if status == "done":
             try:
                 changed = sorted(
@@ -370,6 +299,166 @@ class CodingAgent:
             commands=commands,
             test_output=test_output,
             report=_ref(layout, report),
+        )
+
+    # ------------------------------------------------------------- sandbox
+
+    def _open_runner(
+        self,
+        stack: ExitStack,
+        layout: ProjectLayout,
+        project: Mapping[str, Any],
+        repo_id: str,
+    ) -> CommandRunner | None:
+        """Enter the project sandbox when configured, or return ``None``.
+
+        The repository is bind-mounted into the container, so file actions stay
+        on the host and only command execution moves into the sandbox.
+        """
+
+        sandbox = docker_runner(self.settings)
+        if sandbox is None:
+            return None
+        try:
+            environment = load_environment(layout)
+        except EnvironmentError as exc:
+            raise AgentError(f"environment contract: {exc}") from exc
+        if environment is None and not self.settings.sandbox_image:
+            raise AgentError(
+                "FORGEL_SANDBOX=docker requires environment.yaml or "
+                "FORGEL_SANDBOX_IMAGE"
+            )
+        available, detail = sandbox.available()
+        if not available:
+            raise AgentError(f"sandbox unavailable: {detail}")
+        try:
+            return stack.enter_context(
+                sandbox.session(
+                    layout,
+                    environment,
+                    str(project["id"]),
+                    repo_id,
+                )
+            )
+        except SandboxError as exc:
+            raise AgentError(f"sandbox: {exc}") from exc
+
+    def _converse(
+        self,
+        layout: ProjectLayout,
+        repo: Path,
+        repo_id: str,
+        task: Mapping[str, Any],
+        model: str,
+        runner: CommandRunner | None,
+    ) -> tuple[
+        str,
+        str,
+        int,
+        list[str],
+        list[dict[str, Any]],
+        set[str],
+        str,
+    ]:
+        """Run the model loop and the final test, returning the run state."""
+
+        messages: list[ModelMessage] = [
+            ModelMessage("system", SYSTEM_PROMPT),
+            ModelMessage(
+                "user",
+                self._task_prompt(layout, task, repo_id, repo),
+            ),
+        ]
+        actions: list[str] = []
+        commands: list[dict[str, Any]] = []
+        touched: set[str] = set()
+        status = "failed"
+        summary = "step limit reached"
+        invalid = 0
+        steps = 0
+
+        for step in range(1, self.max_steps + 1):
+            steps = step
+            try:
+                raw = self.client.complete(messages, model=model)
+            except ModelError as exc:
+                status = "failed"
+                summary = f"model call failed: {exc}"
+                break
+            action = parse_action(raw)
+            if action is None:
+                invalid += 1
+                messages.append(ModelMessage("assistant", raw))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Invalid reply. Return exactly one JSON action object.",
+                    )
+                )
+                if invalid >= 3:
+                    status = "failed"
+                    summary = "the model did not return a valid action"
+                    break
+                continue
+            invalid = 0
+            kind = str(action["action"])
+            messages.append(
+                ModelMessage("assistant", json.dumps(action, ensure_ascii=False))
+            )
+            if kind == "done":
+                status = "done"
+                summary = str(action.get("summary", "")).strip() or (
+                    "agent reported done"
+                )
+                break
+            if kind == "fail":
+                status = "failed"
+                summary = str(action.get("reason", "")).strip() or (
+                    "agent reported failure"
+                )
+                break
+            observation, command = self._execute(
+                layout, repo, action, touched, runner
+            )
+            actions.append(self._action_summary(action))
+            if command is not None:
+                commands.append(command)
+            messages.append(
+                ModelMessage("user", f"OBSERVATION:\n{_cap(observation)}")
+            )
+            messages = self._trim(messages)
+        else:
+            status = "failed"
+            summary = f"step limit reached ({self.max_steps})"
+
+        test_output = ""
+        if status == "done":
+            test_command = [
+                str(item) for item in task.get("test_command", [])
+            ]
+            if test_command:
+                code, output = self._run_command(
+                    layout, repo, test_command, timeout=120, runner=runner
+                )
+                test_output = output
+                commands.append(
+                    {
+                        "command": test_command,
+                        "exit_code": code,
+                        "final_test": True,
+                    }
+                )
+                if code != 0:
+                    status = "failed"
+                    summary += f"; final test command exited {code}"
+        return (
+            status,
+            summary,
+            steps,
+            actions,
+            commands,
+            touched,
+            test_output,
         )
 
     # ------------------------------------------------------------- setup
@@ -444,6 +533,7 @@ Files:
         repo: Path,
         action: Mapping[str, Any],
         touched: set[str],
+        runner: CommandRunner | None = None,
     ) -> tuple[str, dict[str, Any] | None]:
         kind = str(action.get("action"))
         try:
@@ -493,7 +583,11 @@ Files:
                 except (TypeError, ValueError):
                     timeout_value = 60
                 code, output = self._run_command(
-                    layout, repo, command, timeout=timeout_value
+                    layout,
+                    repo,
+                    command,
+                    timeout=timeout_value,
+                    runner=runner,
                 )
                 return (
                     f"exit code {code}\n{_cap(output)}",
@@ -565,10 +659,19 @@ Files:
         repo: Path,
         command: Sequence[str],
         timeout: float,
+        runner: CommandRunner | None = None,
     ) -> tuple[int, str]:
+        if runner is not None:
+            try:
+                return runner.run(list(command), timeout=timeout)
+            except SandboxError as exc:
+                return 125, _cap(f"sandbox error: {exc}")
+        argv = list(command)
+        if argv and Path(argv[0]).name in {"python", "python3"}:
+            argv[0] = sys.executable
         try:
             completed = subprocess.run(
-                list(command),
+                argv,
                 cwd=str(repo),
                 env=_safe_env(layout),
                 capture_output=True,

@@ -9,7 +9,6 @@ API mode instead.
 from __future__ import annotations
 
 import json
-import sys
 
 APP_SOURCE = r'''#!/usr/bin/env python3
 """Mini Blog: a minimal standard-library blog platform."""
@@ -278,7 +277,7 @@ def responses() -> list[str]:
             {
                 "action": "run",
                 "command": [
-                    sys.executable,
+                    "python",
                     "-m",
                     "unittest",
                     "discover",

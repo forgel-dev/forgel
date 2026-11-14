@@ -15,9 +15,19 @@ services:
       FORGEL_REGISTRY: /app/registry/recipes.json
       FORGEL_JURISDICTIONS: /app/jurisdiction
       FORGEL_QA_RUNTIME: local
-      # Project code runs in this container in the single-tenant local
-      # sandbox. The host Docker socket is deliberately not mounted.
-      FORGEL_SANDBOX: local
+      # local runs project code in this container (single-tenant). docker
+      # runs it in a per-project container on a separate daemon. The host
+      # Docker socket is never mounted.
+      FORGEL_SANDBOX: ${FORGEL_SANDBOX:-local}
+      FORGEL_SANDBOX_HOST: ${FORGEL_SANDBOX_HOST:-}
+      FORGEL_SANDBOX_PROJECTS_ROOT: ${FORGEL_SANDBOX_PROJECTS_ROOT:-}
+      FORGEL_SANDBOX_IMAGE: ${FORGEL_SANDBOX_IMAGE:-}
+      FORGEL_SANDBOX_NETWORK: ${FORGEL_SANDBOX_NETWORK:-none}
+      FORGEL_SANDBOX_CPUS: ${FORGEL_SANDBOX_CPUS:-2}
+      FORGEL_SANDBOX_MEMORY: ${FORGEL_SANDBOX_MEMORY:-2g}
+      FORGEL_SANDBOX_PIDS: ${FORGEL_SANDBOX_PIDS:-512}
+      FORGEL_SANDBOX_IMAGES: ${FORGEL_SANDBOX_IMAGES:-}
+      FORGEL_SANDBOX_REQUIRE_DIGEST: ${FORGEL_SANDBOX_REQUIRE_DIGEST:-0}
     volumes:
       - forgel-data:/data
       - ./secrets:/run/secrets:ro
@@ -26,6 +36,21 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Per-project sandbox. Opt in with COMPOSE_PROFILES=sandbox in .env.deploy.
+  # A containerized dockerd needs mount and network administration, hence the
+  # privilege. Treat the host as trusted single-tenant, or point
+  # FORGEL_SANDBOX_HOST at a remote Docker host for stronger isolation.
+  sandbox:
+    image: docker:27-dind
+    profiles: ["sandbox"]
+    privileged: true
+    restart: unless-stopped
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375"]
+    volumes:
+      - forgel-data:/sandbox-data
 
 volumes:
   forgel-data:

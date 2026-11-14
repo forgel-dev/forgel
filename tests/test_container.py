@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.approvals import record_approval
 from forgel.artifacts import write_text
@@ -17,6 +18,39 @@ from forgel.projects import create_project
 from forgel.sync import reconcile_project, sync_project
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+class _FakeSession:
+    image = "python:3.12-slim"
+
+    def __init__(self) -> None:
+        self.commands: list[list[str]] = []
+
+    def __enter__(self) -> _FakeSession:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+    def run(self, command, timeout: float = 120.0):  # type: ignore[no-untyped-def]
+        self.commands.append(list(command))
+        return 0, "sandbox ok\n"
+
+
+class _FakeSandbox:
+    def __init__(self) -> None:
+        self.session_obj = _FakeSession()
+        self.repos: list[str] = []
+
+    def available(self) -> tuple[bool, str]:
+        return True, "27.5.1"
+
+    def ensure_image(self, layout, environment, project_id):  # type: ignore[no-untyped-def]
+        return "python:3.12-slim"
+
+    def session(self, layout, environment, project_id, repo_id):  # type: ignore[no-untyped-def]
+        self.repos.append(repo_id)
+        return self.session_obj
 
 
 class ContainerProjectTest(unittest.TestCase):
@@ -169,6 +203,27 @@ class ContainerProjectTest(unittest.TestCase):
         with self.assertRaises(StageError) as ctx:
             orchestrator.stage_qa(project)
         self.assertIn("exit code 3", str(ctx.exception))
+
+    def test_qa_can_run_in_the_docker_sandbox(self) -> None:
+        project_id, root, layout = self._create()
+        orchestrator = Orchestrator(self.settings, self.ledger)
+        self._finish(orchestrator, project_id)
+
+        sandbox = _FakeSandbox()
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        with patch(
+            "forgel.orchestrator.docker_runner", return_value=sandbox
+        ):
+            orchestrator.stage_qa(project)
+
+        report = layout.artifact("docs/program/qa-report.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("docker sandbox (python:3.12-slim)", report)
+        self.assertEqual(sandbox.repos, ["e2e"])
+        self.assertEqual(len(sandbox.session_obj.commands), 1)
+        self.assertEqual(sandbox.session_obj.commands[0], ["python", "check.py"])
 
     def test_malformed_environment_fails_qa(self) -> None:
         project_id, root, layout = self._create()

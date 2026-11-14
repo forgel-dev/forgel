@@ -9,8 +9,13 @@ services:
       FORGEL_REGISTRY: /app/registry/recipes.json
       FORGEL_JURISDICTIONS: /app/jurisdiction
       # The core runs QA in-process inside this container. For containerized
-      # QA, run the CLI on the host or attach a sandbox runner (M1).
+      # QA, run the CLI on the host or enable the sandbox profile.
       FORGEL_QA_RUNTIME: local
+      FORGEL_SANDBOX: "${FORGEL_SANDBOX:-local}"
+      FORGEL_SANDBOX_HOST: "${FORGEL_SANDBOX_HOST:-}"
+      FORGEL_SANDBOX_PROJECTS_ROOT: "${FORGEL_SANDBOX_PROJECTS_ROOT:-}"
+      FORGEL_SANDBOX_IMAGE: "${FORGEL_SANDBOX_IMAGE:-}"
+      FORGEL_SANDBOX_NETWORK: "${FORGEL_SANDBOX_NETWORK:-none}"
     volumes:
       - forgel-data:/data
     command: ["demo"]
@@ -25,7 +30,11 @@ services:
       FORGEL_REGISTRY: /app/registry/recipes.json
       FORGEL_JURISDICTIONS: /app/jurisdiction
       FORGEL_QA_RUNTIME: local
-      FORGEL_SANDBOX: local
+      FORGEL_SANDBOX: "${FORGEL_SANDBOX:-local}"
+      FORGEL_SANDBOX_HOST: "${FORGEL_SANDBOX_HOST:-}"
+      FORGEL_SANDBOX_PROJECTS_ROOT: "${FORGEL_SANDBOX_PROJECTS_ROOT:-}"
+      FORGEL_SANDBOX_IMAGE: "${FORGEL_SANDBOX_IMAGE:-}"
+      FORGEL_SANDBOX_NETWORK: "${FORGEL_SANDBOX_NETWORK:-none}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
       TELEGRAM_ALLOWED_CHAT_IDS: "${TELEGRAM_ALLOWED_CHAT_IDS:-}"
       TELEGRAM_POLL_TIMEOUT: "${TELEGRAM_POLL_TIMEOUT:-}"
@@ -47,6 +56,23 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Per-project sandbox: a separate Docker daemon that runs project images.
+  # Opt in with `docker compose --profile sandbox up`. It is privileged because
+  # a containerized dockerd needs mount and network administration; treat such
+  # a host as trusted, or point FORGEL_SANDBOX_HOST at a remote daemon instead.
+  # The data volume is mounted here only so the daemon can bind-mount a single
+  # project repository into a project container.
+  sandbox:
+    image: docker:27-dind
+    profiles: ["sandbox"]
+    privileged: true
+    restart: unless-stopped
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["dockerd", "--host=tcp://0.0.0.0:2375"]
+    volumes:
+      - forgel-data:/sandbox-data
 
 volumes:
   forgel-data:

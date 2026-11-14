@@ -56,6 +56,7 @@ from .project_config import (
 from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
+from .sandbox import DockerSandbox
 from .providers import ProviderError
 from .providers.github_api import GithubAPIError
 from .providers.github_auth import GithubAuth, GithubAuthError
@@ -944,7 +945,26 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     paused = "paused" if is_paused(settings.home) else "running"
     report("control", paused)
-    report("sandbox", settings.sandbox)
+    if settings.sandbox == "docker":
+        sandbox = DockerSandbox(settings)
+        available, detail = sandbox.available()
+        report(
+            "sandbox",
+            f"docker {detail}" if available else detail,
+            available,
+        )
+        report(
+            "sandbox images",
+            ", ".join(settings.sandbox_images) or "any image",
+        )
+        report(
+            "sandbox limits",
+            f"{settings.sandbox_cpus} cpu, {settings.sandbox_memory}, "
+            f"{settings.sandbox_pids} pids, network {settings.sandbox_network}"
+            + (", digest required" if settings.sandbox_require_digest else ""),
+        )
+    else:
+        report("sandbox", "local (single-tenant)")
 
     try:
         telegram = TelegramConfig.from_env(home=settings.home)

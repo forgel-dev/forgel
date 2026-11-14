@@ -149,27 +149,80 @@ What it cannot do:
 - see the daemon's secret environment in agent commands (`_safe_env` strips
   it).
 
-`FORGEL_SANDBOX=local` is the only implemented mode. It is **single-tenant**:
-all projects live under the same `/data` and the same UID, so a hostile project
-command could read another project's files. Do not run untrusted projects on a
-shared installation. A per-project sandbox (a separate Docker daemon or remote
-sandbox, project-only mounts, labels, network and resource limits) is the next
-milestone; the core refuses `FORGEL_SANDBOX=docker` until it exists.
+`FORGEL_SANDBOX=local` runs project commands in the daemon container itself. It
+is **single-tenant**: all projects live under the same `/data` and the same
+UID, so a hostile project command could read another project's files. Do not
+run untrusted projects on a shared installation.
+
+`FORGEL_SANDBOX=docker` runs the environment's `setup`, `test` and `e2e`
+commands, and the coding agent's `run` actions, in a fresh container per
+session. The container:
+
+- mounts the working repository at `/workspace` and only the sibling
+  repositories listed in `environment.yaml`'s `mounts`, read-only — no `/data`,
+  no secrets, no Docker socket;
+- runs as the daemon UID/GID with all capabilities dropped,
+  `no-new-privileges`, a read-only root filesystem and a writable `/tmp`;
+- has CPU, memory and pid limits and a configurable network;
+- is labelled `forgel.kind=sandbox` and removed when the session ends.
+
+It talks to a **separate** Docker daemon through `DOCKER_HOST`. Never point it
+at the host socket of the machine whose files it must protect.
 
 The environment contract is an OCI image or build context plus a small
 `environment.yaml` with `setup`, `test` and `e2e` commands. The core has no
 per-language adapters; official recipes are starting points, and the agent may
-author a standard environment definition for a missing stack with review. In
-the local fallback QA runs the contract's `test` and `e2e` commands on the host
-and skips `setup`; a malformed contract fails QA instead of falling back, while
-a project without one keeps the legacy e2e script.
+author a standard environment definition for a missing stack with review. A
+malformed contract fails QA instead of falling back; a project without one
+keeps the legacy e2e script in local mode and needs `FORGEL_SANDBOX_IMAGE` (or
+an environment) in docker mode.
+
+### Enabling the Docker sandbox
+
+Two supported daemons:
+
+1. **A remote Docker host** (preferred for anything multi-tenant). Create a
+   dedicated VM, expose its engine over SSH or TLS, and set
+   `FORGEL_SANDBOX_HOST=ssh://docker@runner` (or `tcp://…` with
+   `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH`). Mount the projects directory on
+   that host at a fixed path and set `FORGEL_SANDBOX_PROJECTS_ROOT` to it, so
+   the daemon can bind-mount one repository.
+2. **The bundled DinD sidecar** (trusted single-user hosts). Put these in
+   `.env.deploy`:
+
+   ```
+   FORGEL_SANDBOX=docker
+   FORGEL_SANDBOX_HOST=tcp://sandbox:2375
+   FORGEL_SANDBOX_PROJECTS_ROOT=/sandbox-data/projects
+   COMPOSE_PROFILES=sandbox
+   ```
+
+   The sidecar is privileged because a containerized `dockerd` needs mount and
+   network administration. It shares the `/data` volume at `/sandbox-data`, so
+   project containers can mount one repository. A privileged sidecar is close
+   to root on the host: use it only when the host itself is trusted.
+
+Optional policy knobs (both modes):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `FORGEL_SANDBOX_NETWORK` | `none` | `none` blocks egress; `bridge` enables it |
+| `FORGEL_SANDBOX_CPUS` | `2` | CPU limit per project container |
+| `FORGEL_SANDBOX_MEMORY` | `2g` | memory limit |
+| `FORGEL_SANDBOX_PIDS` | `512` | pid limit |
+| `FORGEL_SANDBOX_IMAGE` | empty | base image for projects without a contract |
+| `FORGEL_SANDBOX_IMAGES` | empty | comma-separated image prefixes; empty allows any |
+| `FORGEL_SANDBOX_REQUIRE_DIGEST` | `0` | require `@sha256:` on pulled images |
+| `FORGEL_SANDBOX_READ_ONLY` | `1` | read-only root filesystem |
+
+With `network=none`, `setup` cannot install from the network: bake dependencies
+into the environment image, or enable `bridge` for trusted projects.
+`forgel doctor` reports the daemon, the image policy and the limits.
 
 Project environments that need containers (Postgres, Redis, a compose stack)
-require that future sandbox. The daemon never mounts the host
-`/var/run/docker.sock`; doing so would give project code root-equivalent
-control of the host. For a trusted single-user host, run those services
-outside Forgel and point the project at them explicitly; for multi-tenant,
-wait for the sandbox.
+are still not supported inside a project: a nested Compose stand would need a
+Docker socket inside the project container. Run those services outside Forgel
+and point the project at them, or wait for a dedicated services sandbox.
 
 ### Secrets
 

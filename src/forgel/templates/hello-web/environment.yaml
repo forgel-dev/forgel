@@ -7,8 +7,12 @@
 # `image` or `build` describes the environment. `setup` installs dependencies
 # inside it, `test` and `e2e` are the gates QA runs. `ports` and `health`
 # describe the running service for the sandbox and the docker QA stand.
+#
+# `mounts` lists sibling repositories the commands need. The sandbox mounts
+# them read-only next to the working repository; the e2e check imports the API.
 image: python:3.12-slim
 repo: e2e
+mounts: [api, web]
 e2e: ["python check.py"]
 ports: [8000]
 health: "/health"

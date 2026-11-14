@@ -43,7 +43,6 @@ from forgel.config import Settings  # noqa: E402
 from forgel.environment import (  # noqa: E402
     Environment,
     EnvironmentError,
-    command_argv,
     environment_path,
     load_environment,
     render_environment,
@@ -201,6 +200,12 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=1800.0)
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--yes", action="store_true")
+    parser.add_argument(
+        "--sandbox",
+        choices=["local", "docker"],
+        default="local",
+        help="Run agent commands in the per-project Docker sandbox",
+    )
     parser.add_argument("--clean", action="store_true")
     parser.add_argument(
         "--home",
@@ -257,7 +262,7 @@ def main() -> int:
             environment_path(layout),
             render_environment(environment),
         )
-        test_command = command_argv(environment.test[0])
+        test_command = shlex.split(environment.test[0])
         task = create_task(
             layout,
             TASK_TITLE,
@@ -280,6 +285,7 @@ def main() -> int:
         "PYTHONPATH": str(ROOT / "src"),
         "FORGEL_HOME": str(home),
         "FORGEL_MODEL_MODE": mode,
+        "FORGEL_SANDBOX": args.sandbox,
     }
     if args.mode == "script":
         (home / "model-script.json").write_text(

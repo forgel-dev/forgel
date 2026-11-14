@@ -54,6 +54,17 @@ bridge test double, not a model. A manual run can start the e2e with
 `--home <empty-dir> --mode bridge` and write `response.txt` files itself (for
 example, a Claude Code subagent can write one per request).
 
+Sandbox mode: `--sandbox docker` runs the agent's commands in a per-project
+container on the Docker daemon behind `DOCKER_HOST` (a remote engine or the
+output of `deploy/compose.yaml --profile sandbox`). The project gets only its
+own repository, `network=none` by default, and the image from its
+`environment.yaml`. The local mode stays the default and needs no daemon.
+
+```bash
+DOCKER_HOST=tcp://127.0.0.1:2375 \
+python tests/e2e/run_blog_e2e.py --mode script --strict --sandbox docker
+```
+
 API mode: a real OpenAI-compatible model. Requires a key and explicit `--yes`:
 
 ```bash

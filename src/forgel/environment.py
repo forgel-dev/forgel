@@ -9,7 +9,9 @@ The file lives in the control repository (``program/environment.yaml`` for a
 container project, the project root for a legacy one). Paths in the contract
 are relative to the project root. Commands run in the repository named by
 ``repo``; when it is omitted, the sole repository is used, otherwise the
-project root.
+project root. ``mounts`` lists sibling repositories the commands need; the
+sandbox mounts them read-only, so a repository's e2e can inspect the product
+without exposing the rest of the project.
 
 Only a strict YAML subset is accepted: top-level ``key: value`` pairs, scalar
 values, flow lists (``[a, b]``) and block lists. That is the whole contract, so
@@ -34,6 +36,7 @@ FIELDS = {
     "image",
     "build",
     "repo",
+    "mounts",
     "services",
     "setup",
     "test",
@@ -56,6 +59,7 @@ class Environment:
     image: str = ""
     build: str = ""
     repo: str = ""
+    mounts: tuple[str, ...] = ()
     services: tuple[str, ...] = ()
     setup: tuple[str, ...] = ()
     test: tuple[str, ...] = ()
@@ -92,7 +96,7 @@ class Environment:
             data["build"] = self.build
         if self.repo:
             data["repo"] = self.repo
-        for key in ("services", "setup", "test", "e2e"):
+        for key in ("mounts", "services", "setup", "test", "e2e"):
             values = getattr(self, key)
             if values:
                 data[key] = list(values)
@@ -367,6 +371,16 @@ def parse_environment(text: str, source: str = FILENAME) -> Environment:
     repo = _string(data, "repo", source)
     if repo and not REPO_NAME.fullmatch(repo):
         raise EnvironmentError(f"{source}: invalid 'repo' name {repo!r}")
+    mounts = tuple(dict.fromkeys(_strings(data, "mounts", source)))
+    for item in mounts:
+        if not REPO_NAME.fullmatch(item):
+            raise EnvironmentError(
+                f"{source}: invalid repository id in 'mounts': {item!r}"
+            )
+        if item == repo:
+            raise EnvironmentError(
+                f"{source}: 'mounts' repeats the working repository {item!r}"
+            )
     services = tuple(
         _project_path(path, "services", source)
         for path in _strings(data, "services", source)
@@ -385,6 +399,7 @@ def parse_environment(text: str, source: str = FILENAME) -> Environment:
         image=image,
         build=build,
         repo=repo,
+        mounts=mounts,
         services=services,
         setup=_commands(data, "setup", source),
         test=_commands(data, "test", source),
@@ -430,14 +445,19 @@ def load_environment(layout: ProjectLayout) -> Environment | None:
     except OSError as exc:
         raise EnvironmentError(f"{path}: cannot read: {exc}") from exc
     environment = parse_environment(text, source=str(path))
+    known = {entry["id"] for entry in entries(layout)}
     repo_id = environment.repository(layout)
-    if environment.repo:
-        known = {entry["id"] for entry in entries(layout)}
-        if repo_id not in known:
-            raise EnvironmentError(
-                f"{path}: unknown repository {repo_id!r}; known: "
-                + ", ".join(sorted(known))
-            )
+    if environment.repo and repo_id not in known:
+        raise EnvironmentError(
+            f"{path}: unknown repository {repo_id!r}; known: "
+            + ", ".join(sorted(known))
+        )
+    unknown_mounts = sorted(set(environment.mounts) - known)
+    if unknown_mounts:
+        raise EnvironmentError(
+            f"{path}: unknown repository id(s) in 'mounts': "
+            + ", ".join(unknown_mounts)
+        )
     if environment.build:
         target = layout.root / environment.build
         if not target.exists():
@@ -463,7 +483,7 @@ def render_environment(environment: Environment) -> str:
     for key in ("image", "build", "repo"):
         if key in data:
             lines.append(f"{key}: {data[key]}")
-    for key in ("services", "setup", "test", "e2e"):
+    for key in ("mounts", "services", "setup", "test", "e2e"):
         if key not in data:
             continue
         values = data[key]

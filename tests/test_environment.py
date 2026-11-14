@@ -22,6 +22,7 @@ FULL = """
 # the project environment
 image: python:3.12-slim
 repo: api
+mounts: [web]
 services: [compose.yaml, "infra/extra.yml"]
 setup:
   - pip install -r requirements.txt
@@ -37,6 +38,7 @@ class ParseEnvironmentTest(unittest.TestCase):
         environment = parse_environment(FULL)
         self.assertEqual(environment.image, "python:3.12-slim")
         self.assertEqual(environment.repo, "api")
+        self.assertEqual(environment.mounts, ("web",))
         self.assertEqual(
             environment.services, ("compose.yaml", "infra/extra.yml")
         )
@@ -130,10 +132,15 @@ class ParseEnvironmentTest(unittest.TestCase):
         with self.assertRaises(EnvironmentError):
             parse_environment("image: x\nrepo: ../main\n")
 
+    def test_mounting_the_working_repository_is_rejected(self) -> None:
+        with self.assertRaises(EnvironmentError):
+            parse_environment("image: x\nrepo: api\nmounts: [api]\n")
+
     def test_render_round_trips(self) -> None:
         environment = Environment(
             image="python:3.12-slim",
             repo="api",
+            mounts=("web",),
             services=("compose.yaml",),
             setup=("pip install -r requirements.txt",),
             test=("python -m unittest",),
@@ -243,6 +250,20 @@ class LoadEnvironmentTest(unittest.TestCase):
             assert environment is not None
             self.assertEqual(environment.repository(layout), "")
             self.assertEqual(environment.workdir(layout), root)
+
+    def test_unknown_mount_repository_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "project.json").write_text(
+                json.dumps({"repos": [{"id": "main"}]}), encoding="utf-8"
+            )
+            (root / "repos" / "main").mkdir(parents=True)
+            (root / "program").mkdir()
+            (root / "program" / "environment.yaml").write_text(
+                "image: x\nmounts: [other]\n", encoding="utf-8"
+            )
+            with self.assertRaises(EnvironmentError):
+                load_environment(self._layout(root, "container"))
 
     def test_missing_build_path_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -44,6 +45,7 @@ from .project_config import (
     render_project_config,
 )
 from .registry import load_registry, select_recipe
+from .sandbox import DockerSandbox, SandboxError, docker_runner
 from .state import next_stage, stages_from
 
 FEATURE_ID = "20261113000000_hello_web"
@@ -1056,6 +1058,7 @@ See `docs/program/jurisdiction/requirements.md` and
         except EnvironmentError as exc:
             raise StageError(f"environment contract: {exc}") from exc
 
+        sandbox = docker_runner(self.settings)
         runtime = self.settings.qa_runtime
         config = load_project_config(self._control(project))
         if runtime == "auto" and config is not None:
@@ -1063,7 +1066,11 @@ See `docs/program/jurisdiction/requirements.md` and
         if runtime == "auto":
             runtime = "docker" if self._docker_available() else "local"
 
-        if runtime == "docker":
+        if sandbox is not None:
+            returncode, output, runtime_label = self._run_qa_sandbox(
+                project, environment, sandbox
+            )
+        elif runtime == "docker":
             returncode, output, runtime_label = self._run_qa_docker(project)
         elif environment is not None and environment.has_commands:
             returncode, output = self._run_qa_environment(
@@ -1094,6 +1101,57 @@ See `docs/program/jurisdiction/requirements.md` and
         if returncode != 0:
             raise StageError(f"QA failed with exit code {returncode}: {output}")
         return [self._ref(project, path)]
+
+    def _run_qa_sandbox(
+        self,
+        project: dict[str, Any],
+        environment: Environment | None,
+        sandbox: DockerSandbox,
+    ) -> tuple[int, str, str]:
+        layout = self._layout(project)
+        if environment is None:
+            raise StageError(
+                "FORGEL_SANDBOX=docker requires environment.yaml"
+            )
+        if not (environment.test or environment.e2e):
+            raise StageError(
+                "environment.yaml defines neither 'test' nor 'e2e'"
+            )
+        repo_id = environment.repository(layout)
+        if not repo_id:
+            raise StageError(
+                "environment.yaml must set 'repo' when the project has "
+                "several repositories"
+            )
+        available, detail = sandbox.available()
+        if not available:
+            raise StageError(f"sandbox unavailable: {detail}")
+        try:
+            session = sandbox.session(
+                layout, environment, str(project["id"]), repo_id
+            )
+        except SandboxError as exc:
+            raise StageError(f"sandbox: {exc}") from exc
+        label = f"docker sandbox ({session.image})"
+        output = ""
+        try:
+            with session:
+                for command in environment.setup:
+                    output += f"$ {command}\n"
+                for command in (
+                    list(environment.test) + list(environment.e2e)
+                ):
+                    output += f"$ {command}\n"
+                    argv = shlex.split(command)
+                    if not argv:
+                        raise StageError("environment command is empty")
+                    returncode, text = session.run(argv, timeout=300)
+                    output += text
+                    if returncode != 0:
+                        return returncode, output, label
+        except SandboxError as exc:
+            raise StageError(f"sandbox: {exc}") from exc
+        return 0, output, label
 
     def _run_qa_environment(
         self, project: dict[str, Any], environment: Environment

@@ -165,10 +165,10 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-067** | The migration e2e is a manual, budget-gated harness with deterministic product checks and separate harness checks | The result depends on the model; a harness failure must be distinguishable from a model-quality failure, and a local subagent run must not spend provider budget | `tests/e2e` builds a minimal blog with `script`, `bridge` or `api` modes; `validate_blog.py` is an external validator; harness checks cover daemon/task/report/commit lifecycle; runs only on explicit instruction |
 | **D-068** | A plain chat change request becomes a coding-agent task; the intake agent fills explicit requirements, acceptance, repository, constraints and test command | The chat is the product interface and should not stop at a recorded request; the executable unit is a task the daemon can run and the user can inspect or cancel | The intake agent returns a structured change request; the task is stored in `docs/program/tasks/`, shown by `/tasks`, cancellable with `/task cancel`, and executed by the daemon; ambiguous multi-repository requests are questions, not guesses |
 | **D-069** | Deployment is a local SSH utility driven by `.env.deploy`; the image is pushed to a registry or built remotely, the remote env is written with mode `0600`, and the server needs only SSH + Docker + Compose | Manual SSH configuration is the main source of deployment mistakes, and configuration must stay easy to change as the installation evolves; the server should not need a toolchain | `forgel deploy up` checks SSH/Docker/Compose, offers a consent-based install when root or passwordless sudo is available, otherwise prints manual commands; it builds/pushes or remote-builds, uploads the Compose file and filtered env, starts the service and runs the doctor; secrets never appear in argv or logs. SSH user, port and key are optional (config/agent/default key). |
-| **D-070** | The daemon container drops to an unprivileged user; project code runs only in the local single-tenant sandbox, and the host Docker socket is never mounted | Project tests are untrusted code; container root plus host Docker access would turn a test into host compromise, while local execution is acceptable for a single trusted operator | `deploy/entrypoint.sh` chowns `/data` then drops to UID/GID 10001; agent commands get a stripped env; `FORGEL_SANDBOX=docker` is refused until a per-project sandbox exists; the host socket is not part of any Compose file |
+| **D-070** | The daemon container drops to an unprivileged user; project code runs only in the local single-tenant sandbox, and the host Docker socket is never mounted | Project tests are untrusted code; container root plus host Docker access would turn a test into host compromise, while local execution is acceptable for a single trusted operator | `deploy/entrypoint.sh` chowns `/data` then drops to UID/GID 10001; agent commands get a stripped env; `FORGEL_SANDBOX=docker` is implemented by D-073 as a per-project sandbox (separate daemon, one repository mounted, non-root, no capabilities); the host socket is not part of any Compose file |
 | **D-071** | A project environment is a declarative container artifact (OCI image or Dockerfile/Compose/Dev Container) plus a small contract for `setup`, `test` and `e2e` commands; the core contains no per-language command adapters | Knowing every toolchain's current commands in the core goes stale and creates permanent maintenance, while per-instance scripts fragment the ecosystem | The environment is a committed project artifact; Forgel reads the contract and runs it in the sandbox; official recipes are only starting points |
 | **D-072** | Official recipes cover common stacks as convenience templates; the coding agent may create or extend an environment definition for a missing stack, but only through the standard contract and with review | Maintaining every environment is impossible, and forbidding new ones caps the product; a standard, reviewable artifact avoids bespoke per-instance adapters | Recipes are small composable starting points; the agent writes a Dockerfile/Compose/Dev Container and `environment.yaml`; nothing language-specific enters the core |
-| **D-073** | Arbitrary environment code runs only inside a per-project sandbox: repo-only mount, no `/data` secrets, no host Docker socket, resource and network limits, configurable registry policy | Broad environment support is safe only behind an isolation boundary; CI runners solve the same problem the same way | The sandbox runtime builds/pulls and runs the project image; the daemon talks to it; a trusted single-user host may allow arbitrary images, while hosted mode uses an allowlist and pinned digests; `local` remains a single-tenant fallback |
+| **D-073** | Arbitrary environment code runs only inside a per-project sandbox: repo-only mount, no `/data` secrets, no host Docker socket, resource and network limits, configurable registry policy | Broad environment support is safe only behind an isolation boundary; CI runners solve the same problem the same way | The sandbox runtime builds/pulls and runs the project image; the daemon talks to it; a trusted single-user host may allow arbitrary images, while hosted mode uses an allowlist and pinned digests; `local` remains a single-tenant fallback. One labelled container per session mounts the working repository at `/workspace` and the declared sibling repositories read-only, runs as the daemon UID/GID with capabilities dropped, a read-only root and `/tmp`, CPU/memory/pid limits and `network=none` by default; the daemon reaches it over `DOCKER_HOST`, never the host socket. The bundled DinD sidecar is opt-in and privileged; a remote daemon is the multi-tenant choice |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -967,6 +967,7 @@ the commands Forgel needs.
 # program/environment.yaml — a project artifact
 image: python:3.12-slim        # or: build: repos/api/environment
 repo: api                      # commands run here; default: the sole repository
+mounts: [web]                  # sibling repositories, mounted read-only
 services: [compose.yaml]       # optional
 setup: ["pip install -r requirements.txt"]
 test: ["python -m unittest discover -s tests"]
@@ -975,8 +976,10 @@ ports: [8000]
 health: "/health"
 ```
 
-Paths in the contract are relative to the project root. The file is a strict
-YAML subset: top-level keys, scalar values, flow lists and block lists. A
+Paths in the contract are relative to the project root. `mounts` lists sibling
+repositories by id; the sandbox mounts them read-only at `/<id>`, so an e2e can
+inspect the product without exposing the rest of the project. The file is a
+strict YAML subset: top-level keys, scalar values, flow lists and block lists. A
 malformed contract fails QA loudly; a project without one keeps the legacy
 fallback (the template e2e script), so existing projects are not broken. The
 local single-tenant fallback runs `test` and then `e2e` on the host and the
@@ -993,8 +996,14 @@ reviewable artifact — never as a bespoke adapter inside the core.
 Sandbox boundary: repo-only mount, no `/data` secrets, no host Docker socket,
 resource and network limits, configurable registry policy (allowlist and
 pinned digests for multi-tenant; arbitrary images allowed for a trusted
-single-user host). The daemon never mounts `/var/run/docker.sock`; a dedicated
-Docker daemon or a remote sandbox is the target.
+single-user host). The daemon never mounts `/var/run/docker.sock`; it reaches
+a dedicated Docker engine over `DOCKER_HOST`. `FORGEL_SANDBOX=docker` starts one
+labelled container per session: the selected repository at `/workspace`, the
+daemon UID/GID, all capabilities dropped, `no-new-privileges`, a read-only root
+with a writable `/tmp`, CPU/memory/pid limits, `network=none` by default, and
+the image policy from `FORGEL_SANDBOX_IMAGES`/`FORGEL_SANDBOX_REQUIRE_DIGEST`.
+Coding-agent `run` actions and the contract's `setup`/`test`/`e2e` commands run
+inside it; file actions stay on the mounted repository.
 
 This choice is (c) at the execution layer, (b) at the artifact layer and (a)
 for convenience: arbitrary environments are allowed, but only behind a
