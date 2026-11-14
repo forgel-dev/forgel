@@ -19,7 +19,7 @@ from forgel.model import ScriptedModelClient
 from forgel.project_config import render_project_config
 from forgel.projects import create_project
 from forgel.secrets import get_secret, set_secret
-from forgel.tasks import create_task
+from forgel.tasks import create_task, get_task, update_task
 from forgel.telegram import (
     HELP,
     CommandRouter,
@@ -293,6 +293,23 @@ class SelectionAndAgentTest(unittest.TestCase):
         self.ledger.set_session(7, project)
         reply = router.handle(7, "What is this project?", "@tester")
         self.assertEqual(reply.text, "project answer")
+
+    def test_task_accept_command_finalizes_a_review(self) -> None:
+        router = self._router()
+        project = self._project("Accept", "A brief.")
+        self.ledger.set_session(7, project)
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project)["workspace"]
+        )
+        task = create_task(
+            layout, "Review me", ["A"], ["B"], repo_id="api"
+        )
+        update_task(layout, task["id"], status="review")
+        reply = router.handle(7, f"/task accept {task['id']}", "@tester")
+        self.assertIn("Accepted", reply.text)
+        updated = get_task(layout, task["id"])
+        assert updated is not None
+        self.assertEqual(updated["status"], "done")
 
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()

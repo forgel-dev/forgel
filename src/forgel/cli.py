@@ -61,6 +61,7 @@ from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, resolve_project
 from .proposals import ProposalError, propose_project, summarize_proposals
 from .sandbox import DockerSandbox
+from .task_review import accept_task, reject_task
 from .tokens import tokenizer_name
 from .providers import ProviderError
 from .providers.github_api import GithubAPIError
@@ -634,6 +635,48 @@ def cmd_task(args: argparse.Namespace) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
+        if args.action in {"accept", "reject"}:
+            if not args.task_id:
+                print(
+                    f"error: task {args.action} requires --task",
+                    file=sys.stderr,
+                )
+                return 2
+            task = tasks.get_task(layout, args.task_id)
+            if task is None:
+                print(
+                    f"error: unknown task {args.task_id!r}",
+                    file=sys.stderr,
+                )
+                return 1
+            if args.action == "accept":
+                updated = accept_task(
+                    settings,
+                    ledger,
+                    project,
+                    task,
+                    actor=args.actor,
+                    notes=args.notes,
+                )
+            else:
+                updated = reject_task(
+                    settings,
+                    ledger,
+                    project,
+                    task,
+                    actor=args.actor,
+                    notes=args.notes,
+                )
+            tasks.commit_task(
+                layout,
+                updated["id"],
+                f"{args.action.capitalize()} task {updated['id']}",
+            )
+            print(
+                f"{args.action.capitalize()}ed {updated['id']} "
+                f"({updated['status']})."
+            )
+            return 0
         if args.action == "cancel":
             if not args.task_id:
                 print("error: task cancel requires --task", file=sys.stderr)
@@ -1017,6 +1060,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         str(settings.context_window),
     )
     report("tokenizer", tokenizer_name())
+    report(
+        "task pipeline",
+        f"qa={'on' if settings.task_qa else 'off'}, "
+        f"review={'on' if settings.task_review else 'off'}, "
+        f"accept={settings.task_accept}",
+    )
     if peak.should_defer(
         settings.peak_policy, hours=settings.peak_hours
     ):
@@ -1411,9 +1460,13 @@ def build_parser() -> argparse.ArgumentParser:
     task = subparsers.add_parser(
         "task", help="Queue or list coding-agent tasks"
     )
-    task.add_argument("action", choices=["add", "list", "cancel"])
+    task.add_argument(
+        "action", choices=["add", "list", "cancel", "accept", "reject"]
+    )
     task.add_argument("project_id")
     task.add_argument("--task", dest="task_id", default="")
+    task.add_argument("--actor", default="owner")
+    task.add_argument("--notes", default="")
     task.add_argument("--title", default="")
     task.add_argument("--require", action="append", default=[])
     task.add_argument("--accept", action="append", default=[])

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from forgel.config import Settings
@@ -83,6 +84,39 @@ class SettingsTest(unittest.TestCase):
                 settings = Settings.from_env(tmp)
         self.assertEqual(settings.peak_policy, "off_peak")
         self.assertEqual(settings.peak_hours, "1-4,6-10")
+
+    def test_task_pipeline_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {
+                    "FORGEL_TASK_QA": "",
+                    "FORGEL_TASK_REVIEW": "",
+                    "FORGEL_TASK_ACCEPT": "",
+                },
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertTrue(settings.task_qa)
+        self.assertTrue(settings.task_review)
+        self.assertEqual(settings.task_accept, "human")
+        direct = Settings(
+            home=Path(tmp),
+            registry_path=Path("/x"),
+            templates_path=Path("/x"),
+            jurisdiction_path=Path("/x"),
+        )
+        self.assertFalse(direct.task_qa)
+        self.assertFalse(direct.task_review)
+        self.assertEqual(direct.task_accept, "auto")
+
+    def test_invalid_task_accept_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ, {"FORGEL_TASK_ACCEPT": "maybe"}, clear=False
+            ):
+                with self.assertRaises(ValueError):
+                    Settings.from_env(tmp)
 
     def test_invalid_peak_settings_are_rejected(self) -> None:
         cases = (

@@ -181,6 +181,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-083** | Everything tied to one model family — default model, context window, tokenizer encoding, peak schedule and its messages — lives in a model profile; the core only asks a profile for those values | The peak schedule and tokenizer are DeepSeek-specific and may change with the next generation; scattering them through config, daemon and chat makes a model change a core change | `src/forgel/model_profiles.py` defines the profile interface and the DeepSeek profile; `tokens`, `peak`, `config`, `project_config` and `model` read defaults from it; an unknown family gets a neutral profile with no peak gating; a future model plugin can expose the same fields |
 | **D-084** | A completed coding task gets an independent QA pass: the project's environment contract runs again after the agent, and the verdict is authoritative | The agent's own final test is self-reported; a green task with a red project gate must not look accepted, and the template pipeline already separates developer work from QA | `task_qa` runs `test` then `e2e` (sandbox or local), writes `docs/program/agent/<task>.qa.md`, records the verdict in the task and ledger; a red verdict fails the task; no command means `skipped`, never a false pass; `FORGEL_TASK_QA` turns it off |
 | **D-085** | A milestone goal becomes an ordered backlog in one planner call; tasks carry a plan id, order and dependencies, and the daemon runs only tasks whose dependencies are done | Hand-decomposing a milestone is the remaining human bottleneck; a small, reviewable plan artifact keeps the decomposition visible and correctable | `forgel plan` and `/plan` ask the model for 1–20 small tasks with explicit requirements, acceptance, repository and test command; `--dry-run` previews them; the plan is committed as `docs/program/plans/<id>.md`; dependency edges gate execution; a failed dependency leaves its dependents pending and reported as blocked |
+| **D-086** | Review and acceptance are explicit task stages: an independent reviewer with clean context judges the committed diff, and a passing review leaves the task in `review` until a human accepts it unless the project opts into automatic acceptance | QA proves the gate passes, not that the change is the right one; the reviewer must not see the agent's self-justification, and a human acceptance is the M0.5 exit criterion | `run_task_review` sends requirements, diff, assumptions and the QA verdict to the model; a failed verdict fails the task; `docs/program/agent/<task>.review.md`; `forgel task accept|reject` and `/task accept|reject`; `FORGEL_TASK_REVIEW` and `FORGEL_TASK_ACCEPT=auto|human`; an errored review never auto-accepts |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1104,6 +1105,15 @@ verdict is authoritative, and a red gate fails the task with a QA report. A
 milestone goal is turned into an ordered backlog of tasks in one planner call
 (D-085); each task names its repository, dependencies and test command, and
 the daemon runs a task only after its dependencies are done.
+
+**Review and acceptance (D-086).** After QA, an independent reviewer gets the
+explicit requirements, the committed diff, the recorded assumptions and the QA
+verdict — not the agent's self-justification. A failed verdict fails the task
+and writes `docs/program/agent/<task>.review.md`; a pass leaves the task in
+`review` until a human accepts it with `forgel task accept` or `/task accept`
+(and may reject it with the matching command). A project that trusts its loop
+can set `FORGEL_TASK_ACCEPT=auto`; an errored review never auto-accepts. The
+default runtime is `qa + review + human acceptance`.
 
 ### 7.16 Peak-Hour Policy
 

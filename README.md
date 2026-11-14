@@ -309,6 +309,8 @@ forgel task add <project> \
   --accept "The external validator exits 0" \
   --test-command "python -m unittest discover -s tests"
 forgel task list <project>
+forgel task accept <project> --task <id> [--notes "..."]
+forgel task reject <project> --task <id> [--notes "..."]
 ```
 
 A plain chat message is not just conversation: the project agent classifies it,
@@ -333,11 +335,17 @@ step count, runs the final test command, commits with a bot message, writes
 `docs/program/agent/<task>.md` and records a ledger event. It refuses to commit
 secret-looking files. After a done task the independent QA pass runs the
 environment contract again (sandbox or local); a red gate fails the task and
-writes `docs/program/agent/<task>.qa.md`.
+writes `docs/program/agent/<task>.qa.md`. Then an independent reviewer with a
+clean context judges the committed diff against the explicit requirements and
+writes `docs/program/agent/<task>.review.md`; a failed verdict fails the task.
+A passing review leaves the task in `review` for a human decision (the default
+`FORGEL_TASK_ACCEPT=human`); `forgel task accept|reject` or `/task
+accept|reject` records it. Set `FORGEL_TASK_ACCEPT=auto` to accept green
+reviews automatically; an errored review never auto-accepts.
 
 From the chat: send a plain message to the selected project to queue a change;
-`/plan` decomposes a milestone; `/tasks` shows the queue; `/task cancel <id>`
-cancels a pending task.
+`/plan` decomposes a milestone; `/tasks` shows the queue; `/task accept|reject`
+records a review decision; `/task cancel <id>` cancels a pending task.
 
 Free local runs can use a scripted model or a subagent bridge instead of a
 provider key; a production run uses `FORGEL_MODEL_API_KEY`. The manual blog e2e

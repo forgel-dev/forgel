@@ -62,9 +62,11 @@ class Settings:
     peak_policy: str = "always"
     peak_hours: str = default_profile().peak_windows
     timezone: str = ""
-    # Independent task QA: on in the runtime, off for direct construction so
-    # library and test code does not spawn extra test processes by accident.
+    # Post-agent pipeline: on in the runtime, off for direct construction so
+    # library and test code does not spawn extra model/test calls by accident.
     task_qa: bool = False
+    task_review: bool = False
+    task_accept: str = "auto"  # auto | human
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -141,6 +143,14 @@ class Settings:
             )
         peak_hours = peak.hours_from_env()
         peak.parse_hours(peak_hours)
+        task_accept = (
+            os.environ.get("FORGEL_TASK_ACCEPT", "human").strip().lower()
+            or "human"
+        )
+        if task_accept not in {"auto", "human"}:
+            raise ValueError(
+                "FORGEL_TASK_ACCEPT must be one of: auto, human"
+            )
         return cls(
             home=home_path.expanduser().resolve(),
             registry_path=registry_path.expanduser().resolve(),
@@ -167,6 +177,8 @@ class Settings:
             peak_hours=peak_hours,
             timezone=os.environ.get("FORGEL_TIMEZONE", "").strip(),
             task_qa=_env_bool("FORGEL_TASK_QA", True),
+            task_review=_env_bool("FORGEL_TASK_REVIEW", True),
+            task_accept=task_accept,
         )
 
     @property

@@ -15,7 +15,7 @@ from typing import Any, Callable
 from . import peak, tasks
 from .approvals import awaits_approval, latest_approval
 from .coding_agent import CodingAgent
-from .task_qa import run_task_qa
+from .task_review import process_task_result
 from .config import Settings
 from .control import is_paused
 from .layout import ProjectLayout
@@ -54,6 +54,7 @@ def project_state(ledger: Ledger, project: dict[str, Any]) -> str:
     if task is not None and task.get("status") in {
         "pending",
         "running",
+        "review",
         "failed",
     }:
         return f"task {task['status']}"
@@ -125,21 +126,27 @@ def _run_task(
         result = CodingAgent(settings, ledger, model).run(
             project, task, log
         )
-        if result.status == "done" and settings.task_qa:
+        if result.status == "done" and (
+            settings.task_qa or settings.task_review
+        ):
             try:
-                run_task_qa(settings, ledger, project, task, log)
-            except Exception as exc:  # noqa: BLE001 - QA must not crash the daemon
+                process_task_result(
+                    settings, ledger, project, task, model, log
+                )
+            except Exception as exc:  # noqa: BLE001 - the pipeline must not crash
+                stored = tasks.get_task(layout, task_id) or task
                 tasks.update_task(
                     layout,
                     task_id,
                     status="failed",
                     result={
-                        **dict(task.get("result") or {}),
-                        "summary": f"task QA crashed: {exc}",
+                        **dict(stored.get("result") or {}),
+                        "summary": f"post-agent pipeline failed: {exc}",
                     },
                 )
                 log(
-                    f"[qa] {project['id']}: task {task_id} crashed: {exc}"
+                    f"[task] {project['id']}: {task_id} "
+                    f"post-agent pipeline crashed: {exc}"
                 )
     except Exception as exc:  # noqa: BLE001 - one task must not kill the daemon
         tasks.update_task(

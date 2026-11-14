@@ -17,7 +17,14 @@ from .artifacts import read_json, write_json
 from .layout import ProjectLayout
 
 TASKS_DIR = "docs/program/tasks"
-VALID_STATUSES = {"pending", "running", "done", "failed", "cancelled"}
+VALID_STATUSES = {
+    "pending",
+    "running",
+    "review",
+    "done",
+    "failed",
+    "cancelled",
+}
 
 
 def _now() -> str:

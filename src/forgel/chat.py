@@ -42,6 +42,7 @@ from .ledger import Ledger
 from .artifacts import write_text
 from .planner import PlanningError, plan_project
 from .project_config import ConfigError, render_project_config
+from .task_review import accept_task, reject_task
 from .program_manifest import entries as manifest_entries
 from .projects import ProjectError, create_project, derive_name, resolve_project
 from .proposals import summarize_proposals
@@ -62,7 +63,13 @@ from .sync import (
     reconciliation_status_path,
     sync_project,
 )
-from .tasks import cancel_task, commit_task, latest_task, list_tasks
+from .tasks import (
+    cancel_task,
+    commit_task,
+    get_task,
+    latest_task,
+    list_tasks,
+)
 
 DECISIONS = {"accept", "fix", "rollback", "ignore"}
 SCOPES = {"staging", "production"}
@@ -92,6 +99,8 @@ Projects
 /plan <goal>            turn a milestone goal into queued tasks
 /tasks                  coding-agent tasks for the selected project
 /task cancel <id>       cancel a pending task
+/task accept <id> [note]   accept a task awaiting review
+/task reject <id> [note]   reject a task awaiting review
 /projects              projects, state and the selected one
 /use <id>              select the current project
 /status [id]           state, staging, approvals, recent stages
@@ -526,21 +535,60 @@ class CommandRouter:
         return Reply("\n".join(lines))
 
     def _task(self, chat_id: int, rest: str, _actor: str) -> Reply:
-        tokens = rest.split()
-        if not tokens or tokens[0].lower() != "cancel":
-            return Reply("Usage: /task cancel <task-id>")
+        usage = (
+            "Usage: /task cancel <task-id>, "
+            "/task accept <task-id> [note] or "
+            "/task reject <task-id> [note]"
+        )
+        tokens = rest.split(maxsplit=2)
+        action = tokens[0].lower() if tokens else ""
+        if action not in {"cancel", "accept", "reject"}:
+            return Reply(usage)
         if len(tokens) < 2:
-            return Reply("Usage: /task cancel <task-id>")
+            return Reply(usage)
         project = self._selected(chat_id)
         if isinstance(project, Reply):
             return project
         layout = ProjectLayout.detect(project["workspace"])
-        try:
-            task = cancel_task(layout, tokens[1])
-        except ValueError as exc:
-            return Reply(f"error: {exc}")
-        commit_task(layout, task["id"], f"Cancel task {task['id']}")
-        return Reply(f"Cancelled task {task['id']}.")
+        task_id = tokens[1]
+        notes = tokens[2].strip() if len(tokens) > 2 else ""
+        if action == "cancel":
+            try:
+                task = cancel_task(layout, task_id)
+            except ValueError as exc:
+                return Reply(f"error: {exc}")
+            commit_task(layout, task["id"], f"Cancel task {task['id']}")
+            return Reply(f"Cancelled task {task['id']}.")
+        task = get_task(layout, task_id)
+        if task is None:
+            return Reply(f"error: unknown task {task_id!r}")
+        if action == "accept":
+            updated = accept_task(
+                self.settings,
+                self.ledger,
+                project,
+                task,
+                actor="telegram",
+                notes=notes,
+            )
+        else:
+            updated = reject_task(
+                self.settings,
+                self.ledger,
+                project,
+                task,
+                actor="telegram",
+                notes=notes,
+            )
+        commit_task(
+            layout,
+            updated["id"],
+            f"{action.capitalize()} task {updated['id']}",
+        )
+        return Reply(
+            f"{action.capitalize()}ed task {updated['id']} "
+            f"({updated['status']})."
+        )
 
     def _github(self, chat_id: int, rest: str, _actor: str) -> Reply:
         project = self._selected(chat_id)

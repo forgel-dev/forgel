@@ -257,6 +257,7 @@ class CodingAgent:
         repo_id, repo = self._repository(layout, task)
         if not (repo / ".git").exists():
             raise AgentError(f"repository {repo_id} has no git history")
+        base_sha = git_ops.head_sha(repo)
         gitignore = repo / ".gitignore"
         if not gitignore.exists():
             write_text(gitignore, DEFAULT_GITIGNORE)
@@ -329,6 +330,10 @@ class CodingAgent:
                 "test_output": _cap(test_output, 6000),
                 "assumptions": assumptions,
                 "context": context_stats,
+                "git": {
+                    "base": base_sha,
+                    "head": git_ops.head_sha(repo),
+                },
                 "report": _ref(layout, report),
             },
         )

@@ -288,6 +288,11 @@ def main() -> int:
         "FORGEL_SANDBOX": args.sandbox,
         # The harness must not depend on the wall clock or DeepSeek pricing.
         "FORGEL_PEAK_POLICY": "always",
+        # Keep independent QA, but the scripted model has no reviewer answer;
+        # auto-accept a green QA instead of leaving the task in review.
+        "FORGEL_TASK_QA": "1",
+        "FORGEL_TASK_REVIEW": "0",
+        "FORGEL_TASK_ACCEPT": "auto",
     }
     if args.mode == "script":
         (home / "model-script.json").write_text(
