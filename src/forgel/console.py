@@ -141,16 +141,27 @@ def run_console(
     if agent is None:
         client = build_model_client(settings.home, log=output)
         if client is None:
-            local_env = Path.cwd() / ".env.local"
+            candidates = [
+                Path.cwd() / ".env.local",
+                settings.home / ".env.local",
+            ]
+            existing = [path for path in candidates if path.exists()]
             output("Forgel is not fully configured:")
-            if local_env.exists():
+            if existing:
+                targets = " or ".join(str(path) for path in existing)
                 output(
-                    f"  model: set FORGEL_MODEL_API_KEY in {local_env}"
+                    f"  model: set FORGEL_MODEL_API_KEY in {targets}"
+                )
+                output(
+                    "         (`forgel setup` creates ./.env.local; "
+                    "it is never committed)"
                 )
             else:
                 output(
-                    "  model: run `forgel setup` to create ./.env.local, "
-                    "then set FORGEL_MODEL_API_KEY"
+                    "  model: set FORGEL_MODEL_API_KEY in the environment, "
+                    "./.env.local, or "
+                    f"{settings.home / '.env.local'} "
+                    "(`forgel setup` creates ./.env.local)"
                 )
             output(
                 "  github: optional locally; needed to publish branches "
