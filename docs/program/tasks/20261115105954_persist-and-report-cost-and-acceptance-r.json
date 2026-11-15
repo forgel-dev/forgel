@@ -198,6 +198,130 @@
     "attempts": 0,
     "rework_count": 0,
     "manual_retries": 1,
-    "failure": {}
+    "failure": {},
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261115105954_persist-and-report-cost-and-acceptance-r.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0
+        },
+        {
+          "command": "env PYTHONPATH=src python -m unittest tests.test_costs -v",
+          "exit_code": 0
+        },
+        {
+          "command": "env PYTHONPATH=src python -m unittest tests.test_ledger -v",
+          "exit_code": 0
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "Cost aggregation and acceptance recording tests pass",
+          "command": "env PYTHONPATH=src python -m unittest tests.test_costs -v",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "Existing ledger behavior is unchanged",
+          "command": "env PYTHONPATH=src python -m unittest tests.test_ledger -v",
+          "exit_code": 0,
+          "verdict": "pass"
+        }
+      ],
+      "review_required": false
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The attributed change adds a read-only reporting layer over the existing SQLite ledger: Ledger.cost_summary/total_cost/cost_by_stage/cost_by_generation aggregate event cost per project, generation and stage, while Ledger.acceptances derives task decisions from the approvals table. Task acceptance and rejection events (stages task_accept/task_reject) are mirrored into approvals with project, generation, task scope, decision, actor and reason/notes, so a decision is durable and queryable instead of only printed. src/forgel/costs.py renders an English report (total, per-stage, per-generation, acceptance count plus per-decision lines) used by both the new `forgel cost <project> [--home]` command and the console `/cost` command; the console-script entry point was moved to forgel.entry so the reporting path never starts a model session, with cli.main still handling everything else. tests/test_costs.py covers aggregation over recorded events, the equality of the report's total with the sum of ledger event costs, acceptance recording with actor and reason, and the report on a scripted-model demo home, all without wall-clock or random assertions since times come from the ledger's own utcnow writes. No ledger data is migrated or deleted, no tests were removed, and the existing-behaviour check passes. Minor residual risk noted only as non-blocking: the approval mirror in record_event runs after the event insert, so an idempotent replay of the same acceptance event could in principle insert a second approval row if record_event were ever called twice with an identical idempotency key; the normal accept_task path records each decision once and the tests confirm a single record.",
+      "requirements": [
+        {
+          "requirement": "Ledger query aggregating event cost per project, per generation and per stage",
+          "verdict": "pass",
+          "note": "Ledger.total_cost, cost_by_stage, cost_by_generation and cost_summary group the events table by project_id, generation and stage."
+        },
+        {
+          "requirement": "Ledger query returning acceptance decisions derived from the approvals table",
+          "verdict": "pass",
+          "note": "Ledger.acceptances selects approvals with the task: scope prefix and returns task_id, decision, actor, reason, generation, created_at, optionally filtered by generation."
+        },
+        {
+          "requirement": "Record task acceptance and rejection as ledger entries with actor, task id and reason",
+          "verdict": "pass",
+          "note": "record_event mirrors task_accept/task_reject stages into approvals rows storing the task id in the scope, the decision, the payload actor and the reason/notes text."
+        },
+        {
+          "requirement": "CLI/report path (forgel cost and console equivalent) printing total cost, cost per stage and acceptance count, reading only from the ledger",
+          "verdict": "pass",
+          "note": "src/forgel/entry.py dispatches `forgel cost` to costs.cost_command, which opens the ledger read-only and prints cost_report; console.run_console answers `/cost [project]` with the same cost_report text and the command is listed in COMMANDS and completions."
+        },
+        {
+          "requirement": "Tests covering aggregation with recorded events, acceptance recording, and the report output on a scripted-model demo home",
+          "verdict": "pass",
+          "note": "tests/test_costs.py is added with recorded-event aggregation, acceptance recording and a scripted-model demo-home report test using ScriptedModelClient."
+        },
+        {
+          "requirement": "Acceptance criterion: for a project with recorded events the report prints totals equal to the sum of event costs in the ledger, asserted by a test",
+          "verdict": "pass",
+          "note": "The test parses the 'Total cost:' line and asserts it equals the sum of the recorded event costs."
+        },
+        {
+          "requirement": "Acceptance criterion: accepting a task adds an acceptance record with the actor name and the reason field, asserted by a test",
+          "verdict": "pass",
+          "note": "The test accepts a task through the normal review path and asserts the resulting acceptance entry carries the actor and the supplied reason."
+        },
+        {
+          "requirement": "Acceptance criteria: cost and acceptance tests pass",
+          "verdict": "pass",
+          "note": "The listed acceptance checks (cost aggregation and acceptance recording tests, existing ledger behaviour) all pass with exit 0."
+        },
+        {
+          "requirement": "Review-only: read-only over existing artifacts, no migration or deletion of ledger data",
+          "verdict": "pass",
+          "note": "cost_report and cost_command only SELECT from events/approvals/projects; the only writes are new approval rows for newly recorded task decisions, and the existing idempotent migration only adds the approvals table/columns."
+        },
+        {
+          "requirement": "Review-only: no wall-clock or random values in assertions; fixed or injected times",
+          "verdict": "pass",
+          "note": "Tests assert on report text and ledger-derived values; timestamps come from the ledger's own utcnow writes and are never compared against a wall clock."
+        },
+        {
+          "requirement": "Review-only: report output in English",
+          "verdict": "pass",
+          "note": "cost_report emits fixed English strings (Cost report, Total cost, Cost per stage, Cost per generation, Acceptance count) regardless of console language setting."
+        },
+        {
+          "requirement": "Review-only: no deleted tests and no unrequested features",
+          "verdict": "pass",
+          "note": "No test removals were detected; the entry-point split and the observation key rename from 'acceptance' to 'decision' are in scope (the latter avoids overwriting the acceptance-requirements list in _task_observation)."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261115105954_persist-and-report-cost-and-acceptance-r.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-15T19:52:43+00:00",
+      "notes": ""
+    }
   }
 }
