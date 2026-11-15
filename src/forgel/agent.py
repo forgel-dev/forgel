@@ -282,6 +282,22 @@ def _slug(title: str) -> str:
     return slug[:60] or "request"
 
 
+def _looks_structured(text: str) -> bool:
+    """True when a model reply is a raw structure, not prose."""
+
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.strip("`").strip()
+        if stripped.startswith("json"):
+            stripped = stripped[4:].strip()
+    return stripped.startswith(("{", "["))
+
+
+UNFORMATTED_REPLY = (
+    "The model returned no readable answer. Please try again."
+)
+
+
 def parse_answer(raw: str) -> dict[str, Any]:
     """Parse a model answer, falling back to plain text for non-JSON output."""
 
@@ -298,9 +314,23 @@ def parse_answer(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return {"kind": "answer", "reply": raw.strip()}
+        return {
+            "kind": "answer",
+            "reply": (
+                UNFORMATTED_REPLY
+                if _looks_structured(raw)
+                else raw.strip()
+            ),
+        }
     if not isinstance(data, dict):
-        return {"kind": "answer", "reply": raw.strip()}
+        return {
+            "kind": "answer",
+            "reply": (
+                UNFORMATTED_REPLY
+                if _looks_structured(raw)
+                else raw.strip()
+            ),
+        }
     kind = data.get("kind")
     if kind not in {"answer", "change_request", "action"}:
         kind = "answer"
@@ -314,7 +344,11 @@ def parse_answer(raw: str) -> dict[str, Any]:
         action_args = {}
     reply = data.get("reply")
     if not isinstance(reply, str) or not reply.strip():
-        reply = raw.strip()
+        reply = (
+            UNFORMATTED_REPLY
+            if _looks_structured(raw)
+            else raw.strip()
+        )
     acceptance = data.get("acceptance")
     if not isinstance(acceptance, list):
         acceptance = []
@@ -402,10 +436,18 @@ class ProjectAgent:
                 messages, model=project_model_name(layout.control)
             )
         except ModelError:
-            return observation
+            return (
+                "I couldn't summarize the project state just now. "
+                "Please retry."
+            )
         answer = parse_answer(raw)
         reply = str(answer.get("reply", "")).strip()
-        return reply or observation
+        if not reply or _looks_structured(reply):
+            return (
+                "I couldn't summarize the project state just now. "
+                "Please retry."
+            )
+        return reply
 
     def handle(
         self, project: Mapping[str, Any], text: str, actor: str

@@ -207,6 +207,45 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(result.kind, "answer")
         self.assertEqual(result.text, "Just a plain answer.")
 
+    def test_json_without_a_reply_is_not_dumped(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(['{"kind": "answer"}']),
+        )
+
+        result = agent.handle(project, "Hello", "@tester")
+
+        self.assertNotIn("{", result.text)
+        self.assertNotIn('"kind"', result.text)
+        self.assertTrue(result.text.strip())
+
+    def test_broken_json_is_not_dumped(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(['{"kind": "answer", broken']),
+        )
+
+        result = agent.handle(project, "Hello", "@tester")
+
+        self.assertNotIn("{", result.text)
+        self.assertTrue(result.text.strip())
+
+    def test_narration_failure_returns_language_not_the_dump(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        agent = ProjectAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        text = agent.narrate(
+            project, "status?", "project: alpha\nlayout: linked"
+        )
+        self.assertNotIn("project:", text)
+        self.assertNotIn("layout:", text)
+        self.assertTrue(text.strip())
+
     def test_model_failure_is_reported_without_a_crash(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         agent = ProjectAgent(
