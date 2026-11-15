@@ -8,12 +8,17 @@ from unittest.mock import patch
 
 from forgel.agent import ProjectAgent
 from forgel.config import Settings
-from forgel.console import _task_snapshot, _task_update_text, run_console
+from forgel.console import (
+    _explain_outcomes,
+    _task_observation,
+    _task_snapshot,
+    run_console,
+)
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.projects import create_project
-from forgel.tasks import create_task, update_task
+from forgel.tasks import create_task, get_task, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -127,9 +132,57 @@ class ConsoleTest(unittest.TestCase):
         self.assertIn("Recorded.", text)
         self.assertIn("Add a page", text)
 
-    def test_task_status_change_is_reported_in_text(self) -> None:
+    def test_task_observation_contains_the_real_cause(self) -> None:
         project_id = create_project(
             self.settings, self.ledger, "Tasks", "A brief."
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        task = create_task(
+            layout,
+            "Fix the README",
+            ["Update README"],
+            ["README is updated"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "repeated action loop: read_file:README.md",
+                "failure": {
+                    "kind": "agent",
+                    "message": "the agent read README.md five times",
+                },
+                "files_changed": ["README.md"],
+                "report": "docs/program/agent/run.md",
+            },
+        )
+        stored = get_task(layout, task["id"])
+        assert stored is not None
+        observation = _task_observation(stored, layout)
+        self.assertEqual(observation["status"], "failed")
+        self.assertIn(
+            "repeated action loop", observation["summary"]
+        )
+        self.assertIn(
+            "read README.md five times",
+            observation["failure"]["message"],
+        )
+        self.assertEqual(
+            observation["files_changed"], ["README.md"]
+        )
+
+    def test_outcome_explanation_uses_the_model_and_the_request(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Outcomes",
+            "A brief.",
+            mode="brownfield",
         )
         project = self.ledger.get_project(project_id)
         assert project is not None
@@ -148,16 +201,33 @@ class ConsoleTest(unittest.TestCase):
             str(task["id"]),
             status="failed",
             result={
-                "summary": "repeated action loop",
+                "summary": "repeated action loop: read_file:README.md",
+                "failure": {
+                    "kind": "agent",
+                    "message": "the agent read README.md five times",
+                },
                 "files_changed": ["README.md"],
                 "report": "docs/program/agent/run.md",
             },
         )
-        text = _task_update_text(layout, before)
-        self.assertIn(str(task["id"]), text)
-        self.assertIn("failed", text)
-        self.assertIn("repeated action loop", text)
-        self.assertIn("README.md", text)
+        reply = (
+            "Агент зациклился на перечитывании README и не дошёл до правки. "
+            "Задача не закрыта; её нужно перезапустить, иначе очередь стоит."
+        )
+        client = ScriptedModelClient([reply])
+        answer = _explain_outcomes(
+            ProjectAgent(self.settings, self.ledger, client),
+            project,
+            layout,
+            before,
+            "ru",
+            "Продолжаем",
+        )
+        self.assertEqual(answer, reply)
+        prompt = client.requests[0][-1].content
+        self.assertIn("Продолжаем", prompt)
+        self.assertIn("repeated action loop", prompt)
+        self.assertIn("README.md", prompt)
 
     def test_quit_and_eof_end_the_console(self) -> None:
         text = self._run(["/quit"])

@@ -215,6 +215,41 @@ class AgentError(RuntimeError):
     """The agent could not produce a usable answer."""
 
 
+EXPLAIN_PROMPT = """You are Forgel's project agent. Your job is diagnosis, not
+a status report. The project owner wants to know what exactly did not work and
+why, in the language of their latest message.
+
+Rules:
+- Open with the concrete malfunction: which step, command, file, assertion or
+  review criterion broke. The task status ("failed", "review", "did not
+  pass") is the outcome, never the explanation; do not lead with it and do not
+  restate it.
+- Give the mechanism from the evidence: what the coding agent tried, the exact
+  repeated action, the failing command and its error or output, the reviewer's
+  blocking defect, the QA assertion, or the engine message. Connect cause to
+  effect: why that made the task impossible to finish.
+- Separate root cause from symptom. If a guard stopped the run, say what
+  triggered the guard. If the model returned nothing, say that the provider
+  answer was empty and what happened next. If review rejected the work, quote
+  the defect and the criterion it violates. If the work is fine but cannot
+  produce the required evidence, say exactly which evidence is missing.
+- Use the task requirements, acceptance criteria, checks, actions, command
+  exits, QA report, review defects and plan state together. Do not explain one
+  field in isolation.
+- Then state the consequence for the milestone and the concrete unblock: what
+  the runtime does automatically, what needs a retry or a criteria change, and
+  what the owner must decide. If nothing is required, say so plainly.
+- If the evidence is insufficient to name a cause, say which evidence is
+  missing; never guess and never substitute "a process error", "an internal
+  error" or "something went wrong".
+- Use only facts present in the context. Never invent files, results, state or
+  decisions.
+- Return plain prose in the user's language. No JSON, no key:value dump, no
+  boilerplate template, no internal terms such as ledger, generation or
+  checkpoint unless they are the cause.
+"""
+
+
 SUMMARY_PROMPT = """You compact the conversation of a project assistant.
 
 Preserve decisions, facts, file names, user preferences, open questions and
@@ -786,6 +821,47 @@ class ProjectAgent:
             return (
                 "I couldn't summarize the project state just now. "
                 "Please retry."
+            )
+        return reply
+
+    def explain(
+        self,
+        project: Mapping[str, Any],
+        question: str,
+        observation: str,
+        fallback: str = "",
+    ) -> str:
+        """Explain a finished task from the whole context, not a status dump."""
+
+        layout = ProjectLayout.detect(project["workspace"])
+        messages = [
+            ModelMessage(
+                role="system",
+                content=EXPLAIN_PROMPT,
+            ),
+            ModelMessage(
+                role="user",
+                content=(
+                    f"Project: {project['name']} ({project['id']})\n\n"
+                    f"User message:\n{question}\n\n"
+                    f"Runtime context:\n{observation}\n\n"
+                    "Write the explanation now."
+                ),
+            ),
+        ]
+        try:
+            raw = self.client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError:
+            return fallback or (
+                "I couldn't explain the result just now. Please retry."
+            )
+        answer = parse_answer(raw)
+        reply = str(answer.get("reply", "")).strip()
+        if not reply or _looks_structured(reply):
+            return fallback or (
+                "I couldn't explain the result just now. Please retry."
             )
         return reply
 

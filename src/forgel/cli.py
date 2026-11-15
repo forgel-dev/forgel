@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
-from . import __version__, git_ops, peak, tasks
+from . import __version__, git_ops, language, peak, tasks
 from .adopt import (
     AdoptError,
     add_repository,
@@ -772,6 +772,11 @@ def cmd_task(args: argparse.Namespace) -> int:
                     shlex.split(args.test_command)
                     if args.test_command
                     else []
+                ),
+                language=language.detect(
+                    " ".join(
+                        [args.title, *args.require, *args.accept]
+                    )
                 ),
             )
         except ValueError as exc:

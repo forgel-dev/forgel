@@ -10,8 +10,9 @@ never reaches ``done`` on its own.
 
 For a brownfield linked project there is no orchestrator staging descriptor;
 the human sign-off that keeps the pipeline from reaching ``done`` is the task
-acceptance gate (``FORGEL_TASK_ACCEPT=human``). The driver treats that gate as
-the staging approval gate and asserts it is a hard stop.
+acceptance gate. The product default is ``FORGEL_TASK_ACCEPT=auto``; the driver
+opts into ``human`` to prove that the gate is a hard stop when a project asks
+for it.
 
 No network, Docker daemon, cloud resources or provider model are touched. The
 temporary home and fixture repository are removed on exit, and the exit code

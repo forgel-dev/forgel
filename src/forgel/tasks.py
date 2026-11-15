@@ -97,6 +97,7 @@ def create_task(
     order: int = 0,
     depends_on: list[str] | None = None,
     checks: list[dict[str, Any]] | None = None,
+    language: str = "",
 ) -> dict[str, Any]:
     title = title.strip()
     requirements = [item.strip() for item in requirements if item.strip()]
@@ -129,6 +130,7 @@ def create_task(
             item for item in (depends_on or []) if item
         ],
         "checks": [_normalize_check(item) for item in (checks or [])],
+        "language": language.strip().lower(),
         "status": "pending",
         "created_at": _now(),
         "started_at": "",

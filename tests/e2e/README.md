@@ -22,9 +22,9 @@ The driver is an offline smoke of Forgel on itself:
 3. run one task through the coding agent, task QA and task review;
 4. stop at the approval gate.
 
-The run never touches the network, Docker or cloud resources. For a brownfield
-linked project the human gate is the task acceptance gate
-(`FORGEL_TASK_ACCEPT` defaults to `human`, and the driver sets it): the task
+The run never touches the network, Docker or cloud resources. The product
+default is automatic acceptance (`FORGEL_TASK_ACCEPT=auto`); the driver opts
+into `FORGEL_TASK_ACCEPT=human` to exercise the task acceptance gate: the task
 parks in `review` status with a pending acceptance record, and the driver
 asserts the project never reaches `done` on its own. The temporary home and
 fixture repository are removed on exit.

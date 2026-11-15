@@ -37,6 +37,10 @@ explicit because they are entry points or touch sensitive state.
 - After each command the daemon runs until it needs a human: a task awaiting
   acceptance, a stalled or finished milestone, or a scheduled retry (it waits
   through the backoff; Ctrl-C returns to the prompt).
+- Answers follow the language of your message. After a task the console
+  explains what actually broke and why, using the agent's actions, command
+  exits, QA report, review defects and milestone state; it names the concrete
+  cause or says which evidence is missing instead of restating the status.
 - The home defaults to `FORGEL_HOME` (usually `~/.forgel`).
 - Every console command also exists as `forgel <command>` for scripts.
 
@@ -210,9 +214,11 @@ The current agent takes a task end to end:
 3. An independent QA pass then runs the commands declared in the project's
    `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent
    review checks the committed diff against the requirements.
-4. The task then waits in `review` for a human decision: "accept" in the
-   console (or `forgel task accept`), or "send it back: <reason>" (or `forgel
-   task reject`), which returns the task for rework with that feedback.
+4. A passing review is accepted automatically and the task moves to `done`.
+   Set `FORGEL_TASK_ACCEPT=human` only if you want to sign off every task
+   yourself: it then waits in `review` until you say "accept" in the console
+   (or `forgel task accept`), or "send it back: <reason>" (or `forgel task
+   reject`), which returns it for rework with that feedback.
 
 Long tasks run as bounded sessions that hand off state through
 `docs/program/agent/<task>.state.md`. See `PLAN.md` §7.15.
@@ -416,10 +422,11 @@ environment contract again (sandbox or local); a red gate fails the task and
 writes `docs/program/agent/<task>.qa.md`. Then an independent reviewer with a
 clean context judges the committed diff against the explicit requirements and
 writes `docs/program/agent/<task>.review.md`; a failed verdict fails the task.
-A passing review leaves the task in `review` for a human decision (the default
-`FORGEL_TASK_ACCEPT=human`); `forgel task accept|reject` or `/task
-accept|reject` records it. Set `FORGEL_TASK_ACCEPT=auto` to accept green
-reviews automatically; an errored review never auto-accepts.
+A passing review is accepted automatically (`FORGEL_TASK_ACCEPT=auto`, the
+default); `forgel task accept|reject` or `/task accept|reject` remains
+available for manual decisions. Set `FORGEL_TASK_ACCEPT=human` to leave every
+green task in `review` for a human. A review-only criterion is judged by the
+reviewer; only an errored review needs a human.
 
 Failures are handled by kind: infrastructure failures are retried
 (`FORGEL_TASK_RETRIES=5`, backoff 1/5/15/30/60 min), QA/review rejections go back for rework with the
@@ -432,9 +439,10 @@ dependents; `forgel plan --status` shows the milestone state.
 
 Tasks carry executable acceptance checks, run by QA and stored outside the
 agent's write scope. A criterion that cannot be automated is marked
-`verification: review` and cannot be auto-accepted. Tests are normally only
-added; a deletion needs a recorded reason (`removed`, `replaced` with the
-replacement, or `wrong`), and an unjustified deletion fails the review.
+`verification: review` and judged by the independent reviewer. Tests are
+normally only added; a deletion needs a recorded reason (`removed`, `replaced`
+with the replacement, or `wrong`), and an unjustified deletion fails the
+review.
 
 From the chat: send a plain message to the selected project to queue a change;
 `/plan` decomposes a milestone; `/tasks` shows the queue; `/task accept|reject`

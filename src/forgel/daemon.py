@@ -15,7 +15,7 @@ from typing import Any, Callable
 from . import peak, tasks
 from .approvals import awaits_approval, latest_approval
 from .coding_agent import CodingAgent
-from .task_review import process_task_result
+from .task_review import accept_parked_green_tasks, process_task_result
 from .config import Settings
 from .control import is_paused
 from .layout import ProjectLayout
@@ -437,6 +437,13 @@ def run_once(
         if project_is_done(ledger, project_id):
             continue
         layout = ProjectLayout.detect(project["workspace"])
+        for task_id in accept_parked_green_tasks(
+            settings, ledger, project, layout
+        ):
+            log(
+                f"[daemon] {project_id}: auto-accepted {task_id} "
+                "(green review)"
+            )
         recovered = tasks.recover_running(layout)
         for task in recovered:
             log(

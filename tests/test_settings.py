@@ -106,7 +106,7 @@ class SettingsTest(unittest.TestCase):
                 settings = Settings.from_env(tmp)
         self.assertTrue(settings.task_qa)
         self.assertTrue(settings.task_review)
-        self.assertEqual(settings.task_accept, "human")
+        self.assertEqual(settings.task_accept, "auto")
         direct = Settings(
             home=Path(tmp),
             registry_path=Path("/x"),

@@ -89,7 +89,7 @@ def head_sha(repo: Path) -> str:
 
 
 def status_paths(repo: Path) -> list[str]:
-    result = _run(repo, "status", "--porcelain")
+    result = _run(repo, "status", "--porcelain", "--untracked-files=all")
     paths: list[str] = []
     for line in result.stdout.splitlines():
         if len(line) <= 3:

@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import git_ops, tasks
+from . import git_ops, language, tasks
 from .artifacts import write_text
 from .config import Settings
 from .session_context import (
@@ -360,8 +360,22 @@ class CodingAgent:
             )
         finally:
             stack.close()
+        previous_result = dict(task.get("result") or {})
+        previous_files = [
+            str(item)
+            for item in (previous_result.get("files_changed") or [])
+        ]
+        dirty = set(git_ops.status_paths(repo))
+        carried: set[str] = set()
+        for item in previous_files:
+            if item.endswith("/"):
+                carried |= {
+                    path for path in dirty if path.startswith(item)
+                }
+            elif item in dirty:
+                carried.add(item)
         changed = sorted(
-            (set(git_ops.status_paths(repo)) - preexisting) | set(touched)
+            (dirty - preexisting) | set(touched) | carried
         )
         commit_sha = ""
         if status == "done":
@@ -378,11 +392,6 @@ class CodingAgent:
             changed = sorted(set(touched))
 
         files_changed = changed
-        previous_result = dict(task.get("result") or {})
-        previous_files = [
-            str(item)
-            for item in (previous_result.get("files_changed") or [])
-        ]
         attributed_files = sorted(
             set(previous_files) | set(files_changed)
         )
@@ -964,6 +973,7 @@ class CodingAgent:
         test_command = task.get("test_command") or []
         tree = self._list(repo)
         branch = git_ops.current_branch(repo)
+        answer_language = language.name(str(task.get("language") or ""))
         return f"""TASK: {task['title']}
 
 Requirements:
@@ -980,6 +990,9 @@ Assumptions already recorded at intake (do not re-ask):
 {feedback_section}
 Final test command: {json.dumps(test_command)}
 Repository: {repo_id} at {repo} (branch {branch})
+
+Write done.summary, done.assumptions and fail.reason in {answer_language}.
+The user asked for this task in that language; keep the report readable to them.
 
 Files:
 {tree}

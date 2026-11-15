@@ -12,6 +12,7 @@ prompt); an idle home returns immediately.
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 import time
@@ -23,11 +24,12 @@ try:  # line editing and history for the prompt; no dependency
 except ImportError:  # pragma: no cover - platform without readline
     readline = None  # type: ignore[assignment]
 
-from .agent import ProjectAgent, append_history
+from .agent import ProjectAgent, append_history, load_history
 from .chat import CommandRouter
 from .config import Settings
 from .control import is_paused
 from .daemon import next_retry_wait, run_once
+from .language import detect as detect_language
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
@@ -38,9 +40,374 @@ from .tasks import latest_task, list_tasks, retry_moment
 PROMPT = "forgel> "
 QUIT = {"/quit", "/exit", "quit", "exit", "bye"}
 
+STRINGS: dict[str, dict[str, str]] = {
+    "en": {
+        "done": "done",
+        "failed": "failed",
+        "review": "needs your decision",
+        "pending": "queued",
+        "running": "running",
+        "blocked": "blocked",
+        "cancelled": "cancelled",
+        "plan_done": "done",
+        "plan_review": "awaiting a decision",
+        "plan_stalled": "stalled",
+        "plan_running": "running",
+        "plan_none": "none",
+        "milestone": "Milestone {plan}: {status} ({counts}).",
+        "count_done": "done",
+        "count_failed": "failed",
+        "count_blocked": "blocked",
+        "count_review": "in review",
+        "count_pending": "queued",
+        "explain_question": "The user's last message: {text}\n\nExplain the result in plain language, in the language of that message. Start with the concrete thing that did not work and why, not with the task status or plan counts. Synthesize the whole context: what happened and why, what is now blocked or waiting, what the runtime will do next on its own, and what — if anything — the user must decide. If the task is not complete, name the real cause from the evidence (the failing command and its error, the reviewer's blocking defect, the repeated action, the coding agent's reason, or the infrastructure failure), not a generic \"process error\". Do not restate the status dump, do not list raw fields, and do not invent facts. If nothing is needed from the user, say so directly.",
+        "explain_state_question": "Explain the current state in plain language, in the language of the user's message. Synthesize the plan and the latest result: what happened, what is blocked or waiting, what the runtime will do next on its own, and what — if anything — the user must decide. Do not restate the status dump or invent facts.",
+        "explain_missing_model": "No model is configured, so this result cannot be explained in plain language. Task {task}: {status}. Reports: {reports}.",
+        "explain_failed": "I couldn't explain the result just now. The task is {status}. Reports: {reports}.",
+        "waiting": "Waiting for a scheduled retry at {moment} (about {minutes} min). Ctrl-C returns to the prompt.",
+        "stopped": "Stopped waiting; the retry stays scheduled.",
+        "daemon_error": "daemon error: {error}",
+    },
+    "ru": {
+        "done": "готово",
+        "failed": "провал",
+        "review": "нужно решение",
+        "pending": "в очереди",
+        "running": "в работе",
+        "blocked": "заблокировано",
+        "cancelled": "отменено",
+        "plan_done": "завершён",
+        "plan_review": "ждёт решения",
+        "plan_stalled": "застрял",
+        "plan_running": "в работе",
+        "plan_none": "нет",
+        "milestone": "План {plan}: {status} ({counts}).",
+        "count_done": "готово",
+        "count_failed": "провал",
+        "count_blocked": "заблокировано",
+        "count_review": "на проверке",
+        "count_pending": "в очереди",
+        "explain_question": "Пользователь только что написал: «{text}».\n\nОбъясни результат на языке этого сообщения. Начни с конкретного места, которое не сработало, и почему, а не со статуса задачи или счётчиков плана. Собери весь контекст: что произошло и почему, что сейчас заблокировано или ждёт, что система сделает дальше сама и что, если вообще что-то, должен решить пользователь. Если задача не выполнена, назови реальную причину по фактам: упавшая команда и её ошибка, блокирующий дефект ревьюера, повторяющееся действие, причина от кодового агента или сбой инфраструктуры — а не общее «процесс завершился ошибкой». Не пересказывай статус и не перечисляй поля; не выдумывай факты. Если от пользователя ничего не требуется, скажи это прямо.",
+        "explain_state_question": "Объясни текущее состояние на языке сообщения пользователя. Собери картину из плана и последнего результата: что произошло, что заблокировано или ждёт, что система сделает дальше сама и что, если что-то, должен решить пользователь. Не пересказывай статус и не выдумывай факты.",
+        "explain_missing_model": "Модель не настроена, поэтому объяснить результат человеческим языком нельзя. Задача {task}: {status}. Отчёты: {reports}.",
+        "explain_failed": "Не удалось объяснить результат. Статус задачи: {status}. Отчёты: {reports}.",
+        "waiting": "Ждём запланированный повтор в {moment} (около {minutes} мин). Ctrl-C вернёт к приглашению.",
+        "stopped": "Ожидание остановлено; повтор остаётся запланированным.",
+        "daemon_error": "ошибка демона: {error}",
+    },
+}
+
+
+def _t(lang: str, key: str, **values: object) -> str:
+    table = STRINGS.get(lang) or STRINGS["en"]
+    template = table.get(key) or STRINGS["en"].get(key, key)
+    return template.format(**values)
+
+
+def _status_name(lang: str, status: str) -> str:
+    key = str(status or "")
+    if key in STRINGS["en"]:
+        return _t(lang, key)
+    return key
+
+
+def _plan_line(summary: dict, lang: str) -> str:
+    counts = summary.get("counts") or {}
+    parts = [
+        _t(lang, f"count_{key}") + f" {counts[key]}"
+        for key in ("done", "failed", "blocked", "review", "pending")
+        if counts.get(key)
+    ]
+    return _t(
+        lang,
+        "milestone",
+        plan=summary.get("plan_id") or "",
+        status=_t(lang, f"plan_{summary.get('status') or 'none'}"),
+        counts=", ".join(parts) or _t(lang, "plan_none"),
+    )
+
+
+def _attention_task(layout: ProjectLayout) -> dict | None:
+    tasks = list_tasks(layout)
+    for status in ("review", "failed", "pending", "blocked", "running"):
+        items = [
+            task for task in tasks if task.get("status") == status
+        ]
+        if items:
+            return items[-1]
+    return None
+
+
+def _cap_text(value: object, limit: int) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
+
+
+def _tail_text(value: object, limit: int) -> str:
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    return "…" + text[-limit:].lstrip()
+
+
+def _recent_conversation(
+    layout: ProjectLayout, session: str = "", limit: int = 6
+) -> list[dict]:
+    rows = load_history(layout, limit=limit * 2, session=session)
+    items = [
+        {
+            "role": row.get("role"),
+            "text": _cap_text(row.get("text"), 500),
+        }
+        for row in rows
+        if row.get("role") in {"user", "assistant"}
+        and str(row.get("text") or "").strip()
+    ]
+    return items[-limit:]
+
+
+def _report_text(
+    layout: ProjectLayout,
+    ref: object,
+    limit: int = 5000,
+    tail: bool = False,
+) -> str:
+    text_ref = str(ref or "").strip()
+    if not text_ref:
+        return ""
+    try:
+        text = layout.artifact(text_ref).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if len(text) <= limit:
+        return text
+    return ("…" + text[-limit:]) if tail else (text[:limit] + "…")
+
+
+def _report_actions(
+    layout: ProjectLayout, ref: object, limit: int = 30
+) -> list[str]:
+    text = _report_text(layout, ref, limit=200_000)
+    marker = "## Actions"
+    if marker not in text:
+        return []
+    section = text.split(marker, 1)[1].split("\n## ", 1)[0]
+    actions = [
+        _cap_text(line.strip()[2:], 300)
+        for line in section.splitlines()
+        if line.strip().startswith("- ")
+    ]
+    return actions[-limit:]
+
+
+def _task_observation(task: dict, layout: ProjectLayout) -> dict:
+    result = dict(task.get("result") or {})
+    qa = dict(result.get("qa") or {})
+    review = dict(result.get("review") or {})
+    failed_requirements = [
+        {
+            "requirement": item.get("requirement"),
+            "verdict": item.get("verdict"),
+            "note": _cap_text(item.get("note"), 900),
+        }
+        for item in (review.get("requirements") or [])
+        if str(item.get("verdict") or "") not in {"pass", ""}
+    ]
+    return {
+        "id": task.get("id"),
+        "title": task.get("title"),
+        "plan_goal": task.get("plan_goal"),
+        "status": task.get("status"),
+        "started_at": task.get("started_at"),
+        "finished_at": task.get("finished_at"),
+        "requirements": list(task.get("requirements") or []),
+        "acceptance": list(task.get("acceptance") or []),
+        "constraints": list(task.get("constraints") or []),
+        "checks": list(task.get("checks") or []),
+        "summary": _cap_text(result.get("summary"), 2600),
+        "failure": result.get("failure") or {},
+        "last_failure": result.get("last_failure") or {},
+        "last_actions": _report_actions(layout, result.get("report")),
+        "last_commands": [
+            {
+                "command": item.get("command"),
+                "exit_code": item.get("exit_code"),
+                "final_test": bool(item.get("final_test")),
+            }
+            for item in (result.get("commands") or [])
+        ][-12:],
+        "final_test_output": _tail_text(
+            result.get("test_output"), 3000
+        ),
+        "qa": {
+            "status": qa.get("status"),
+            "review_required": qa.get("review_required"),
+            "commands": [
+                {
+                    "command": item.get("command"),
+                    "exit_code": item.get("exit_code"),
+                }
+                for item in (qa.get("commands") or [])
+            ][:12],
+            "checks": [
+                {
+                    "criterion": item.get("criterion"),
+                    "exit_code": item.get("exit_code"),
+                    "verdict": item.get("verdict"),
+                }
+                for item in (qa.get("checks") or [])
+            ][:12],
+            "report": _report_text(
+                layout, qa.get("report"), limit=8000, tail=True
+            ),
+        },
+        "review": {
+            "status": review.get("status"),
+            "summary": _cap_text(review.get("summary"), 4000),
+            "blocking": [
+                _cap_text(item, 900)
+                for item in (review.get("blocking") or [])
+            ][:10],
+            "failed_requirements": failed_requirements[:10],
+        },
+        "acceptance": result.get("acceptance") or {},
+        "files_changed": list(result.get("files_changed") or [])[:40],
+        "context": result.get("context") or {},
+        "reports": [
+            str(ref)
+            for ref in (
+                result.get("report"),
+                qa.get("report"),
+                review.get("report"),
+            )
+            if str(ref or "").strip()
+        ],
+    }
+
+
+def _plan_observation(layout: ProjectLayout) -> dict:
+    summary = plan_status(layout)
+    return {
+        "id": summary.get("plan_id"),
+        "goal": summary.get("goal"),
+        "status": summary.get("status"),
+        "counts": summary.get("counts"),
+        "tasks": [
+            {
+                "id": task.get("id"),
+                "title": task.get("title"),
+                "status": task.get("status"),
+                "blocked_by": task.get("blocked_by"),
+            }
+            for task in (summary.get("tasks") or [])
+        ],
+    }
+
+
+def _changed_tasks(
+    layout: ProjectLayout, before: dict[str, str]
+) -> list[dict]:
+    changed: list[dict] = []
+    for item in list_tasks(layout):
+        task_id = str(item["id"])
+        status = str(item.get("status", ""))
+        if before.get(task_id) == status:
+            continue
+        result = dict(item.get("result") or {})
+        if status == "pending" and not (
+            result.get("last_failure") or result.get("retry_after")
+        ):
+            continue
+        if status not in {
+            "done",
+            "failed",
+            "review",
+            "pending",
+            "blocked",
+            "cancelled",
+            "running",
+        }:
+            continue
+        changed.append(item)
+    return changed
+
+
+def _conversation_observation(
+    layout: ProjectLayout, session: str = ""
+) -> list[dict]:
+    return _recent_conversation(layout, session=session)
+
+
+def _explain_outcomes(
+    agent: ProjectAgent | None,
+    project: dict | None,
+    layout: ProjectLayout,
+    before: dict[str, str],
+    lang: str,
+    user_text: str,
+    session: str = "",
+) -> str:
+    """Ask the model for a plain-language account of what just happened."""
+
+    changed = _changed_tasks(layout, before)
+    if not changed:
+        return ""
+    last = changed[-1]
+    reports = _task_observation(last, layout)["reports"]
+    if agent is None or project is None:
+        return _t(
+            lang,
+            "explain_missing_model",
+            task=last.get("id") or "",
+            status=_status_name(lang, str(last.get("status") or "")),
+            reports=", ".join(reports) or "—",
+        )
+    observation = json.dumps(
+        {
+            "project": {
+                "name": project.get("name"),
+                "brief": _cap_text(project.get("brief"), 800),
+            },
+            "plan": _plan_observation(layout),
+            "changed_tasks": [
+                _task_observation(task, layout) for task in changed
+            ],
+            "recent_conversation": _conversation_observation(
+                layout, session
+            ),
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+    question = _t(
+        lang, "explain_question", text=user_text or "(no message)"
+    )
+    fallback = _t(
+        lang,
+        "explain_failed",
+        status=_status_name(lang, str(last.get("status") or "")),
+        reports=", ".join(reports) or "—",
+    )
+    try:
+        answer = agent.explain(
+            project, question, observation, fallback=fallback
+        )
+    except Exception:  # noqa: BLE001 - the console must stay up
+        answer = fallback
+    answer = str(answer or "").strip()
+    if answer:
+        return answer
+    return fallback
+
 
 def _report_state(
-    ledger: Ledger, output: Callable[[str], None]
+    ledger: Ledger,
+    output: Callable[[str], None],
+    agent: ProjectAgent | None = None,
+    lang: str = "en",
+    session: str = "",
 ) -> None:
     project_id = ledger.get_session(0)
     if not project_id:
@@ -50,31 +417,59 @@ def _report_state(
         return
     layout = ProjectLayout.detect(project["workspace"])
     summary = plan_status(layout)
-    if summary["status"] not in {"none", "running"}:
-        output(
-            f"Milestone {summary['plan_id']}: {summary['status']}."
+    task = _attention_task(layout)
+    if agent is not None and task is not None:
+        observation = json.dumps(
+            {
+                "project": {
+                    "name": project.get("name"),
+                    "brief": _cap_text(project.get("brief"), 800),
+                },
+                "plan": _plan_observation(layout),
+                "latest_task": _task_observation(task, layout),
+                "recent_conversation": _conversation_observation(
+                    layout, session
+                ),
+            },
+            ensure_ascii=False,
+            indent=2,
         )
-    task = latest_task(layout)
+        try:
+            answer = agent.explain(
+                project,
+                _t(lang, "explain_state_question"),
+                observation,
+                fallback=_t(
+                    lang,
+                    "explain_failed",
+                    status=_status_name(
+                        lang, str(task.get("status") or "")
+                    ),
+                    reports=", ".join(
+                        _task_observation(task, layout)["reports"]
+                    )
+                    or "—",
+                ),
+            ).strip()
+        except Exception:  # noqa: BLE001 - the console must stay up
+            answer = ""
+        if answer:
+            output(answer)
+            return
+    if summary["status"] not in {"none", "running"}:
+        output(_plan_line(summary, lang))
     if task is None:
         return
-    status = task.get("status")
-    if status == "review":
-        output(
-            f"Task {task['id']} awaits your decision: say \"accept\" "
-            "or tell me what to change."
+    reports = _task_observation(task, layout)["reports"]
+    output(
+        _t(
+            lang,
+            "explain_missing_model",
+            task=task.get("id") or "",
+            status=_status_name(lang, str(task.get("status") or "")),
+            reports=", ".join(reports) or "—",
         )
-    elif status == "pending":
-        moment = retry_moment(task)
-        if moment is not None:
-            output(
-                f"Task {task['id']} retries at "
-                f"{moment.strftime('%H:%M UTC')}."
-            )
-    elif status == "failed":
-        output(
-            f"Task {task['id']} failed: "
-            + str((task.get("result") or {}).get("summary", ""))[:200]
-        )
+    )
 
 
 def _drain(
@@ -82,6 +477,10 @@ def _drain(
     ledger: Ledger,
     output: Callable[[str], None],
     sleep_fn: Callable[[float], None] = time.sleep,
+    lang: str = "en",
+    agent: ProjectAgent | None = None,
+    project: dict | None = None,
+    session: str = "",
 ) -> None:
     """Run until no immediately runnable work remains.
 
@@ -93,13 +492,13 @@ def _drain(
         try:
             processed = run_once(settings, ledger, log=output)
         except Exception as exc:  # noqa: BLE001 - the console must stay up
-            output(f"daemon error: {exc}")
+            output(_t(lang, "daemon_error", error=exc))
             return
         if processed:
             continue
         wait = next_retry_wait(ledger)
         if wait is None:
-            _report_state(ledger, output)
+            # The caller prints the outcome of tasks whose status changed.
             return
         moment = None
         for project in ledger.list_projects():
@@ -108,17 +507,23 @@ def _drain(
             if task is not None:
                 moment = retry_moment(task) or moment
         when = (
-            f" at {moment.strftime('%H:%M UTC')}" if moment else ""
+            moment.strftime("%H:%M UTC") if moment else ""
         )
         output(
-            f"Waiting for a scheduled retry{when} "
-            f"(about {wait / 60:.0f} min). Ctrl-C returns to the prompt."
+            _t(
+                lang,
+                "waiting",
+                moment=when,
+                minutes=f"{wait / 60:.0f}",
+            )
         )
         try:
             sleep_fn(wait)
         except KeyboardInterrupt:
-            output("Stopped waiting; the retry stays scheduled.")
-            _report_state(ledger, output)
+            output(_t(lang, "stopped"))
+            _report_state(
+                ledger, output, agent, lang, session
+            )
             return
 
 
@@ -267,40 +672,6 @@ def _task_snapshot(layout: ProjectLayout) -> dict[str, str]:
     }
 
 
-def _short_summary(text: str, limit: int = 280) -> str:
-    first = str(text or "").strip().split("\n\n")[0]
-    if len(first) > limit:
-        first = first[:limit].rstrip() + "…"
-    return first
-
-
-def _task_update_text(
-    layout: ProjectLayout, before: dict[str, str]
-) -> str:
-    """Summarize tasks whose status changed during this drain."""
-
-    items = list_tasks(layout)
-    lines: list[str] = []
-    for item in items:
-        task_id = str(item["id"])
-        status = str(item.get("status", ""))
-        if before.get(task_id) == status:
-            continue
-        result = item.get("result") or {}
-        summary = _short_summary(str(result.get("summary") or ""))
-        files = [str(value) for value in result.get("files_changed") or []]
-        report = str(result.get("report") or "").strip()
-        line = f"Task `{task_id}`: **{status}**"
-        if summary:
-            line += f" — {summary}"
-        if files:
-            line += "\nFiles: " + ", ".join(f"`{value}`" for value in files)
-        if report:
-            line += f"\nReport: `{report}`"
-        lines.append(line)
-    return "\n\n".join(lines)
-
-
 def run_console(
     settings: Settings,
     ledger: Ledger,
@@ -392,6 +763,7 @@ def run_console(
             "Tab completes commands; ↑/↓ history; \\ continues a line; "
             "Ctrl-C stops input; Ctrl-D exits."
         )
+    lang = "en"
     try:
         while True:
             if interactive:
@@ -413,6 +785,8 @@ def run_console(
                 continue
             if text in QUIT:
                 break
+            if not text.startswith("/"):
+                lang = detect_language(text, lang)
             if router.agent is None:
                 client = build_model_client(settings.home, log=output)
                 if client is not None:
@@ -446,20 +820,37 @@ def run_console(
                     _task_snapshot(layout) if layout is not None else {}
                 )
                 try:
-                    _drain(settings, ledger, output, sleep_fn=sleep_fn)
+                    _drain(
+                        settings,
+                        ledger,
+                        output,
+                        sleep_fn=sleep_fn,
+                        lang=lang,
+                        agent=router.agent,
+                        project=project,
+                        session=str(chat_id),
+                    )
                 except KeyboardInterrupt:
                     if interactive:
                         output("Stopped; back to the prompt.")
                         continue
                     raise
                 if layout is not None:
-                    update = _task_update_text(layout, before)
-                    if update:
-                        output(update)
+                    explanation = _explain_outcomes(
+                        router.agent,
+                        project,
+                        layout,
+                        before,
+                        lang,
+                        text,
+                        session=str(chat_id),
+                    )
+                    if explanation:
+                        output(explanation)
                         append_history(
                             layout,
                             "assistant",
-                            update,
+                            explanation,
                             actor,
                             session=str(chat_id),
                         )

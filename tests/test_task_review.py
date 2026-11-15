@@ -17,6 +17,7 @@ from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.task_review import (
     _review_prompt,
+    accept_parked_green_tasks,
     accept_task,
     process_task_result,
     reject_task,
@@ -352,6 +353,78 @@ class TaskReviewTest(unittest.TestCase):
             stored["result"]["acceptance"]["actor"], "auto"
         )
 
+    def test_auto_policy_accepts_a_task_parked_for_a_human(self) -> None:
+        self.settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+            task_qa=True,
+            task_review=True,
+            task_accept="auto",
+        )
+        task = self._task(status="review")
+        update_task(
+            self.layout,
+            task["id"],
+            status="review",
+            result={
+                **task["result"],
+                "qa": {"status": "pass", "review_required": False},
+                "review": {"status": "pass"},
+                "acceptance": {
+                    "status": "pending",
+                    "reason": "review passed; acceptance required",
+                },
+            },
+        )
+        accepted = accept_parked_green_tasks(
+            self.settings, self.ledger, self.project, self.layout
+        )
+        self.assertEqual(accepted, [task["id"]])
+        final = get_task(self.layout, task["id"])
+        assert final is not None
+        self.assertEqual(final["status"], "done")
+        self.assertEqual(
+            final["result"]["acceptance"]["actor"], "auto"
+        )
+
+    def test_auto_policy_accepts_a_review_only_task(self) -> None:
+        self.settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+            task_qa=True,
+            task_review=True,
+            task_accept="auto",
+        )
+        task = self._task(status="review")
+        update_task(
+            self.layout,
+            task["id"],
+            status="review",
+            result={
+                **task["result"],
+                "qa": {"status": "pass", "review_required": True},
+                "review": {"status": "pass"},
+                "acceptance": {
+                    "status": "pending",
+                    "reason": "acceptance checks require review",
+                },
+            },
+        )
+        accepted = accept_parked_green_tasks(
+            self.settings, self.ledger, self.project, self.layout
+        )
+        self.assertEqual(accepted, [task["id"]])
+        final = get_task(self.layout, task["id"])
+        assert final is not None
+        self.assertEqual(final["status"], "done")
+        self.assertTrue(final["result"]["qa"]["review_required"])
+
     def test_daemon_runs_qa_review_and_leaves_the_task_for_acceptance(
         self,
     ) -> None:
@@ -534,7 +607,9 @@ class TaskReviewTest(unittest.TestCase):
         )
         self.assertEqual(result.status, "pass", result.summary)
 
-    def test_review_only_checks_block_auto_acceptance(self) -> None:
+    def test_review_only_checks_are_accepted_after_a_green_review(
+        self,
+    ) -> None:
         self.settings = Settings(
             home=self.home,
             registry_path=REPO_ROOT / "registry" / "recipes.json",
@@ -563,9 +638,12 @@ class TaskReviewTest(unittest.TestCase):
         )
         final = get_task(self.layout, task["id"])
         assert final is not None
-        self.assertEqual(final["status"], "review")
+        self.assertEqual(final["status"], "done")
         self.assertTrue(
             final["result"]["qa"]["review_required"]
+        )
+        self.assertEqual(
+            final["result"]["acceptance"]["actor"], "auto"
         )
 
     def test_a_rejected_review_goes_back_for_rework(self) -> None:

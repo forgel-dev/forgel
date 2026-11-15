@@ -3,8 +3,8 @@
 The reviewer gets a clean context: the task's explicit requirements, the diff
 the agent committed, the QA verdict and the assumptions. It does not see the
 agent's self-justification and it cannot modify the repository. A failed review
-fails the task; a passing review leaves the task in ``review`` until a human
-accepts it, unless the project explicitly opts into automatic acceptance.
+fails the task; a passing review is accepted automatically unless the project
+opts into human acceptance.
 
 Acceptance is a record, not a second implementation: it writes who accepted,
 when and with what note into the task and the ledger.
@@ -37,7 +37,7 @@ from .repo_tools import (
     execute_repo_action,
 )
 from .task_qa import TaskQAResult, run_task_qa
-from .tasks import get_task, update_task
+from .tasks import get_task, list_tasks, update_task
 
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
@@ -884,7 +884,6 @@ def process_task_result(
     if (
         settings.task_accept == "auto"
         and review_status not in {"error", "fail"}
-        and not review_required
     ):
         accept_task(
             settings, ledger, project, task, actor="auto", notes=""
@@ -898,3 +897,41 @@ def process_task_result(
     elif review_status == "skipped":
         reason = "review is disabled; acceptance required"
     await_acceptance(layout, task, reason)
+
+
+def accept_parked_green_tasks(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    layout: ProjectLayout,
+) -> list[str]:
+    """Accept tasks that were parked for a human while the policy was human.
+
+    Switching ``FORGEL_TASK_ACCEPT`` to ``auto`` must take effect without a
+    manual accept for every task already waiting. A task stays parked only
+    when the reviewer errored: without a verdict there is nothing to accept.
+    """
+
+    if settings.task_accept != "auto":
+        return []
+    accepted: list[str] = []
+    for task in list_tasks(layout):
+        if task.get("status") != "review":
+            continue
+        result = dict(task.get("result") or {})
+        acceptance = dict(result.get("acceptance") or {})
+        if acceptance.get("status") != "pending":
+            continue
+        review = dict(result.get("review") or {})
+        if str(review.get("status") or "") in {"error", "fail"}:
+            continue
+        accept_task(
+            settings,
+            ledger,
+            project,
+            task,
+            actor="auto",
+            notes="acceptance policy is auto",
+        )
+        accepted.append(str(task["id"]))
+    return accepted

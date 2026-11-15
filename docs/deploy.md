@@ -253,10 +253,10 @@ and point the project at them, or wait for a dedicated services sandbox.
   `FORGEL_TIMEZONE` makes `/peak` show local times.
 - The Docker image includes `tiktoken`, so context budgets use a real
   tokenizer; a minimal install falls back to a conservative count.
-- A task goes through independent QA and a reviewer by default. With
-  `FORGEL_TASK_ACCEPT=human` (the default) a green task waits in `review`
-  until `/task accept <id>`; set `auto` to accept green reviews without a
-  human. An errored review never auto-accepts.
+- A task goes through independent QA and a reviewer by default. A green review
+  is accepted automatically; set `FORGEL_TASK_ACCEPT=human` to leave every
+  task in `review` until `/task accept <id>`. Review-only criteria are part of
+  the reviewer's verdict; only an errored review needs a human.
 - Infrastructure failures are retried with backoff (`FORGEL_TASK_RETRIES=5`, 1/5/15/30/60 min); QA and review
   rejections go back for rework with the feedback (`FORGEL_TASK_REWORKS=5`) and
   an external arbiter (`FORGEL_TASK_ARBITER`) resolves a repeated conflict.

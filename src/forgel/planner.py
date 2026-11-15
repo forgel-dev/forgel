@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import peak, tasks
+from . import language, peak, tasks
 from .adopt import AdoptError, add_repository, create_repository
 from .agent import build_context
 from .artifacts import write_text
@@ -701,6 +701,7 @@ def plan_project(
     _apply_repositories(settings, ledger, project, repositories)
     created: list[dict[str, Any]] = []
     ids: list[str] = []
+    task_language = language.detect(goal)
     for index, item in enumerate(items):
         dependencies = [ids[position] for position in item["depends_on"]]
         task = tasks.create_task(
@@ -717,6 +718,7 @@ def plan_project(
             plan_goal=goal,
             order=index + 1,
             depends_on=dependencies,
+            language=task_language,
         )
         ids.append(str(task["id"]))
         created.append(

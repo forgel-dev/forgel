@@ -691,6 +691,41 @@ class CodingAgentTest(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertIn("README.md", result.files_changed)
 
+    def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
+        leftover = self.repo / "leftover"
+        leftover.mkdir()
+        (leftover / "note.py").write_text("value = 1\n", encoding="utf-8")
+        task = create_task(
+            self.layout,
+            "Finish a partial change",
+            ["Keep the note"],
+            ["The note is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                "summary": "earlier attempt",
+                "files_changed": ["leftover/"],
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [json.dumps({"action": "done", "summary": "already written"})]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        tracked = _run(
+            self.repo, "ls-files", "leftover/note.py"
+        ).stdout.strip()
+        self.assertEqual(tracked, "leftover/note.py")
+        self.assertIn("leftover/note.py", result.files_changed)
+
     def test_daemon_processes_a_pending_task(self) -> None:
         task = self._task()
         client = ScriptedModelClient(self._responses())

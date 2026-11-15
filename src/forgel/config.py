@@ -159,8 +159,8 @@ class Settings:
         peak_hours = peak.hours_from_env()
         peak.parse_hours(peak_hours)
         task_accept = (
-            os.environ.get("FORGEL_TASK_ACCEPT", "human").strip().lower()
-            or "human"
+            os.environ.get("FORGEL_TASK_ACCEPT", "auto").strip().lower()
+            or "auto"
         )
         if task_accept not in {"auto", "human"}:
             raise ValueError(
