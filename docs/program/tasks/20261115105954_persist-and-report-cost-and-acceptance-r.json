@@ -61,10 +61,10 @@
       ]
     }
   ],
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "2026-11-15T17:30:54+00:00",
-  "finished_at": "2026-11-15T17:34:14+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "repeated action loop: read_file:src/forgel/chat.py",
     "files_changed": [],
@@ -90,10 +90,13 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261115105954_persist-and-report-cost-and-acceptance-r.md",
+    "last_failure": {
       "kind": "agent",
       "message": "repeated action loop: read_file:src/forgel/chat.py"
     },
-    "report": "docs/program/agent/20261115105954_persist-and-report-cost-and-acceptance-r.md"
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   }
 }
