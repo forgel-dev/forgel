@@ -12,7 +12,12 @@ from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
-from forgel.planner import PlanningError, plan_project, plan_status
+from forgel.planner import (
+    MAX_RESEARCH_STEPS,
+    PlanningError,
+    plan_project,
+    plan_status,
+)
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.tasks import list_tasks, update_task
@@ -237,6 +242,29 @@ class PlannerTest(unittest.TestCase):
             with self.assertRaises(PlanningError) as ctx:
                 self._plan()
         self.assertIn("paused", str(ctx.exception))
+
+    def test_research_budget_forces_the_plan(self) -> None:
+        responses = [
+            json.dumps({"action": "list_files", "path": "."})
+            for _ in range(MAX_RESEARCH_STEPS + 1)
+        ] + [json.dumps(PLAN)]
+        client = ScriptedModelClient(responses)
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            dry_run=True,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+        self.assertTrue(
+            any(
+                "Research budget exhausted" in message.content
+                for message in client.requests[-1]
+            )
+        )
 
     def test_planner_retries_after_tool_markup(self) -> None:
         markup = (

@@ -43,7 +43,7 @@ from .repo_tools import (
 
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
-MAX_RESEARCH_STEPS = 8
+MAX_RESEARCH_STEPS = 16
 
 
 class PlanningError(RuntimeError):
@@ -174,9 +174,11 @@ one JSON action per turn:
 {{"action": "list_files", "path": ".", "repo_id": "main"}}
 {{"action": "read_file", "path": "PLAN.md", "repo_id": "main"}}
 Paths are relative to the repository and may not leave it. Read the project's
-own documents and code instead of guessing; do not ask a human. When you have
-enough context, reply with the plan object below. Never mix an action and the
-plan in one reply. Return JSON only; do not use tool-call markup, XML or
+own documents and code instead of guessing; do not ask a human. The context
+below already includes the project documents and a file tree; read only what
+is missing and stop reading once you can plan. When you have enough context,
+reply with the plan object below. Never mix an action and the plan in one
+reply. Return JSON only; do not use tool-call markup, XML or
 provider-specific function calls.
 
 Return exactly one JSON object:
@@ -470,6 +472,7 @@ def plan_project(
     raw = ""
     parsed: tuple[str, list[dict[str, Any]]] | None = None
     plan_retries = 0
+    budget_notice = False
     for step in range(MAX_RESEARCH_STEPS + 4):
         try:
             raw = model_client.complete(
@@ -504,10 +507,21 @@ def plan_project(
                     plan_retries += 1
                     continue
                 raise PlanningError(str(exc)) from exc
-        if step == MAX_RESEARCH_STEPS:
-            raise PlanningError(
-                "the planner exceeded the research step limit"
+        if step >= MAX_RESEARCH_STEPS:
+            if budget_notice:
+                raise PlanningError(
+                    "the planner exceeded the research step limit"
+                )
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Research budget exhausted. Return the final plan JSON "
+                    "object now; do not read or list more files.",
+                )
             )
+            budget_notice = True
+            continue
         try:
             observation = execute_repo_action(layout, repos, data)
         except RepoActionError as exc:
