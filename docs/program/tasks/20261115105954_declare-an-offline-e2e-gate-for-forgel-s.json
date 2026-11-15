@@ -1,0 +1,81 @@
+{
+  "id": "20261115105954_declare-an-offline-e2e-gate-for-forgel-s",
+  "title": "Declare an offline e2e gate for Forgel's own self-hosting pipeline",
+  "requirements": [
+    "Add an e2e entry to environment.yaml with a command list that runs an offline end-to-end smoke of Forgel on itself: adopt a local fixture repository, plan a milestone with the scripted model, run one task through coding agent, task QA and review, and stop at the staging approval gate.",
+    "The self-hosting e2e must run with FORGEL_MODEL_MODE=script, must not touch the network, Docker or cloud resources, and must finish within a couple of minutes.",
+    "Add tests/e2e/ self-hosting driver (or extend the existing one) that the environment.yaml e2e command invokes and that exits non-zero on a red gate.",
+    "Extend tests/test_environment.py to assert that environment.yaml declares both test and e2e and that the e2e command parses into a non-empty argument list."
+  ],
+  "acceptance": [
+    "The environment test passes with an e2e declaration.",
+    "The self-hosting e2e command exits 0 in the repository sandbox, asserted by the suite run that invokes it.",
+    "The e2e run stops at the staging approval gate and never reaches done without an approval, asserted by the driver."
+  ],
+  "constraints": [
+    "No external services, cloud resources or network calls.",
+    "Deterministic output; clean up temporary directories.",
+    "Do not weaken existing tests; keep the suite green."
+  ],
+  "repo_id": "main",
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
+  "assumptions": [],
+  "plan_id": "20261115105954_m1-oss-django-drf-react-spa-postgres-s3-",
+  "plan_goal": "Довести проект до выхода на M1 (публичная OSS-альфа): вертикальный срез Django/DRF + React SPA + Postgres + S3 на Yandex Cloud, multi-repo, независимый e2e QA в изолированном стенде, staging с подтверждением человеком, учёт стоимости и приёмок, самохостинг Forgel на самом себе. Первой задачей — проставить в PLAN.md и README отметки о том, что из M0/M0.5 уже сделано, чтобы список отражал реальность.",
+  "order": 6,
+  "depends_on": [
+    "20261115105954_record-m0-and-m0-5-completion-status-in-"
+  ],
+  "checks": [
+    {
+      "criterion": "environment.yaml declares test and e2e and the e2e command parses",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_environment",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "Self-hosting e2e driver exits 0 and parks at the staging gate",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_e2e",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "Full suite is green after the change",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    }
+  ],
+  "status": "pending",
+  "created_at": "2026-11-15T10:59:54+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

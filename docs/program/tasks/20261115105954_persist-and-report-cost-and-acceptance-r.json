@@ -1,0 +1,69 @@
+{
+  "id": "20261115105954_persist-and-report-cost-and-acceptance-r",
+  "title": "Persist and report cost and acceptance records per task",
+  "requirements": [
+    "Ledger: add a query that aggregates event cost per project, per generation and per stage, and a query that returns acceptance decisions derived from the approvals table.",
+    "Record task acceptance and rejection as ledger entries with actor, task id and reason, so an acceptance is durable and queryable rather than only printed.",
+    "Add a CLI/report path (forgel cost and the console equivalent) printing total cost, cost per stage and the acceptance count for a project, reading only from the ledger.",
+    "Extend tests/test_ledger.py or add tests/test_costs.py covering aggregation with recorded events, acceptance recording, and the report output on a scripted-model demo home."
+  ],
+  "acceptance": [
+    "Cost and acceptance tests pass.",
+    "For a project with recorded events, the cost report prints totals that equal the sum of event costs in the ledger, asserted by a test.",
+    "Accepting a task adds an acceptance record with the actor name and the reason field, asserted by a test."
+  ],
+  "constraints": [
+    "Read-only over existing artifacts; do not migrate or delete ledger data.",
+    "No wall-clock or random values in assertions; fix times or use injected values.",
+    "Report output in English."
+  ],
+  "repo_id": "main",
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
+  "assumptions": [],
+  "plan_id": "20261115105954_m1-oss-django-drf-react-spa-postgres-s3-",
+  "plan_goal": "Довести проект до выхода на M1 (публичная OSS-альфа): вертикальный срез Django/DRF + React SPA + Postgres + S3 на Yandex Cloud, multi-repo, независимый e2e QA в изолированном стенде, staging с подтверждением человеком, учёт стоимости и приёмок, самохостинг Forgel на самом себе. Первой задачей — проставить в PLAN.md и README отметки о том, что из M0/M0.5 уже сделано, чтобы список отражал реальность.",
+  "order": 5,
+  "depends_on": [
+    "20261115105954_register-the-django-drf-react-recipe-and"
+  ],
+  "checks": [
+    {
+      "criterion": "Cost aggregation and acceptance recording tests pass",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_costs",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "Existing ledger behavior is unchanged",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_ledger",
+        "-v"
+      ]
+    }
+  ],
+  "status": "pending",
+  "created_at": "2026-11-15T10:59:54+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

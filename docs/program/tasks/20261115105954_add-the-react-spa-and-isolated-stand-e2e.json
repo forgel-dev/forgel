@@ -1,0 +1,83 @@
+{
+  "id": "20261115105954_add-the-react-spa-and-isolated-stand-e2e",
+  "title": "Add the React SPA and isolated-stand e2e QA scenario to the template",
+  "requirements": [
+    "web/: a React SPA source (index.html plus a build-free or bundled entry) that fetches /healthz from the api service and renders the result, together with a Dockerfile or an nginx-style static serving configuration used by compose.yaml.",
+    "compose.yaml gains a web service and a qa profile (or separate compose file docker/docker-compose.qa.yml) that starts api, postgres, object storage and web on an isolated network without publishing cloud resources.",
+    "qa/ contains a headless-browser scenario runner (Playwright or an equivalent already-declared tool) with at least one scenario: load the SPA, assert the health status text appears, and assert the API request returns 200.",
+    "The template environment.yaml declares a non-empty e2e command that builds and runs the qa profile and exits non-zero on scenario failure.",
+    "tests/test_template_django_drf_react.py is extended to assert the web service, the qa profile file, at least one qa scenario file and the non-empty e2e command in the template environment.yaml."
+  ],
+  "acceptance": [
+    "The extended structural template test passes, including the e2e assertions.",
+    "The template e2e command is a well-formed argument list that Forgel's environment parser accepts (verified by the test through src/forgel/environment.py).",
+    "A human confirms from the task report that the e2e command runs the scenario in the isolated compose stand and exits 0, with the command and tail of output included in docs/program/agent/<task>.md."
+  ],
+  "constraints": [
+    "No browser download, Docker run or network access in the unittest suite.",
+    "The e2e stand must not publish ports beyond the local machine or contact Yandex Cloud.",
+    "Public text in English."
+  ],
+  "repo_id": "main",
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
+  "assumptions": [],
+  "plan_id": "20261115105954_m1-oss-django-drf-react-spa-postgres-s3-",
+  "plan_goal": "Довести проект до выхода на M1 (публичная OSS-альфа): вертикальный срез Django/DRF + React SPA + Postgres + S3 на Yandex Cloud, multi-repo, независимый e2e QA в изолированном стенде, staging с подтверждением человеком, учёт стоимости и приёмок, самохостинг Forgel на самом себе. Первой задачей — проставить в PLAN.md и README отметки о том, что из M0/M0.5 уже сделано, чтобы список отражал реальность.",
+  "order": 3,
+  "depends_on": [
+    "20261115105954_add-the-django-drf-backend-skeleton-temp"
+  ],
+  "checks": [
+    {
+      "criterion": "Structural test covers web, qa profile, scenario file and e2e command",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_template_django_drf_react",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "The template environment.yaml parses through src/forgel/environment.py with a test and an e2e command",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_environment",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "The e2e scenario passes in the isolated compose stand, evidence in the task report",
+      "verification": "review",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_template_django_drf_react",
+        "-v"
+      ]
+    }
+  ],
+  "status": "pending",
+  "created_at": "2026-11-15T10:59:54+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

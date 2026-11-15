@@ -1,0 +1,67 @@
+{
+  "id": "20261115105954_record-m0-and-m0-5-completion-status-in-",
+  "title": "Record M0 and M0.5 completion status in PLAN.md and README",
+  "requirements": [
+    "In PLAN.md §10 Roadmap add an explicit status marker line directly under the M0 — Skeleton and M0.5 — Self-Hosting headings, in the form '**Status:** done — <evidence>' or '**Status:** partial — <what remains>', with concrete evidence references (make demo, telegram gateway, planner, task QA, peak policy, sandbox).",
+    "Do not delete or renumber existing roadmap items; only add status markers and, where a stated deliverable is missing, list it under 'partial' with the remaining item.",
+    "In README.md update the '**Status:** pre-alpha' section to name M0 and M0.5 as complete (or partial with the same wording as PLAN.md) and link to PLAN.md §10.",
+    "Keep the wording in English (D-025) and factual: do not claim a state that the repository does not show.",
+    "Add tests/test_docs_status.py, a unittest that reads PLAN.md and README.md from the repository root and asserts: under each of the '### M0 — Skeleton' and '### M0.5 — Self-Hosting' headings there is a '**Status:**' line, and README.md contains the same M0/M0.5 status wording."
+  ],
+  "acceptance": [
+    "tests/test_docs_status.py exists and passes, proving PLAN.md has a Status line under both the M0 and M0.5 roadmap headings and README.md carries the matching status.",
+    "The repository documentation claims only evidence that exists in the tree (make demo target, telegram module, planner module, task QA, peak policy, sandbox); a human confirms each claim is backed by a file or Makefile target."
+  ],
+  "constraints": [
+    "Documentation-only change plus one test file; do not change product code.",
+    "Public documents in English.",
+    "Do not mention internal working documents or sessions in the text."
+  ],
+  "repo_id": "main",
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
+  "assumptions": [],
+  "plan_id": "20261115105954_m1-oss-django-drf-react-spa-postgres-s3-",
+  "plan_goal": "Довести проект до выхода на M1 (публичная OSS-альфа): вертикальный срез Django/DRF + React SPA + Postgres + S3 на Yandex Cloud, multi-repo, независимый e2e QA в изолированном стенде, staging с подтверждением человеком, учёт стоимости и приёмок, самохостинг Forgel на самом себе. Первой задачей — проставить в PLAN.md и README отметки о том, что из M0/M0.5 уже сделано, чтобы список отражал реальность.",
+  "order": 1,
+  "depends_on": [],
+  "checks": [
+    {
+      "criterion": "PLAN.md has Status lines under M0 and M0.5 and README.md matches",
+      "verification": "command",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_docs_status",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "Every status claim is backed by an existing file or Makefile target",
+      "verification": "review",
+      "command": [
+        "env",
+        "PYTHONPATH=src",
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_docs_status",
+        "-v"
+      ]
+    }
+  ],
+  "status": "pending",
+  "created_at": "2026-11-15T10:59:54+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
