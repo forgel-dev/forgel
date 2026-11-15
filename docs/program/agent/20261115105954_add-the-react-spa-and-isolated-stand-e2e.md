@@ -3,8 +3,8 @@
 - Task: `20261115105954_add-the-react-spa-and-isolated-stand-e2e`
 - Status: `done`
 - Repository: `main`
-- Steps: 26
-- Finished: 2026-11-15T16:39:32+00:00
+- Steps: 11
+- Finished: 2026-11-15T16:43:32+00:00
 
 ## Requirements
 
@@ -28,11 +28,10 @@
 
 ## Assumptions
 
+- The restored ComposeServicesTest.test_declares_the_api_postgres_and_object_storage now asserts the backend slice as a subset (>= api, postgres, minio) so the new web service does not make it fail; the exact service set of compose.yaml and of the QA stand is asserted separately.
 - The e2e command stays `sh scripts/e2e.sh` because environment.yaml has no working directory of its own and the template already uses script wrappers.
 - The qa profile lives in a separate docker/docker-compose.qa.yml so the local stand stays internal-only and never publishes ports.
 - The headless browser is playwright-core driving the Alpine chromium package baked into the qa image, so nothing is downloaded at build or run time.
-- `set -e` plus an EXIT trap in scripts/e2e.sh makes the declared command exit non-zero as soon as a build, health gate or scenario step fails.
-- The sandbox rejects a bare `sh` action, so the declared command was launched as `sh scripts/e2e.sh` via Python subprocess with the template as cwd; the reported output is that process's own stdout/stderr and exit code.
 
 ## Test Removals
 
@@ -43,42 +42,48 @@
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 26
-- Estimated input tokens (all calls): 565060
-- Provider input/output tokens: 607372 / 22461
-- Estimated prompt at the end: 37824 tokens
+- Model calls: 11
+- Estimated input tokens (all calls): 155881
+- Provider input/output tokens: 169759 / 8255
+- Estimated prompt at the end: 23348 tokens
 - State: not needed
 
 ## Summary
 
-Added the React SPA and the isolated-stand e2e QA scenario to the django-drf-react template and fixed the previous attempt's only blocking defect (an unjustified test removal).
+Added the React SPA and the isolated-stand e2e QA scenario to src/forgel/templates/django-drf-react and fixed the only blocking review defect on this retry.
 
-Product work kept from the previous attempt: web/ holds the React SPA (index.html, src/main.jsx, src/App.jsx fetching /healthz and rendering it into [data-testid="health-status"]) bundled with esbuild in web/Dockerfile and served by nginx (web/nginx.conf proxies /healthz to api:8000); compose.yaml declares the web service; docker/docker-compose.qa.yml is the isolated stand with api, postgres, minio, web and an on-demand `qa` profile on a single `internal: true` network with no published ports and no Yandex Cloud references; qa/ runs a Playwright (playwright-core + baked-in Alpine chromium) headless scenario that loads the SPA, asserts the health status text and asserts the /healthz response is 200, exiting non-zero on failure; environment.yaml declares `e2e: ["sh scripts/e2e.sh"]`; scripts/e2e.sh builds the stack, brings up api/postgres/minio/web with health gates, runs the qa profile and tears the stand down under `set -e` plus an EXIT trap.
+Product work (kept from the previous attempt):
+- web/: React SPA (index.html, src/main.jsx, src/App.jsx) that fetches /healthz from the api service and renders the payload into [data-testid="health-status"]; bundled with esbuild in web/Dockerfile and served by nginx (web/nginx.conf proxies /healthz to api:8000). compose.yaml now declares the web service (context: web, WEB_PORT).
+- docker/docker-compose.qa.yml: isolated stand with api, postgres, minio, web and an on-demand `qa` service in the qa profile, all on a single `internal: true` network, no published ports and no Yandex Cloud references.
+- qa/: headless-browser scenario runner (Playwright: playwright-core with the Alpine chromium package baked into the image, so nothing is downloaded at build or run time) with scenario.js that loads the SPA, asserts the health status text appears, asserts the /healthz request returned 200, and exits non-zero on failure; plus qa/Dockerfile and qa/package.json.
+- environment.yaml declares the non-empty e2e command `sh scripts/e2e.sh` (a well-formed argument list the environment parser accepts).
+- scripts/e2e.sh builds the stack, brings up api/postgres/minio/web behind health gates, runs the qa profile (`--profile qa run --rm qa`) and tears the stand down under `set -e` plus an EXIT trap, so any scenario failure makes the declared command exit non-zero.
 
-Fix for the review: the removed ComposeServicesTest.test_declares_the_api_postgres_and_object_storage is restored and now asserts the exact service set {api, web, postgres, minio}, so the old API/Postgres/object-storage coverage is back and the new web service is covered too. No test is deleted, so test_removals is empty.
+Fix for the review:
+- Restored ComposeServicesTest.test_declares_the_api_postgres_and_object_storage instead of deleting it. It now asserts the api/postgres/object-storage slice is still declared and configured, and a sibling test_declares_the_web_service asserts the new web service. No test was removed or weakened, so done.test_removals is empty.
 
-Report docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md records the actual output of the declared command `sh scripts/e2e.sh` in the isolated compose stand: PASS for the SPA index 200, the /healthz request 200, {"status":"ok"}, the rendered health text and the rendered HTTP code, then `SUMMARY: 5/5 checks passed`, `e2e: the isolated QA stand passed`, `EXIT 0`.
+tests/test_template_django_drf_react.py asserts the web service, the qa profile file (docker/docker-compose.qa.yml), the qa scenario file(s) and the non-empty e2e command parsed through src/forgel/environment.py.
 
-Verification: `python -m unittest tests.test_template_django_drf_react -v` -> 28 tests OK; `python -m unittest discover -s tests` -> 473 tests OK. The suite uses no browser download, no Docker run and no network access (it only reads files and the environment contract through src/forgel/environment.py).
+Verification (no browser download, no Docker run, no network in the suite — files and the environment contract only):
+- `python -m unittest tests.test_template_django_drf_react -v` -> 29 tests, OK (exit 0).
+- `python -m unittest discover -s tests` -> 474 tests, OK (exit 0, 63.0s).
+
+The isolated-compose e2e output (PASS for SPA index 200, /healthz 200, {"status":"ok"}, rendered health text and code; `SUMMARY: 5/5 checks passed`; `e2e: the isolated QA stand passed`; `EXIT 0`) is recorded in docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md.
 
 ## Files Changed
 
-- none
+- `tests/test_template_django_drf_react.py`
 
 ## Commands
 
 - `["python", "-m", "unittest", "tests.test_template_django_drf_react", "-v"]` → exit 0
-- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["docker", "compose", "version"]` → exit 0
-- `["python", "-m", "unittest", "tests.test_template_django_drf_react", "-v"]` → exit 0
-- `["python", "-c", "import re,subprocess\np=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True)\nt=re.sub(r'\\x1b\\[[0-9;]*[A-Za-z]','',p.stdout+p.stderr)\nkeep=[l for l in t.splitlines() if l.strip() and not l.startswith(('#',' Image ',' Network ',' Volume ',' Container ','postgres-1','minio-1','web-1','api-1'))]\nprint('\\n'.join(keep))\nprint('EXIT', p.returncode)"]` → exit 0
 - `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 - `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-[agent] 20261115163839_inspect-and-finish: context handoff to session 2 (~4815/3072 tokens)
+[agent] 20261115164242_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -505,9 +510,9 @@ Verification: `python -m unittest tests.test_template_django_drf_react -v` -> 28
 [approval] completed
 [done] running
 [done] completed
-.........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+..........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 473 tests in 63.638s
+Ran 474 tests in 61.667s
 
 OK
 
@@ -516,15 +521,9 @@ OK
 ## Actions
 
 - read_file: tests/test_template_django_drf_react.py
-- read_file: src/forgel/templates/django-drf-react/environment.yaml
-- read_file: docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.review.md
-- read_file: src/forgel/templates/django-drf-react/scripts/e2e.sh
-- list_files
-- read_file: src/forgel/templates/django-drf-react/scripts/e2e.sh
+- write_file: tests/test_template_django_drf_react.py
 - run: ['python', '-m', 'unittest', 'tests.test_template_django_drf_react', '-v']
 - run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
 - read_file: docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md
-- run: ['docker', 'compose', 'version']
-- run: ['python', '-m', 'unittest', 'tests.test_template_django_drf_react', '-v']
-- run: ['python', '-c', "import re,subprocess\np=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True)\nt=re.sub(r'\\x1b\\[[0-9;]*[A-Za-z]','',p.stdout+p.stderr)\nkeep=[l for l in t.splitlines() if l.strip() and not l.startswith(('#',' Image ',' Network ',' Volume ',' Container ','postgres-1','minio-1','web-1','api-1'))]\nprint('\\n'.join(keep))\nprint('EXIT', p.returncode)"]
-- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md
+- read_file: docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md
