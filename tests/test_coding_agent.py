@@ -584,6 +584,33 @@ class CodingAgentTest(unittest.TestCase):
         )
         self.assertIn("source", final_prompt)
 
+    def test_tool_markup_is_retried(self) -> None:
+        task = create_task(
+            self.layout,
+            "Finish",
+            ["Finish it"],
+            ["It is finished"],
+            repo_id="main",
+            test_command=[],
+        )
+        markup = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"action\">"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+        client = ScriptedModelClient(
+            [
+                markup,
+                json.dumps({"action": "done", "summary": "done"}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertIn(
+            "tool-call markup", client.requests[1][-1].content
+        )
+
     def test_repeated_actions_fail_fast(self) -> None:
         task = self._task()
         repeated = json.dumps(

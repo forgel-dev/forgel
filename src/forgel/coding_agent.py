@@ -110,7 +110,9 @@ SYSTEM_PROMPT = """You are Forgel's coding agent for exactly one repository.
 Work only inside the repository. Never touch `.git`, never read or write files
 outside it, and never add secrets.
 
-Reply with exactly one JSON object per turn. Available actions:
+Reply with exactly one JSON object per turn. Do not emit tool-call markup,
+XML or provider-specific function calls; the runtime understands only the
+JSON actions below.
 {"action": "list_files", "path": "."}
 {"action": "read_file", "path": "relative/path"}
 {"action": "write_file", "path": "relative/path", "content": "..."}
@@ -203,6 +205,20 @@ def _cap(text: str, limit: int = MAX_OBSERVATION) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + f"\n... [truncated, {len(text)} chars]"
+
+
+def _looks_like_tool_markup(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "<｜｜dsml｜｜",
+            "<|",
+            "<tool_call",
+            "<function_call",
+            "<system_warning",
+        )
+    )
 
 
 def parse_action(raw: str) -> dict[str, Any] | None:
@@ -549,6 +565,7 @@ class CodingAgent:
         summary = "step limit reached"
         failure_kind = "agent"
         invalid = 0
+        markup_retries = 0
         steps = 0
         sessions = 0
         compactions = 0
@@ -604,6 +621,23 @@ class CodingAgent:
                     break
                 action = parse_action(raw)
                 if action is None:
+                    if (
+                        _looks_like_tool_markup(raw)
+                        and markup_retries < 2
+                    ):
+                        messages.append(
+                            ModelMessage("assistant", raw)
+                        )
+                        messages.append(
+                            ModelMessage(
+                                "user",
+                                "Return exactly one JSON action object. "
+                                "Do not use tool-call markup, XML or "
+                                "provider-specific function calls.",
+                            )
+                        )
+                        markup_retries += 1
+                        continue
                     invalid += 1
                     messages.append(ModelMessage("assistant", raw))
                     messages.append(
@@ -620,6 +654,7 @@ class CodingAgent:
                         break
                     continue
                 invalid = 0
+                markup_retries = 0
                 kind = str(action["action"])
                 messages.append(
                     ModelMessage(
