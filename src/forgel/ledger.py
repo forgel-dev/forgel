@@ -15,6 +15,16 @@ from pathlib import Path
 from typing import Any
 
 
+# Task decisions are recorded twice: as an event (the timeline) and as an
+# approval row (the decision log). The mapping names the approval decision for
+# each acceptance stage.
+TASK_DECISIONS: dict[str, str] = {
+    "task_accept": "accepted",
+    "task_reject": "rejected",
+}
+TASK_SCOPE_PREFIX = "task:"
+
+
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -216,12 +226,50 @@ class Ledger:
                 utcnow(),
             ),
         )
+        self._mirror_task_decision(project_id, generation, stage, payload or {})
         self._conn.commit()
         row = self._conn.execute(
             "SELECT * FROM events WHERE idempotency_key = ?", (key,)
         ).fetchone()
         assert row is not None
         return dict(row)
+
+    def _mirror_task_decision(
+        self,
+        project_id: str,
+        generation: int,
+        stage: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Keep the decision log in step with an acceptance event.
+
+        Acceptance is a human decision, so it is stored where decisions live:
+        the approvals table. The event stays the timeline entry; the approval
+        row is what ``acceptances`` reports.
+        """
+
+        decision = TASK_DECISIONS.get(stage)
+        task_id = str(payload.get("task_id") or payload.get("task") or "")
+        if decision is None or not task_id:
+            return
+        reason = str(payload.get("reason") or payload.get("notes") or "")
+        self._conn.execute(
+            """
+            INSERT INTO approvals (
+                project_id, generation, scope, decision, actor,
+                compliance_ack, notes, release_sha, created_at
+            ) VALUES (?, ?, ?, ?, ?, 0, ?, '', ?)
+            """,
+            (
+                project_id,
+                generation,
+                f"{TASK_SCOPE_PREFIX}{task_id}",
+                decision,
+                str(payload.get("actor") or ""),
+                reason,
+                utcnow(),
+            ),
+        )
 
     def has_completed(
         self, project_id: str, stage: str, generation: int | None = None
@@ -255,6 +303,88 @@ class Ledger:
                 (project_id, generation),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    # ------------------------------------------------------------- reporting
+
+    def total_cost(self, project_id: str) -> float:
+        row = self._conn.execute(
+            "SELECT COALESCE(SUM(cost), 0) AS total FROM events WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        return float(row["total"]) if row is not None else 0.0
+
+    def cost_by_stage(self, project_id: str) -> dict[str, float]:
+        rows = self._conn.execute(
+            """
+            SELECT stage, COALESCE(SUM(cost), 0) AS total
+            FROM events WHERE project_id = ?
+            GROUP BY stage ORDER BY stage
+            """,
+            (project_id,),
+        ).fetchall()
+        return {str(row["stage"]): float(row["total"]) for row in rows}
+
+    def cost_by_generation(self, project_id: str) -> dict[int, float]:
+        rows = self._conn.execute(
+            """
+            SELECT generation, COALESCE(SUM(cost), 0) AS total
+            FROM events WHERE project_id = ?
+            GROUP BY generation ORDER BY generation
+            """,
+            (project_id,),
+        ).fetchall()
+        return {int(row["generation"]): float(row["total"]) for row in rows}
+
+    def cost_summary(self, project_id: str) -> dict[str, Any]:
+        """Aggregate event cost for one project.
+
+        The totals are sums over the ``events`` table only, so a report that
+        prints them can be checked against the ledger without extra state.
+        """
+
+        rows = self._conn.execute(
+            "SELECT COUNT(*) AS total FROM events WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        return {
+            "project": project_id,
+            "total": self.total_cost(project_id),
+            "by_stage": self.cost_by_stage(project_id),
+            "by_generation": self.cost_by_generation(project_id),
+            "events": int(rows["total"]) if rows is not None else 0,
+        }
+
+    def acceptances(
+        self, project_id: str, generation: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Task acceptance and rejection decisions, newest last.
+
+        Decisions live in the approvals table under the ``task:<id>`` scope,
+        one row per accepted or rejected task.
+        """
+
+        query = (
+            "SELECT * FROM approvals "
+            "WHERE project_id = ? AND scope LIKE ?"
+        )
+        params: list[Any] = [project_id, f"{TASK_SCOPE_PREFIX}%"]
+        if generation is not None:
+            query += " AND generation = ?"
+            params.append(generation)
+        query += " ORDER BY seq"
+        rows = self._conn.execute(query, params).fetchall()
+        return [
+            {
+                "seq": int(row["seq"]),
+                "task_id": str(row["scope"])[len(TASK_SCOPE_PREFIX) :],
+                "decision": str(row["decision"]),
+                "actor": str(row["actor"]),
+                "reason": str(row["notes"]),
+                "generation": int(row["generation"]),
+                "created_at": str(row["created_at"]),
+            }
+            for row in rows
+        ]
 
     def set_checkpoint(
         self, project_id: str, stage: str, generation: int | None = None

@@ -1,0 +1,23 @@
+"""Console-script entry point.
+
+``forgel`` dispatches two kinds of work: the reporting commands that read only
+from the ledger (``forgel cost``) and everything else, which stays in
+``forgel.cli``. Keeping the split here means the reporting path never has to
+start a model session.
+"""
+
+from __future__ import annotations
+
+import sys
+from typing import Sequence
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "cost":
+        from .costs import cost_command
+
+        return cost_command(arguments[1:])
+    from .cli import main as cli_main
+
+    return cli_main(arguments)

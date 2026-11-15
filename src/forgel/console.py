@@ -4,6 +4,8 @@ One client, no separate utilities: start `forgel` in a repository, `/adopt`
 it, describe the milestone, and watch the daemon work. The console and the
 Telegram gateway share one command router, so every command behaves the same.
 
+The console also answers `/cost`, which reads totals straight from the ledger.
+
 After a command the console drains runnable work until it reaches a real stop:
 a task awaiting acceptance, a plan that is stalled or done, or a retry that is
 scheduled for later. A scheduled retry is waited out (Ctrl-C returns to the
@@ -28,6 +30,7 @@ from .agent import ProjectAgent, append_history, load_history
 from .chat import CommandRouter
 from .config import Settings
 from .control import is_paused
+from .costs import cost_report
 from .daemon import next_retry_wait, run_once
 from .language import detect as detect_language
 from .layout import ProjectLayout
@@ -272,7 +275,7 @@ def _task_observation(task: dict, layout: ProjectLayout) -> dict:
             ][:10],
             "failed_requirements": failed_requirements[:10],
         },
-        "acceptance": result.get("acceptance") or {},
+        "decision": result.get("acceptance") or {},
         "files_changed": list(result.get("files_changed") or [])[:40],
         "context": result.get("context") or {},
         "reports": [
@@ -574,6 +577,7 @@ COMMANDS = (
     "/use",
     "/projects",
     "/status",
+    "/cost",
     "/plan",
     "/tasks",
     "/task",
@@ -592,7 +596,7 @@ COMMANDS = (
 
 def _completion_options(buffer: str, ledger: Ledger) -> list[str]:
     stripped = buffer.lstrip()
-    if stripped.startswith("/use "):
+    if stripped.startswith("/use ") or stripped.startswith("/cost "):
         return [str(item["id"]) for item in ledger.list_projects()]
     if stripped.startswith("/"):
         return list(COMMANDS)
@@ -761,7 +765,7 @@ def run_console(
     )
     output(
         "Forgel console. Describe the work or use /help; "
-        "/quit exits."
+        "/cost reports spend and acceptance; /quit exits."
     )
     output(
         "Mode: "
@@ -811,6 +815,24 @@ def run_console(
                 continue
             if text in QUIT:
                 break
+            command, _, argument = text.partition(" ")
+            if command == "/cost":
+                selector = argument.strip() or (
+                    ledger.get_session(chat_id) or ""
+                )
+                if not selector:
+                    output(
+                        "No project selected. Use /cost <project> "
+                        "or /use <project>."
+                    )
+                    continue
+                try:
+                    project = resolve_project(ledger, selector)
+                except ProjectError as exc:
+                    output(f"error: {exc}")
+                    continue
+                output(cost_report(ledger, str(project["id"])))
+                continue
             if not text.startswith("/"):
                 lang = detect_language(text, lang)
             if router.agent is None:
