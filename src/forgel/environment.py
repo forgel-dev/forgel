@@ -53,6 +53,8 @@ COMMAND_FIELDS = ("setup", "test", "e2e")
 REPO_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
 ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
 RESERVED_ENV = {"HOME", "TMPDIR"}
+PYTHON_NAMES = {"python", "python3"}
+ENV_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}=")
 
 
 class EnvironmentError(ValueError):
@@ -488,14 +490,23 @@ def command_argv(command: str) -> list[str]:
 
     A bare ``python`` or ``python3`` is resolved to the interpreter running
     Forgel, so a committed contract stays portable across hosts where only one
-    of those names exists.
+    of those names exists. The same holds when the interpreter is wrapped in
+    ``env`` after its ``NAME=value`` assignments (``env PYTHONPATH=src python
+    -m unittest``), which is how acceptance checks set extra variables.
     """
 
     argv = shlex.split(command)
     if not argv:
         raise EnvironmentError("an empty command cannot be run")
-    if Path(argv[0]).name in {"python", "python3"}:
-        argv[0] = sys.executable
+    index = 0
+    if Path(argv[0]).name == "env":
+        index = 1
+        while index < len(argv) and ENV_ASSIGNMENT.match(argv[index]):
+            index += 1
+        if index == len(argv):
+            raise EnvironmentError("an env command needs a program to run")
+    if Path(argv[index]).name in PYTHON_NAMES:
+        argv[index] = sys.executable
     return argv
 
 

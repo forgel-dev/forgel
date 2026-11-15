@@ -23,6 +23,44 @@ docker compose down -v
 TODO: paste the output of the command above.
 ```
 
+## Expected output (what the human must see)
+
+```text
+$ docker compose ps
+NAME              IMAGE                COMMAND                  SERVICE   STATUS         PORTS
+api-1             ...-api              "./docker/entrypoint…"   api       Up (healthy)   0.0.0.0:8000->8000/tcp
+minio-1           minio/minio:latest   "/usr/bin/docker-ent…"   minio     Up (healthy)   0.0.0.0:9000-9001->9000-9001/tcp
+postgres-1        postgres:16-alpine   "docker-entrypoint.s…"   postgres  Up (healthy)   0.0.0.0:5432->5432/tcp
+
+$ docker compose exec -T postgres psql -U app -d app -c 'select 1;'
+ ?column?
+----------
+        1
+(1 row)
+
+$ curl -i http://127.0.0.1:8000/healthz
+HTTP/1.1 200 OK
+Content-Type: application/json
+...
+
+{"status": "ok"}
+
+$ docker compose logs --no-color --tail=20 api
+api-1  | Waiting for postgres at postgres:5432 ...
+api-1  | Operations to perform:
+api-1  |   Apply all migrations: admin, auth, contenttypes, sessions
+api-1  | Running migrations:
+api-1  |   Applying contenttypes.0001_initial... OK
+...
+api-1  |   Applying sessions.0001_initial... OK
+api-1  | bucket 'app-media' is ready
+api-1  | Starting development server at http://0.0.0.0:8000/
+```
+
+The migrate run only succeeds against the Postgres service named by
+`DATABASE_URL` (falling back to the discrete `POSTGRES_*` variables), so the
+log above is the proof that the API is connected to Postgres.
+
 ## What the output must show
 
 - `docker compose ps` lists `api`, `postgres` and `minio` as `Up`.
