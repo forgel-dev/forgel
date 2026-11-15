@@ -69,6 +69,7 @@ ALLOWED_EXECUTABLES = {
     "npm",
     "make",
     "git",
+    "docker",
 }
 GIT_READ_ONLY = {"status", "diff", "log", "show", "rev-parse"}
 NPM_ALLOWED = {"test", "run", "--version", "-v"}
@@ -1151,6 +1152,9 @@ Files:
                 raise AgentError(
                     "only read-only git commands are allowed"
                 )
+        if executable == "docker":
+            if len(command) < 2 or command[1] != "compose":
+                raise AgentError("only docker compose is allowed")
         if executable == "npm":
             if len(command) < 2 or command[1] not in NPM_ALLOWED:
                 raise AgentError("only npm test/run are allowed")

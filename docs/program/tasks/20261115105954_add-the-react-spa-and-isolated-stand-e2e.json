@@ -11,7 +11,7 @@
   "acceptance": [
     "The extended structural template test passes, including the e2e assertions.",
     "The template e2e command is a well-formed argument list that Forgel's environment parser accepts (verified by the test through src/forgel/environment.py).",
-    "A human confirms from the task report that the e2e command runs the scenario in the isolated compose stand and exits 0, with the command and tail of output included in docs/program/agent/<task>.md."
+    "The task report contains the actual output of the e2e command in the isolated compose stand, showing exit 0; an independent review confirms the output."
   ],
   "constraints": [
     "No browser download, Docker run or network access in the unittest suite.",
@@ -62,17 +62,9 @@
       ]
     },
     {
-      "criterion": "The e2e scenario passes in the isolated compose stand, evidence in the task report",
+      "criterion": "The e2e scenario passes in the isolated compose stand, with actual output in the task report",
       "verification": "review",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_template_django_drf_react",
-        "-v"
-      ]
+      "command": []
     }
   ],
   "status": "blocked",

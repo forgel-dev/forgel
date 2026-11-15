@@ -13,7 +13,7 @@ from unittest.mock import patch
 from forgel.adopt import add_repository, adopt_repository
 from forgel.agent import ProjectAgent
 from forgel.artifacts import write_text
-from forgel.coding_agent import CodingAgent, MAX_INVALID_REPLIES
+from forgel.coding_agent import AgentError, CodingAgent, MAX_INVALID_REPLIES
 from forgel.config import Settings
 from forgel.daemon import run_daemon
 from forgel.layout import ProjectLayout
@@ -642,6 +642,21 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn(
             "tool-call markup", client.requests[1][-1].content
         )
+
+    def test_docker_compose_is_allowed(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        self.assertEqual(
+            agent._command(["docker", "compose", "up", "--build", "-d"]),
+            ["docker", "compose", "up", "--build", "-d"],
+        )
+        self.assertEqual(
+            agent._command(["docker", "compose", "version"]),
+            ["docker", "compose", "version"],
+        )
+        with self.assertRaises(AgentError):
+            agent._command(["docker", "ps"])
 
     def test_repeated_actions_fail_fast(self) -> None:
         task = self._task()

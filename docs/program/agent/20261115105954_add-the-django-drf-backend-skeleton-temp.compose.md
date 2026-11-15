@@ -1,20 +1,21 @@
 # django-drf-react template: `docker compose up --build` evidence
 
 The unittest suite never starts Docker (constraint), so the local stand is
-verified by the command below. Run it from the repository root and paste the
-output into the `Output` section.
+verified by the coding agent: run the commands below, paste the actual output
+into the `Output` section and mark the status confirmed. There is no human
+evidence gate.
 
 ## Command
 
+Run from the repository root:
+
 ```sh
-cd src/forgel/templates/django-drf-react
-cp .env.example .env
-docker compose up --build -d
-docker compose ps
-docker compose exec -T postgres psql -U "${POSTGRES_USER:-app}" -d "${POSTGRES_DB:-app}" -c 'select 1;'
-curl -i http://127.0.0.1:8000/healthz
-docker compose logs --no-color --tail=20 api
-docker compose down -v
+docker compose -f src/forgel/templates/django-drf-react/compose.yaml --project-directory src/forgel/templates/django-drf-react --env-file src/forgel/templates/django-drf-react/.env.example up --build -d
+docker compose -f src/forgel/templates/django-drf-react/compose.yaml --project-directory src/forgel/templates/django-drf-react ps
+docker compose -f src/forgel/templates/django-drf-react/compose.yaml --project-directory src/forgel/templates/django-drf-react exec -T postgres psql -U app -d app -c 'select 1;'
+docker compose -f src/forgel/templates/django-drf-react/compose.yaml --project-directory src/forgel/templates/django-drf-react exec -T api python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/healthz').read().decode())"
+docker compose -f src/forgel/templates/django-drf-react/compose.yaml --project-directory src/forgel/templates/django-drf-react logs --no-color --tail=20 api
+docker compose -f src/forgel/templates/django-drf-react/compose.yaml --project-directory src/forgel/templates/django-drf-react down -v
 ```
 
 ## Output
@@ -23,7 +24,7 @@ docker compose down -v
 TODO: paste the output of the command above.
 ```
 
-## Expected output (what the human must see)
+## Expected output (what the run must show)
 
 ```text
 $ docker compose ps
@@ -38,11 +39,7 @@ $ docker compose exec -T postgres psql -U app -d app -c 'select 1;'
         1
 (1 row)
 
-$ curl -i http://127.0.0.1:8000/healthz
-HTTP/1.1 200 OK
-Content-Type: application/json
-...
-
+$ docker compose ... exec -T api python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/healthz').read().decode())"
 {"status": "ok"}
 
 $ docker compose logs --no-color --tail=20 api
@@ -70,7 +67,7 @@ log above is the proof that the API is connected to Postgres.
   connection is configured.
 - `docker compose exec -T postgres psql -U app -d app -c 'select 1;'` returns
   one row, proving the stack runs on the Postgres service.
-- `curl -i http://127.0.0.1:8000/healthz` answers `HTTP/1.1 200 OK` and
+- `docker compose ... exec -T api python -c ...` fetches `/healthz` and prints
   `{"status": "ok"}`.
 
 ## Also verifiable without Docker
@@ -82,6 +79,5 @@ fallback, no object storage):
 sh src/forgel/templates/django-drf-react/scripts/test.sh
 ```
 
-Status: **not yet run in Docker** - the sandbox of this task has no Docker
-daemon, so a human must paste the compose output before the acceptance
-criterion is closed.
+Status: **not yet run** - the coding agent runs the block above and records
+the actual output; no human evidence gate.

@@ -13,7 +13,7 @@
   "acceptance": [
     "The structural template test passes.",
     "All Python sources under the template compile with python -m compileall.",
-    "A human confirms from the task report that `docker compose up --build` in the template serves GET /healthz with 200 and the Postgres connection configured; a ready-to-paste command and its output are included in docs/program/agent/<task>.md."
+    "The task report contains the actual output of `docker compose up --build` in the template, showing GET /healthz with 200 and the Postgres connection; an independent review confirms the output."
   ],
   "constraints": [
     "No network calls, Docker runs or cloud resources inside the unittest suite.",
@@ -63,17 +63,9 @@
       ]
     },
     {
-      "criterion": "The compose stand serves /healthz against Postgres, evidence in the task report",
+      "criterion": "The compose stand serves /healthz against Postgres, with actual output in the task report",
       "verification": "review",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_template_django_drf_react",
-        "-v"
-      ]
+      "command": []
     }
   ],
   "status": "failed",
