@@ -36,7 +36,7 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "review",
+  "status": "done",
   "created_at": "2026-11-15T00:47:02+00:00",
   "started_at": "2026-11-15T02:23:41+00:00",
   "finished_at": "2026-11-15T02:27:44+00:00",
@@ -185,9 +185,45 @@
     "resumed_at": "2026-11-15T02:20:07+00:00",
     "last_summary": "Updated README.md to remove the stale claim that the agent only accepts the request and does not edit code. It now describes the real cycle: a plain-language request becomes a task, the task runs in a sandbox where the coding agent edits code and writes a report, independent QA replays the commands from environment.yaml, and the task waits for a human decision. Wording is consistent with the planner, independent QA, sessions/handoff sections and PLAN.md 7.15. Only README.md was committed with git commit -s (Signed-off-by present). No code or tests changed; make test passes (76 tests, OK).; task review failed",
     "review": {
-      "status": "error",
-      "summary": "Reviewer returned an unusable answer: the reviewer did not return JSON",
-      "requirements": [],
+      "status": "pass",
+      "summary": "The attributed commit changes only README.md, and the current README states that the agent works end to end: a plain-language request becomes a task, the agent edits the code and commits, writes a report, an independent QA pass runs the `test`/`e2e` commands from `environment.yaml`, and the task then waits in `review` for a human accept/reject decision. This matches the requirements and is consistent with the earlier README sections (planner, independent QA, sessions, accept/send-it-back). The commit is documentation-only, in English, signed off, and the reported acceptance checks (`make test`, environment test) pass. The committed diff itself narrows the step-4 wording to add the reject/rework path rather than rewriting the 'edits code' statement, so the requested wording is satisfied by the current file state (the descriptive steps 1–3 are already present and consistent), not contradicted by this change.",
+      "requirements": [
+        {
+          "requirement": "README.md no longer claims that the current agent only accepts a request and does not edit code; the description reflects actual behavior",
+          "verdict": "pass",
+          "note": "The current README's agent section explicitly says the agent 'reads the repository, edits the code, commits with a bot message and writes its report'; no claim that the agent does not edit code appears in that section. The attributed diff does not rewrite this text, so this part of the criterion is met by the existing file state rather than by this commit."
+        },
+        {
+          "requirement": "The current cycle is described in product terms: plain-language request becomes a task, the task runs in the sandbox, the agent writes a report, an independent check runs the commands from environment.yaml, then the task waits for a human decision",
+          "verdict": "pass",
+          "note": "README steps 1–4 cover exactly this sequence (task creation, sandbox work with code edits and report to docs/program/agent/<task>.md, independent QA over environment.yaml test/e2e, then waiting in review for a human decision)."
+        },
+        {
+          "requirement": "Wording is consistent with the rest of README.md (planner, independent QA, sessions and state handoff) and with PLAN.md §7.15",
+          "verdict": "pass",
+          "note": "The added 'send it back: <reason>' / reject wording matches the earlier console section ('say \"accept\" or \"send it back: <reason>\"') and the Task QA/milestones and Context and handoff sections, which all reference PLAN.md §7.15; no contradiction is introduced."
+        },
+        {
+          "requirement": "Changes limited to documentation: no code or tests touched",
+          "verdict": "pass",
+          "note": "The attributed diff touches only README.md; attributed files list contains README.md only and the worktree is clean."
+        },
+        {
+          "requirement": "make test passes",
+          "verdict": "pass",
+          "note": "Acceptance checks report environment test and task test command both exiting 0, and the QA verdict is pass for local plus environment.yaml."
+        },
+        {
+          "requirement": "English text and commit signed off with git commit -s",
+          "verdict": "pass",
+          "note": "The changed text is in English and the commit carries a 'Signed-off-by: Forgel <forgel@localhost>' trailer."
+        },
+        {
+          "requirement": "Do not weaken or alter existing tests to pass; no secrets, .env.local contents or internal notes committed",
+          "verdict": "pass",
+          "note": "No test files are part of the attributed change, no test removals were detected, and the diff contains no secrets or .env.local content."
+        }
+      ],
       "blocking": [],
       "report": "docs/program/agent/20261115004702_readme.review.md"
     },
@@ -197,9 +233,10 @@
       "retryable": false
     },
     "acceptance": {
-      "status": "pending",
-      "reason": "the reviewer could not produce a verdict",
-      "at": "2026-11-15T02:30:14+00:00"
+      "status": "accepted",
+      "actor": "telegram",
+      "at": "2026-11-15T05:55:01+00:00",
+      "notes": ""
     }
   }
 }
