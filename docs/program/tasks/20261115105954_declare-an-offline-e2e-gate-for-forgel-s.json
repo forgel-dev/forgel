@@ -73,10 +73,10 @@
       ]
     }
   ],
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "2026-11-15T11:43:01+00:00",
-  "finished_at": "2026-11-15T12:00:54+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "repeated action loop: read_file:src/forgel/environment.py",
     "files_changed": [
@@ -135,10 +135,13 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.md",
+    "last_failure": {
       "kind": "agent",
       "message": "repeated action loop: read_file:src/forgel/environment.py"
     },
-    "report": "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.md"
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   }
 }
