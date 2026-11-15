@@ -23,6 +23,7 @@ from forgel.ledger import Ledger, new_project_id
 from forgel.model import ScriptedModelClient
 from forgel.program_manifest import entries as manifest_entries
 from forgel.program_manifest import set_entries
+from forgel.repo_tools import RepoActionError, execute_repo_action
 from forgel.project_config import render_project_config
 from forgel.projects import create_project
 from forgel.tasks import get_task
@@ -315,6 +316,19 @@ class AgentTest(unittest.TestCase):
         self.assertNotIn("project:", text)
         self.assertNotIn("layout:", text)
         self.assertTrue(text.strip())
+
+    def test_research_cannot_read_process_artifacts(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        with self.assertRaises(RepoActionError):
+            execute_repo_action(
+                layout,
+                manifest_entries(layout),
+                {
+                    "action": "read_file",
+                    "path": "docs/program/state.md",
+                },
+            )
 
     def test_agent_reads_repository_files_before_answering(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

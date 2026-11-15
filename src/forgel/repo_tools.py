@@ -63,6 +63,10 @@ def _path(repo: Path, value: Any) -> Path:
         raise RepoActionError(
             "the .git and .forgel directories are off-limits"
         )
+    if relative.parts[:2] == ("docs", "program"):
+        raise RepoActionError(
+            "process artifacts under docs/program are not readable"
+        )
     return candidate
 
 
@@ -91,6 +95,8 @@ def execute_repo_action(
         for item in sorted(path.rglob("*")):
             relative = item.relative_to(repo)
             if any(part in SKIP_PARTS for part in relative.parts):
+                continue
+            if relative.parts[:2] == ("docs", "program"):
                 continue
             if item.name.endswith((".pyc", ".sqlite3", ".sqlite")):
                 continue

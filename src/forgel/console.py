@@ -12,9 +12,16 @@ prompt); an idle home returns immediately.
 
 from __future__ import annotations
 
+import sys
+import threading
 import time
 from pathlib import Path
 from typing import Callable
+
+try:  # line editing and history for the prompt; no dependency
+    import readline  # noqa: F401
+except ImportError:  # pragma: no cover - platform without readline
+    readline = None  # type: ignore[assignment]
 
 from .agent import ProjectAgent
 from .chat import CommandRouter
@@ -115,6 +122,144 @@ def _drain(
             return
 
 
+def _flush_pending_input() -> None:
+    """Drop keys typed while the daemon was working, before the prompt."""
+
+    try:
+        import termios
+    except ImportError:  # pragma: no cover - non-POSIX
+        return
+    try:
+        if sys.stdin.isatty():
+            termios.tcflush(sys.stdin, termios.TCIFLUSH)
+    except (OSError, ValueError):
+        return
+
+
+COMMANDS = (
+    "/help",
+    "/adopt",
+    "/new",
+    "/use",
+    "/projects",
+    "/status",
+    "/plan",
+    "/tasks",
+    "/task",
+    "/repo",
+    "/secret",
+    "/config",
+    "/peak",
+    "/pause",
+    "/resume",
+    "/github",
+    "/deploy",
+    "/quit",
+    "/exit",
+)
+
+
+def _completion_options(buffer: str, ledger: Ledger) -> list[str]:
+    stripped = buffer.lstrip()
+    if stripped.startswith("/use "):
+        return [str(item["id"]) for item in ledger.list_projects()]
+    if stripped.startswith("/"):
+        return list(COMMANDS)
+    return []
+
+
+def _setup_readline(settings: Settings, ledger: Ledger) -> None:
+    if readline is None:
+        return
+    history = settings.home / "console_history"
+    try:
+        settings.home.mkdir(parents=True, exist_ok=True)
+        readline.read_history_file(history)
+    except OSError:
+        pass
+    readline.set_history_length(500)
+
+    def completer(text: str, state: int) -> str | None:
+        options = _completion_options(
+            readline.get_line_buffer(), ledger
+        )
+        matches = [item for item in options if item.startswith(text)]
+        return matches[state] if state < len(matches) else None
+
+    readline.set_completer(completer)
+    readline.set_completer_delims(" \t\n")
+    readline.parse_and_bind("tab: complete")
+
+
+def _save_history(settings: Settings) -> None:
+    if readline is None:
+        return
+    try:
+        readline.write_history_file(settings.home / "console_history")
+    except OSError:
+        return
+
+
+def _prompt_text(ledger: Ledger, chat_id: int) -> str:
+    project_id = ledger.get_session(chat_id)
+    if project_id:
+        project = ledger.get_project(project_id)
+        if project is not None:
+            return f"forgel[{project['name']}]> "
+    return PROMPT
+
+
+def _read_input(
+    input_fn: Callable[[str], str], prompt: str, interactive: bool
+) -> str:
+    line = input_fn(prompt)
+    if not interactive:
+        return line
+    parts: list[str] = []
+    while line.rstrip().endswith("\\"):
+        parts.append(line.rstrip()[:-1])
+        line = input_fn("... ")
+    parts.append(line)
+    return "\n".join(parts)
+
+
+class _Spinner:
+    """A one-line activity indicator while the model is working."""
+
+    def __init__(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self) -> "_Spinner":
+        if not self.enabled:
+            return self
+        self._thread = threading.Thread(
+            target=self._spin, daemon=True
+        )
+        self._thread.start()
+        return self
+
+    def _spin(self) -> None:
+        frames = "|/-\\"
+        index = 0
+        while not self._stop.wait(0.15):
+            sys.stdout.write(
+                "\r\033[2m" + frames[index % len(frames)] + " working…\033[0m"
+            )
+            sys.stdout.flush()
+            index += 1
+
+    def __exit__(self, *exc_info: object) -> None:
+        if not self.enabled:
+            return
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1)
+        sys.stdout.write("\r\033[K")
+        sys.stdout.flush()
+
+
 def run_console(
     settings: Settings,
     ledger: Ledger,
@@ -189,27 +334,72 @@ def run_console(
         )
         + "."
     )
-    while True:
-        try:
-            line = input_fn(PROMPT)
-        except (EOFError, KeyboardInterrupt):
-            break
-        text = line.strip()
-        if not text:
-            continue
-        if text in QUIT:
-            break
-        if router.agent is None:
-            client = build_model_client(settings.home, log=output)
-            if client is not None:
-                router.agent = ProjectAgent(settings, ledger, client)
-        try:
-            reply = router.handle(chat_id, text, actor)
-        except Exception as exc:  # noqa: BLE001 - the console must stay up
-            output(f"error: {exc}")
-            continue
-        if reply.text:
-            output(reply.text)
-        if daemon and not is_paused(settings.home):
-            _drain(settings, ledger, output, sleep_fn=sleep_fn)
+    interactive = (
+        input_fn is input
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+    )
+    if interactive:
+        _setup_readline(settings, ledger)
+        selected = ledger.get_session(chat_id)
+        project = ledger.get_project(selected) if selected else None
+        output(
+            f"Project: {project['name'] if project else 'none'}  ·  "
+            f"cwd: {Path.cwd()}"
+        )
+        output(
+            "Tab completes commands; ↑/↓ history; \\ continues a line; "
+            "Ctrl-C stops input; Ctrl-D exits."
+        )
+    try:
+        while True:
+            if interactive:
+                _flush_pending_input()
+            prompt = (
+                _prompt_text(ledger, chat_id) if interactive else PROMPT
+            )
+            try:
+                line = _read_input(input_fn, prompt, interactive)
+            except EOFError:
+                break
+            except KeyboardInterrupt:
+                if interactive:
+                    output("")
+                    continue
+                break
+            text = line.strip()
+            if not text:
+                continue
+            if text in QUIT:
+                break
+            if router.agent is None:
+                client = build_model_client(settings.home, log=output)
+                if client is not None:
+                    router.agent = ProjectAgent(settings, ledger, client)
+            try:
+                with _Spinner(interactive):
+                    reply = router.handle(chat_id, text, actor)
+            except KeyboardInterrupt:
+                if interactive:
+                    output("Stopped.")
+                    continue
+                raise
+            except Exception as exc:  # noqa: BLE001 - keep the console up
+                output(f"error: {exc}")
+                continue
+            if reply.text:
+                output(reply.text)
+                if interactive:
+                    output("")
+            if daemon and not is_paused(settings.home):
+                try:
+                    _drain(settings, ledger, output, sleep_fn=sleep_fn)
+                except KeyboardInterrupt:
+                    if interactive:
+                        output("Stopped; back to the prompt.")
+                        continue
+                    raise
+    finally:
+        if interactive:
+            _save_history(settings)
     output("Bye.")

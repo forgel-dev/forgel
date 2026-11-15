@@ -12,6 +12,7 @@ the child environment, and secret-looking files are never committed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shlex
@@ -45,13 +46,14 @@ from .model import (
 from .project_config import ConfigError, load_project_config
 from .sandbox import CommandRunner, SandboxError, docker_runner
 
-MAX_STEPS = 24
+MAX_STEPS = 40
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
-MAX_READ_CHARS = 12_000
-MAX_OBSERVATION = 4_000
+MAX_READ_CHARS = 30_000
+MAX_OBSERVATION = 30_000
 MAX_LIST_ENTRIES = 200
 MAX_HISTORY_MESSAGES = 12
+MAX_REPEATED_ACTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
     "read_file",
@@ -139,6 +141,14 @@ Autonomy (D-075):
 
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
+- Use read_file for file contents. run is only for tests and build commands;
+  never use python, grep, cat or similar to print a file.
+- A file you have read is in the conversation. Do not read it again before
+  editing; when you know the exact change, call write_file immediately.
+- Do not repeat an action. If you see the same observation twice, change the
+  approach or make the edit.
+- If the task changes documentation only, edit the document and call done; do
+  not add tests.
 - Prefer the Python standard library unless the task says otherwise. Do not
   install packages.
 - No external APIs, no network calls, no deployment changes, no Telegram.
@@ -305,13 +315,11 @@ class CodingAgent:
             )
         finally:
             stack.close()
-        changed: list[str] = []
+        changed = sorted(
+            (set(git_ops.status_paths(repo)) - preexisting) | set(touched)
+        )
         if status == "done":
             try:
-                changed = sorted(
-                    (set(git_ops.status_paths(repo)) - preexisting)
-                    | set(touched)
-                )
                 if changed:
                     git_ops.commit_paths(
                         repo, changed, f"Agent: {task['title']}"
@@ -511,6 +519,7 @@ class CodingAgent:
         steps = 0
         sessions = 0
         compactions = 0
+        signatures: dict[str, int] = {}
 
         def handoff(session: int) -> tuple[list[ModelMessage], str]:
             changed = sorted(
@@ -622,6 +631,19 @@ class CodingAgent:
                     )
                     terminal = True
                     break
+                signature = self._signature(action)
+                repeats = 0
+                if kind in {"read_file", "write_file", "run"}:
+                    repeats = signatures.get(signature, 0) + 1
+                    signatures[signature] = repeats
+                    if repeats >= MAX_REPEATED_ACTIONS:
+                        status = "failed"
+                        failure_kind = "agent"
+                        summary = (
+                            f"repeated action loop: {signature}"
+                        )
+                        terminal = True
+                        break
                 observation, command = self._execute(
                     layout,
                     repo,
@@ -640,6 +662,18 @@ class CodingAgent:
                         "user", f"OBSERVATION:\n{_cap(observation)}"
                     )
                 )
+                if repeats >= 3:
+                    warning = (
+                        "You have repeated this action several times. Its "
+                        "result is already above. Do not repeat it; make the "
+                        "edit or call done."
+                    )
+                    messages.append(ModelMessage("user", warning))
+                    recent.append(warning)
+                if kind in {"write_file", "delete_file"} and (
+                    observation.startswith(("wrote ", "deleted "))
+                ):
+                    signatures.clear()
                 messages = self._trim(messages)
                 if (
                     budget.should_compact(messages, model)
@@ -857,6 +891,13 @@ Files:
                 return f"deleted {relative}", None
             if kind == "run":
                 command = self._command(action.get("command"))
+                if self._looks_like_file_inspection(command):
+                    return (
+                        "File contents must be read with read_file. "
+                        "run is only for tests and build commands; "
+                        "this command was not executed.",
+                        None,
+                    )
                 timeout = action.get("timeout", 60)
                 try:
                     timeout_value = max(5, min(int(timeout), 120))
@@ -902,6 +943,41 @@ Files:
         name = path.name
         if name in SECRET_PATH_NAMES or name.endswith(SECRET_SUFFIXES):
             raise AgentError(f"refusing to write secret-like file {name}")
+
+    @staticmethod
+    def _looks_like_file_inspection(command: Sequence[str]) -> bool:
+        executable = Path(command[0]).name
+        if executable.startswith("python") and "-c" in command:
+            index = command.index("-c")
+            code = " ".join(command[index + 1:])
+            return any(
+                marker in code
+                for marker in (
+                    "open(",
+                    "read_text",
+                    "readlines",
+                    ".read(",
+                    "write_text",
+                    "Path(",
+                )
+            )
+        return False
+
+    @staticmethod
+    def _signature(action: Mapping[str, Any]) -> str:
+        kind = str(action.get("action"))
+        path = str(action.get("path") or "")
+        if kind in {"read_file", "list_files", "delete_file"}:
+            return f"{kind}:{path}"
+        if kind == "write_file":
+            content = str(action.get("content") or "")
+            digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
+            return f"write_file:{path}:{digest}"
+        if kind == "run":
+            return "run:" + json.dumps(
+                action.get("command"), sort_keys=True, ensure_ascii=False
+            )
+        return kind
 
     def _command(self, value: Any) -> list[str]:
         if isinstance(value, str):

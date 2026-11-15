@@ -520,6 +520,74 @@ class CodingAgentTest(unittest.TestCase):
         self.assertEqual(stored["status"], "done")
         self.assertTrue((self.repo / "feature.py").exists())
 
+    def test_read_file_returns_large_files_without_slicing(self) -> None:
+        (self.repo / "big.py").write_text(
+            "x" * 10_000 + "\n", encoding="utf-8"
+        )
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": "big.py"},
+            set(),
+        )
+        self.assertGreater(len(observation), 9_000)
+
+    def test_run_cannot_be_used_to_print_a_file(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "run",
+                "command": [
+                    sys.executable,
+                    "-c",
+                    "print(open('README.md').read())",
+                ],
+            },
+            set(),
+        )
+        self.assertIn("read_file", observation)
+        self.assertNotIn("source", observation)
+
+    def test_repeated_actions_fail_fast(self) -> None:
+        task = self._task()
+        repeated = json.dumps(
+            {"action": "read_file", "path": "README.md"}
+        )
+        client = ScriptedModelClient([repeated] * 10)
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("repeated action loop", result.summary)
+        self.assertLessEqual(result.steps, 5)
+
+    def test_a_failed_run_reports_the_changed_files(self) -> None:
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "README.md",
+                        "content": "changed\n",
+                    }
+                ),
+                json.dumps({"action": "fail", "reason": "stop"}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("README.md", result.files_changed)
+
     def test_daemon_processes_a_pending_task(self) -> None:
         task = self._task()
         client = ScriptedModelClient(self._responses())
