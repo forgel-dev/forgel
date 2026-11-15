@@ -199,6 +199,57 @@ class PlannerTest(unittest.TestCase):
         with self.assertRaises(PlanningError):
             self._plan(payload)
 
+    def test_plan_can_add_a_repository_before_tasks(self) -> None:
+        payload = {
+            "notes": "Add the frontend repository first.",
+            "repositories": [
+                {
+                    "id": "web",
+                    "role": "frontend",
+                    "path": "/tmp/web",
+                    "create": False,
+                    "depends_on": ["main"],
+                }
+            ],
+            "tasks": [
+                {
+                    "title": "Add a page",
+                    "requirements": ["Add a page"],
+                    "acceptance": ["The page exists"],
+                    "repo_id": "web",
+                    "checks": [
+                        {
+                            "criterion": "The page exists",
+                            "verification": "review",
+                        }
+                    ],
+                }
+            ],
+        }
+        client = ScriptedModelClient([json.dumps(payload)])
+        with patch(
+            "forgel.planner.add_repository"
+        ) as add, patch(
+            "forgel.planner.create_repository"
+        ) as create:
+            result = plan_project(
+                self.settings,
+                self.ledger,
+                self.project,
+                "Build the frontend",
+                client=client,
+                log=lambda _m: None,
+            )
+        add.assert_called_once()
+        create.assert_not_called()
+        self.assertEqual(result.repositories[0]["id"], "web")
+        self.assertEqual(result.tasks[0]["repo_id"], "web")
+        artifact = (self.layout.root / result.artifact).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Repositories", artifact)
+        self.assertIn("`web`", artifact)
+
     def test_forward_dependency_is_rejected(self) -> None:
         payload = {
             "tasks": [

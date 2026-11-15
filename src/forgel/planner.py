@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from . import peak, tasks
+from .adopt import AdoptError, add_repository, create_repository
 from .agent import build_context
 from .artifacts import write_text
 from .config import Settings
@@ -34,6 +35,10 @@ from .model import (
     project_model_name,
 )
 from .program_manifest import entries as manifest_entries
+from .program_manifest import slugify_repo_id
+from .providers import ProviderError
+from .providers.github_api import GithubAPIError
+from .providers.github_auth import GithubAuthError
 from .repo_tools import (
     MAX_READ_CHARS,
     RESEARCH_ACTIONS,
@@ -56,6 +61,7 @@ class PlanResult:
     goal: str
     notes: str
     tasks: list[dict[str, Any]] = field(default_factory=list)
+    repositories: list[dict[str, Any]] = field(default_factory=list)
     artifact: str = ""
     dry_run: bool = False
 
@@ -184,6 +190,17 @@ provider-specific function calls.
 Return exactly one JSON object:
 {{
   "notes": "assumptions and ordering rationale in a few sentences",
+  "repositories": [
+    {{
+      "id": "api",
+      "role": "backend",
+      "path": "optional local path",
+      "create": true,
+      "private": true,
+      "org": "optional GitHub owner",
+      "depends_on": ["existing-or-earlier-repo-id"]
+    }}
+  ],
   "tasks": [
     {{
       "title": "short imperative title",
@@ -204,6 +221,13 @@ Return exactly one JSON object:
 
 Rules:
 - Produce 1 to {max_tasks} tasks, in execution order.
+- If the goal needs repositories that are not in the project graph, list them
+  in "repositories" and use their ids in tasks. Do not silently narrow the
+  goal to the existing repositories.
+- create=true creates a new GitHub repository (path optional); create=false
+  adds an existing local git repository at path. Repositories are created or
+  added before the tasks run; depends_on may reference an existing repository
+  or an earlier planned one.
 - depends_on uses 0-based indexes of earlier tasks only; no cycles.
 - One repository per task; do not mix repositories in one task.
 - Give every task explicit requirements and acceptance criteria; the agent
@@ -266,12 +290,74 @@ Project context:
 """
 
 
+def _parse_repositories(
+    data: Mapping[str, Any], known: Sequence[str]
+) -> list[dict[str, Any]]:
+    raw = data.get("repositories", [])
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise PlanningError("repositories must be a list")
+    seen = set(known)
+    specs: list[dict[str, Any]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise PlanningError(
+                f"repository {index} must be an object"
+            )
+        repo_id = slugify_repo_id(str(item.get("id", "")))
+        if not repo_id:
+            raise PlanningError(f"repository {index} has no id")
+        if repo_id in seen:
+            raise PlanningError(
+                f"repository {index} duplicates or already exists: {repo_id}"
+            )
+        create = item.get("create", True)
+        if not isinstance(create, bool):
+            raise PlanningError(
+                f"repository {repo_id}: create must be true or false"
+            )
+        path = str(item.get("path") or "").strip()
+        if not create and not path:
+            raise PlanningError(
+                f"repository {repo_id}: an existing repository needs a path"
+            )
+        depends = item.get("depends_on", [])
+        if not isinstance(depends, list) or not all(
+            isinstance(value, str) and value.strip() for value in depends
+        ):
+            raise PlanningError(
+                f"repository {repo_id}: depends_on must be a list of ids"
+            )
+        dependencies = list(dict.fromkeys(value.strip() for value in depends))
+        for dependency in dependencies:
+            if dependency not in seen:
+                raise PlanningError(
+                    f"repository {repo_id}: unknown dependency "
+                    f"{dependency!r}; define it earlier or use an existing id"
+                )
+        specs.append(
+            {
+                "id": repo_id,
+                "role": str(item.get("role") or "application").strip(),
+                "create": create,
+                "private": bool(item.get("private", True)),
+                "org": str(item.get("org") or "").strip(),
+                "description": str(item.get("description") or "").strip(),
+                "path": path,
+                "depends_on": dependencies,
+            }
+        )
+        seen.add(repo_id)
+    return specs
+
+
 def _parse_plan(
     raw: str,
     known_repos: Sequence[str],
     default_repo: str,
     max_tasks: int,
-) -> tuple[str, list[dict[str, Any]]]:
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     text = raw.strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -288,6 +374,12 @@ def _parse_plan(
         raise PlanningError(f"invalid plan JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise PlanningError("the plan must be a JSON object")
+    repositories = _parse_repositories(data, known_repos)
+    allowed_repos = list(known_repos) + [
+        str(item["id"]) for item in repositories
+    ]
+    if len(allowed_repos) != 1:
+        default_repo = ""
     raw_tasks = data.get("tasks")
     if not isinstance(raw_tasks, list) or not raw_tasks:
         raise PlanningError("the plan has no tasks")
@@ -327,7 +419,7 @@ def _parse_plan(
         if not acceptance:
             raise PlanningError(f"task {index} has no acceptance criteria")
         repo_id = str(item.get("repo_id", "")).strip() or default_repo
-        if known_repos and repo_id not in known_repos:
+        if allowed_repos and repo_id not in allowed_repos:
             raise PlanningError(
                 f"task {index} targets unknown repository {repo_id!r}"
             )
@@ -406,7 +498,7 @@ def _parse_plan(
                 ],
             }
         )
-    return notes, items
+    return notes, items, repositories
 
 
 def _json_object(raw: str) -> dict[str, Any] | None:
@@ -434,6 +526,53 @@ def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
         text[:limit]
         + "\n... [truncated; use read_file with offset to read the rest]"
     )
+
+
+def _apply_repositories(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    repositories: Sequence[Mapping[str, Any]],
+) -> None:
+    """Create or add repositories before the plan's coding tasks run."""
+
+    for spec in repositories:
+        repo_id = str(spec["id"])
+        try:
+            if bool(spec.get("create", True)):
+                create_repository(
+                    settings,
+                    ledger,
+                    dict(project),
+                    repo_id,
+                    org=str(spec.get("org") or ""),
+                    private=bool(spec.get("private", True)),
+                    depends_on=list(spec.get("depends_on") or []),
+                    role=str(spec.get("role") or "application"),
+                    description=str(spec.get("description") or ""),
+                    path=str(spec.get("path") or ""),
+                )
+            else:
+                add_repository(
+                    settings,
+                    ledger,
+                    dict(project),
+                    str(spec.get("path") or ""),
+                    repo_id=repo_id,
+                    depends_on=list(spec.get("depends_on") or []),
+                    role=str(spec.get("role") or "application"),
+                )
+        except (
+            AdoptError,
+            ProviderError,
+            GithubAPIError,
+            GithubAuthError,
+            OSError,
+            ValueError,
+        ) as exc:
+            raise PlanningError(
+                f"repository setup failed for {repo_id}: {exc}"
+            ) from exc
 
 
 def plan_project(
@@ -476,7 +615,9 @@ def plan_project(
         ),
     ]
     raw = ""
-    parsed: tuple[str, list[dict[str, Any]]] | None = None
+    parsed: (
+        tuple[str, list[dict[str, Any]], list[dict[str, Any]]] | None
+    ) = None
     plan_retries = 0
     budget_notice = False
     for step in range(MAX_RESEARCH_STEPS + 4):
@@ -543,7 +684,7 @@ def plan_project(
         )
     if parsed is None:
         raise PlanningError("the planner did not return a plan")
-    notes, items = parsed
+    notes, items, repositories = parsed
     plan_id = _plan_id(goal)
     if dry_run:
         return PlanResult(
@@ -551,8 +692,10 @@ def plan_project(
             goal=goal,
             notes=notes,
             tasks=items,
+            repositories=repositories,
             dry_run=True,
         )
+    _apply_repositories(settings, ledger, project, repositories)
     created: list[dict[str, Any]] = []
     ids: list[str] = []
     for index, item in enumerate(items):
@@ -601,6 +744,16 @@ def plan_project(
         )
         for index, item in enumerate(created, 1)
     )
+    repo_lines = (
+        "\n".join(
+            f"- `{item['id']}` — "
+            f"{'create' if item.get('create') else 'add'}, "
+            f"{item.get('role', 'application')}, "
+            f"depends on: {', '.join(item.get('depends_on') or []) or 'none'}"
+            for item in repositories
+        )
+        or "- none"
+    )
     write_text(
         path,
         f"""# Plan: {goal}
@@ -613,6 +766,10 @@ def plan_project(
 ## Notes
 
 {notes or '—'}
+
+## Repositories
+
+{repo_lines}
 
 ## Backlog
 
@@ -639,5 +796,6 @@ def plan_project(
         goal=goal,
         notes=notes,
         tasks=created,
+        repositories=repositories,
         artifact=str(path.relative_to(layout.root)),
     )
