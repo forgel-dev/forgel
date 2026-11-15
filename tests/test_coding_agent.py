@@ -13,7 +13,12 @@ from unittest.mock import patch
 from forgel.adopt import add_repository, adopt_repository
 from forgel.agent import ProjectAgent
 from forgel.artifacts import write_text
-from forgel.coding_agent import AgentError, CodingAgent, MAX_INVALID_REPLIES
+from forgel.coding_agent import (
+    AgentError,
+    CodingAgent,
+    MAX_INVALID_REPLIES,
+    _safe_env,
+)
 from forgel.config import Settings
 from forgel.daemon import run_daemon
 from forgel.layout import ProjectLayout
@@ -690,6 +695,32 @@ class CodingAgentTest(unittest.TestCase):
         ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "failed")
         self.assertIn("README.md", result.files_changed)
+
+    def test_agent_env_keeps_docker_client_config(self) -> None:
+        parent = self.home / "parent-home"
+        (parent / ".docker").mkdir(parents=True)
+        with patch.dict(
+            os.environ,
+            {
+                "HOME": str(parent),
+                "DOCKER_HOST": "unix:///tmp/docker.sock",
+                "TOP_SECRET": "leak",
+            },
+            clear=False,
+        ):
+            os.environ.pop("DOCKER_CONFIG", None)
+            env = _safe_env(self.layout)
+        self.assertEqual(
+            env["HOME"],
+            str(self.layout.root / ".forgel" / "agent-home"),
+        )
+        self.assertEqual(
+            env["DOCKER_HOST"], "unix:///tmp/docker.sock"
+        )
+        self.assertEqual(
+            env["DOCKER_CONFIG"], str(parent / ".docker")
+        )
+        self.assertNotIn("TOP_SECRET", env)
 
     def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
         leftover = self.repo / "leftover"

@@ -94,6 +94,14 @@ SAFE_ENV_KEYS = {
     "TERM",
     "SHELL",
     "VIRTUAL_ENV",
+    # Docker client settings. The agent HOME is redirected below, which hides
+    # ~/.docker and makes the client fall back to /var/run/docker.sock even
+    # when Docker Desktop keeps its socket and context elsewhere.
+    "DOCKER_HOST",
+    "DOCKER_CONTEXT",
+    "DOCKER_CONFIG",
+    "DOCKER_CERT_PATH",
+    "DOCKER_TLS_VERIFY",
 }
 DEFAULT_GITIGNORE = """__pycache__/
 *.py[cod]
@@ -195,6 +203,11 @@ def _safe_env(layout: ProjectLayout) -> dict[str, str]:
         for key, value in os.environ.items()
         if key in SAFE_ENV_KEYS
     }
+    parent_home = os.environ.get("HOME", "")
+    if "DOCKER_CONFIG" not in env and parent_home:
+        docker_config = Path(parent_home) / ".docker"
+        if docker_config.exists():
+            env["DOCKER_CONFIG"] = str(docker_config)
     agent_home = layout.root / ".forgel" / "agent-home"
     agent_home.mkdir(parents=True, exist_ok=True)
     env["HOME"] = str(agent_home)
