@@ -4,7 +4,13 @@
 # is relative to this file; commands run at the repository root. Tests import
 # the package from `src`, and the suite creates git repositories, so the image
 # carries git.
+#
+# `e2e` is the offline self-hosting gate: it adopts a local fixture repository,
+# plans a milestone with the scripted model, runs one task through the coding
+# agent, task QA and review, and stops at the staging approval gate. It never
+# touches the network, Docker or cloud resources.
 build: environment
 test: ["python -m unittest discover -s tests"]
+e2e: ["env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py"]
 env:
   PYTHONPATH: src

@@ -353,6 +353,22 @@ class RepositoryEnvironmentTest(unittest.TestCase):
         self.assertEqual(environment.env_map, {"PYTHONPATH": "src"})
         self.assertTrue((REPO_ROOT / "environment" / "Dockerfile").is_file())
 
+    def test_the_repository_declares_a_self_hosting_e2e_gate(self) -> None:
+        environment = load_environment(
+            ProjectLayout(root=REPO_ROOT, kind="legacy")
+        )
+        self.assertIsNotNone(environment)
+        assert environment is not None
+        self.assertTrue(environment.test, "environment.yaml declares no test")
+        self.assertTrue(environment.e2e, "environment.yaml declares no e2e")
+        argv = command_argv(environment.e2e[0])
+        self.assertTrue(argv, "the e2e command does not parse into an argument list")
+        self.assertIn("FORGEL_MODEL_MODE=script", environment.e2e[0])
+        self.assertTrue(
+            any(argv_item.endswith("run_self_hosting_e2e.py") for argv_item in argv),
+            argv,
+        )
+
 
 class CommandArgvTest(unittest.TestCase):
     def test_python_is_resolved_to_the_running_interpreter(self) -> None:

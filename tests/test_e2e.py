@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 from forgel.approvals import record_approval
 from forgel.config import Settings
+from forgel.environment import command_argv, load_environment
 from forgel.ledger import Ledger, new_project_id
+from forgel.layout import ProjectLayout
 from forgel.orchestrator import Orchestrator, StageError
 from forgel.sync import reconcile_project, sync_project
 
@@ -28,6 +32,40 @@ def approve_and_run(
         notes=f"generation {generation}",
     )
     orchestrator.run(project_id)
+
+
+class SelfHostingE2ETest(unittest.TestCase):
+    """The environment contract's e2e command is a green offline gate."""
+
+    def test_the_declared_e2e_command_exits_zero(self) -> None:
+        environment = load_environment(
+            ProjectLayout(root=REPO_ROOT, kind="legacy")
+        )
+        self.assertIsNotNone(environment)
+        assert environment is not None
+        self.assertTrue(environment.e2e)
+        argv = command_argv(environment.e2e[0])
+        self.assertTrue(argv)
+        completed = subprocess.run(
+            argv,
+            cwd=str(REPO_ROOT),
+            env={
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("FORGEL_")
+            },
+            capture_output=True,
+            text=True,
+            timeout=240,
+            check=False,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            completed.stdout[-4000:] + completed.stderr[-4000:],
+        )
+        self.assertIn("self-hosting gate is green", completed.stdout)
+        self.assertNotIn("FAIL ", completed.stdout)
 
 
 class EndToEndTest(unittest.TestCase):

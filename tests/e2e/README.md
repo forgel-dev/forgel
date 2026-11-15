@@ -1,4 +1,40 @@
-# Forgel Blog E2E
+# Forgel E2E
+
+Two end-to-end drivers live here:
+
+- `run_self_hosting_e2e.py` — the offline self-hosting gate declared in
+  `environment.yaml`.
+- `run_blog_e2e.py` — a manual end-to-end test of the Forgel harness.
+
+## Self-hosting gate
+
+`environment.yaml` declares both `test` and `e2e`. The `e2e` command is:
+
+```bash
+env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
+```
+
+The driver is an offline smoke of Forgel on itself:
+
+1. adopt a local fixture repository (a tiny git repository made in a
+   temporary directory);
+2. plan a milestone with the scripted model (`FORGEL_MODEL_MODE=script`);
+3. run one task through the coding agent, task QA and task review;
+4. stop at the approval gate.
+
+The run never touches the network, Docker or cloud resources. For a brownfield
+linked project the human gate is the task acceptance gate
+(`FORGEL_TASK_ACCEPT` defaults to `human`, and the driver sets it): the task
+parks in `review` status with a pending acceptance record, and the driver
+asserts the project never reaches `done` on its own. The temporary home and
+fixture repository are removed on exit.
+
+The driver exits non-zero when any gate is red (missing scripted model, a task
+that did not stop at the gate, QA or review failure, or a pipeline that ran
+through to `done`). `tests/test_e2e.py` invokes the declared command and
+asserts exit code 0, so the suite covers the gate.
+
+## Blog harness
 
 A manual end-to-end test of the Forgel harness: a local daemon receives a task,
 a coding agent builds a minimal blog platform from scratch, and an external
@@ -11,7 +47,7 @@ later be moved to a separate repository or wired into a pre-release process.
 **Not part of `make test`.** Run it only on explicit instruction. `api` mode
 spends provider budget.
 
-## Scope
+### Scope
 
 Included:
 
@@ -27,7 +63,7 @@ Excluded by design:
 - deployment; everything runs locally;
 - Telegram; interaction is through the CLI.
 
-## Run
+### Run
 
 Deterministic harness check (free; no model calls):
 
@@ -74,7 +110,7 @@ python tests/e2e/run_blog_e2e.py --mode api --strict --yes
 
 The script prints the artifacts directory; `--clean` removes it.
 
-## The task
+### The task
 
 The generated task is stored in the project's control repository under
 `docs/program/tasks/`. It asks for:
@@ -96,11 +132,11 @@ The task also fixes the **run contract** (the command, port and form fields).
 Without that contract the acceptance would depend on an implementation guess.
 Everything else — file layout, HTML, SQL schema — is the agent's decision.
 
-## Acceptance
+### Acceptance
 
 Two independent groups, reported separately.
 
-### Product (depends on the model)
+#### Product (depends on the model)
 
 `validate_blog.py` is an external, deterministic validator. It starts the app,
 checks the HTTP behaviour, restarts it for persistence, runs the unit tests and
@@ -116,7 +152,7 @@ python tests/e2e/run_blog_e2e.py --mode script --strict \
 The reviewer receives the task and repository path, must not modify the code,
 and checks adherence to the explicit requirements plus safety and scope.
 
-### Harness (independent of model quality)
+#### Harness (independent of model quality)
 
 These must hold even when the model produces bad code:
 
