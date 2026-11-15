@@ -36,10 +36,10 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-15T00:47:02+00:00",
-  "started_at": "2026-11-15T01:14:16+00:00",
-  "finished_at": "2026-11-15T01:17:16+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "repeated action loop: read_file:README.md",
     "files_changed": [],
@@ -145,14 +145,10 @@
     "report": "docs/program/agent/20261115004702_readme.md",
     "last_failure": {
       "kind": "agent",
-      "message": "step limit reached (24 per session x 6 sessions)"
+      "message": "repeated action loop: read_file:README.md"
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1,
-    "failure": {
-      "kind": "agent",
-      "message": "repeated action loop: read_file:README.md"
-    }
+    "manual_retries": 2
   }
 }
