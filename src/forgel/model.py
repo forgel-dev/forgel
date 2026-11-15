@@ -43,6 +43,8 @@ class ModelConfig:
     base_url: str
     api_key: str
     timeout: float = 120.0
+    retries: int = 3
+    retry_backoff: tuple[float, ...] = (1.0, 3.0, 9.0)
 
 
 class ModelClient(Protocol):
@@ -61,6 +63,7 @@ class OpenAICompatibleClient:
     ) -> None:
         self.config = config
         self._opener = opener or urllib.request.urlopen
+        self.last_usage: dict[str, Any] | None = None
 
     def complete(
         self,
@@ -75,25 +78,58 @@ class OpenAICompatibleClient:
             ],
             "temperature": 0.2,
         }
-        request = urllib.request.Request(
-            f"{self.config.base_url.rstrip('/')}/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.config.api_key}",
-            },
-        )
-        try:
-            with self._opener(
-                request, timeout=self.config.timeout
-            ) as response:
-                body = json.loads(response.read().decode("utf-8"))
-        except (urllib.error.URLError, OSError) as exc:
-            raise ModelError(self._redact(f"model request failed: {exc}")) from exc
-        except json.JSONDecodeError as exc:
-            raise ModelError("model endpoint returned invalid JSON") from exc
+        request_url = f"{self.config.base_url.rstrip('/')}/chat/completions"
+        attempts = max(1, min(int(self.config.retries) + 1, 10))
+        body: Any = None
+        self.last_usage = None
+        for attempt in range(1, attempts + 1):
+            request = urllib.request.Request(
+                request_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.config.api_key}",
+                },
+            )
+            try:
+                with self._opener(
+                    request, timeout=self.config.timeout
+                ) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code in {429, 500, 502, 503, 504} and (
+                    attempt < attempts
+                ):
+                    self._retry_sleep(attempt)
+                    continue
+                raise ModelError(
+                    self._redact(
+                        f"model request failed after {attempt} attempt(s): "
+                        f"HTTP {exc.code}"
+                    )
+                ) from exc
+            except (urllib.error.URLError, OSError) as exc:
+                if attempt < attempts:
+                    self._retry_sleep(attempt)
+                    continue
+                raise ModelError(
+                    self._redact(
+                        "model request failed after "
+                        f"{attempts} attempts: {exc}"
+                    )
+                ) from exc
+            except json.JSONDecodeError as exc:
+                raise ModelError(
+                    "model endpoint returned invalid JSON"
+                ) from exc
+        if body is None:
+            raise ModelError("model request failed")
         if not isinstance(body, dict):
             raise ModelError("model endpoint returned an unexpected response")
+        usage = body.get("usage")
+        if isinstance(usage, dict):
+            self.last_usage = usage
         choices = body.get("choices")
         if not isinstance(choices, list) or not choices:
             raise ModelError("model endpoint returned no choices")
@@ -108,6 +144,12 @@ class OpenAICompatibleClient:
         if not isinstance(content, str) or not content.strip():
             raise ModelError("model endpoint returned an empty answer")
         return content
+
+    def _retry_sleep(self, attempt: int) -> None:
+        backoff = self.config.retry_backoff or (1.0,)
+        delay = backoff[min(attempt - 1, len(backoff) - 1)]
+        if delay > 0:
+            time.sleep(delay)
 
     def _redact(self, message: str) -> str:
         if self.config.api_key:
@@ -294,6 +336,31 @@ def build_model_client(
         if log:
             log(f"[model] invalid base URL: {base_url!r}")
         return None
+    try:
+        timeout = float(env.get("FORGEL_MODEL_TIMEOUT", "120"))
+    except ValueError:
+        timeout = 120.0
+    if timeout <= 0:
+        timeout = 120.0
+    try:
+        retries = int(env.get("FORGEL_MODEL_RETRIES", "3"))
+    except ValueError:
+        retries = 3
+    retries = max(0, min(retries, 10))
+    backoff: list[float] = []
+    for item in env.get("FORGEL_MODEL_RETRY_BACKOFF", "1,3,9").split(","):
+        try:
+            value = float(item.strip())
+        except ValueError:
+            continue
+        if value >= 0:
+            backoff.append(value)
     return OpenAICompatibleClient(
-        ModelConfig(base_url=base_url, api_key=key)
+        ModelConfig(
+            base_url=base_url,
+            api_key=key,
+            timeout=timeout,
+            retries=retries,
+            retry_backoff=tuple(backoff) or (1.0,),
+        )
     )
