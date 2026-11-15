@@ -76,12 +76,12 @@
       ]
     }
   ],
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "2026-11-15T13:03:04+00:00",
-  "finished_at": "2026-11-15T13:12:14+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Completed and verified the django-drf-react template at src/forgel/templates/django-drf-react/: FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, scripts/test.sh, docker/entrypoint.sh, plus api/ (manage.py, requirements.txt pinning Django/djangorestframework/psycopg/django-storages/boto3, config/settings.py reading DATABASE_URL or POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY with SQLite + filesystem fallbacks so tests need no server, config/urls.py routing health.urls, health/views.py DRF APIView answering GET /healthz with {\"status\": \"ok\"}, config/bucket.py creating the bucket at container start, and api/tests/test_health.py exercising /healthz via the Django test client). compose.yaml now declares exactly three services (api, postgres, minio) wired through ${...} environment variables, with the bucket created by the API entrypoint; environment.yaml declares test: [\"./scripts/test.sh\"] (wrapper cds into api/ and runs python manage.py test) and leaves e2e for the next task. Fixed settings.py to install django.contrib.auth so DRF's default UNAUTHENTICATED_USER resolves, and hardened the MinIO healthcheck to use curl (the image ships no mc). tests/test_template_django_drf_react.py (18 tests) asserts the required files, the pins, the settings env reads, template independence from hello-web, the parsed environment contract with a non-empty test command running from api/, the compose services, bucket creation, and the registered /healthz route backed by a DRF view tested through the Django client. Verified: python -m unittest discover -s tests (438 tests, OK), python -m unittest tests.test_template_django_drf_react -v (18 tests, OK), python -m compileall -q src/forgel/templates/django-drf-react (exit 0). Docker is unavailable in this sandbox, so docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md and its .compose.md companion contain the ready-to-paste `docker compose up --build` command, the expected output a human must confirm (200 + {\"status\": \"ok\"} and migrations proving the Postgres connection), and the statement that the stand has not been run here.",
+    "summary": "Completed and verified the django-drf-react template at src/forgel/templates/django-drf-react/: FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, scripts/test.sh, docker/entrypoint.sh, plus api/ (manage.py, requirements.txt pinning Django/djangorestframework/psycopg/django-storages/boto3, config/settings.py reading DATABASE_URL or POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY with SQLite + filesystem fallbacks so tests need no server, config/urls.py routing health.urls, health/views.py DRF APIView answering GET /healthz with {\"status\": \"ok\"}, config/bucket.py creating the bucket at container start, and api/tests/test_health.py exercising /healthz via the Django test client). compose.yaml now declares exactly three services (api, postgres, minio) wired through ${...} environment variables, with the bucket created by the API entrypoint; environment.yaml declares test: [\"./scripts/test.sh\"] (wrapper cds into api/ and runs python manage.py test) and leaves e2e for the next task. Fixed settings.py to install django.contrib.auth so DRF's default UNAUTHENTICATED_USER resolves, and hardened the MinIO healthcheck to use curl (the image ships no mc). tests/test_template_django_drf_react.py (18 tests) asserts the required files, the pins, the settings env reads, template independence from hello-web, the parsed environment contract with a non-empty test command running from api/, the compose services, bucket creation, and the registered /healthz route backed by a DRF view tested through the Django client. Verified: python -m unittest discover -s tests (438 tests, OK), python -m unittest tests.test_template_django_drf_react -v (18 tests, OK), python -m compileall -q src/forgel/templates/django-drf-react (exit 0). Docker is unavailable in this sandbox, so docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md and its .compose.md companion contain the ready-to-paste `docker compose up --build` command, the expected output a human must confirm (200 + {\"status\": \"ok\"} and migrations proving the Postgres connection), and the statement that the stand has not been run here.; task QA failed (exit 127)",
     "files_changed": [
       "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md",
       "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md",
@@ -229,13 +229,63 @@
     "report": "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md",
     "attempts": 2,
     "last_failure": {
-      "kind": "infrastructure",
-      "message": "Added the django-drf-react template under src/forgel/templates/django-drf-react/ (FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, scripts/test.sh, docker/entrypoint.sh) plus api/ — a Django project with DRF: api/config/settings.py reads DATABASE_URL or POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY (falling back to in-memory SQLite and file-system storage so tests need no server), api/config/urls.py routes the health app, api/health/views.py serves GET /healthz as a DRF APIView returning {\"status\": \"ok\"}, api/config/bucket.py creates the S3 bucket on container start, api/tests/test_health.py exercises /healthz through the Django test client, and api/requirements.txt pins Django, djangorestframework, psycopg, django-storages and boto3. compose.yaml declares api, postgres and minio wired through ${...} env vars with the API health check and bucket creation in the entrypoint; environment.yaml declares test: [\"./scripts/test.sh\"] (the wrapper cds into api/ and runs python manage.py test) and leaves e2e for the next task. Added tests/test_template_django_drf_react.py (18 tests) asserting the required files, the pins, the settings env reads, the template-independent text, the parsed environment contract with a non-empty test command, the compose services, the bucket creation and the registered /healthz route. Verified with python -m unittest discover -s tests (438 tests, OK), python -m unittest tests.test_template_django_drf_react -v (18 tests, OK) and python -m compileall -q src/forgel/templates/django-drf-react/api (exit 0). The docker compose stand could not be started here (no Docker daemon), so docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md holds the ready-to-paste command and the output a human must paste; the task report links it.; commit failed: git add -- docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md src/forgel/templates/django-drf-react/.env.example src/forgel/templates/django-drf-react/Dockerfile src/forgel/templates/django-drf-react/api/config/bucket.py src/forgel/templates/django-drf-react/api/config/wsgi.py src/forgel/templates/django-drf-react/api/health/tests/__init__.py src/forgel/templates/django-drf-react/compose.yaml src/forgel/templates/django-drf-react/docker/entrypoint.sh src/forgel/templates/django-drf-react/environment.yaml src/forgel/templates/django-drf-react/scripts/test.sh tests/test_template_django_drf_react.py failed: fatal: спецификатор пути «src/forgel/templates/django-drf-react/api/health/tests/__init__.py» не соответствует ни одному файлу"
+      "kind": "qa",
+      "message": "task QA failed (exit 127)",
+      "retryable": false
     },
     "resume_count": 1,
     "resumed_at": "2026-11-15T12:33:16+00:00",
     "last_summary": "model call failed: model request failed: The read operation timed out",
     "retry_after": "2026-11-15T13:03:04+00:00",
-    "failure": {}
+    "qa": {
+      "status": "fail",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0
+        },
+        {
+          "command": "env PYTHONPATH=src python -m unittest tests.test_template_django_drf_react -v",
+          "exit_code": 127
+        },
+        {
+          "command": "python -m compileall -q src/forgel/templates/django-drf-react",
+          "exit_code": 0
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "Template structural validation test passes",
+          "command": "env PYTHONPATH=src python -m unittest tests.test_template_django_drf_react -v",
+          "exit_code": 127,
+          "verdict": "fail"
+        },
+        {
+          "criterion": "Template Python sources compile",
+          "command": "python -m compileall -q src/forgel/templates/django-drf-react",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "The compose stand serves /healthz against Postgres, evidence in the task report",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review"
+        }
+      ],
+      "review_required": true
+    },
+    "rework_count": 1,
+    "feedback": [
+      "QA check failed: Template structural validation test passes (exit 127)"
+    ]
   }
 }

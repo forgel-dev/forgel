@@ -1,0 +1,457 @@
+# Task QA: Add the Django/DRF backend skeleton template with Postgres and S3 compose
+
+- Task: `20261115105954_add-the-django-drf-backend-skeleton-temp`
+- Project: `forgel-1d2bf685`
+- Runtime: local + environment.yaml
+- Verdict: **FAIL**
+- Exit code: 127
+- Finished: 2026-11-15T13:13:15+00:00
+
+## Checks
+
+- environment test: pass (exit 0)
+- Template structural validation test passes: fail (exit 127)
+- Template Python sources compile: pass (exit 0)
+- The compose stand serves /healthz against Postgres, evidence in the task report: review
+
+## Output
+
+```
+$ python -m unittest discover -s tests
+[agent] 20261115131224_inspect-and-finish: context handoff to session 2 (~4783/3072 tokens)
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+......................................................................................................................................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 438 tests in 59.799s
+
+OK
+$ env PYTHONPATH=src python -m unittest tests.test_template_django_drf_react -v
+env: python: No such file or directory
+$ python -m compileall -q src/forgel/templates/django-drf-react
+
+```
