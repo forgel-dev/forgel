@@ -202,6 +202,26 @@ class TaskReviewTest(unittest.TestCase):
             "No product commits were attributed", prompt
         )
 
+    def test_reviewer_retries_after_tool_markup(self) -> None:
+        task = self._task()
+        markup = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"verdict\">"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+        client = ScriptedModelClient([markup, PASS])
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "pass", result.summary)
+        self.assertIn(
+            "tool-call markup", client.requests[1][-1].content
+        )
+
     def test_reviewer_can_read_current_files(self) -> None:
         task = self._task()
         client = ScriptedModelClient(

@@ -41,7 +41,7 @@ from .tasks import get_task, update_task
 
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
-MAX_REVIEW_STEPS = 6
+MAX_REVIEW_STEPS = 8
 MAX_QA_CHARS = 2_000
 REMOVAL_REASONS = {"removed", "replaced", "wrong"}
 TEST_PATH = re.compile(
@@ -419,7 +419,8 @@ Report:
 Every review-only criterion must appear in "requirements" with a verdict.
 
 Do not rewrite the code and do not report stylistic preferences. Return
-exactly one JSON object:
+JSON only; do not emit tool-call markup, XML or provider-specific function
+calls. Return exactly one JSON object:
 {
   "verdict": "pass" | "fail",
   "summary": "one paragraph",
@@ -633,7 +634,9 @@ def run_task_review(
         ModelMessage("user", _review_prompt(layout, task)),
     ]
     raw = ""
-    for step in range(MAX_REVIEW_STEPS + 1):
+    parsed: dict[str, Any] | None = None
+    answer_retries = 0
+    for step in range(MAX_REVIEW_STEPS + 3):
         try:
             raw = client.complete(
                 messages, model=project_model_name(layout.control)
@@ -653,7 +656,40 @@ def run_task_review(
         data = _json_object(raw)
         action = str(data.get("action", "")) if data else ""
         if action not in RESEARCH_ACTIONS:
-            break
+            try:
+                parsed = _parse_review(raw)
+                break
+            except (ValueError, json.JSONDecodeError) as exc:
+                if answer_retries < 2:
+                    messages.append(
+                        ModelMessage("assistant", raw.strip())
+                    )
+                    messages.append(
+                        ModelMessage(
+                            "user",
+                            "Return exactly one JSON verdict object with "
+                            "verdict, summary, requirements and blocking. "
+                            "Do not use tool-call markup, XML, "
+                            "provider-specific function calls or prose.",
+                        )
+                    )
+                    answer_retries += 1
+                    continue
+                return _record_review(
+                    ledger,
+                    layout,
+                    project,
+                    task,
+                    ReviewResult(
+                        status="error",
+                        summary=(
+                            "Reviewer returned an unusable answer: "
+                            f"{exc}"
+                        ),
+                        output=_cap(raw, MAX_QA_CHARS),
+                    ),
+                    log,
+                )
         if step == MAX_REVIEW_STEPS:
             return _record_review(
                 ledger,
@@ -686,9 +722,7 @@ def run_task_review(
                 + "\n\nReturn another action or the final verdict JSON.",
             )
         )
-    try:
-        parsed = _parse_review(raw)
-    except (ValueError, json.JSONDecodeError) as exc:
+    if parsed is None:
         return _record_review(
             ledger,
             layout,
@@ -696,8 +730,7 @@ def run_task_review(
             task,
             ReviewResult(
                 status="error",
-                summary=f"Reviewer returned an unusable answer: {exc}",
-                output=_cap(raw, MAX_QA_CHARS),
+                summary="the reviewer did not return a verdict",
             ),
             log,
         )
