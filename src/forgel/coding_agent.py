@@ -44,13 +44,14 @@ from .model import (
     project_model_name,
 )
 from .project_config import ConfigError, load_project_config
+from .repo_tools import READ_DEFAULT_LINES, read_text_page
 from .sandbox import CommandRunner, SandboxError, docker_runner
 
 MAX_STEPS = 40
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
-MAX_READ_CHARS = 30_000
-MAX_OBSERVATION = 30_000
+MAX_OBSERVATION = 200_000
+MAX_INVALID_REPLIES = 8
 MAX_LIST_ENTRIES = 200
 MAX_REPEATED_ACTIONS = 5
 ALLOWED_ACTIONS = {
@@ -114,7 +115,7 @@ Reply with exactly one JSON object per turn. Do not emit tool-call markup,
 XML or provider-specific function calls; the runtime understands only the
 JSON actions below.
 {"action": "list_files", "path": "."}
-{"action": "read_file", "path": "relative/path"}
+{"action": "read_file", "path": "relative/path", "offset": 1, "limit": 2000}
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
@@ -143,7 +144,9 @@ Autonomy (D-075):
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
 - Use read_file for file contents. run is only for tests and build commands;
-  never use python, grep, cat or similar to print a file.
+  never use python, grep, cat or similar to print a file. read_file returns a
+  numbered line range with a continuation hint; read the next range with
+  offset instead of writing helper scripts.
 - A file you have read is in the conversation. Do not read it again before
   editing; when you know the exact change, call write_file immediately.
 - Do not repeat an action. If you see the same observation twice, change the
@@ -204,7 +207,11 @@ def _safe_env(layout: ProjectLayout) -> dict[str, str]:
 def _cap(text: str, limit: int = MAX_OBSERVATION) -> str:
     if len(text) <= limit:
         return text
-    return text[:limit] + f"\n... [truncated, {len(text)} chars]"
+    return (
+        text[:limit]
+        + f"\n... [output truncated, {len(text)} chars; rerun with a "
+        "narrower command or read the file with read_file]"
+    )
 
 
 def _looks_like_tool_markup(text: str) -> bool:
@@ -644,12 +651,18 @@ class CodingAgent:
                         ModelMessage(
                             "user",
                             "Invalid reply. Return exactly one JSON action "
-                            "object.",
+                            "object using one of: list_files, read_file, "
+                            "write_file, delete_file, run, done, fail. "
+                            "Do not return prose, a plan, tool-call markup "
+                            "or any other shape.",
                         )
                     )
-                    if invalid >= 3:
+                    if invalid >= MAX_INVALID_REPLIES:
                         status = "failed"
-                        summary = "the model did not return a valid action"
+                        summary = (
+                            "the model did not return a valid action "
+                            f"after {invalid} attempts"
+                        )
                         terminal = True
                         break
                     continue
@@ -931,8 +944,12 @@ Files:
                 data = path.read_bytes()
                 if b"\x00" in data:
                     return "binary file; not displayed", None
-                text = data.decode("utf-8", errors="replace")
-                return _cap(text, MAX_READ_CHARS), None
+                return read_text_page(
+                    path,
+                    action.get("offset", 1),
+                    action.get("limit", READ_DEFAULT_LINES),
+                    display=str(action.get("path") or ""),
+                ), None
             if kind == "write_file":
                 path = self._path(repo, action.get("path"))
                 self._check_write_path(path)

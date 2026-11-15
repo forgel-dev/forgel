@@ -427,7 +427,10 @@ def _json_object(raw: str) -> dict[str, Any] | None:
 def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
     if len(text) <= limit:
         return text
-    return text[:limit] + "\n... [truncated]"
+    return (
+        text[:limit]
+        + "\n... [truncated; use read_file with offset to read the rest]"
+    )
 
 
 def plan_project(

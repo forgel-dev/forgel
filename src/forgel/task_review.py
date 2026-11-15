@@ -73,7 +73,11 @@ def _now() -> str:
 def _cap(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
-    return text[:limit] + f"\n... [truncated, {len(text)} chars]"
+    return (
+        text[:limit]
+        + f"\n... [truncated, {len(text)} chars; read the full file "
+        "with read_file]"
+    )
 
 
 def _repo(layout: ProjectLayout, task: Mapping[str, Any]) -> tuple[str, Path]:

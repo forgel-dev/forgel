@@ -21,8 +21,8 @@ DEFAULT_WINDOW = 1_000_000
 MAX_RESERVE = 8_192
 COMPACT_AT = 0.7
 KEEP_RECENT = 3
-MAX_STATE_CHARS = 60_000
-MAX_OBSERVATION_CHARS = 20_000
+MAX_STATE_CHARS = 240_000
+MAX_OBSERVATION_CHARS = 120_000
 
 
 def estimate_tokens(text: str, model: str = "") -> int:
@@ -99,7 +99,12 @@ class SessionState:
         )
         observation_lines = (
             "\n".join(
-                f"- {item[:MAX_OBSERVATION_CHARS]}"
+                f"- {item}"
+                if len(item) <= MAX_OBSERVATION_CHARS
+                else (
+                    f"- {item[:MAX_OBSERVATION_CHARS]}\n"
+                    "  ... [observation truncated; re-read the file]"
+                )
                 for item in self.observations[-KEEP_RECENT:]
             )
             or "- none"

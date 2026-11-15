@@ -13,7 +13,7 @@ from unittest.mock import patch
 from forgel.adopt import add_repository, adopt_repository
 from forgel.agent import ProjectAgent
 from forgel.artifacts import write_text
-from forgel.coding_agent import CodingAgent
+from forgel.coding_agent import CodingAgent, MAX_INVALID_REPLIES
 from forgel.config import Settings
 from forgel.daemon import run_daemon
 from forgel.layout import ProjectLayout
@@ -359,7 +359,9 @@ class CodingAgentTest(unittest.TestCase):
 
     def test_invalid_actions_fail_the_task(self) -> None:
         task = self._task()
-        client = ScriptedModelClient(["not json", "still not", "nope"])
+        client = ScriptedModelClient(
+            ["not json"] * MAX_INVALID_REPLIES
+        )
         result = CodingAgent(self.settings, self.ledger, client).run(
             self.project, task, log=lambda _m: None
         )
@@ -583,6 +585,36 @@ class CodingAgentTest(unittest.TestCase):
             message.content for message in client.requests[-1]
         )
         self.assertIn("source", final_prompt)
+
+    def test_read_file_pages_by_lines(self) -> None:
+        lines = [f"line {index}" for index in range(2500)]
+        (self.repo / "big.txt").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        first, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": "big.txt"},
+            set(),
+        )
+        self.assertIn("lines 1-2000 of 2500", first)
+        self.assertIn("line 1999", first)
+        self.assertIn("offset=2001", first)
+        second, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "read_file",
+                "path": "big.txt",
+                "offset": 2001,
+            },
+            set(),
+        )
+        self.assertIn("lines 2001-2500 of 2500", second)
+        self.assertIn("line 2499", second)
 
     def test_tool_markup_is_retried(self) -> None:
         task = create_task(

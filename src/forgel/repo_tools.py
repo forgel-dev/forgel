@@ -7,8 +7,10 @@ from typing import Any, Mapping, Sequence
 
 from .layout import ProjectLayout
 
-MAX_READ_CHARS = 12_000
+MAX_READ_CHARS = 200_000
 MAX_LIST_ENTRIES = 200
+READ_DEFAULT_LINES = 2_000
+READ_MAX_LINES = 5_000
 RESEARCH_ACTIONS = {"list_files", "read_file"}
 SKIP_PARTS = {
     ".git",
@@ -70,10 +72,62 @@ def _path(repo: Path, value: Any) -> Path:
     return candidate
 
 
-def _cap(text: str) -> str:
-    if len(text) <= MAX_READ_CHARS:
-        return text
-    return text[:MAX_READ_CHARS] + "\n... [truncated]"
+def read_text_page(
+    path: Path,
+    offset: Any = 1,
+    limit: Any = READ_DEFAULT_LINES,
+    display: str = "",
+) -> str:
+    """Read a line range with numbering and an explicit continuation hint."""
+
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return f"cannot read {display or path.name}: {exc}"
+    all_lines = text.splitlines()
+    total = len(all_lines)
+    try:
+        start = max(1, int(offset))
+    except (TypeError, ValueError):
+        start = 1
+    try:
+        count = max(1, min(int(limit), READ_MAX_LINES))
+    except (TypeError, ValueError):
+        count = READ_DEFAULT_LINES
+    if total == 0:
+        return f"{display or path.name}: empty file"
+    if start > total:
+        return (
+            f"{display or path.name}: {total} lines; "
+            f"offset {start} is past the end"
+        )
+    end = min(total, start + count - 1)
+    numbered: list[str] = []
+    used = 0
+    for number in range(start, end + 1):
+        line = all_lines[number - 1]
+        rendered = f"{number:04d}| {line}"
+        if used + len(rendered) + 1 > MAX_READ_CHARS:
+            if not numbered:
+                numbered.append(
+                    f"{number:04d}| "
+                    + line[:MAX_READ_CHARS]
+                    + " ... [line truncated]"
+                )
+            break
+        numbered.append(rendered)
+        used += len(rendered) + 1
+    actual_end = start + len(numbered) - 1
+    header = (
+        f"{display or path.name}: lines {start}-{actual_end} of {total}"
+    )
+    footer = ""
+    if actual_end < total:
+        footer = (
+            f"\n... use read_file with offset={actual_end + 1} "
+            f"to continue"
+        )
+    return header + "\n" + "\n".join(numbered) + footer
 
 
 def execute_repo_action(
@@ -120,5 +174,10 @@ def execute_repo_action(
         data = path.read_bytes()
         if b"\x00" in data:
             return "binary file; not displayed"
-        return _cap(data.decode("utf-8", errors="replace"))
+        return read_text_page(
+            path,
+            action.get("offset", 1),
+            action.get("limit", READ_DEFAULT_LINES),
+            display=str(action.get("path") or ""),
+        )
     raise RepoActionError(f"unknown action: {kind}")
