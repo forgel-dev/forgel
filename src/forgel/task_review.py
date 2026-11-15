@@ -31,17 +31,18 @@ from .model import (
     project_model_name,
 )
 from .program_manifest import entries as manifest_entries
+from .project_config import ConfigError, load_project_config
 from .repo_tools import (
     RESEARCH_ACTIONS,
     RepoActionError,
     execute_repo_action,
 )
+from .session_context import budget_for
 from .task_qa import TaskQAResult, run_task_qa
 from .tasks import get_task, list_tasks, update_task
 
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
-MAX_REVIEW_STEPS = 8
 MAX_QA_CHARS = 2_000
 REMOVAL_REASONS = {"removed", "replaced", "wrong"}
 TEST_PATH = re.compile(
@@ -634,6 +635,18 @@ def _record_review(
     )
 
 
+def _review_window(
+    settings: Settings, layout: ProjectLayout
+) -> int:
+    try:
+        config = load_project_config(layout.control)
+    except ConfigError:
+        return settings.context_window
+    if config is None:
+        return settings.context_window
+    return config.models.context_window
+
+
 def run_task_review(
     settings: Settings,
     ledger: Ledger,
@@ -685,11 +698,25 @@ def run_task_review(
     raw = ""
     parsed: dict[str, Any] | None = None
     answer_retries = 0
-    for step in range(MAX_REVIEW_STEPS + 3):
-        try:
-            raw = client.complete(
-                messages, model=project_model_name(layout.control)
+    model = project_model_name(layout.control)
+    budget = budget_for(_review_window(settings, layout))
+    while True:
+        if budget.usage(messages, model) >= budget.usable:
+            return _record_review(
+                ledger,
+                layout,
+                project,
+                task,
+                ReviewResult(
+                    status="error",
+                    summary=(
+                        "the reviewer context window is exhausted"
+                    ),
+                ),
+                log,
             )
+        try:
+            raw = client.complete(messages, model=model)
         except ModelError as exc:
             return _record_review(
                 ledger,
@@ -739,18 +766,6 @@ def run_task_review(
                     ),
                     log,
                 )
-        if step == MAX_REVIEW_STEPS:
-            return _record_review(
-                ledger,
-                layout,
-                project,
-                task,
-                ReviewResult(
-                    status="error",
-                    summary="the reviewer exceeded the inspection limit",
-                ),
-                log,
-            )
         args = dict(data.get("action_args") or {})
         for key in ("path", "repo_id"):
             if key in data and key not in args:
