@@ -73,7 +73,7 @@
       ]
     }
   ],
-  "status": "review",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T13:48:28+00:00",
   "finished_at": "2026-11-15T14:29:20+00:00",
@@ -295,9 +295,10 @@
       "report": "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.review.md"
     },
     "acceptance": {
-      "status": "pending",
-      "reason": "review passed; acceptance required",
-      "at": "2026-11-15T14:31:00+00:00"
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-15T14:42:48+00:00",
+      "notes": "acceptance policy is auto"
     }
   }
 }
