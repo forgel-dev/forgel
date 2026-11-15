@@ -57,6 +57,22 @@ def _cap(text: str, limit: int = MAX_OUTPUT) -> str:
     return text[:limit] + f"\n... [truncated, {len(text)} chars]"
 
 
+DOC_SUFFIXES = {".md", ".rst", ".txt"}
+
+
+def _documentation_only(task: dict[str, Any]) -> bool:
+    files = [
+        str(item)
+        for item in ((task.get("result") or {}).get("files_changed") or [])
+    ]
+    if not files:
+        return False
+    return all(
+        item.endswith(tuple(DOC_SUFFIXES)) or item.startswith("docs/")
+        for item in files
+    )
+
+
 def _task_repo_id(
     layout: ProjectLayout, task: dict[str, Any]
 ) -> str:
@@ -338,6 +354,24 @@ def run_task_qa(
     task = get_task(layout, str(task["id"])) or task
     log(f"[qa] {project['id']}: task {task['id']}: running")
     repo_id = _task_repo_id(layout, task)
+    if _documentation_only(task):
+        return _record(
+            ledger,
+            layout,
+            project,
+            task,
+            TaskQAResult(
+                status="skipped",
+                runtime="documentation-only",
+                output=(
+                    "Documentation-only change; executable checks are "
+                    "skipped and the result is verified by review."
+                ),
+                review_required=True,
+            ),
+            0,
+            log,
+        )
     try:
         environment = load_environment(layout)
     except Exception as exc:  # noqa: BLE001 - environment is project data

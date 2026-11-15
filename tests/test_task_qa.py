@@ -72,6 +72,29 @@ class TaskQATest(unittest.TestCase):
         update_task(self.layout, task["id"], status="done")
         return task
 
+    def test_documentation_only_task_skips_executable_checks(self) -> None:
+        task = self._task(
+            ["python", "-c", "raise SystemExit(1)"]
+        )
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                "files_changed": ["README.md"],
+                "summary": "documented",
+            },
+        )
+        result = run_task_qa(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "skipped")
+        self.assertEqual(result.runtime, "documentation-only")
+        self.assertEqual(result.commands, [])
+
     def test_local_checks_do_not_inherit_forgel_environment(self) -> None:
         argv = [
             sys.executable,

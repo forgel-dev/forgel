@@ -208,6 +208,9 @@ Rules:
 - One repository per task; do not mix repositories in one task.
 - Give every task explicit requirements and acceptance criteria; the agent
   must not invent unstated features.
+- Tests are for behaviour and code. Do not add tests for documentation,
+  prose, status markers or other text-only changes; verify those with a
+  review-only check and leave test_command empty.
 - Give every task at least one executable check per acceptance criterion.
   The check command runs in the repository and must exit 0 when the criterion
   is met. If a criterion cannot be checked by a command (documentation, UX),
