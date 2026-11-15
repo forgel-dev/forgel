@@ -309,6 +309,23 @@ class AgentTest(unittest.TestCase):
             "tool-call markup", client.requests[1][-1].content
         )
 
+    def test_a_plan_object_is_retried_as_an_answer(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        client = ScriptedModelClient(
+            [
+                json.dumps({"notes": "plan", "tasks": []}),
+                json.dumps(
+                    {"kind": "answer", "reply": "План: сначала M0.5."}
+                ),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+        result = agent.handle(project, "Какой план?", "@tester")
+        self.assertEqual(result.text, "План: сначала M0.5.")
+        self.assertIn(
+            "cannot be shown", client.requests[1][-1].content
+        )
+
     def test_process_tool_results_are_not_replayed(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         layout = ProjectLayout.detect(project["workspace"])
@@ -331,12 +348,16 @@ class AgentTest(unittest.TestCase):
             path="README.md",
         )
         append_history(layout, "user", "hello", "@tester", session="s")
+        append_history(
+            layout, "assistant", UNFORMATTED_REPLY, "@tester", session="s"
+        )
         agent = ProjectAgent(
             self.settings, self.ledger, ScriptedModelClient([])
         )
         history = agent._session_history(layout, "s")
         self.assertNotIn("PROCESS-MARKER", history)
         self.assertIn("DOC-MARKER", history)
+        self.assertNotIn(UNFORMATTED_REPLY, history)
 
     def test_json_without_a_reply_is_not_dumped(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

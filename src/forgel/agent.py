@@ -141,6 +141,10 @@ Reply in the language of the user's message. Return exactly one JSON object:
   "assumptions": ["what you decided where the request was silent"]
 }
 
+kind="answer" must include a non-empty plain-text "reply". Never answer a
+question with a plan or task object; the plan action is separate and needs a
+milestone goal.
+
 Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
 - adopt {url, brief?}: adopt a repository as a new project and select it;
@@ -545,8 +549,10 @@ def _looks_like_tool_markup(text: str) -> bool:
         marker in lowered
         for marker in (
             "<｜｜dsml｜｜",
+            "<|",
             "<tool_call",
             "<function_call",
+            "<system_warning",
         )
     )
 
@@ -768,6 +774,10 @@ class ProjectAgent:
             lines: list[str] = []
             for turn in recent:
                 role = str(turn.get("role", ""))
+                if role == "assistant" and (
+                    str(turn.get("text", "")) == UNFORMATTED_REPLY
+                ):
+                    continue
                 if role == "tool":
                     path = str(turn.get("path", ""))
                     if path.startswith("docs/program/"):
@@ -862,6 +872,7 @@ class ProjectAgent:
         repos = manifest_entries(layout)
         raw = ""
         markup_retries = 0
+        answer_retries = 0
         for step in range(MAX_RESEARCH_STEPS + 1):
             try:
                 raw = self.client.complete(messages, model=model)
@@ -888,6 +899,28 @@ class ProjectAgent:
                         )
                     )
                     markup_retries += 1
+                    continue
+                candidate = parse_answer(raw)
+                unreadable = candidate["kind"] == "answer" and (
+                    not str(candidate["reply"]).strip()
+                    or candidate["reply"] == UNFORMATTED_REPLY
+                )
+                if unreadable and answer_retries < 2:
+                    messages.append(
+                        ModelMessage("assistant", raw.strip())
+                    )
+                    messages.append(
+                        ModelMessage(
+                            "user",
+                            "That reply cannot be shown to the user. Return "
+                            "exactly one JSON object with kind=answer and a "
+                            "non-empty plain-text reply. Do not return a "
+                            "plan, a task list, tool-call markup or an "
+                            "empty reply. Use a read_file action if you "
+                            "still need a file.",
+                        )
+                    )
+                    answer_retries += 1
                     continue
                 break
             if step == MAX_RESEARCH_STEPS:
