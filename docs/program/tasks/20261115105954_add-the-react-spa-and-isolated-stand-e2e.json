@@ -67,9 +67,16 @@
       "command": []
     }
   ],
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-15T15:40:17+00:00",
+  "finished_at": "2026-11-15T16:02:22+00:00",
+  "result": {
+    "summary": "agent crashed: can only concatenate str (not \"bytes\") to str",
+    "failure": {
+      "kind": "external",
+      "message": "can only concatenate str (not \"bytes\") to str",
+      "retryable": false
+    }
+  }
 }
