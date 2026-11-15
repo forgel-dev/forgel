@@ -36,13 +36,15 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T00:47:02+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T02:23:41+00:00",
+  "finished_at": "2026-11-15T02:27:44+00:00",
   "result": {
-    "summary": "the model did not return a valid action",
-    "files_changed": [],
+    "summary": "README.md now describes the agent's actual behaviour instead of the stale intake-only claim. The 'Model and agent' section presents the product cycle in four steps: (1) a plain-language request becomes a task with explicit requirements and acceptance criteria (and `forgel plan`/`/plan` turns a milestone into an ordered backlog with dependencies); (2) the agent works on the task in the sandbox — reads the repository, edits the code, commits with a bot message and writes `docs/program/agent/<task>.md`; (3) an independent QA pass runs the `test` then `e2e` commands from the project's `environment.yaml` in the sandbox, and an independent review judges the committed diff against the requirements; (4) the task waits in `review` for a human decision — accept, or send it back with a reason, which returns it for rework. The four-step cycle is followed by the existing session/handoff note pointing at `PLAN.md` §7.15, so it agrees with the sections above (planner, independent QA, sessions and state handoff, approvals/human gates). Only documentation was touched: no code, tests or behaviour changed, and no files besides README.md were authored by me. `make test` was run after the edit and exited 0 (full unittest suite green).",
+    "files_changed": [
+      "README.md"
+    ],
     "commands": [
       {
         "command": [
@@ -57,31 +59,83 @@
           "git",
           "log",
           "--oneline",
-          "-8"
+          "-10"
         ],
         "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat",
+          "HEAD",
+          "--",
+          "README.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "HEAD",
+          "--",
+          "README.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "make",
+          "test"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "make",
+          "test"
+        ],
+        "exit_code": 0,
+        "final_test": true
       }
     ],
-    "test_output": "",
+    "test_output": "python3 -m unittest discover -s tests -v\n[agent] 20261115022701_inspect-and-finish: step cap, handoff to session 2\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[accept\n... [truncated, 30029 chars]",
     "assumptions": [
       "В качестве первой реальной задачи выбрана правка README, потому что расхождение видно прямо в файле и задача проходит весь цикл с минимальным риском.",
       "Задача сознательно маленькая: цель прогона — проверить конвейер, а не объём изменений.",
-      "Если у вас есть конкретная правка в коде или цель этапа, эта задача заменяется без потерь."
+      "Если у вас есть конкретная правка в коде или цель этапа, эта задача заменяется без потерь.",
+      "The stale 'accepts a request only / does not edit code' sentence was already absent at HEAD in this branch, so the edit concentrated on the wording of the cycle itself (step 4 previously mentioned only accepting, not sending back) and on keeping it consistent with the four-step description; the acceptance criterion 'README no longer claims the agent does not edit code' holds.",
+      "Rejection path is described in product language ('send it back: <reason>' with the `forgel task reject` equivalent) because the surrounding console section already uses that phrasing.",
+      "The signed commit (`git commit -s`) could not be created by this session: the sandbox permits only read-only git commands, so committing and signing is left to the pipeline that commits the task result.",
+      "PLAN.md was read for §7.15 consistency and deliberately left unmodified, per the README-only constraint; it therefore cannot appear in the diff.",
+      "No internal agent-run notes were added by this session and no secrets, .env.local content or internal documents were committed."
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "estimated_tokens": 21500,
+      "estimated_tokens": 39211,
       "state": ""
     },
     "test_removals": [],
     "git": {
-      "base": "aed9f09e33a2ab5d45b8b24767aef353aa0f6d47",
-      "head": "aed9f09e33a2ab5d45b8b24767aef353aa0f6d47",
-      "commit": "",
-      "commits": []
+      "base": "8439451abe6b9a738cd8578b4fe2a79b2e6ce89a",
+      "head": "904bb72664e2902b43dd52ad6ba378cf2ac8a443",
+      "commit": "904bb72664e2902b43dd52ad6ba378cf2ac8a443",
+      "commits": [
+        "904bb72664e2902b43dd52ad6ba378cf2ac8a443"
+      ]
     },
     "report": "docs/program/agent/20261115004702_readme.md",
     "last_failure": {
@@ -206,6 +260,7 @@
         "Consistency with PLAN.md section 7.15 is unverified because PLAN.md is not in the diff."
       ],
       "report": "docs/program/agent/20261115004702_readme.review.md"
-    }
+    },
+    "failure": {}
   }
 }
