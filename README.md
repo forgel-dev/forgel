@@ -198,14 +198,21 @@ export FORGEL_MODEL_BASE_URL=https://api.deepseek.com/v1   # optional
 export FORGEL_MODEL_NAME=deepseek-flash                     # optional
 ```
 
-The current agent takes a task end to end. A request in plain language becomes a
-task with explicit requirements and acceptance criteria; the agent then works
-on it in the sandbox, edits the code and writes its report. An independent QA
-pass then runs the commands declared in the project's `environment.yaml`
-(`test`, then `e2e`) in the sandbox, and an independent review checks the
-committed diff against the requirements. The task then waits in `review` for
-a human decision ("accept" in the console, or `forgel task accept`). Long
-tasks run as bounded sessions that hand off state through
+The current agent takes a task end to end:
+
+1. A request in plain language becomes a task with explicit requirements and
+   acceptance criteria; for a milestone, `forgel plan` (or `/plan`) turns the
+   goal into an ordered backlog of such tasks, and the daemon starts a task
+   only after its dependencies are done.
+2. The agent works on the task in the sandbox: it reads the repository, edits
+   the code and writes its report.
+3. An independent QA pass then runs the commands declared in the project's
+   `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent
+   review checks the committed diff against the requirements.
+4. The task then waits in `review` for a human decision ("accept" in the
+   console, or `forgel task accept`).
+
+Long tasks run as bounded sessions that hand off state through
 `docs/program/agent/<task>.state.md`. See `PLAN.md` §7.15.
 
 For local runs without a model key, `FORGEL_MODEL_MODE=script` reads responses
