@@ -1,10 +1,10 @@
 # Agent Run: Record M0 and M0.5 completion status in PLAN.md and README
 
 - Task: `20261115105954_record-m0-and-m0-5-completion-status-in-`
-- Status: `failed`
+- Status: `done`
 - Repository: `main`
-- Steps: 15
-- Finished: 2026-11-15T11:03:05+00:00
+- Steps: 39
+- Finished: 2026-11-15T11:24:37+00:00
 
 ## Requirements
 
@@ -27,7 +27,11 @@
 
 ## Assumptions
 
-- none
+- Marked M0 as done: every M0 deliverable has a backing file or Makefile target in the tree.
+- Marked M0.5 as partial rather than done because its exit criterion (a real Forgel change accepted through Forgel itself) has not happened and post-merge smoke/auto-revert is still a reserved config field, both stated in README and PLAN §11.
+- Listed the missing M0.5 deliverables in the status line instead of adding new roadmap bullets, so existing items are neither deleted nor renumbered.
+- Used the exact existing M0/M0.5 headings (including the durations in parentheses) as the anchors for the status lines and the test lookups.
+- Kept the documentation in English per D-025 and wrote no internal-work references.
 
 ## Test Removals
 
@@ -38,35 +42,478 @@
 - Window: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Estimated prompt at the end: 38698 tokens
+- Estimated prompt at the end: 184498 tokens
 - State: not needed
 
 ## Summary
 
-the model did not return a valid action
+Recorded M0 and M0.5 completion status. PLAN.md §10 now carries a '**Status:** done — <evidence>' line directly under '### M0 — Skeleton (2–3 weeks)' citing concrete artifacts (Makefile/make demo, src/forgel/cli.py, orchestrator.py, ledger.py, telegram.py, approvals.py, registry/recipes.json, jurisdiction/generic.json and ru.json, Dockerfile + compose.yaml + hello-web template, context.py + forgel.toml, LICENSE/CONTRIBUTING.md), and a '**Status:** partial — <what remains>' line directly under '### M0.5 — Self-Hosting (immediate goal)' citing the existing telegram gateway, planner, task QA, task review, peak policy, sandbox, adoption, GitHub provider and deploy utility, and naming the remaining items (the self-hosting exit criterion and post-merge smoke with auto-revert). No existing roadmap item was deleted or renumbered; later milestones are untouched. README.md's '**Status:** pre-alpha' section now names M0 (done) and M0.5 (partial with the same remaining-work wording) and links to PLAN.md §10 (PLAN.md#10-roadmap). Added tests/test_docs_status.py, a stdlib unittest that reads both files from the repository root and asserts the status lines exist under each heading, that the evidence paths exist on disk, that make's demo target exists, that later milestone headings are unchanged, and that README repeats the same M0/M0.5 status and link. Full suite: python -m unittest discover -s tests — 425 tests, OK.
 
 ## Files Changed
 
-- `_roadmap_dump.py`
+- `PLAN.md`
+- `README.md`
+- `tests/test_docs_status.py`
 
 ## Commands
 
-- none
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_docs_status.py", "-v"]` → exit 1
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_docs_status.py", "-v"]` → exit 1
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_docs_status.py", "-v"]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-not run
+[agent] 20261115112351_inspect-and-finish: step cap, handoff to session 2
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+.........................................................................................................................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 425 tests in 53.573s
+
+OK
+
 ```
 
 ## Actions
 
 - read_file: PLAN.md
 - read_file: README.md
-- read_file: AGENTS.md
-- read_file: docs/program/tasks/20261115105954_record-m0-and-m0-5-completion-status-in-.json
+- read_file: Makefile
+- read_file: docs/program/agent/20261115004702_readme.state.md
+- write_file: PLAN.md
 - read_file: PLAN.md
-- read_file: ./PLAN.md
-- write_file: _roadmap_dump.py
-- delete_file: _roadmap_dump.py
-- read_file: docs/program/plans/20261115105954_m1-oss-django-drf-react-spa-postgres-s3-.md
+- read_file: README.md
+- write_file: tests/test_docs_status.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_docs_status.py', '-v']
+- write_file: README.md
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_docs_status.py', '-v']
+- write_file: tests/test_docs_status.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_docs_status.py', '-v']
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']

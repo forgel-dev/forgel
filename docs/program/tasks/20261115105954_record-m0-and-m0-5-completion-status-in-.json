@@ -59,32 +59,109 @@
       ]
     }
   ],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T11:15:11+00:00",
+  "finished_at": "2026-11-15T11:24:37+00:00",
   "result": {
-    "summary": "the model did not return a valid action",
+    "summary": "Recorded M0 and M0.5 completion status. PLAN.md §10 now carries a '**Status:** done — <evidence>' line directly under '### M0 — Skeleton (2–3 weeks)' citing concrete artifacts (Makefile/make demo, src/forgel/cli.py, orchestrator.py, ledger.py, telegram.py, approvals.py, registry/recipes.json, jurisdiction/generic.json and ru.json, Dockerfile + compose.yaml + hello-web template, context.py + forgel.toml, LICENSE/CONTRIBUTING.md), and a '**Status:** partial — <what remains>' line directly under '### M0.5 — Self-Hosting (immediate goal)' citing the existing telegram gateway, planner, task QA, task review, peak policy, sandbox, adoption, GitHub provider and deploy utility, and naming the remaining items (the self-hosting exit criterion and post-merge smoke with auto-revert). No existing roadmap item was deleted or renumbered; later milestones are untouched. README.md's '**Status:** pre-alpha' section now names M0 (done) and M0.5 (partial with the same remaining-work wording) and links to PLAN.md §10 (PLAN.md#10-roadmap). Added tests/test_docs_status.py, a stdlib unittest that reads both files from the repository root and asserts the status lines exist under each heading, that the evidence paths exist on disk, that make's demo target exists, that later milestone headings are unchanged, and that README repeats the same M0/M0.5 status and link. Full suite: python -m unittest discover -s tests — 425 tests, OK.",
     "files_changed": [
-      "_roadmap_dump.py"
+      "PLAN.md",
+      "README.md",
+      "_roadmap_dump.py",
+      "tests/test_docs_status.py"
     ],
-    "commands": [],
-    "test_output": "",
-    "assumptions": [],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_docs_status.py",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_docs_status.py",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_docs_status.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261115112351_inspect-and-finish: step cap, handoff to session 2\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[aud\n... [output truncated, 9192 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "Marked M0 as done: every M0 deliverable has a backing file or Makefile target in the tree.",
+      "Marked M0.5 as partial rather than done because its exit criterion (a real Forgel change accepted through Forgel itself) has not happened and post-merge smoke/auto-revert is still a reserved config field, both stated in README and PLAN §11.",
+      "Listed the missing M0.5 deliverables in the status line instead of adding new roadmap bullets, so existing items are neither deleted nor renumbered.",
+      "Used the exact existing M0/M0.5 headings (including the durations in parentheses) as the anchors for the status lines and the test lookups.",
+      "Kept the documentation in English per D-025 and wrote no internal-work references."
+    ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "estimated_tokens": 38698,
+      "estimated_tokens": 184498,
       "state": ""
     },
     "test_removals": [],
     "git": {
-      "base": "1256382c61b2778b473ee649b539d94cbe191173",
-      "head": "1256382c61b2778b473ee649b539d94cbe191173",
-      "commit": "",
-      "commits": []
+      "base": "9d7cd697ea40e69d54e3842a49f79a2bd9871773",
+      "head": "fac1f2056542bc7812d5c7e4d04cd5536b2f6e93",
+      "commit": "fac1f2056542bc7812d5c7e4d04cd5536b2f6e93",
+      "commits": [
+        "fac1f2056542bc7812d5c7e4d04cd5536b2f6e93"
+      ]
     },
     "report": "docs/program/agent/20261115105954_record-m0-and-m0-5-completion-status-in-.md",
     "last_failure": {
@@ -93,6 +170,7 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "failure": {}
   }
 }
