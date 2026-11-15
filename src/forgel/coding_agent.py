@@ -1244,7 +1244,26 @@ Files:
         if not command:
             raise AgentError("the command is empty")
         executable = Path(command[0]).name
-        if (
+        relative = (
+            not Path(command[0]).is_absolute()
+            and ".." not in Path(command[0]).parts
+        )
+        if executable in {"sh", "bash"}:
+            if (
+                len(command) < 2
+                or not command[1].endswith(".sh")
+                or Path(command[1]).is_absolute()
+                or ".." in Path(command[1]).parts
+            ):
+                raise AgentError(
+                    "only project shell scripts are allowed"
+                )
+        elif executable.endswith(".sh"):
+            if not relative:
+                raise AgentError(
+                    "only project shell scripts are allowed"
+                )
+        elif (
             executable not in ALLOWED_EXECUTABLES
             and not executable.startswith("python")
         ):

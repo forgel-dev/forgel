@@ -663,6 +663,27 @@ class CodingAgentTest(unittest.TestCase):
         with self.assertRaises(AgentError):
             agent._command(["docker", "ps"])
 
+    def test_project_shell_scripts_are_allowed(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        self.assertEqual(
+            agent._command(["sh", "scripts/e2e.sh"]),
+            ["sh", "scripts/e2e.sh"],
+        )
+        self.assertEqual(
+            agent._command(["bash", "scripts/e2e.sh"]),
+            ["bash", "scripts/e2e.sh"],
+        )
+        self.assertEqual(
+            agent._command(["./scripts/test.sh"]),
+            ["./scripts/test.sh"],
+        )
+        with self.assertRaises(AgentError):
+            agent._command(["sh", "-c", "echo unsafe"])
+        with self.assertRaises(AgentError):
+            agent._command(["sh", "/tmp/outside.sh"])
+
     def test_repeated_actions_fail_fast(self) -> None:
         task = self._task()
         repeated = json.dumps(
