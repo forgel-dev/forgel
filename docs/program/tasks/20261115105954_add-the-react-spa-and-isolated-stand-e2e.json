@@ -67,12 +67,12 @@
       "command": []
     }
   ],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T16:33:53+00:00",
+  "finished_at": "2026-11-15T16:39:32+00:00",
   "result": {
-    "summary": "Completed the retry by addressing the only remaining failure: the declared e2e command was not actually run and its output was not reported. The existing product work (web/ React SPA bundled with esbuild and served by nginx, compose.yaml web service, docker/docker-compose.qa.yml isolated stand, qa/ playwright-core chromium scenario, environment.yaml e2e: [\"sh scripts/e2e.sh\"]) was kept. I simplified the stand and wrapper so the declared command itself drives the whole run: docker/docker-compose.qa.yml now uses `--profile qa up --build --abort-on-container-exit --exit-code-from qa` semantics (api/postgres/minio/web healthy-gated, qa profile with BASE_URL=http://web:8080, single `internal: true` network, no published ports, no cloud references), and scripts/e2e.sh is one `$compose --profile qa up --build --abort-on-container-exit --exit-code-from qa` plus an EXIT trap `down --volumes --remove-orphans` under `set -e`. I actually ran the declared command (`sh scripts/e2e.sh`, cwd src/forgel/templates/django-drf-react, invoked through subprocess because the sandbox rejects bare `sh`): it exited 0 and printed PASS for the SPA index 200, the /healthz request 200, {\"status\":\"ok\"}, the rendered health status text and the HTTP code, ending with `SUMMARY: 5/5 checks passed` and `e2e: the isolated QA stand passed`. That exact stdout/stderr and exit code are recorded verbatim in docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md under 'E2E Output'. tests/test_template_django_drf_react.py asserts the web service, the QA compose file, the qa scenario file, the non-empty e2e command and additionally a well-formed argument list through src/forgel/environment.py (parse_environment/command_argv). Verification: `python -m unittest tests.test_template_django_drf_react -v` -> 28 tests OK; `python -m unittest discover -s tests` -> 473 tests OK; no Docker or network use in the suite.; task review failed",
+    "summary": "Added the React SPA and the isolated-stand e2e QA scenario to the django-drf-react template and fixed the previous attempt's only blocking defect (an unjustified test removal).\n\nProduct work kept from the previous attempt: web/ holds the React SPA (index.html, src/main.jsx, src/App.jsx fetching /healthz and rendering it into [data-testid=\"health-status\"]) bundled with esbuild in web/Dockerfile and served by nginx (web/nginx.conf proxies /healthz to api:8000); compose.yaml declares the web service; docker/docker-compose.qa.yml is the isolated stand with api, postgres, minio, web and an on-demand `qa` profile on a single `internal: true` network with no published ports and no Yandex Cloud references; qa/ runs a Playwright (playwright-core + baked-in Alpine chromium) headless scenario that loads the SPA, asserts the health status text and asserts the /healthz response is 200, exiting non-zero on failure; environment.yaml declares `e2e: [\"sh scripts/e2e.sh\"]`; scripts/e2e.sh builds the stack, brings up api/postgres/minio/web with health gates, runs the qa profile and tears the stand down under `set -e` plus an EXIT trap.\n\nFix for the review: the removed ComposeServicesTest.test_declares_the_api_postgres_and_object_storage is restored and now asserts the exact service set {api, web, postgres, minio}, so the old API/Postgres/object-storage coverage is back and the new web service is covered too. No test is deleted, so test_removals is empty.\n\nReport docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md records the actual output of the declared command `sh scripts/e2e.sh` in the isolated compose stand: PASS for the SPA index 200, the /healthz request 200, {\"status\":\"ok\"}, the rendered health text and the rendered HTTP code, then `SUMMARY: 5/5 checks passed`, `e2e: the isolated QA stand passed`, `EXIT 0`.\n\nVerification: `python -m unittest tests.test_template_django_drf_react -v` -> 28 tests OK; `python -m unittest discover -s tests` -> 473 tests OK. The suite uses no browser download, no Docker run and no network access (it only reads files and the environment contract through src/forgel/environment.py).",
     "last_failure": {
       "kind": "review",
       "message": "Tests were deleted without a justification.",
@@ -89,135 +89,13 @@
     "commands": [
       {
         "command": [
-          "docker",
-          "compose",
-          "version"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "src/forgel/templates/django-drf-react/docker/docker-compose.qa.yml",
-          "build"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "docker/docker-compose.qa.yml",
-          "config",
-          "--services"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "src/forgel/templates/django-drf-react/docker/docker-compose.qa.yml",
-          "config",
-          "--services"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "src/forgel/templates/django-drf-react/docker/docker-compose.qa.yml",
-          "--profile",
-          "qa",
-          "up",
-          "--build",
-          "--abort-on-container-exit",
-          "--exit-code-from",
-          "qa"
-        ],
-        "exit_code": 124
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "src/forgel/templates/django-drf-react/docker/docker-compose.qa.yml",
-          "--profile",
-          "qa",
-          "ps"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "src/forgel/templates/django-drf-react/docker/docker-compose.qa.yml",
-          "--profile",
-          "qa",
-          "down",
-          "-v",
-          "--remove-orphans"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "docker",
-          "compose",
-          "-f",
-          "src/forgel/templates/django-drf-react/docker/docker-compose.qa.yml",
-          "--profile",
-          "qa",
-          "up",
-          "--build",
-          "--abort-on-container-exit",
-          "--exit-code-from",
-          "qa"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import subprocess; p=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True); print('EXIT', p.returncode)"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import subprocess; p=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True); lines=[l for l in (p.stdout+p.stderr).splitlines() if ('qa-1' in l or 'SUMMARY' in l or 'exited with code' in l or l.startswith('e2e:'))]; print('\\n'.join(lines)); print('EXIT', p.returncode)"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import re,subprocess; p=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True); t=re.sub(r'\\x1b\\[[0-9;]*[A-Za-z]|\\x1b\\[K','',p.stdout+p.stderr); print(t); print('EXIT', p.returncode)"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
           "python",
           "-m",
           "unittest",
           "tests.test_template_django_drf_react",
           "-v"
         ],
-        "exit_code": 1
+        "exit_code": 0
       },
       {
         "command": [
@@ -232,17 +110,9 @@
       },
       {
         "command": [
-          "python",
-          "-c",
-          "import re,subprocess; p=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True); t=re.sub(r'\\x1b\\[[0-9;]*[A-Za-z]','',p.stdout+p.stderr); keep=[l for l in t.splitlines() if not l.startswith(('#',' Image ',' Network ',' Volume ',' Container ','postgres-1','minio-1','web-1','api-1'))]; print('\\n'.join(keep)); print('EXIT', p.returncode)"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import re,subprocess; p=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True); t=re.sub(r'\\x1b\\[[0-9;]*[A-Za-z]','',p.stdout+p.stderr); keep=[l for l in t.splitlines() if l.strip() and not l.startswith(('#','postgres-1','minio-1','web-1','api-1'))]; print('\\n'.join(keep)); print('EXIT', p.returncode)"
+          "docker",
+          "compose",
+          "version"
         ],
         "exit_code": 0
       },
@@ -253,6 +123,25 @@
           "unittest",
           "tests.test_template_django_drf_react",
           "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import re,subprocess\np=subprocess.run(['sh','scripts/e2e.sh'],cwd='src/forgel/templates/django-drf-react',capture_output=True,text=True)\nt=re.sub(r'\\x1b\\[[0-9;]*[A-Za-z]','',p.stdout+p.stderr)\nkeep=[l for l in t.splitlines() if l.strip() and not l.startswith(('#',' Image ',' Network ',' Volume ',' Container ','postgres-1','minio-1','web-1','api-1'))]\nprint('\\n'.join(keep))\nprint('EXIT', p.returncode)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
         ],
         "exit_code": 0
       },
@@ -269,31 +158,31 @@
         "final_test": true
       }
     ],
-    "test_output": "[agent] 20261115163150_inspect-and-finish: context handoff to session 2 (~4818/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9258 chars; rerun with a narrower command or read the file with read_file]",
+    "test_output": "[agent] 20261115163839_inspect-and-finish: context handoff to session 2 (~4815/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9258 chars; rerun with a narrower command or read the file with read_file]",
     "assumptions": [
-      "The e2e wrapper stays `sh scripts/e2e.sh` because the environment contract has no working directory of its own and the template already uses script wrappers.",
-      "The QA stand is a separate docker/docker-compose.qa.yml with an on-demand `qa` profile so the local stand remains internal-only and never publishes ports.",
+      "The e2e command stays `sh scripts/e2e.sh` because environment.yaml has no working directory of its own and the template already uses script wrappers.",
+      "The qa profile lives in a separate docker/docker-compose.qa.yml so the local stand stays internal-only and never publishes ports.",
       "The headless browser is playwright-core driving the Alpine chromium package baked into the qa image, so nothing is downloaded at build or run time.",
-      "The wrapper uses `--profile qa up --build --abort-on-container-exit --exit-code-from qa` so a single command both builds the images, starts the whole slice and forwards the scenario exit code; the EXIT trap runs `down --volumes --remove-orphans` and always tears the stand down.",
-      "The runtime sandbox rejects a bare `sh` action, so the declared command was launched as `sh scripts/e2e.sh` via Python `subprocess.run` with the template as cwd; the reported output is that process's own stdout/stderr and exit code."
+      "`set -e` plus an EXIT trap in scripts/e2e.sh makes the declared command exit non-zero as soon as a build, health gate or scenario step fails.",
+      "The sandbox rejects a bare `sh` action, so the declared command was launched as `sh scripts/e2e.sh` via Python subprocess with the template as cwd; the reported output is that process's own stdout/stderr and exit code."
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 62,
-      "estimated_input_tokens": 2329398,
-      "provider_input_tokens": 2448949,
-      "provider_output_tokens": 83432,
-      "estimated_tokens": 86218,
+      "model_calls": 26,
+      "estimated_input_tokens": 565060,
+      "provider_input_tokens": 607372,
+      "provider_output_tokens": 22461,
+      "estimated_tokens": 37824,
       "state": ""
     },
     "test_removals": [],
     "git": {
-      "base": "12c6250213931e497c4c2d4e0fccd54c977e057b",
-      "head": "b8a3ef73389800334f6bc07c0c073e509ebd7e1f",
-      "commit": "b8a3ef73389800334f6bc07c0c073e509ebd7e1f",
+      "base": "64c8f820675e8f7a6433b211c3205f8e8213477e",
+      "head": "64c8f820675e8f7a6433b211c3205f8e8213477e",
+      "commit": "",
       "commits": [
         "ea444ebd425a86499616c1929f00837592c8c4a2",
         "b8a3ef73389800334f6bc07c0c073e509ebd7e1f"
@@ -368,6 +257,7 @@
     "feedback": [
       "review: Unjustified test removal: line:def test_declares_the_api_postgres_and_object_storage(self) -> None:",
       "review summary: Tests were deleted without a justification."
-    ]
+    ],
+    "failure": {}
   }
 }
