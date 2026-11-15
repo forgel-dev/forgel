@@ -81,6 +81,29 @@ class GitOpsTest(unittest.TestCase):
             git_ops.commit_all(self.repo, "leak")
         self.assertTrue(git_ops.is_dirty(self.repo))
 
+    def test_commit_paths_ignores_a_deleted_untracked_file(self) -> None:
+        (self.repo / "keep.txt").write_text("keep\n", encoding="utf-8")
+        (self.repo / "temp.yaml").write_text("temp\n", encoding="utf-8")
+        (self.repo / "temp.yaml").unlink()
+        git_ops.commit_paths(
+            self.repo, ["keep.txt", "temp.yaml"], "keep only"
+        )
+        files = _run(
+            self.repo, "show", "--name-only", "--format=", "HEAD"
+        ).stdout
+        self.assertIn("keep.txt", files)
+        self.assertNotIn("temp.yaml", files)
+
+    def test_commit_paths_stages_a_tracked_deletion(self) -> None:
+        (self.repo / "gone.txt").write_text("x\n", encoding="utf-8")
+        git_ops.commit_paths(self.repo, ["gone.txt"], "add")
+        (self.repo / "gone.txt").unlink()
+        git_ops.commit_paths(self.repo, ["gone.txt"], "remove")
+        files = _run(
+            self.repo, "show", "--name-only", "--format=", "HEAD"
+        ).stdout
+        self.assertIn("gone.txt", files)
+
     def test_auth_env_does_not_contain_the_raw_token(self) -> None:
         env = git_ops.auth_env("super-secret-token")
         assert env is not None

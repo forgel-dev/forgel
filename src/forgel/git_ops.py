@@ -227,10 +227,21 @@ def commit_all(repo: Path, message: str) -> str:
     return head_sha(repo)
 
 
+def _known_path(repo: Path, path: str) -> bool:
+    """True when a path can be staged: it exists or git tracks it."""
+
+    if (repo / path).exists():
+        return True
+    result = _run(repo, "ls-files", "--error-unmatch", "--", path)
+    return result.returncode == 0
+
+
 def commit_paths(repo: Path, paths: list[str], message: str) -> str:
     """Commit only the given paths, leaving other worktree changes alone."""
 
-    existing = [item for item in paths if item]
+    existing = [
+        item for item in paths if item and _known_path(repo, item)
+    ]
     if not existing:
         return head_sha(repo)
     suspicious = secret_like(existing)
