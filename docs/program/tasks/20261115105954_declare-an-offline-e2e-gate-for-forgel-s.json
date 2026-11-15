@@ -73,36 +73,120 @@
       ]
     }
   ],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T13:48:28+00:00",
+  "finished_at": "2026-11-15T14:29:20+00:00",
   "result": {
-    "summary": "model call failed: model endpoint returned an empty answer",
+    "summary": "Declared an offline self-hosting e2e gate for Forgel itself.\n\n- environment.yaml: added `e2e: [\"env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py\"]` (test entry unchanged) and documented the gate in the header comment.\n- tests/e2e/run_self_hosting_e2e.py (new driver): creates a temporary home plus a local fixture git repository, adopts it in place, plans a milestone with the scripted model (one plan response), then runs one task through the coding agent, task QA and task review via the daemon. It asserts: script model mode is set, the task stopped at the gate in `review`, QA passed, review passed, the acceptance record is `pending`, and the project never reached `done`. It exits 1 on any red gate (and if the driver crashes) and 0 only when green. It uses no network/Docker/cloud, keeps the peak policy at `always` for determinism, and removes the temporary home and fixture in a `finally` block. The gate runs in ~1s.\n- tests/test_e2e.py: added `SelfHostingE2ETest` which loads the repository environment contract, resolves the declared e2e command through `command_argv`, runs it from the repository root, and asserts exit 0 with the green marker and no FAIL lines. Existing pipeline tests are untouched.\n- tests/test_environment.py: extended `RepositoryEnvironmentTest` with an assertion that environment.yaml declares both `test` and `e2e`, that the e2e command parses into a non-empty argv, that it sets `FORGEL_MODEL_MODE=script`, and that it invokes the self-hosting driver. All existing tests kept intact.\n- tests/e2e/README.md: documented the self-hosting gate alongside the existing blog harness.\n\nTested with the final command `python -m unittest discover -s tests`: 446 tests pass. The declared gate was also run directly (exit 0, all gates PASS) and with `FORGEL_MODEL_MODE=auto` to confirm it fails red (exit 1).",
     "files_changed": [
-      "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.state.md"
+      "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.state.md",
+      "environment.yaml",
+      "tests/e2e/README.md",
+      "tests/e2e/run_self_hosting_e2e.py",
+      "tests/test_e2e.py",
+      "tests/test_environment.py"
     ],
-    "commands": [],
-    "test_output": "",
-    "assumptions": [],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-c",
+          "import os,runpy,sys;os.environ['FORGEL_MODEL_MODE']='script';sys.path[:0]=['src','.'];runpy.run_path('tests/e2e/run_self_hosting_e2e.py',run_name='__main__')"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_environment",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import os,runpy,sys;os.environ['FORGEL_MODEL_MODE']='auto';sys.path[:0]=['src','.'];runpy.run_path('tests/e2e/run_self_hosting_e2e.py',run_name='__main__')"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_e2e.SelfHostingE2ETest",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261115142834_inspect-and-finish: context handoff to session 2 (~4783/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9231 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "The task's 'staging approval gate' maps to the human acceptance gate for the self-hosting run: the fixture is adopted in place as a brownfield linked project, which has no orchestrator staging descriptor, so the driver parks the task in `review` with a pending acceptance record (`task_accept=\"human\"`) and asserts the project never reaches `done`.",
+      "The driver takes the model mode from the environment because that is exactly what the declared command sets with `env FORGEL_MODEL_MODE=script`, and it fails red when the variable is not `script`.",
+      "The driver keeps `peak_policy=\"always\"` (set in Settings and also patched into the fixture forge.toml) so the offline gate is deterministic and never defers for DeepSeek pricing.",
+      "The scripted responses are a small ordered queue (plan, one write_file, done, review pass) rather than the blog scenario, so the smoke is fast and exercises coding agent, QA and review in one pass.",
+      "The environment.yaml test also asserts the scripted mode and driver path so the declaration cannot silently drift from the requirement."
+    ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 2,
-      "estimated_input_tokens": 28108,
-      "provider_input_tokens": 19555,
-      "provider_output_tokens": 151,
-      "estimated_tokens": 9527,
+      "model_calls": 84,
+      "estimated_input_tokens": 10139850,
+      "provider_input_tokens": 10638574,
+      "provider_output_tokens": 385269,
+      "estimated_tokens": 201113,
       "state": ""
     },
     "test_removals": [],
     "git": {
-      "base": "09eac9f4b18ad51cd0d259219864156fe4648105",
-      "head": "09eac9f4b18ad51cd0d259219864156fe4648105",
-      "commit": "",
-      "commits": []
+      "base": "ba8e2841e3f2d8a83c6f41d6b76c19e07b5a3dfc",
+      "head": "91bbb52ee46c2904e2044ce8e8f26d5d1d9eb34a",
+      "commit": "91bbb52ee46c2904e2044ce8e8f26d5d1d9eb34a",
+      "commits": [
+        "91bbb52ee46c2904e2044ce8e8f26d5d1d9eb34a"
+      ]
     },
     "report": "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.md",
     "last_failure": {
@@ -115,6 +199,7 @@
     "resume_count": 1,
     "resumed_at": "2026-11-15T13:47:23+00:00",
     "last_summary": "repeated action loop: read_file:src/forgel/environment.py",
-    "retry_after": "2026-11-15T13:48:28+00:00"
+    "retry_after": "2026-11-15T13:48:28+00:00",
+    "failure": {}
   }
 }
