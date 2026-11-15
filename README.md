@@ -210,8 +210,9 @@ The current agent takes a task end to end:
 3. An independent QA pass then runs the commands declared in the project's
    `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent
    review checks the committed diff against the requirements.
-4. The task then waits in `review` for a human decision ("accept" in the
-   console, or `forgel task accept`).
+4. The task then waits in `review` for a human decision: "accept" in the
+   console (or `forgel task accept`), or "send it back: <reason>" (or `forgel
+   task reject`), which returns the task for rework with that feedback.
 
 Long tasks run as bounded sessions that hand off state through
 `docs/program/agent/<task>.state.md`. See `PLAN.md` §7.15.
