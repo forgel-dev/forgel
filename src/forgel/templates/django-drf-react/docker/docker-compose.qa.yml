@@ -1,0 +1,126 @@
+# Isolated QA stand: api, postgres, object storage, web and the headless
+# browser scenario on one internal network.
+#
+# Nothing is published to the host: the browser reaches the SPA as
+# http://web:8080 and nginx proxies /healthz to http://api:8000. The ``qa``
+# network is ``internal``, so no service can reach the internet or a cloud
+# resource.
+#
+# The stand is driven by the e2e command declared in environment.yaml:
+#
+#   docker compose -f docker/docker-compose.qa.yml --profile qa up \
+#     --build --abort-on-container-exit --exit-code-from qa
+#
+# ``up`` builds the images and starts api, postgres, object storage and web;
+# the ``qa`` profile starts the scenario once the SPA answers, and
+# ``--exit-code-from qa`` makes the command exit non-zero when a scenario
+# check fails.
+name: django-drf-react-qa
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: django-drf-react-api
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      DJANGO_DEBUG: "1"
+      DJANGO_SECRET_KEY: qa-only-secret-key
+      DJANGO_ALLOWED_HOSTS: "*"
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: qa-only-password
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: app-media
+      S3_ACCESS_KEY: qa-only-access-key
+      S3_SECRET_KEY: qa-only-secret-key
+      S3_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks: [qa]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8000/healthz")
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: qa-only-password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [qa]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:latest}
+    environment:
+      MINIO_ROOT_USER: qa-only-access-key
+      MINIO_ROOT_PASSWORD: qa-only-secret-key
+    volumes:
+      - minio-data:/bitnami/minio/data
+    networks: [qa]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    image: django-drf-react-web
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [qa]
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --spider
+        - -q
+        - http://127.0.0.1:8080/
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  qa:
+    build:
+      context: ../qa
+      dockerfile: Dockerfile
+    image: django-drf-react-qa
+    environment:
+      BASE_URL: http://web:8080
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [qa]
+    # Started by `up` only when the qa profile is enabled.
+    profiles: [qa]
+
+networks:
+  qa:
+    internal: true
+
+volumes:
+  postgres-data:
+  minio-data:

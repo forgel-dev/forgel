@@ -4,10 +4,12 @@ import re
 import unittest
 from pathlib import Path
 
-from forgel.environment import parse_environment
+from forgel.environment import command_argv, parse_environment
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = REPO_ROOT / "src" / "forgel" / "templates" / "django-drf-react"
+QA_COMPOSE = "docker/docker-compose.qa.yml"
+E2E_COMMAND = "sh scripts/e2e.sh"
 
 REQUIRED_FILES = (
     "FORGEL.md",
@@ -20,7 +22,9 @@ REQUIRED_FILES = (
     "compose.yaml",
     "environment.yaml",
     "scripts/test.sh",
+    "scripts/e2e.sh",
     "docker/entrypoint.sh",
+    QA_COMPOSE,
     "api/manage.py",
     "api/requirements.txt",
     "api/config/settings.py",
@@ -28,6 +32,15 @@ REQUIRED_FILES = (
     "api/health/urls.py",
     "api/health/views.py",
     "api/tests/test_health.py",
+    "web/index.html",
+    "web/package.json",
+    "web/Dockerfile",
+    "web/nginx.conf",
+    "web/src/main.jsx",
+    "web/src/App.jsx",
+    "qa/Dockerfile",
+    "qa/package.json",
+    "qa/scenario.js",
 )
 
 PINNED = (
@@ -137,7 +150,6 @@ class TemplateEnvironmentTest(unittest.TestCase):
     def test_the_test_command_is_declared_and_runs_from_api(self) -> None:
         environment = parse_environment(self.text, source=str(self.path))
         self.assertTrue(environment.test, "environment.yaml declares no test")
-        self.assertEqual(environment.e2e, (), "e2e belongs to a later task")
         command = environment.test[0]
         self.assertIn("manage.py", command + self._wrapper_text(command))
         wrapper = (TEMPLATE / command.lstrip("./")).resolve()
@@ -146,6 +158,33 @@ class TemplateEnvironmentTest(unittest.TestCase):
         self.assertIn("manage.py", body)
         self.assertIn(" test", body)
         self.assertIn("api", body)
+
+    def test_the_e2e_command_is_declared_and_builds_the_qa_stand(self) -> None:
+        environment = parse_environment(self.text, source=str(self.path))
+        self.assertTrue(environment.e2e, "environment.yaml declares no e2e")
+        self.assertEqual(environment.e2e, (E2E_COMMAND,))
+        argv = command_argv(environment.e2e[0])
+        self.assertEqual(argv, ["sh", "scripts/e2e.sh"])
+        wrapper = (TEMPLATE / argv[1]).resolve()
+        self.assertTrue(wrapper.is_file(), E2E_COMMAND)
+        body = wrapper.read_text(encoding="utf-8")
+        self.assertIn("set -e", body)
+        self.assertIn(QA_COMPOSE, body)
+        # The wrapper builds the stand, starts api, postgres, object storage
+        # and web, runs the scenario from the qa profile and tears the stand
+        # down; `set -e` makes a failing step fail the whole command.
+        self.assertIn("$compose build", body)
+        self.assertIn("up", body)
+        self.assertIn("--profile qa run --rm qa", body)
+        self.assertIn("down", body)
+
+    def test_the_e2e_command_is_a_well_formed_argument_list(self) -> None:
+        environment = parse_environment(self.text, source=str(self.path))
+        for command in environment.e2e:
+            argv = command_argv(command)
+            self.assertTrue(argv)
+            self.assertFalse(any("\n" in item for item in argv), argv)
+            self.assertEqual(argv[0], "sh")
 
     def _wrapper_text(self, command: str) -> str:
         wrapper = (TEMPLATE / command.lstrip("./")).resolve()
@@ -166,8 +205,10 @@ class ComposeServicesTest(unittest.TestCase):
         self.text = (TEMPLATE / "compose.yaml").read_text(encoding="utf-8")
         self.services = services(self.text)
 
-    def test_declares_the_api_postgres_and_object_storage(self) -> None:
-        self.assertEqual(set(self.services), {"api", "postgres", "minio"})
+    def test_declares_the_api_web_postgres_and_object_storage(self) -> None:
+        self.assertEqual(
+            set(self.services), {"api", "web", "postgres", "minio"}
+        )
 
     def test_postgres_is_configured_from_the_environment(self) -> None:
         postgres = self.services["postgres"]
@@ -215,6 +256,80 @@ class ComposeServicesTest(unittest.TestCase):
         self.assertIn("POSTGRES_PASSWORD=", env_example)
         ignore = (TEMPLATE / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(".env", ignore.splitlines())
+
+
+class WebAppTest(unittest.TestCase):
+    def test_the_spa_fetches_the_health_endpoint(self) -> None:
+        app = (TEMPLATE / "web" / "src" / "App.jsx").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('fetch("/healthz"', app)
+        self.assertIn("react", app)
+        self.assertIn('data-testid="health-status"', app)
+
+    def test_the_spa_is_bundled_and_served_by_nginx(self) -> None:
+        package = (TEMPLATE / "web" / "package.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"build"', package)
+        self.assertIn("esbuild", package)
+        self.assertIn('"react"', package)
+        dockerfile = (TEMPLATE / "web" / "Dockerfile").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("npm run build", dockerfile)
+        self.assertIn("nginx", dockerfile)
+        nginx = (TEMPLATE / "web" / "nginx.conf").read_text(encoding="utf-8")
+        self.assertIn("proxy_pass", nginx)
+        self.assertIn("api:8000", nginx)
+
+    def test_compose_uses_the_web_image(self) -> None:
+        web = services(
+            (TEMPLATE / "compose.yaml").read_text(encoding="utf-8")
+        )["web"]
+        self.assertIn("context: web", web)
+        self.assertIn("WEB_PORT", web)
+
+
+class QaStandTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.text = (TEMPLATE / QA_COMPOSE).read_text(encoding="utf-8")
+        self.services = services(self.text)
+
+    def test_the_stand_runs_every_service_of_the_slice(self) -> None:
+        self.assertEqual(
+            set(self.services), {"api", "postgres", "minio", "web", "qa"}
+        )
+
+    def test_the_scenario_runs_in_the_qa_profile(self) -> None:
+        self.assertIn("profiles: [qa]", self.services["qa"])
+
+    def test_the_stand_is_isolated_from_the_host_and_the_internet(self) -> None:
+        for name, body in self.services.items():
+            with self.subTest(service=name):
+                self.assertNotIn("ports:", body, name)
+                self.assertNotIn("0.0.0.0", body, name)
+        self.assertIn("internal: true", self.text)
+        self.assertNotIn("yandex", self.text.lower())
+
+    def test_the_browser_scenario_runs_in_a_headless_browser(self) -> None:
+        scenario = (TEMPLATE / "qa" / "scenario.js").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("playwright", scenario)
+        self.assertIn("chromium.launch", scenario)
+        self.assertIn('pathname === "/healthz"', scenario)
+        self.assertIn("health.status() === 200", scenario)
+        self.assertIn("health-status", scenario)
+        self.assertIn("process.exit", scenario)
+        package = (TEMPLATE / "qa" / "package.json").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("playwright", package)
+        dockerfile = (TEMPLATE / "qa" / "Dockerfile").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("playwright", dockerfile)
 
 
 class HealthRouteTest(unittest.TestCase):
