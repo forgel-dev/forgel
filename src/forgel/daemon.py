@@ -422,8 +422,18 @@ def run_once(
     """Run every project that has pending work. Returns processed project ids."""
 
     processed: list[str] = []
+    seen: dict[str, str] = {}
     for project in ledger.list_projects():
         project_id = project["id"]
+        workspace = str(Path(project["workspace"]).resolve())
+        owner = seen.get(workspace)
+        if owner is not None:
+            log(
+                f"[daemon] {project_id}: duplicate workspace of "
+                f"{owner}; skipped"
+            )
+            continue
+        seen[workspace] = project_id
         if project_is_done(ledger, project_id):
             continue
         layout = ProjectLayout.detect(project["workspace"])

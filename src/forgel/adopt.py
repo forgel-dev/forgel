@@ -639,6 +639,12 @@ def _adopt_linked(
             "this folder is already a Forgel project; select it with "
             "`/use <id>` or adopt from a copy"
         )
+    for existing in ledger.list_projects():
+        if Path(existing["workspace"]).resolve() == root.resolve():
+            raise AdoptError(
+                f"this folder is already adopted as {existing['id']}; "
+                f"select it with `/use {existing['id']}`"
+            )
     url, provider = _source_remote(root)
     project_name = (
         name.strip() or _remote_name(url) or _project_name(root.name)

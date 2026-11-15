@@ -406,7 +406,13 @@ class CodingAgent:
             summary,
             files_changed,
         )
-        log(f"[agent] {project['id']}: {status}: {summary}")
+        if status == "failed":
+            log(
+                f"[agent] {project['id']}: task {task['id']}: failed — "
+                f"{summary[:200]}"
+            )
+        else:
+            log(f"[agent] {project['id']}: task {task['id']}: {status}")
         return AgentResult(
             status=status,
             summary=summary,

@@ -119,6 +119,19 @@ def _workdir(
     return layout.root
 
 
+SAFE_ENV_KEYS = {
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "TERM",
+    "SHELL",
+    "SYSTEMROOT",
+    "COMSPEC",
+}
+
+
 def _run_local(
     layout: ProjectLayout,
     environment: Environment | None,
@@ -127,9 +140,11 @@ def _run_local(
 ) -> list[tuple[dict[str, Any], int, str]]:
     workdir = _workdir(layout, environment, repo_id)
     env = {
-        **os.environ,
-        **(environment.env_map if environment is not None else {}),
+        key: os.environ[key]
+        for key in SAFE_ENV_KEYS
+        if key in os.environ
     }
+    env.update(environment.env_map if environment is not None else {})
     results: list[tuple[dict[str, Any], int, str]] = []
     for check in checks:
         command = check["command"]
@@ -321,6 +336,7 @@ def run_task_qa(
 
     layout = ProjectLayout.detect(project["workspace"])
     task = get_task(layout, str(task["id"])) or task
+    log(f"[qa] {project['id']}: task {task['id']}: running")
     repo_id = _task_repo_id(layout, task)
     try:
         environment = load_environment(layout)

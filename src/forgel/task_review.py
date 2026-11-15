@@ -456,6 +456,7 @@ def run_task_review(
 
     layout = ProjectLayout.detect(str(project["workspace"]))
     task = get_task(layout, str(task["id"])) or task
+    log(f"[review] {project['id']}: task {task['id']}: running")
     removals = detected_test_removals(layout, task)
     if removals and not test_removals(task):
         return _record_review(

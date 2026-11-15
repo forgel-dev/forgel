@@ -181,6 +181,39 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(stored["status"], "pending")
             self.assertTrue(any("paused" in line for line in logs))
 
+    def test_duplicate_workspaces_are_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self._settings(tmp)
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+            workspace = settings.projects_dir / "shared"
+            (workspace / ".forgel").mkdir(parents=True)
+            (workspace / ".forgel" / "project.json").write_text(
+                '{"mode": "brownfield", "repos": []}',
+                encoding="utf-8",
+            )
+            ledger.create_project(
+                "newer", "Newer", "A newer project.", str(workspace)
+            )
+            ledger.create_project(
+                "older", "Older", "An older project.", str(workspace)
+            )
+            newer = ledger.get_project("newer")
+            older = ledger.get_project("older")
+            assert newer is not None and older is not None
+            logs: list[str] = []
+            with patch.object(
+                ledger, "list_projects", return_value=[newer, older]
+            ):
+                processed = run_once(settings, ledger, log=logs.append)
+            self.assertEqual(processed, [])
+            self.assertTrue(
+                any(
+                    "duplicate workspace" in line and "older" in line
+                    for line in logs
+                )
+            )
+
     def test_done_project_is_not_rerun(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self._settings(tmp)

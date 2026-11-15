@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from forgel.session_context import (
     MAX_STATE_CHARS,
@@ -25,7 +26,11 @@ class EstimateTest(unittest.TestCase):
             SimpleNamespace(content="a" * 300),
             SimpleNamespace(content="b" * 300),
         ]
-        self.assertGreaterEqual(messages_tokens(messages), 200)
+        with patch(
+            "forgel.session_context.count_tokens",
+            side_effect=lambda text, model="": heuristic_tokens(text),
+        ):
+            self.assertGreaterEqual(messages_tokens(messages), 200)
 
 
 class BudgetTest(unittest.TestCase):
@@ -42,8 +47,12 @@ class BudgetTest(unittest.TestCase):
         budget = budget_for(4096)
         small = [SimpleNamespace(content="a" * 300)]
         large = [SimpleNamespace(content="a" * 9000)]
-        self.assertFalse(budget.should_compact(small))
-        self.assertTrue(budget.should_compact(large))
+        with patch(
+            "forgel.session_context.count_tokens",
+            side_effect=lambda text, model="": heuristic_tokens(text),
+        ):
+            self.assertFalse(budget.should_compact(small))
+            self.assertTrue(budget.should_compact(large))
 
 
 class SessionStateTest(unittest.TestCase):

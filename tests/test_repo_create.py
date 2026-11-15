@@ -149,7 +149,9 @@ class RepoCreateTest(unittest.TestCase):
 
     def test_create_uses_the_user_login_without_an_org(self) -> None:
         api = FakeAPI()
-        with patch("forgel.adopt.git_ops.push"):
+        with patch.dict(
+            os.environ, {"FORGEL_GITHUB_ORG": ""}, clear=False
+        ), patch("forgel.adopt.git_ops.push"):
             result = create_repository(
                 self.settings,
                 self.ledger,

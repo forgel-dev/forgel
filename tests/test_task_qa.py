@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+import shlex
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.artifacts import write_text
 from forgel.config import Settings
@@ -11,7 +15,7 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
-from forgel.task_qa import run_task_qa
+from forgel.task_qa import _run_local, run_task_qa
 from forgel.tasks import create_task, get_task, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +71,25 @@ class TaskQATest(unittest.TestCase):
         )
         update_task(self.layout, task["id"], status="done")
         return task
+
+    def test_local_checks_do_not_inherit_forgel_environment(self) -> None:
+        argv = [
+            sys.executable,
+            "-c",
+            "import os; print(os.environ.get("
+            "'FORGEL_MODEL_API_KEY', 'MISSING'))",
+        ]
+        check = {"command": shlex.join(argv)}
+        with patch.dict(
+            os.environ, {"FORGEL_MODEL_API_KEY": "secret"}, clear=False
+        ):
+            results = _run_local(
+                self.layout, None, "main", [check]
+            )
+        _check, code, output = results[0]
+        self.assertEqual(code, 0)
+        self.assertIn("MISSING", output)
+        self.assertNotIn("secret", output)
 
     def _environment(self, command: str) -> None:
         write_text(

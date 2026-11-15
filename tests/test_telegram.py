@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -537,7 +538,9 @@ class SelectionAndAgentTest(unittest.TestCase):
         self.assertEqual(
             get_secret(self.settings.home, "model.api_key", {}), value
         )
-        listing = router.handle(7, "/secret", "@tester")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FORGEL_MODEL_API_KEY", None)
+            listing = router.handle(7, "/secret", "@tester")
         self.assertNotIn(value, listing.text)
         self.assertIn("model.api_key: file", listing.text)
 

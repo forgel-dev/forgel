@@ -267,6 +267,13 @@ def _task_snapshot(layout: ProjectLayout) -> dict[str, str]:
     }
 
 
+def _short_summary(text: str, limit: int = 280) -> str:
+    first = str(text or "").strip().split("\n\n")[0]
+    if len(first) > limit:
+        first = first[:limit].rstrip() + "…"
+    return first
+
+
 def _task_update_text(
     layout: ProjectLayout, before: dict[str, str]
 ) -> str:
@@ -280,7 +287,7 @@ def _task_update_text(
         if before.get(task_id) == status:
             continue
         result = item.get("result") or {}
-        summary = str(result.get("summary") or "").strip()
+        summary = _short_summary(str(result.get("summary") or ""))
         files = [str(value) for value in result.get("files_changed") or []]
         report = str(result.get("report") or "").strip()
         line = f"Task `{task_id}`: **{status}**"
