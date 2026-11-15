@@ -663,6 +663,38 @@ class CodingAgentTest(unittest.TestCase):
         with self.assertRaises(AgentError):
             agent._command(["docker", "ps"])
 
+    def test_reading_different_ranges_is_not_a_repeated_action(
+        self,
+    ) -> None:
+        path = self.repo / "notes.txt"
+        path.write_text(
+            "one\ntwo\nthree\nfour\nfive\n", encoding="utf-8"
+        )
+        task = create_task(
+            self.layout,
+            "Read in ranges",
+            ["Read the notes"],
+            ["The notes are read"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps(
+                {
+                    "action": "read_file",
+                    "path": "notes.txt",
+                    "offset": number,
+                    "limit": 1,
+                }
+            )
+            for number in range(1, 6)
+        ] + [json.dumps({"action": "done", "summary": "read"})]
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+
     def test_project_shell_scripts_are_allowed(self) -> None:
         agent = CodingAgent(
             self.settings, self.ledger, ScriptedModelClient([])

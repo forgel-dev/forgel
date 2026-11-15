@@ -666,6 +666,7 @@ class CodingAgent:
                     max_tokens=max_state_tokens, model=model
                 ),
             )
+            signatures.clear()
             return (
                 [
                     ModelMessage("system", SYSTEM_PROMPT),
@@ -1220,7 +1221,12 @@ Files:
     def _signature(action: Mapping[str, Any]) -> str:
         kind = str(action.get("action"))
         path = str(action.get("path") or "")
-        if kind in {"read_file", "list_files", "delete_file"}:
+        if kind == "read_file":
+            return (
+                f"read_file:{path}:"
+                f"{action.get('offset', '')}:{action.get('limit', '')}"
+            )
+        if kind in {"list_files", "delete_file"}:
             return f"{kind}:{path}"
         if kind == "write_file":
             content = str(action.get("content") or "")
