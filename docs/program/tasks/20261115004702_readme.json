@@ -36,10 +36,10 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-15T00:47:02+00:00",
-  "started_at": "2026-11-15T00:47:02+00:00",
-  "finished_at": "2026-11-15T00:51:33+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "step limit reached (24 per session x 6 sessions)",
     "files_changed": [],
@@ -865,10 +865,13 @@
       "base": "819f66b471750f7582733ef86f1f2213a000b485",
       "head": "819f66b471750f7582733ef86f1f2213a000b485"
     },
-    "failure": {
+    "report": "docs/program/agent/20261115004702_readme.md",
+    "last_failure": {
       "kind": "agent",
       "message": "step limit reached (24 per session x 6 sessions)"
     },
-    "report": "docs/program/agent/20261115004702_readme.md"
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   }
 }
