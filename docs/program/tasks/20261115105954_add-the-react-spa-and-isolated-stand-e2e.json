@@ -67,9 +67,11 @@
       "command": []
     }
   ],
-  "status": "pending",
+  "status": "blocked",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "",
   "finished_at": "",
-  "result": {}
+  "result": {
+    "blocked_by": "20261115105954_add-the-django-drf-backend-skeleton-temp"
+  }
 }
