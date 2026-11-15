@@ -36,12 +36,12 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-15T00:47:02+00:00",
-  "started_at": "2026-11-15T01:36:54+00:00",
-  "finished_at": "2026-11-15T01:42:01+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Rewrote the \"Model and agent\" section of README.md (the only file touched) so it no longer describes the agent as intake-only and instead documents the actual product flow as a 4-step numbered list: (1) a plain-language request becomes a task with explicit requirements and acceptance criteria, with `forgel plan`/`/plan` turning a milestone into a dependency-ordered backlog the daemon respects; (2) the agent works on the task in the sandbox, reads the repository, edits the code and writes its report; (3) an independent QA pass runs the commands declared in the project's `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent review checks the committed diff against the requirements; (4) the task then waits in `review` for a human decision (`accept` in the console or `forgel task accept`). The trailing sentence about bounded sessions and state handoff through `docs/program/agent/<task>.state.md` plus the `PLAN.md` §7.15 pointer was kept, and the new wording matches the existing README paragraphs on context/handoff, task QA and milestones, and the Coding Agent section. Verified with `git diff --stat` that only README.md changed from my edit (the task-state JSON is harness bookkeeping, not my change), and `make test` passed twice (exit 0, full unittest suite green).",
+    "summary": "Rewrote the \"Model and agent\" section of README.md (the only file touched) so it no longer describes the agent as intake-only and instead documents the actual product flow as a 4-step numbered list: (1) a plain-language request becomes a task with explicit requirements and acceptance criteria, with `forgel plan`/`/plan` turning a milestone into a dependency-ordered backlog the daemon respects; (2) the agent works on the task in the sandbox, reads the repository, edits the code and writes its report; (3) an independent QA pass runs the commands declared in the project's `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent review checks the committed diff against the requirements; (4) the task then waits in `review` for a human decision (`accept` in the console or `forgel task accept`). The trailing sentence about bounded sessions and state handoff through `docs/program/agent/<task>.state.md` plus the `PLAN.md` §7.15 pointer was kept, and the new wording matches the existing README paragraphs on context/handoff, task QA and milestones, and the Coding Agent section. Verified with `git diff --stat` that only README.md changed from my edit (the task-state JSON is harness bookkeeping, not my change), and `make test` passed twice (exit 0, full unittest suite green).; task QA failed (exit 1)",
     "files_changed": [
       "README.md"
     ],
@@ -178,7 +178,7 @@
       "retryable": false
     },
     "attempts": 0,
-    "rework_count": 1,
+    "rework_count": 2,
     "manual_retries": 2,
     "qa": {
       "status": "fail",
@@ -191,7 +191,7 @@
         },
         {
           "command": "make test",
-          "exit_code": 2
+          "exit_code": 0
         }
       ],
       "checks": [
@@ -204,16 +204,14 @@
         {
           "criterion": "task test command",
           "command": "make test",
-          "exit_code": 2,
-          "verdict": "fail"
+          "exit_code": 0,
+          "verdict": "pass"
         }
       ],
       "review_required": false
     },
     "feedback": [
-      "QA check failed: environment test (exit 1)",
-      "QA check failed: task test command (exit 2)"
-    ],
-    "failure": {}
+      "QA check failed: environment test (exit 1)"
+    ]
   }
 }
