@@ -36,10 +36,10 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-15T00:47:02+00:00",
-  "started_at": "2026-11-15T02:20:07+00:00",
-  "finished_at": "2026-11-15T02:20:46+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "the model did not return a valid action",
     "files_changed": [],
@@ -85,13 +85,12 @@
     },
     "report": "docs/program/agent/20261115004702_readme.md",
     "last_failure": {
-      "kind": "review",
-      "message": "The README edit removes the stale intake-only/no-code-editing statement and adds the requested English four-step description of the task cycle, and the reported test results show make test passing. However, the submission is not acceptable: it adds docs/program/agent/20261115004702_readme.md outside README.md, violating the explicit README-only constraint and committing internal agent-run notes; the README says the agent commits with a bot message while the added report states git commit was not permitted and the change was left for the pipeline; the required signed commit via git commit -s is absent or unverifiable; and consistency with PLAN.md §7.15 cannot be verified from the diff.",
-      "retryable": false
+      "kind": "agent",
+      "message": "the model did not return a valid action"
     },
     "attempts": 0,
-    "rework_count": 4,
-    "manual_retries": 2,
+    "rework_count": 0,
+    "manual_retries": 3,
     "qa": {
       "status": "pass",
       "runtime": "local + environment.yaml",
@@ -207,10 +206,6 @@
         "Consistency with PLAN.md section 7.15 is unverified because PLAN.md is not in the diff."
       ],
       "report": "docs/program/agent/20261115004702_readme.review.md"
-    },
-    "failure": {
-      "kind": "agent",
-      "message": "the model did not return a valid action"
     }
   }
 }
