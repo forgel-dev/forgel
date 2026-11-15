@@ -27,6 +27,8 @@ All settings come from the environment (see `api/config/settings.py`):
 - `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`.
   Without `S3_BUCKET` the default file-system storage is used, so nothing needs
   object storage to start.
+- `MINIO_IMAGE` (compose only) names the object-storage server image; override
+  it to pin a release or to pull from another registry.
 
 ## Run the stand
 
@@ -36,10 +38,9 @@ docker compose up --build
 curl -i http://127.0.0.1:8000/healthz
 ```
 
-The API container waits for Postgres, applies migrations, creates the S3
-bucket when it is missing and then serves the project on port 8000. Postgres
-and MinIO expose their ports from `.env` (`POSTGRES_PORT`, `S3_PORT`,
-`S3_CONSOLE_PORT`).
+The API container applies migrations, creates the S3 bucket when it is missing
+and then serves the project on port 8000. Postgres and MinIO expose their ports
+from `.env` (`POSTGRES_PORT`, `S3_PORT`, `S3_CONSOLE_PORT`).
 
 ## Tests
 

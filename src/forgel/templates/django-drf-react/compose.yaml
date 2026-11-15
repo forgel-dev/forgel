@@ -1,9 +1,9 @@
 # Local stand: the Django/DRF API, Postgres and MinIO (S3-compatible storage).
 #
 # Every value comes from the environment (see .env.example); no credential is
-# committed. The API container waits for Postgres, applies migrations, creates
-# the bucket named by S3_BUCKET (api/config/bucket.py) and then serves the API,
-# so the stack stays at the three services this template declares.
+# committed. The API container applies migrations, creates the bucket named by
+# S3_BUCKET (api/config/bucket.py) and then serves the API, so the stack stays
+# at the three services this template declares.
 services:
   api:
     build:
@@ -50,8 +50,9 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
-    command: ["server", "/data", "--console-address", ":9001"]
+    # S3-compatible object storage. MINIO_IMAGE names a registry that serves the
+    # MinIO server image; override it to pin a release or to use a mirror.
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:latest}
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
@@ -59,9 +60,8 @@ services:
       - "${S3_PORT:-9000}:9000"
       - "${S3_CONSOLE_PORT:-9001}:9001"
     volumes:
-      - minio-data:/data
+      - minio-data:/bitnami/minio/data
     healthcheck:
-      # The MinIO image ships curl, not the mc client.
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 5s

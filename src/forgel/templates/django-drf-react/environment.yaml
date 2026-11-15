@@ -1,0 +1,11 @@
+# environment.yaml — the project environment contract (D-071).
+#
+# `setup` installs the API dependencies and `test` runs the Django suite from
+# `api/` through the scripts/test.sh wrapper, because the contract has no
+# working directory of its own. The e2e gate is declared by a later task.
+image: python:3.12-slim
+services: [compose.yaml]
+setup: ["pip install -r api/requirements.txt"]
+test: ["./scripts/test.sh"]
+ports: [8000]
+health: "/healthz"
