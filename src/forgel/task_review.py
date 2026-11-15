@@ -230,6 +230,47 @@ def _git_output(
     return completed.stdout if completed.returncode == 0 else ""
 
 
+def _git_ok(repo: Path, args: list[str]) -> bool:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=str(repo),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
+def _test_still_exists(repo: Path, label: str) -> bool:
+    """True when the removed test is present at HEAD (for example restored)."""
+
+    kind, _, value = label.partition(":")
+    if kind == "file":
+        path = value.strip()
+        return bool(path) and (
+            (repo / path).exists()
+            or _git_ok(repo, ["cat-file", "-e", f"HEAD:{path}"])
+        )
+    line = value.strip()
+    match = re.search(r"def\s+(test_\w+)", line)
+    if match:
+        pattern = f"def {match.group(1)}"
+    else:
+        match = re.search(
+            r"(?:it|test)\s*\(\s*['\"]([^'\"]+)['\"]", line
+        )
+        if not match:
+            return False
+        pattern = match.group(1)
+    return _git_ok(
+        repo, ["grep", "-q", "-F", "-e", pattern, "HEAD", "--", "."]
+    )
+
+
 def detected_test_removals(
     layout: ProjectLayout, task: Mapping[str, Any]
 ) -> list[str]:
@@ -281,7 +322,11 @@ def detected_test_removals(
             continue
         if TEST_FUNCTION.match(line):
             labels.append(f"line:{line[1:].strip()[:100]}")
-    return list(dict.fromkeys(labels))
+    return [
+        label
+        for label in dict.fromkeys(labels)
+        if not _test_still_exists(repo, label)
+    ]
 
 
 def test_removals(task: Mapping[str, Any]) -> list[dict[str, str]]:

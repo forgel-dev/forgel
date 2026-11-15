@@ -19,6 +19,7 @@ from forgel.task_review import (
     _review_prompt,
     accept_parked_green_tasks,
     accept_task,
+    detected_test_removals,
     process_task_result,
     reject_task,
     run_task_review,
@@ -176,6 +177,116 @@ class TaskReviewTest(unittest.TestCase):
         diff = task_diff(self.layout, stored)
         self.assertIn("value = 2", diff)
         self.assertNotIn("unrelated", diff)
+
+    def test_a_restored_test_is_not_reported_as_removed(self) -> None:
+        test_file = self.repo / "tests" / "test_sample.py"
+        test_file.parent.mkdir()
+        test_file.write_text(
+            "def test_old():\n    assert True\n", encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "add test",
+        )
+        first = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        test_file.write_text(
+            "def test_new():\n    assert True\n", encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "rename test",
+        )
+        second = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        test_file.write_text(
+            "def test_old():\n    assert True\n\n"
+            "def test_new():\n    assert True\n",
+            encoding="utf-8",
+        )
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "restore test",
+        )
+        third = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                **task["result"],
+                "files_changed": ["tests/test_sample.py"],
+                "git": {
+                    "base": first,
+                    "head": third,
+                    "commits": [first, second, third],
+                },
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            detected_test_removals(self.layout, stored), []
+        )
+
+    def test_a_deleted_test_is_still_reported(self) -> None:
+        test_file = self.repo / "tests" / "test_sample.py"
+        test_file.parent.mkdir()
+        test_file.write_text(
+            "def test_old():\n    assert True\n", encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "add test",
+        )
+        first = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        test_file.write_text(
+            "def test_new():\n    assert True\n", encoding="utf-8"
+        )
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "delete test",
+        )
+        second = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                **task["result"],
+                "files_changed": ["tests/test_sample.py"],
+                "git": {
+                    "base": first,
+                    "head": second,
+                    "commits": [first, second],
+                },
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        removals = detected_test_removals(self.layout, stored)
+        self.assertTrue(removals)
+        self.assertTrue(
+            any("test_old" in item for item in removals)
+        )
 
     def test_review_prompt_for_noop_uses_current_state(self) -> None:
         write_text(self.repo / "README.md", "README-MARKER\n")
