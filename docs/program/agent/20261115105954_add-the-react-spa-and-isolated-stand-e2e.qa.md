@@ -5,7 +5,7 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-15T16:52:21+00:00
+- Finished: 2026-11-15T17:01:05+00:00
 
 ## Checks
 
@@ -19,7 +19,7 @@
 
 ```
 $ python -m unittest discover -s tests
-[agent] 20261115165134_inspect-and-finish: context handoff to session 2 (~4816/3072 tokens)
+[agent] 20261115170013_inspect-and-finish: context handoff to session 2 (~4815/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -446,15 +446,15 @@ $ python -m unittest discover -s tests
 [approval] completed
 [done] running
 [done] completed
-...........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+.............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 475 tests in 54.811s
+Ran 477 tests in 61.879s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-5805ea13']]
+PASS the daemon ran the task [['selfhost-f553fcf2']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -540,7 +540,7 @@ test_the_repository_declares_a_self_hosting_e2e_gate (tests.test_environment.Rep
 test_the_repository_environment_contract_is_valid (tests.test_environment.RepositoryEnvironmentTest.test_the_repository_environment_contract_is_valid) ... ok
 
 ----------------------------------------------------------------------
-Ran 39 tests in 0.026s
+Ran 39 tests in 0.021s
 
 OK
 

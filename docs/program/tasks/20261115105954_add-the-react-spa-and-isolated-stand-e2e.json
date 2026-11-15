@@ -67,7 +67,7 @@
       "command": []
     }
   ],
-  "status": "done",
+  "status": "review",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T16:56:35+00:00",
   "finished_at": "2026-11-15T17:00:01+00:00",
@@ -227,13 +227,10 @@
       "review_required": true
     },
     "review": {
-      "status": "fail",
-      "summary": "Tests were deleted without a justification.",
+      "status": "error",
+      "summary": "the reviewer exceeded the inspection limit",
       "requirements": [],
-      "blocking": [
-        "Unjustified test removal: line:def test_declares_the_api_postgres_and_object_storage(self) -> None:",
-        "Unjustified test removal: line:def test_declares_the_api_web_postgres_and_object_storage(self) -> None:"
-      ],
+      "blocking": [],
       "report": "docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.review.md"
     },
     "feedback": [
@@ -244,6 +241,15 @@
     "resume_count": 1,
     "resumed_at": "2026-11-15T16:56:35+00:00",
     "last_summary": "Addressed the only remaining blocker from the review (unjustified test removal) and preserved all product work from the previous attempt.\n\nTests:\n- `tests/test_template_django_drf_react.py` now contains BOTH previously flagged tests again, intact:\n  - `ComposeServicesTest.test_declares_the_api_web_postgres_and_object_storage` (exact service set `{api, web, postgres, minio}` for the template compose.yaml), restored byte-for-byte to its pre-deletion form.\n  - `ComposeServicesTest.test_declares_the_api_postgres_and_object_storage` (backend slice asserted as a subset so the SPA's `web` service does not break it).\n  No test was deleted or weakened; the added assertions (`test_declares_the_web_service`, `WebAppTest`, `QaStandTest`, e2e contract tests) remain.\n\nProduct work kept as-is (verified present and covered by the structural tests):\n- `web/`: React SPA (`index.html`, `src/main.jsx`, `src/App.jsx`) fetching `/healthz` from the api service and rendering it into `[data-testid=\"health-status\"]`, bundled with esbuild in `web/Dockerfile` and served by nginx (`web/nginx.conf` proxies `/healthz` to `api:8000`); `compose.yaml` declares the `web` service (`context: web`, `WEB_PORT`).\n- `docker/docker-compose.qa.yml`: isolated stand with api, postgres, minio, web and an on-demand `qa` service in the `qa` profile, single `internal: true` network, no published ports, no Yandex Cloud references.\n- `qa/`: headless Playwright scenario (`qa/scenario.js`, `qa/Dockerfile`, `qa/package.json`) that loads the SPA, asserts the health status text appears, asserts the `/healthz` request returned 200, and exits non-zero on failure.\n- `environment.yaml` declares the non-empty e2e command `sh scripts/e2e.sh` (well-formed argument list accepted by `src/forgel/environment.py`); `scripts/e2e.sh` builds and runs the QA stand under `set -e` with an EXIT trap.\n\nVerification (no browser download, no Docker run, no network in the suite):\n- `python -m unittest tests.test_template_django_drf_react -v` -> 30 tests, OK (exit 0), including `test_declares_the_api_postgres_and_object_storage ... ok` and `test_declares_the_api_web_postgres_and_object_storage ... ok`.\n- `python -m unittest discover -s tests` -> 475 tests, OK (exit 0, 56.2s).\n\nE2E evidence in the task report: `docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.qa.md` records the environment e2e run in the isolated compose stand as PASS with exit code 0, and `docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md` records the stand output (SPA index 200, `/healthz` 200, `{\"status\":\"ok\"}`, rendered health text, `SUMMARY: 5/5 checks passed`, `e2e: the isolated QA stand passed`, `EXIT 0`).; task review failed",
-    "failure": {}
+    "failure": {
+      "kind": "external",
+      "message": "the reviewer exceeded the inspection limit",
+      "retryable": false
+    },
+    "acceptance": {
+      "status": "pending",
+      "reason": "acceptance checks require review",
+      "at": "2026-11-15T17:01:41+00:00"
+    }
   }
 }
