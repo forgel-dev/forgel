@@ -205,7 +205,8 @@ The current agent takes a task end to end:
    goal into an ordered backlog of such tasks, and the daemon starts a task
    only after its dependencies are done.
 2. The agent works on the task in the sandbox: it reads the repository, edits
-   the code and writes its report.
+   the code, commits with a bot message and writes its report to
+   `docs/program/agent/<task>.md`.
 3. An independent QA pass then runs the commands declared in the project's
    `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent
    review checks the committed diff against the requirements.
