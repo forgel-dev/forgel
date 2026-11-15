@@ -40,56 +40,52 @@ commit. Continue from this state; do not repeat finished work.
 
 - docs/program/tasks/20261115105954_add-the-django-drf-backend-skeleton-temp.json
 - src/forgel/templates/django-drf-react/
-- src/forgel/templates/django-drf-react/.dockerignore
-- src/forgel/templates/django-drf-react/.gitignore
-- src/forgel/templates/django-drf-react/AGENTS.md
-- src/forgel/templates/django-drf-react/FORGEL.md
-- src/forgel/templates/django-drf-react/README.md
-- src/forgel/templates/django-drf-react/api/manage.py
-- src/forgel/templates/django-drf-react/api/requirements.txt
+- src/forgel/templates/django-drf-react/Dockerfile
+- src/forgel/templates/django-drf-react/api/config/__init__.py
+- src/forgel/templates/django-drf-react/api/config/asgi.py
+- src/forgel/templates/django-drf-react/api/config/settings.py
+- src/forgel/templates/django-drf-react/api/config/urls.py
+- src/forgel/templates/django-drf-react/api/health/__init__.py
+- src/forgel/templates/django-drf-react/api/health/apps.py
+- src/forgel/templates/django-drf-react/api/health/tests/__init__.py
+- src/forgel/templates/django-drf-react/api/health/urls.py
+- src/forgel/templates/django-drf-react/api/health/views.py
+- src/forgel/templates/django-drf-react/api/tests/__init__.py
+- src/forgel/templates/django-drf-react/api/tests/test_health.py
+- src/forgel/templates/django-drf-react/compose.yaml
+- src/forgel/templates/django-drf-react/docker/entrypoint.sh
+- src/forgel/templates/django-drf-react/environment.yaml
 
 ## Actions
 
-- list_files
-- read_file: src/forgel/templates/hello-web/environment.yaml
-- read_file: src/forgel/templates/hello-web/Dockerfile
-- read_file: src/forgel/templates/hello-web/FORGEL.md
-- read_file: src/forgel/templates/hello-web/AGENTS.md
-- read_file: src/forgel/templates/hello-web/.gitignore
-- read_file: src/forgel/templates/hello-web/.dockerignore
-- read_file: docs/program/tasks/20261115105954_add-the-django-drf-backend-skeleton-temp.json
-- read_file: src/forgel/templates/hello-web/docker/docker-compose.qa.yml
-- read_file: src/forgel/environment.py
-- run: ['python', '-c', "import os;print('\n'.join(sorted(os.listdir('tests'))))"]
-- list_files
-- read_file: registry/recipes.json
-- read_file: tests/test_registry.py
-- read_file: tests/test_templates.py
-- read_file: docs/program/plans/20261115105954_m1-oss-django-drf-react-spa-postgres-s3-.md
-- read_file: tests/test_environment.py
-- read_file: docs/program/agent/20261115004702_readme.md
-- read_file: src/forgel/templates/hello-web/api/app.py
-- read_file: src/forgel/projects.py
+- write_file: src/forgel/templates/django-drf-react/Dockerfile
+- write_file: src/forgel/templates/django-drf-react/api/config/__init__.py
+- write_file: src/forgel/templates/django-drf-react/api/config/settings.py
+- write_file: src/forgel/templates/django-drf-react/api/config/urls.py
+- write_file: src/forgel/templates/django-drf-react/api/config/asgi.py
+- write_file: src/forgel/templates/django-drf-react/api/health/__init__.py
+- write_file: src/forgel/templates/django-drf-react/api/health/views.py
+- write_file: src/forgel/templates/django-drf-react/api/health/views.py
+- write_file: src/forgel/templates/django-drf-react/api/health/urls.py
+- write_file: src/forgel/templates/django-drf-react/api/health/apps.py
+- write_file: src/forgel/templates/django-drf-react/api/health/tests/__init__.py
 - run: ['docker', 'compose', 'version']
-- run: ['python', '-c', "import importlib.util as u;print(u.find_spec('django') is not None, u.find_spec('rest_framework') is not None)"]
-- write_file: src/forgel/templates/django-drf-react/FORGEL.md
-- write_file: src/forgel/templates/django-drf-react/AGENTS.md
-- write_file: src/forgel/templates/django-drf-react/README.md
-- write_file: src/forgel/templates/django-drf-react/.gitignore
-- write_file: src/forgel/templates/django-drf-react/.dockerignore
-- write_file: src/forgel/templates/django-drf-react/api/requirements.txt
-- write_file: src/forgel/templates/django-drf-react/api/manage.py
+- write_file: src/forgel/templates/django-drf-react/api/config/settings.py
+- write_file: src/forgel/templates/django-drf-react/api/tests/__init__.py
+- write_file: src/forgel/templates/django-drf-react/api/tests/test_health.py
+- write_file: src/forgel/templates/django-drf-react/environment.yaml
+- write_file: src/forgel/templates/django-drf-react/docker/entrypoint.sh
+- write_file: src/forgel/templates/django-drf-react/compose.yaml
 
 ## Commands
 
-- `['python', '-c', "import os;print('\n'.join(sorted(os.listdir('tests'))))"]` -> exit 1
-- `['python', '-c', "import importlib.util as u;print(u.find_spec('django') is not None, u.find_spec('rest_framework') is not None)"]` -> exit 0
+- none
 
 ## Recent Observations
 
-- wrote 51 bytes to src/forgel/templates/django-drf-react/.dockerignore
-- wrote 105 bytes to src/forgel/templates/django-drf-react/api/requirements.txt
-- wrote 586 bytes to src/forgel/templates/django-drf-react/api/manage.py
+- wrote 84 bytes to src/forgel/templates/django-drf-react/environment.yaml
+- wrote 404 bytes to src/forgel/templates/django-drf-react/docker/entrypoint.sh
+- wrote 2568 bytes to src/forgel/templates/django-drf-react/compose.yaml
 
 ## Next Step
 
