@@ -16,10 +16,12 @@ from forgel.model import ScriptedModelClient
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.task_review import (
+    _review_prompt,
     accept_task,
     process_task_result,
     reject_task,
     run_task_review,
+    task_diff,
 )
 from forgel.tasks import create_task, get_task, update_task
 
@@ -140,6 +142,88 @@ class TaskReviewTest(unittest.TestCase):
         stored = get_task(self.layout, task["id"])
         assert stored is not None
         return stored
+
+    def test_diff_uses_only_attributed_commits(self) -> None:
+        write_text(self.repo / "app.py", "value = 2\n")
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "agent change",
+        )
+        agent_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        write_text(self.repo / "other.py", "unrelated = True\n")
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "unrelated",
+        )
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                "summary": "implemented",
+                "files_changed": ["app.py"],
+                "git": {"commits": [agent_sha]},
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        diff = task_diff(self.layout, stored)
+        self.assertIn("value = 2", diff)
+        self.assertNotIn("unrelated", diff)
+
+    def test_review_prompt_for_noop_uses_current_state(self) -> None:
+        write_text(self.repo / "README.md", "README-MARKER\n")
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-s", "-m", "document it",
+        )
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                "summary": "already satisfied",
+                "files_changed": [],
+                "git": {},
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        prompt = _review_prompt(self.layout, stored)
+        self.assertIn("README-MARKER", prompt)
+        self.assertIn("Signed-off-by:", prompt)
+        self.assertIn(
+            "No product commits were attributed", prompt
+        )
+
+    def test_reviewer_can_read_current_files(self) -> None:
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {"action": "read_file", "path": "app.py"}
+                ),
+                PASS,
+            ]
+        )
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "pass", result.summary)
+        self.assertIn(
+            "value = 1", client.requests[1][-1].content
+        )
 
     def test_review_pass_is_recorded(self) -> None:
         task = self._task()

@@ -271,17 +271,10 @@ class CodingAgent:
         repo_id, repo = self._repository(layout, task)
         if not (repo / ".git").exists():
             raise AgentError(f"repository {repo_id} has no git history")
-        previous = dict(task.get("result") or {})
-        previous_git = (
-            previous.get("git")
-            if isinstance(previous.get("git"), dict)
-            else {}
-        )
-        # A rework keeps the original base so the reviewer sees the whole
-        # change across attempts, not only the latest fix.
-        base_sha = str(previous_git.get("base") or "") or git_ops.head_sha(
-            repo
-        )
+        # Each attempt starts from the current HEAD. The review is state-based
+        # and uses the attributed files, not a commit range, so unrelated
+        # commits between attempts never enter the review.
+        base_sha = git_ops.head_sha(repo)
         preexisting = set(git_ops.status_paths(repo))
         gitignore = repo / ".gitignore"
         if not gitignore.exists():
@@ -317,10 +310,11 @@ class CodingAgent:
         changed = sorted(
             (set(git_ops.status_paths(repo)) - preexisting) | set(touched)
         )
+        commit_sha = ""
         if status == "done":
             try:
                 if changed:
-                    git_ops.commit_paths(
+                    commit_sha = git_ops.commit_paths(
                         repo, changed, f"Agent: {task['title']}"
                     )
             except git_ops.GitOperationError as exc:
@@ -331,6 +325,38 @@ class CodingAgent:
             changed = sorted(set(touched))
 
         files_changed = changed
+        previous_result = dict(task.get("result") or {})
+        previous_files = [
+            str(item)
+            for item in (previous_result.get("files_changed") or [])
+        ]
+        attributed_files = sorted(
+            set(previous_files) | set(files_changed)
+        )
+        previous_git = (
+            previous_result.get("git")
+            if isinstance(previous_result.get("git"), dict)
+            else {}
+        )
+        attributed_commits = [
+            str(item)
+            for item in (previous_git.get("commits") or [])
+        ]
+        previous_commit = str(previous_git.get("commit") or "")
+        if previous_commit and previous_commit not in attributed_commits:
+            attributed_commits.append(previous_commit)
+        if commit_sha and commit_sha not in attributed_commits:
+            attributed_commits.append(commit_sha)
+        previous_removals = [
+            item
+            for item in (previous_result.get("test_removals") or [])
+            if isinstance(item, dict)
+        ]
+        merged_removals = {
+            str(item.get("test", "")): item
+            for item in previous_removals + test_removals
+            if item.get("test")
+        }
         report = self._write_report(
             layout,
             task,
@@ -352,17 +378,19 @@ class CodingAgent:
             status="done" if status == "done" else "failed",
             finished_at=_now(),
             result={
-                **dict(task.get("result") or {}),
+                **previous_result,
                 "summary": summary,
-                "files_changed": files_changed,
+                "files_changed": attributed_files,
                 "commands": commands,
                 "test_output": _cap(test_output, 6000),
                 "assumptions": assumptions,
                 "context": context_stats,
-                "test_removals": test_removals,
+                "test_removals": list(merged_removals.values()),
                 "git": {
                     "base": base_sha,
                     "head": git_ops.head_sha(repo),
+                    "commit": commit_sha,
+                    "commits": attributed_commits,
                 },
                 "failure": (
                     {"kind": failure_kind, "message": summary}

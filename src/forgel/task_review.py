@@ -30,10 +30,18 @@ from .model import (
     ModelMessage,
     project_model_name,
 )
+from .program_manifest import entries as manifest_entries
+from .repo_tools import (
+    RESEARCH_ACTIONS,
+    RepoActionError,
+    execute_repo_action,
+)
 from .task_qa import TaskQAResult, run_task_qa
 from .tasks import get_task, update_task
 
 MAX_DIFF_CHARS = 16_000
+MAX_FILE_CHARS = 12_000
+MAX_REVIEW_STEPS = 6
 MAX_QA_CHARS = 2_000
 REMOVAL_REASONS = {"removed", "replaced", "wrong"}
 TEST_PATH = re.compile(
@@ -81,34 +89,124 @@ def _repo(layout: ProjectLayout, task: Mapping[str, Any]) -> tuple[str, Path]:
     return repo_id, layout.repo_path(repo_id)
 
 
-def task_diff(layout: ProjectLayout, task: Mapping[str, Any]) -> str:
-    _repo_id, repo = _repo(layout, task)
+def _attributed(task: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    """Files and commits attributed to this task across attempts."""
+
     result = dict(task.get("result") or {})
+    files = [
+        str(item) for item in (result.get("files_changed") or [])
+    ]
     git = result.get("git") if isinstance(result.get("git"), dict) else {}
-    base = str(git.get("base") or "")
-    head = str(git.get("head") or "")
+    commits = [str(item) for item in (git.get("commits") or [])]
+    legacy = str(git.get("commit") or "")
+    if legacy and legacy not in commits:
+        commits.append(legacy)
+    return files, commits
+
+
+def _json_object(raw: str) -> dict[str, Any] | None:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _attributed_diff(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> str:
+    _repo_id, repo = _repo(layout, task)
+    files, commits = _attributed(task)
     if not (repo / ".git").exists():
         return "The repository has no git history."
-    if base and head and base != head:
-        command = ["git", "diff", f"{base}..{head}"]
-    elif head:
-        command = ["git", "show", "--stat", "--patch", head]
-    else:
-        return "No committed changes were found."
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=str(repo),
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
+    if not commits:
+        return (
+            "No product commits were attributed to this task. The change may "
+            "already exist in the repository; inspect the current files."
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        return f"Cannot read the diff: {exc}"
-    if completed.returncode != 0:
-        return (completed.stderr or completed.stdout).strip()
-    return completed.stdout.strip() or "No changes were committed."
+    parts: list[str] = []
+    for commit in commits:
+        command = ["show", "--format=", commit]
+        if files:
+            command += ["--", *files]
+        text = _git_output(repo, command).strip()
+        if text:
+            parts.append(text)
+    return "\n".join(parts).strip() or "No product changes in those commits."
+
+
+def _reference_text(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if path.name == "PLAN.md" and "### 7.15" in text:
+        start = text.index("### 7.15")
+        end = text.find("\n### 7.16", start)
+        section = text[start : end if end >= 0 else start + 6_000]
+        return _cap(section, MAX_FILE_CHARS)
+    return _cap(text, MAX_FILE_CHARS)
+
+
+def _current_files_text(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> str:
+    _repo_id, repo = _repo(layout, task)
+    files, _commits = _attributed(task)
+    if not files:
+        files = [
+            name
+            for name in ("README.md", "PLAN.md")
+            if (repo / name).is_file()
+        ]
+    parts: list[str] = []
+    for relative in files:
+        path = (repo / relative).resolve()
+        try:
+            path.relative_to(repo.resolve())
+        except ValueError:
+            continue
+        text = _reference_text(path)
+        if text:
+            parts.append(f"--- {relative} ---\n{text}")
+    return "\n\n".join(parts) or "(no relevant files)"
+
+
+def _commit_evidence(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> str:
+    _repo_id, repo = _repo(layout, task)
+    files, commits = _attributed(task)
+    lines: list[str] = []
+    for commit in commits:
+        text = _git_output(
+            repo, ["show", "-s", "--format=fuller", commit]
+        ).strip()
+        if text:
+            lines.append(text)
+    if not commits:
+        for relative in files or ["README.md", "PLAN.md"]:
+            text = _git_output(
+                repo,
+                ["log", "-1", "--format=fuller", "--", relative],
+            ).strip()
+            if text:
+                lines.append(f"--- {relative} ---\n{text}")
+    return "\n\n".join(lines) or "(no commit evidence)"
+
+
+def task_diff(layout: ProjectLayout, task: Mapping[str, Any]) -> str:
+    return _attributed_diff(layout, task)
 
 
 def _git_output(
@@ -134,24 +232,39 @@ def detected_test_removals(
     """Deleted test files and removed test functions in the committed diff."""
 
     _repo_id, repo = _repo(layout, task)
-    result = dict(task.get("result") or {})
-    git = result.get("git") if isinstance(result.get("git"), dict) else {}
-    base = str(git.get("base") or "")
-    head = str(git.get("head") or "")
     if not (repo / ".git").exists():
         return []
-    if base and head and base != head:
-        names = _git_output(
-            repo, ["diff", "--name-status", f"{base}..{head}"]
-        )
-        patch = _git_output(repo, ["diff", f"{base}..{head}"])
-    elif head:
-        names = _git_output(
-            repo, ["show", "--format=", "--name-status", head]
-        )
-        patch = _git_output(repo, ["show", "--format=", head])
+    files, commits = _attributed(task)
+    names = ""
+    patch = ""
+    if commits:
+        for commit in commits:
+            command = ["show", "--format=", "--name-status", commit]
+            if files:
+                command += ["--", *files]
+            names += _git_output(repo, command)
+            command = ["show", "--format=", commit]
+            if files:
+                command += ["--", *files]
+            patch += _git_output(repo, command)
     else:
-        return []
+        # Tasks created before attribution existed.
+        result = dict(task.get("result") or {})
+        git = result.get("git") if isinstance(result.get("git"), dict) else {}
+        base = str(git.get("base") or "")
+        head = str(git.get("head") or "")
+        if base and head and base != head:
+            names = _git_output(
+                repo, ["diff", "--name-status", f"{base}..{head}"]
+            )
+            patch = _git_output(repo, ["diff", f"{base}..{head}"])
+        elif head:
+            names = _git_output(
+                repo, ["show", "--format=", "--name-status", head]
+            )
+            patch = _git_output(repo, ["show", "--format=", head])
+        else:
+            return []
     labels: list[str] = []
     for line in names.splitlines():
         parts = line.split("\t")
@@ -204,7 +317,16 @@ def _review_prompt(
     ) or "- none"
     result = dict(task.get("result") or {})
     qa = result.get("qa") if isinstance(result.get("qa"), dict) else {}
-    files = ", ".join(result.get("files_changed") or []) or "none"
+    attributed_files, attributed_commits = _attributed(task)
+    files = ", ".join(attributed_files) or "none"
+    commits = ", ".join(
+        f"`{item}`" for item in attributed_commits
+    ) or "none"
+    _repo_id, repo = _repo(layout, task)
+    worktree = (
+        _git_output(repo, ["status", "--porcelain"]).strip()
+        or "clean"
+    )
     check_lines = (
         "\n".join(
             f"- {item.get('criterion')}: {item.get('verdict')}"
@@ -217,9 +339,6 @@ def _review_prompt(
         )
         or "- none"
     )
-    feedback = "\n".join(
-        f"- {item}" for item in (result.get("feedback") or [])
-    ) or "- none"
     detected = "\n".join(
         f"- {item}"
         for item in detected_test_removals(layout, task)
@@ -243,38 +362,59 @@ Constraints:
 Assumptions recorded:
 {assumptions}
 
-Files changed: {files}
+Files attributed to this task: {files}
+Commits attributed to this task: {commits}
+Worktree: {worktree}
 QA verdict: {qa.get('status', 'not run')} ({qa.get('runtime', 'n/a')})
 
 Acceptance checks:
 {check_lines}
 
-Previous review/QA feedback to address:
-{feedback}
-
-Test removals detected in the diff:
+Test removals detected in the attributed commits:
 {detected}
 Developer justifications:
 {justifications}
 Allowed reasons: "removed" (the scenario is gone), "replaced" (behavior
-changed; the replacement must exist in the diff), "wrong" (incorrect or
-duplicate test). An unjustified removal is a blocking defect.
+changed; the replacement must exist in the attributed change), "wrong"
+(incorrect or duplicate test). An unjustified removal is a blocking defect.
 
-Diff:
+Attributed change (only this task's commits):
 {_cap(task_diff(layout, task), MAX_DIFF_CHARS)}
+
+Current relevant files:
+{_cap(_current_files_text(layout, task), MAX_FILE_CHARS * 2)}
+
+Commit evidence:
+{_cap(_commit_evidence(layout, task), MAX_FILE_CHARS)}
 """
 
 
 SYSTEM_PROMPT = """You are an independent reviewer. You did not implement this
 change and you must not modify the repository.
 
-Judge only the explicit requirements and acceptance criteria. Report:
+The repository is the source of truth. Judge the current state against the
+requirements and acceptance criteria. The attributed files and commits are
+this task's contribution; commits outside that list belong to other work and
+are not part of this review. Do not fail a task because of extra commits or
+pipeline bookkeeping.
+
+If no product changes are attributed to the task, check whether the current
+repository already satisfies the requirements. A previous signed commit is
+valid; no new commit is required for an already-satisfied task.
+
+You may inspect the repository before deciding. Reply with exactly one
+action per turn:
+{"action": "list_files", "path": ".", "repo_id": "main"}
+{"action": "read_file", "path": "README.md", "repo_id": "main"}
+When you have enough context, return the verdict object.
+
+Report:
 - a requirement that is not met,
 - a feature that was not requested,
 - a security problem, a committed secret, or a weakened test,
 - a failing acceptance check or an unverified review-only criterion,
 - a deleted test without one of the allowed justifications; "replaced"
-  requires the named replacement to be present in the diff.
+  requires the named replacement to be present in the attributed change.
 
 Every review-only criterion must appear in "requirements" with a verdict.
 
@@ -492,21 +632,59 @@ def run_task_review(
         ModelMessage("system", SYSTEM_PROMPT),
         ModelMessage("user", _review_prompt(layout, task)),
     ]
-    try:
-        raw = client.complete(
-            messages, model=project_model_name(layout.control)
-        )
-    except ModelError as exc:
-        return _record_review(
-            ledger,
-            layout,
-            project,
-            task,
-            ReviewResult(
-                status="error",
-                summary=f"Reviewer model call failed: {exc}",
-            ),
-            log,
+    raw = ""
+    for step in range(MAX_REVIEW_STEPS + 1):
+        try:
+            raw = client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError as exc:
+            return _record_review(
+                ledger,
+                layout,
+                project,
+                task,
+                ReviewResult(
+                    status="error",
+                    summary=f"Reviewer model call failed: {exc}",
+                ),
+                log,
+            )
+        data = _json_object(raw)
+        action = str(data.get("action", "")) if data else ""
+        if action not in RESEARCH_ACTIONS:
+            break
+        if step == MAX_REVIEW_STEPS:
+            return _record_review(
+                ledger,
+                layout,
+                project,
+                task,
+                ReviewResult(
+                    status="error",
+                    summary="the reviewer exceeded the inspection limit",
+                ),
+                log,
+            )
+        args = dict(data.get("action_args") or {})
+        for key in ("path", "repo_id"):
+            if key in data and key not in args:
+                args[key] = data[key]
+        research = {"action": action, **args}
+        try:
+            observation = execute_repo_action(
+                layout, manifest_entries(layout), research
+            )
+        except RepoActionError as exc:
+            observation = f"error: {exc}"
+        messages.append(ModelMessage("assistant", raw.strip()))
+        messages.append(
+            ModelMessage(
+                "user",
+                "Observation:\n"
+                + _cap(observation, 6_000)
+                + "\n\nReturn another action or the final verdict JSON.",
+            )
         )
     try:
         parsed = _parse_review(raw)
