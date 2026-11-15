@@ -176,7 +176,8 @@ one JSON action per turn:
 Paths are relative to the repository and may not leave it. Read the project's
 own documents and code instead of guessing; do not ask a human. When you have
 enough context, reply with the plan object below. Never mix an action and the
-plan in one reply.
+plan in one reply. Return JSON only; do not use tool-call markup, XML or
+provider-specific function calls.
 
 Return exactly one JSON object:
 {{
@@ -467,7 +468,9 @@ def plan_project(
         ),
     ]
     raw = ""
-    for step in range(MAX_RESEARCH_STEPS + 1):
+    parsed: tuple[str, list[dict[str, Any]]] | None = None
+    plan_retries = 0
+    for step in range(MAX_RESEARCH_STEPS + 4):
         try:
             raw = model_client.complete(
                 messages, model=project_model_name(layout.control)
@@ -479,7 +482,28 @@ def plan_project(
         data = _json_object(raw)
         action = str(data.get("action", "")) if data else ""
         if action not in RESEARCH_ACTIONS:
-            break
+            try:
+                parsed = _parse_plan(
+                    raw, known, default_repo, max_tasks
+                )
+                break
+            except PlanningError as exc:
+                if plan_retries < 2:
+                    messages.append(
+                        ModelMessage("assistant", raw.strip())
+                    )
+                    messages.append(
+                        ModelMessage(
+                            "user",
+                            "Return exactly one JSON plan object with "
+                            "notes and tasks. Do not use tool-call markup, "
+                            "XML, provider-specific function calls or "
+                            "prose.",
+                        )
+                    )
+                    plan_retries += 1
+                    continue
+                raise PlanningError(str(exc)) from exc
         if step == MAX_RESEARCH_STEPS:
             raise PlanningError(
                 "the planner exceeded the research step limit"
@@ -497,7 +521,9 @@ def plan_project(
                 + "\n\nReply with another action or the final plan JSON object.",
             )
         )
-    notes, items = _parse_plan(raw, known, default_repo, max_tasks)
+    if parsed is None:
+        raise PlanningError("the planner did not return a plan")
+    notes, items = parsed
     plan_id = _plan_id(goal)
     if dry_run:
         return PlanResult(

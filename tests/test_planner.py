@@ -238,6 +238,26 @@ class PlannerTest(unittest.TestCase):
                 self._plan()
         self.assertIn("paused", str(ctx.exception))
 
+    def test_planner_retries_after_tool_markup(self) -> None:
+        markup = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"plan\">"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+        client = ScriptedModelClient([markup, json.dumps(PLAN)])
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            dry_run=True,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+        self.assertIn(
+            "tool-call markup", client.requests[1][-1].content
+        )
+
     def test_plan_works_for_an_adopted_linked_project(self) -> None:
         source = Path(self._tmp.name) / "linked-source"
         source.mkdir()

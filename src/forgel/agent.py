@@ -148,6 +148,12 @@ kind="answer" must include a non-empty plain-text "reply". Never answer a
 question with a plan or task object; the plan action is separate and needs a
 milestone goal.
 
+A request to act, change something or continue is an instruction to execute
+the next executable step now. Answer only for questions, status, or when a
+required argument, a material fork or a human gate blocks execution. If the
+request does not name the step, choose the next step from the project
+documents. Never reply with what you intend to do later.
+
 A user request may contain several executable steps. Return every step that
 can be executed now as kind="actions", in order. Do not defer an executable
 step to a later user message. Stop only when a required argument is missing,
