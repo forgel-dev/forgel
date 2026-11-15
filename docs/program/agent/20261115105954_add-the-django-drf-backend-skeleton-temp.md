@@ -3,8 +3,8 @@
 - Task: `20261115105954_add-the-django-drf-backend-skeleton-temp`
 - Status: `done`
 - Repository: `main`
-- Steps: 43
-- Finished: 2026-11-15T13:21:13+00:00
+- Steps: 27
+- Finished: 2026-11-15T13:35:10+00:00
 
 ## Requirements
 
@@ -37,50 +37,42 @@
 - django.contrib.auth is installed because DRF resolves its default UNAUTHENTICATED_USER through that app; no auth endpoints are shipped
 - The Django suite is not wired into the repository unittest gate (Django is not installed there); the structural test compiles every template .py file instead, and the suite runs via scripts/test.sh wherever Django is installed
 - Docker cannot run in the sandbox, so the task report documents the exact compose command and the expected output for a human to confirm
-- The exit-127 QA failure was fixed in shared code (command_argv now resolves python behind a leading `env NAME=value`), because acceptance checks stored outside the repository use that form and must run under QA's stripped PATH
 
 ## Test Removals
 
-- src/forgel/templates/django-drf-react/api/health/tests/__init__.py: removed -> src/forgel/templates/django-drf-react/api/tests/test_health.py
+- none
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 43
-- Estimated input tokens (all calls): 1635778
-- Provider input/output tokens: 1724919 / 49405
-- Estimated prompt at the end: 67173 tokens
+- Model calls: 27
+- Estimated input tokens (all calls): 797258
+- Provider input/output tokens: 838079 / 24696
+- Estimated prompt at the end: 49495 tokens
 - State: not needed
 
 ## Summary
 
-Completed the django-drf-react template (src/forgel/templates/django-drf-react/): FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, scripts/test.sh, docker/entrypoint.sh, plus api/ with a Django/DRF project (manage.py; requirements.txt pinning Django, djangorestframework, psycopg, django-storages and boto3; config/settings.py reading DATABASE_URL or discrete POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY with SQLite + local-storage fallbacks so the suite needs no server; config/urls.py routing health.urls; health/views.py DRF APIView answering GET /healthz with {"status": "ok"}; config/bucket.py creating the bucket at startup; api/tests/test_health.py exercising /healthz via the Django test client). compose.yaml declares exactly the three required services (api, postgres, minio) wired through ${...} variables with the bucket created on startup, and environment.yaml declares test: ["./scripts/test.sh"] (wrapper cd's into api/ and runs python manage.py test), leaving e2e for the next task. tests/test_template_django_drf_react.py (18 tests) asserts the required files, the pins, the settings env reads, independence from hello-web, the parsed environment contract with a non-empty test command running from api/, the compose services and bucket creation, and the registered /healthz route backed by a DRF view tested through the Django client. Addressed the previous QA failure (acceptance check `env PYTHONPATH=src python -m unittest ...` exiting 127 with `env: python: No such file or directory`): forgel/environment.py::command_argv now skips a leading `env` and its NAME=value assignments and pins the following python/python3 to sys.executable, rejecting an env invocation with no program; covered by tests/test_environment_env_prefix.py and tests/test_qa_env_command.py (runs the resolved argv under a PATH containing only env and python3). Verified: python -m unittest discover -s tests (443 tests, OK), python -m unittest tests.test_template_django_drf_react -v (18 tests, OK), python -m compileall -q src/forgel/templates/django-drf-react (exit 0). docs/program/agent/<task>.md and its .compose.md companion now carry the ready-to-paste `docker compose up --build` command, the output block for a human to paste, and the expected output showing HTTP 200 {"status": "ok"} plus migrations proving the Postgres connection; Docker is unavailable in this sandbox so that block is marked as not yet run.
+Completed the django-drf-react template under src/forgel/templates/django-drf-react/ following the hello-web layout: FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, docker/entrypoint.sh and scripts/test.sh. api/ holds a Django/DRF project: manage.py; requirements.txt pinning Django, djangorestframework, psycopg, django-storages and boto3; config/settings.py reads DATABASE_URL or discrete POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY with SQLite and local-storage fallbacks so tests need no database server or S3; config/urls.py includes health.urls; health/views.py is a DRF APIView answering GET /healthz with {"status": "ok"}; api/tests/test_health.py exercises the route through the Django test client. compose.yaml declares exactly the three required services (api, postgres, minio) wired through ${...} variables with the bucket created on startup, and environment.yaml declares the test command as the scripts/test.sh wrapper that cd's into api/ and runs python manage.py test, leaving e2e for the next task. tests/test_template_django_drf_react.py asserts the required files, the requirement pins, the settings environment reads, independence from hello-web, the parsed environment contract with a non-empty test command running from api/, the compose postgres and minio services plus bucket creation, and the registered /healthz route backed by a DRF view tested through the Django client. The previous QA exit-127 failure (env PYTHONPATH=src python ... with no python on PATH) was fixed in forgel/environment.py::command_argv, which now skips a leading env plus its NAME=value assignments and pins the following python/python3 to sys.executable, rejecting an env command with no program; it is covered by tests/test_environment_env_prefix.py and tests/test_qa_env_command.py, which runs the resolved argv under a PATH holding only env and python3. Verified with python -m unittest discover -s tests (443 tests, OK), python -m unittest tests.test_qa_env_command tests.test_environment_env_prefix tests.test_template_django_drf_react -v (23 tests, OK) and python -m compileall -q src/forgel/templates/django-drf-react (exit 0). docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md carries the ready-to-paste `cd src/forgel/templates/django-drf-react && cp .env.example .env && docker compose up --build -d && docker compose ps && docker compose exec -T postgres psql ... -c 'select 1;' && curl -i http://127.0.0.1:8000/healthz` block with the expected output showing HTTP/1.1 200 OK, {"status": "ok"}, all three services Up and the migrate run proving the Postgres connection; Docker has no daemon in this sandbox, so that block is marked for human confirmation.
 
 ## Files Changed
 
-- `docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md`
-- `docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md`
-- `src/forgel/environment.py`
-- `tests/test_environment_env_prefix.py`
-- `tests/test_qa_env_command.py`
+- none
 
 ## Commands
 
-- `["python", "-m", "unittest", "tests.test_template_django_drf_react", "-v"]` → exit 0
-- `["python3", "-m", "unittest", "tests.test_environment", "-v"]` → exit 0
-- `["python", "-m", "unittest", "tests.test_environment_env_prefix", "tests.test_environment", "-v"]` → exit 0
 - `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["python", "-m", "compileall", "-q", "src/forgel/templates/django-drf-react"]` → exit 0
-- `["python", "-m", "unittest", "tests.test_qa_env_command", "tests.test_environment_env_prefix", "-v"]` → exit 0
-- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "log", "--oneline", "-10"]` → exit 0
+- `["python", "-m", "unittest", "tests.test_qa_env_command", "tests.test_environment_env_prefix", "tests.test_template_django_drf_react", "-v"]` → exit 0
 - `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-[agent] 20261115132028_inspect-and-finish: context handoff to session 2 (~4783/3072 tokens)
+[agent] 20261115133423_inspect-and-finish: context handoff to session 2 (~4784/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -509,7 +501,7 @@ Completed the django-drf-react template (src/forgel/templates/django-drf-react/)
 [done] completed
 ...........................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 443 tests in 53.765s
+Ran 443 tests in 55.669s
 
 OK
 
@@ -519,32 +511,18 @@ OK
 
 - list_files
 - read_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.qa.md
-- list_files
-- run: ['python', '-m', 'unittest', 'tests.test_template_django_drf_react', '-v']
-- read_file: docs/program/tasks/20261115105954_add-the-django-drf-backend-skeleton-temp.json
-- read_file: src/forgel/task_qa.py
 - read_file: environment.yaml
-- read_file: src/forgel/environment.py
+- read_file: docs/program/tasks/20261115105954_add-the-django-drf-backend-skeleton-temp.json
 - read_file: src/forgel/environment.py
 - read_file: src/forgel/task_qa.py
-- read_file: src/forgel/environment.py
-- read_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md
-- read_file: tests/test_environment.py
-- read_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md
-- run: ['python3', '-m', 'unittest', 'tests.test_environment', '-v']
-- read_file: tests/test_environment.py
-- write_file: src/forgel/environment.py
-- write_file: tests/test_environment_env_prefix.py
-- run: ['python', '-m', 'unittest', 'tests.test_environment_env_prefix', 'tests.test_environment', '-v']
-- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
-- run: ['python', '-m', 'compileall', '-q', 'src/forgel/templates/django-drf-react']
-- read_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md
-- write_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md
-- run: ['env', 'PYTHONPATH=src', 'python', '-m', 'unittest', 'tests.test_template_django_drf_react', '-v']
-- write_file: tests/test_qa_env_command.py
-- write_file: tests/test_qa_env_command.py
-- run: ['python', '-m', 'unittest', 'tests.test_qa_env_command', 'tests.test_environment_env_prefix', '-v']
-- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
+- list_files
 - read_file: tests/test_template_django_drf_react.py
+- read_file: tests/test_qa_env_command.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'status', '--short']
+- run: ['git', 'ls-files', 'src/forgel/templates/django-drf-react', 'tests/test_template_django_drf_react.py', 'tests/test_qa_env_command.py']
+- read_file: src/forgel/templates/django-drf-react/environment.yaml
 - read_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md
-- write_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md
+- read_file: docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md
+- run: ['git', 'log', '--oneline', '-10']
+- run: ['python', '-m', 'unittest', 'tests.test_qa_env_command', 'tests.test_environment_env_prefix', 'tests.test_template_django_drf_react', '-v']
