@@ -429,7 +429,10 @@ class CodingAgentTest(unittest.TestCase):
     def test_context_handoff_writes_state_and_continues(self) -> None:
         write_text(
             self.layout.control / "forgel.toml",
-            render_project_config("Test project", model_context_window=16384),
+            render_project_config("Test project", model_context_window=4096),
+        )
+        (self.repo / "large.txt").write_text(
+            "x" * 30_000 + "\n", encoding="utf-8"
         )
         task = create_task(
             self.layout,
@@ -440,18 +443,16 @@ class CodingAgentTest(unittest.TestCase):
             test_command=[],
         )
         responses = [
-            json.dumps({"action": "list_files", "path": "."})
-            for _ in range(8)
-        ] + [
+            json.dumps({"action": "read_file", "path": "large.txt"}),
             json.dumps(
                 {"action": "done", "summary": "inspected and done"}
-            )
+            ),
         ]
         result = CodingAgent(
             self.settings,
             self.ledger,
             ScriptedModelClient(responses),
-            max_steps=6,
+            max_steps=1000,
         ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "done", result.summary)
         stored = get_task(self.layout, task["id"])
@@ -465,8 +466,7 @@ class CodingAgentTest(unittest.TestCase):
         self.assertTrue(state.exists())
         text = state.read_text(encoding="utf-8")
         self.assertIn("Session State", text)
-        self.assertIn("Inspect the repository", text)
-        self.assertIn("list_files", text)
+        self.assertIn("read_file", text)
         report = (self.layout.root / result.report).read_text(
             encoding="utf-8"
         )

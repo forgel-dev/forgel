@@ -46,7 +46,6 @@ from .project_config import ConfigError, load_project_config
 from .repo_tools import READ_DEFAULT_LINES, read_text_page
 from .sandbox import CommandRunner, SandboxError, docker_runner
 
-MAX_STEPS = 200
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
@@ -288,8 +287,13 @@ class CodingAgent:
         self.ledger = ledger
         self.client = client
         env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
-        steps = max_steps or (int(env_steps) if env_steps.isdigit() else MAX_STEPS)
-        self.max_steps = max(4, min(steps, 500))
+        if max_steps is not None:
+            steps = max(1, int(max_steps))
+        elif env_steps.isdigit() and int(env_steps) > 0:
+            steps = int(env_steps)
+        else:
+            steps = 0  # no step limit; context drives sessions
+        self.max_steps = min(steps, 5_000)
         env_sessions = os.environ.get(
             "FORGEL_AGENT_MAX_SESSIONS", ""
         ).strip()
@@ -562,9 +566,10 @@ class CodingAgent:
         """Run the model loop and the final test, returning the run state.
 
         The loop is session-based: when the estimated prompt size approaches
-        the context budget, or a session hits its step cap, the run writes a
-        durable state file and starts a new session from it. The model never
-        manages token counts or asks a human to continue.
+        the context budget, the run writes a durable state file and starts a
+        new session from it. The step cap is a hard loop guard, not a normal
+        session boundary. The model never manages token counts or asks a human
+        to continue.
         """
 
         window = self._context_window(layout)
@@ -598,7 +603,7 @@ class CodingAgent:
         ]
         test_removals: list[dict[str, str]] = []
         status = "failed"
-        summary = "step limit reached"
+        summary = "agent did not finish within the session limit"
         failure_kind = "agent"
         invalid = 0
         markup_retries = 0
@@ -655,7 +660,18 @@ class CodingAgent:
         for session in range(1, self.max_sessions + 1):
             sessions = session
             handed_off = False
-            for _step in range(1, self.max_steps + 1):
+            session_steps = 0
+            while True:
+                if self.max_steps and session_steps >= self.max_steps:
+                    status = "failed"
+                    failure_kind = "agent"
+                    summary = (
+                        "operator step limit reached "
+                        f"({self.max_steps})"
+                    )
+                    terminal = True
+                    break
+                session_steps += 1
                 steps += 1
                 estimated_input_tokens += budget.usage(messages, model)
                 try:
@@ -809,38 +825,30 @@ class CodingAgent:
                     observation.startswith(("wrote ", "deleted "))
                 ):
                     signatures.clear()
-                if (
-                    budget.should_compact(messages, model)
-                    and session < self.max_sessions
-                ):
-                    used = budget.usage(messages, model)
-                    messages, state_ref = handoff(session)
-                    invalid = 0
-                    compactions += 1
-                    handed_off = True
-                    print(
-                        f"[agent] {task['id']}: context handoff to "
-                        f"session {session + 1} "
-                        f"(~{used}/{budget.usable} tokens)"
-                    )
+                if budget.should_compact(messages, model):
+                    if session < self.max_sessions:
+                        used = budget.usage(messages, model)
+                        messages, state_ref = handoff(session)
+                        invalid = 0
+                        compactions += 1
+                        handed_off = True
+                        print(
+                            f"[agent] {task['id']}: context handoff to "
+                            f"session {session + 1} "
+                            f"(~{used}/{budget.usable} tokens)"
+                        )
+                        break
+                    status = "failed"
+                    failure_kind = "agent"
+                    summary = "context session limit reached"
+                    terminal = True
                     break
             if terminal:
                 break
             if not handed_off:
-                if session < self.max_sessions:
-                    messages, state_ref = handoff(session)
-                    invalid = 0
-                    compactions += 1
-                    print(
-                        f"[agent] {task['id']}: step cap, handoff to "
-                        f"session {session + 1}"
-                    )
-                    continue
                 status = "failed"
-                summary = (
-                    f"step limit reached ({self.max_steps} per session x "
-                    f"{sessions} sessions)"
-                )
+                failure_kind = "agent"
+                summary = "agent stopped without a terminal action"
                 break
 
         test_output = ""
