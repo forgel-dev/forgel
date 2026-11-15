@@ -953,6 +953,77 @@ class CodingAgent:
             )
         return entry["id"], layout.repo_path(entry["id"])
 
+    def _previous_attempt(self, task: Mapping[str, Any]) -> str:
+        """Context for a retry: keep finished work, address only the blocker."""
+
+        result = task.get("result") or {}
+        failure = result.get("failure") or result.get("last_failure") or {}
+        review = result.get("review") or {}
+        feedback = [
+            str(item) for item in (result.get("feedback") or [])
+        ]
+        files = [
+            str(item) for item in (result.get("files_changed") or [])
+        ]
+        blocking = [
+            str(item) for item in (review.get("blocking") or [])
+        ]
+        failed = [
+            item
+            for item in (review.get("requirements") or [])
+            if str(item.get("verdict") or "") not in {"pass", ""}
+        ]
+        summary = str(result.get("summary") or "").strip()
+        message = str(failure.get("message") or "").strip()
+        if not (
+            summary or message or blocking or failed or feedback or files
+        ):
+            return ""
+        lines = [
+            "This is a retry. The previous attempt left the state below.",
+            "Continue from it: inspect the existing tree, keep completed work,",
+            "and address only the remaining failure. Do not repeat finished work.",
+        ]
+        if summary:
+            lines.append(
+                "\nWhat the previous attempt did:\n"
+                + _cap(summary, 1200)
+            )
+        if message:
+            kind = str(failure.get("kind") or "unknown")
+            lines.append(
+                f"\nWhy it stopped ({kind}):\n" + _cap(message, 900)
+            )
+        if blocking:
+            lines.append(
+                "\nReview blocking defects:\n"
+                + "\n".join(
+                    f"- {_cap(item, 500)}" for item in blocking[:5]
+                )
+            )
+        if failed:
+            lines.append(
+                "\nFailed acceptance criteria:\n"
+                + "\n".join(
+                    "- "
+                    + str(item.get("requirement") or "")
+                    + (f" — {_cap(item.get('note'), 400)}"
+                       if item.get("note") else "")
+                    for item in failed[:5]
+                )
+            )
+        if feedback:
+            lines.append(
+                "\nReviewer feedback:\n"
+                + "\n".join(f"- {_cap(item, 500)}" for item in feedback[:5])
+            )
+        if files:
+            lines.append(
+                "\nFiles already produced:\n"
+                + "\n".join(f"- {item}" for item in files[:20])
+            )
+        return "\n".join(lines)
+
     def _task_prompt(
         self,
         layout: ProjectLayout,
@@ -987,6 +1058,10 @@ class CodingAgent:
         tree = self._list(repo)
         branch = git_ops.current_branch(repo)
         answer_language = language.name(str(task.get("language") or ""))
+        previous = self._previous_attempt(task)
+        previous_section = (
+            f"\n{previous}\n" if previous else ""
+        )
         return f"""TASK: {task['title']}
 
 Requirements:
@@ -1000,7 +1075,7 @@ Constraints:
 
 Assumptions already recorded at intake (do not re-ask):
 {assumptions}
-{feedback_section}
+{feedback_section}{previous_section}
 Final test command: {json.dumps(test_command)}
 Repository: {repo_id} at {repo} (branch {branch})
 

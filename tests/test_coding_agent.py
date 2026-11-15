@@ -722,6 +722,57 @@ class CodingAgentTest(unittest.TestCase):
         )
         self.assertNotIn("TOP_SECRET", env)
 
+    def test_a_retry_prompt_keeps_previous_work(self) -> None:
+        task = create_task(
+            self.layout,
+            "Add the missing evidence",
+            ["Produce the compose evidence"],
+            ["The evidence exists"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout,
+            task["id"],
+            status="failed",
+            result={
+                "summary": "the template and its tests are already done",
+                "failure": {
+                    "kind": "agent",
+                    "message": "the compose output is missing",
+                },
+                "review": {
+                    "status": "fail",
+                    "blocking": ["the Output section still says TODO"],
+                    "requirements": [
+                        {
+                            "requirement": "compose evidence",
+                            "verdict": "fail",
+                            "note": "only expected output is provided",
+                        }
+                    ],
+                },
+                "files_changed": ["template/app.py"],
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [json.dumps({"action": "done", "summary": "added evidence"})]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        prompt = client.requests[0][1].content
+        self.assertIn("This is a retry", prompt)
+        self.assertIn("already done", prompt)
+        self.assertIn("the compose output is missing", prompt)
+        self.assertIn("the Output section still says TODO", prompt)
+        self.assertIn("template/app.py", prompt)
+        self.assertIn("Do not repeat finished work", prompt)
+        self.assertNotIn("If the blocker is missing evidence", prompt)
+
     def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
         leftover = self.repo / "leftover"
         leftover.mkdir()

@@ -20,6 +20,9 @@ shim and is not part of the public repository.
 - Roles have clean context: spec writer, developer, reviewer, QA, acceptor.
 - Artifacts in git are the source of truth; memory is an index.
 - Process prohibitions live in code (gates, ledger, runners), not only in prose.
+- Prompts describe the state, the task and the constraints. Never embed
+  concrete scenarios, expected failures or step-by-step scripts; pass the
+  evidence and let the model reason from it.
 - Work autonomously (D-075). Pre-release work proceeds without confirmation;
   record every assumption in the task and report. Ask only for a material
   fork, an irreversible or production action, or missing access. Finish the
