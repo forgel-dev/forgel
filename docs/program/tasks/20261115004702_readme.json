@@ -36,12 +36,12 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-15T00:47:02+00:00",
-  "started_at": "2026-11-15T01:47:55+00:00",
-  "finished_at": "2026-11-15T01:52:46+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Checked the README against the actual runtime and finished the edit in the \"Model and agent\" section, which now documents the real cycle instead of an intake-only agent: (1) a plain-language request becomes a task with explicit requirements and acceptance criteria, with `forgel plan`/`/plan` producing a dependency-ordered backlog the daemon respects; (2) the agent works in the sandbox, reads the repository, edits the code, commits with a bot message and writes `docs/program/agent/<task>.md`; (3) an independent QA pass runs the `environment.yaml` commands (`test`, then `e2e`) in the sandbox and an independent review checks the committed diff against the requirements; (4) the task then waits in `review` for a human decision. The trailing sentence on bounded sessions and state handoff via `docs/program/agent/<task>.state.md` with the PLAN.md §7.15 pointer is kept, so the section agrees with the existing \"Context and handoff\" and \"Task QA and milestones\" paragraphs and with PLAN.md §7.15. Only README.md was edited; no code or tests were touched. `make test` passes (exit 0, 405 tests OK), and `python -m unittest discover -s tests` (the environment.yaml test contract) also passes. The earlier QA failure was caused by host FORGEL_/TELEGRAM_ environment leaking into project runs, which commit ca173ff already fixed.",
+    "summary": "Checked the README against the actual runtime and finished the edit in the \"Model and agent\" section, which now documents the real cycle instead of an intake-only agent: (1) a plain-language request becomes a task with explicit requirements and acceptance criteria, with `forgel plan`/`/plan` producing a dependency-ordered backlog the daemon respects; (2) the agent works in the sandbox, reads the repository, edits the code, commits with a bot message and writes `docs/program/agent/<task>.md`; (3) an independent QA pass runs the `environment.yaml` commands (`test`, then `e2e`) in the sandbox and an independent review checks the committed diff against the requirements; (4) the task then waits in `review` for a human decision. The trailing sentence on bounded sessions and state handoff via `docs/program/agent/<task>.state.md` with the PLAN.md §7.15 pointer is kept, so the section agrees with the existing \"Context and handoff\" and \"Task QA and milestones\" paragraphs and with PLAN.md §7.15. Only README.md was edited; no code or tests were touched. `make test` passes (exit 0, 405 tests OK), and `python -m unittest discover -s tests` (the environment.yaml test contract) also passes. The earlier QA failure was caused by host FORGEL_/TELEGRAM_ environment leaking into project runs, which commit ca173ff already fixed.; task review failed",
     "files_changed": [
       "README.md"
     ],
@@ -170,21 +170,21 @@
     },
     "report": "docs/program/agent/20261115004702_readme.md",
     "last_failure": {
-      "kind": "qa",
-      "message": "task QA failed (exit 1)",
+      "kind": "review",
+      "message": "The README edit removes the stale intake-only/no-code-editing claim and adds a clear English four-step description of the task cycle. However, the change is not fully acceptable: the diff adds an agent-run report outside README.md despite the 'only README.md' constraint; the README now says the agent commits with a bot message while the added report states git commit was not permitted and the change was left for the pipeline; and the required signed commit is not present or verifiable. Consistency with PLAN.md section 7.15 is also not verifiable from the provided diff.",
       "retryable": false
     },
     "attempts": 0,
-    "rework_count": 2,
+    "rework_count": 3,
     "manual_retries": 2,
     "qa": {
-      "status": "fail",
+      "status": "pass",
       "runtime": "local + environment.yaml",
       "report": "docs/program/agent/20261115004702_readme.qa.md",
       "commands": [
         {
           "command": "python -m unittest discover -s tests",
-          "exit_code": 1
+          "exit_code": 0
         },
         {
           "command": "make test",
@@ -195,8 +195,8 @@
         {
           "criterion": "environment test",
           "command": "python -m unittest discover -s tests",
-          "exit_code": 1,
-          "verdict": "fail"
+          "exit_code": 0,
+          "verdict": "pass"
         },
         {
           "criterion": "task test command",
@@ -208,11 +208,117 @@
       "review_required": false
     },
     "feedback": [
-      "QA check failed: environment test (exit 1)"
+      "review: The README now says the agent commits with a bot message, but the added agent report states git commit was not permitted and the change was left for the pipeline, so the description is not fully factual.",
+      "review: The required signed commit via git commit -s is not met or verifiable; the report explicitly says the agent did not commit.",
+      "review: The diff adds docs/program/agent/20261115004702_readme.md, violating the explicit constraint to change only README.md.",
+      "review: PLAN.md section 7.15 consistency is unverified because PLAN.md is not in the provided diff.",
+      "review summary: The README edit removes the stale intake-only/no-code-editing claim and adds a clear English four-step description of the task cycle. However, the change is not fully acceptable: the diff adds an agent-run report outside README.md despite the 'only README.md' constraint; the README now says the agent commits with a bot message while the added report states git commit was not permitted and the change was left for the pipeline; and the required signed commit is not present or verifiable. Consistency with PLAN.md section 7.15 is also not verifiable from the provided diff."
     ],
     "resume_count": 1,
     "resumed_at": "2026-11-15T01:47:55+00:00",
     "last_summary": "Rewrote the \"Model and agent\" section of README.md (the only file touched) so it no longer describes the agent as intake-only and instead documents the actual product flow as a 4-step numbered list: (1) a plain-language request becomes a task with explicit requirements and acceptance criteria, with `forgel plan`/`/plan` turning a milestone into a dependency-ordered backlog the daemon respects; (2) the agent works on the task in the sandbox, reads the repository, edits the code and writes its report; (3) an independent QA pass runs the commands declared in the project's `environment.yaml` (`test`, then `e2e`) in the sandbox, and an independent review checks the committed diff against the requirements; (4) the task then waits in `review` for a human decision (`accept` in the console or `forgel task accept`). The trailing sentence about bounded sessions and state handoff through `docs/program/agent/<task>.state.md` plus the `PLAN.md` §7.15 pointer was kept, and the new wording matches the existing README paragraphs on context/handoff, task QA and milestones, and the Coding Agent section. Verified with `git diff --stat` that only README.md changed from my edit (the task-state JSON is harness bookkeeping, not my change), and `make test` passed twice (exit 0, full unittest suite green).; task QA failed (exit 1)",
-    "failure": {}
+    "review": {
+      "status": "fail",
+      "summary": "The README edit removes the stale intake-only/no-code-editing claim and adds a clear English four-step description of the task cycle. However, the change is not fully acceptable: the diff adds an agent-run report outside README.md despite the 'only README.md' constraint; the README now says the agent commits with a bot message while the added report states git commit was not permitted and the change was left for the pipeline; and the required signed commit is not present or verifiable. Consistency with PLAN.md section 7.15 is also not verifiable from the provided diff.",
+      "requirements": [
+        {
+          "requirement": "Remove the README claim that the current agent only accepts requests/intake and does not edit code.",
+          "verdict": "pass",
+          "note": "The stale sentence is deleted in the diff."
+        },
+        {
+          "requirement": "Replace the stale claim with a description of the agent's actual behavior.",
+          "verdict": "fail",
+          "note": "The new description says the agent commits with a bot message, but the added run report says git commit was not permitted and the change was left for the pipeline to commit."
+        },
+        {
+          "requirement": "Describe the cycle: a plain-language request becomes a task, the task runs in the sandbox, the agent writes a report, independent QA runs environment.yaml commands, then the task waits for human review.",
+          "verdict": "pass",
+          "note": "The new four-step list covers all required stages."
+        },
+        {
+          "requirement": "Align wording with the existing README discussion of planner, independent QA, sessions, and state handoff.",
+          "verdict": "pass",
+          "note": "The new text explicitly references planning, independent QA/review, bounded sessions, and state handoff."
+        },
+        {
+          "requirement": "Align wording with PLAN.md section 7.15.",
+          "verdict": "fail",
+          "note": "PLAN.md is not included in the provided diff, so the required consistency cannot be independently verified."
+        },
+        {
+          "requirement": "Do not change code, tests, or behavior; documentation only.",
+          "verdict": "pass",
+          "note": "No code or test files are modified."
+        },
+        {
+          "requirement": "Change only README.md; do not touch PLAN.md, code, or tests.",
+          "verdict": "fail",
+          "note": "The diff adds docs/program/agent/20261115004702_readme.md, which is outside the explicit 'only README.md' constraint."
+        },
+        {
+          "requirement": "README must contain no statement that the agent does not edit code.",
+          "verdict": "pass",
+          "note": "The old intake-only/no-code-edit statement is gone."
+        },
+        {
+          "requirement": "The agent and cycle description must be consistent with the rest of README.md and must not contradict PLAN.md.",
+          "verdict": "fail",
+          "note": "PLAN.md consistency is unverified, and the commit claim conflicts with the run report's statement that git commit was not permitted."
+        },
+        {
+          "requirement": "Changes limited to documentation; code and tests untouched.",
+          "verdict": "pass",
+          "note": "The modified/added files are documentation; no code or tests are modified."
+        },
+        {
+          "requirement": "make test passes.",
+          "verdict": "pass",
+          "note": "QA reports pass and the final test output shows the unittest suite completing with exit 0."
+        },
+        {
+          "requirement": "Environment test passes, addressing the previous QA failure.",
+          "verdict": "pass",
+          "note": "The current QA verdict and acceptance checks report environment test exit 0; no contrary evidence is provided."
+        },
+        {
+          "requirement": "Task test command passes.",
+          "verdict": "pass",
+          "note": "The acceptance checks report task test command exit 0."
+        },
+        {
+          "requirement": "Text of the changes is in English.",
+          "verdict": "pass",
+          "note": "The README addition is in English."
+        },
+        {
+          "requirement": "Commit is signed via git commit -s.",
+          "verdict": "fail",
+          "note": "The run report says git commit was not permitted and the change was left in the working tree for the pipeline; no signed commit is verifiable from the diff."
+        },
+        {
+          "requirement": "Do not weaken tests or change test expectations.",
+          "verdict": "pass",
+          "note": "No tests are modified."
+        },
+        {
+          "requirement": "Do not commit secrets, .env.local contents, or internal notes.",
+          "verdict": "pass",
+          "note": "No secret or .env.local content is visible in the diff."
+        },
+        {
+          "requirement": "Public texts are in English.",
+          "verdict": "pass",
+          "note": "The public README text is in English."
+        }
+      ],
+      "blocking": [
+        "The README now says the agent commits with a bot message, but the added agent report states git commit was not permitted and the change was left for the pipeline, so the description is not fully factual.",
+        "The required signed commit via git commit -s is not met or verifiable; the report explicitly says the agent did not commit.",
+        "The diff adds docs/program/agent/20261115004702_readme.md, violating the explicit constraint to change only README.md.",
+        "PLAN.md section 7.15 consistency is unverified because PLAN.md is not in the provided diff."
+      ],
+      "report": "docs/program/agent/20261115004702_readme.review.md"
+    }
   }
 }
