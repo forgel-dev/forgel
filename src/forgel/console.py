@@ -23,7 +23,7 @@ try:  # line editing and history for the prompt; no dependency
 except ImportError:  # pragma: no cover - platform without readline
     readline = None  # type: ignore[assignment]
 
-from .agent import ProjectAgent
+from .agent import ProjectAgent, append_history
 from .chat import CommandRouter
 from .config import Settings
 from .control import is_paused
@@ -33,7 +33,7 @@ from .ledger import Ledger
 from .model import build_model_client
 from .planner import plan_status
 from .projects import ProjectError, resolve_project
-from .tasks import latest_task, retry_moment
+from .tasks import latest_task, list_tasks, retry_moment
 
 PROMPT = "forgel> "
 QUIT = {"/quit", "/exit", "quit", "exit", "bye"}
@@ -260,6 +260,40 @@ class _Spinner:
         sys.stdout.flush()
 
 
+def _task_snapshot(layout: ProjectLayout) -> dict[str, str]:
+    return {
+        str(item["id"]): str(item.get("status", ""))
+        for item in list_tasks(layout)
+    }
+
+
+def _task_update_text(
+    layout: ProjectLayout, before: dict[str, str]
+) -> str:
+    """Summarize tasks whose status changed during this drain."""
+
+    items = list_tasks(layout)
+    lines: list[str] = []
+    for item in items:
+        task_id = str(item["id"])
+        status = str(item.get("status", ""))
+        if before.get(task_id) == status:
+            continue
+        result = item.get("result") or {}
+        summary = str(result.get("summary") or "").strip()
+        files = [str(value) for value in result.get("files_changed") or []]
+        report = str(result.get("report") or "").strip()
+        line = f"Task `{task_id}`: **{status}**"
+        if summary:
+            line += f" — {summary}"
+        if files:
+            line += "\nFiles: " + ", ".join(f"`{value}`" for value in files)
+        if report:
+            line += f"\nReport: `{report}`"
+        lines.append(line)
+    return "\n\n".join(lines)
+
+
 def run_console(
     settings: Settings,
     ledger: Ledger,
@@ -392,6 +426,18 @@ def run_console(
                 if interactive:
                     output("")
             if daemon and not is_paused(settings.home):
+                selected = ledger.get_session(chat_id)
+                project = (
+                    ledger.get_project(selected) if selected else None
+                )
+                layout = (
+                    ProjectLayout.detect(project["workspace"])
+                    if project is not None
+                    else None
+                )
+                before = (
+                    _task_snapshot(layout) if layout is not None else {}
+                )
                 try:
                     _drain(settings, ledger, output, sleep_fn=sleep_fn)
                 except KeyboardInterrupt:
@@ -399,6 +445,17 @@ def run_console(
                         output("Stopped; back to the prompt.")
                         continue
                     raise
+                if layout is not None:
+                    update = _task_update_text(layout, before)
+                    if update:
+                        output(update)
+                        append_history(
+                            layout,
+                            "assistant",
+                            update,
+                            actor,
+                            session=str(chat_id),
+                        )
     finally:
         if interactive:
             _save_history(settings)

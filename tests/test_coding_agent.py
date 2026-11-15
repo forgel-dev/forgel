@@ -555,6 +555,35 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("read_file", observation)
         self.assertNotIn("source", observation)
 
+    def test_history_is_not_trimmed_within_a_session(self) -> None:
+        task = create_task(
+            self.layout,
+            "Read the README",
+            ["Read README.md"],
+            ["The file was read"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps(
+                {"action": "read_file", "path": "README.md"}
+            )
+        ] + [
+            json.dumps({"action": "list_files", "path": "."})
+            for _ in range(8)
+        ] + [
+            json.dumps({"action": "done", "summary": "read it"})
+        ]
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        final_prompt = "\n".join(
+            message.content for message in client.requests[-1]
+        )
+        self.assertIn("source", final_prompt)
+
     def test_repeated_actions_fail_fast(self) -> None:
         task = self._task()
         repeated = json.dumps(

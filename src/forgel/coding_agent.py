@@ -52,7 +52,6 @@ MAX_FILE_BYTES = 200_000
 MAX_READ_CHARS = 30_000
 MAX_OBSERVATION = 30_000
 MAX_LIST_ENTRIES = 200
-MAX_HISTORY_MESSAGES = 12
 MAX_REPEATED_ACTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
@@ -674,7 +673,6 @@ class CodingAgent:
                     observation.startswith(("wrote ", "deleted "))
                 ):
                     signatures.clear()
-                messages = self._trim(messages)
                 if (
                     budget.should_compact(messages, model)
                     and session < self.max_sessions
@@ -1072,19 +1070,6 @@ Files:
         if kind == "run":
             return f"run: {action.get('command')}"
         return str(kind)
-
-    @staticmethod
-    def _trim(messages: list[ModelMessage]) -> list[ModelMessage]:
-        if len(messages) <= MAX_HISTORY_MESSAGES:
-            return messages
-        return [
-            messages[0],
-            messages[1],
-            ModelMessage(
-                "user",
-                "Earlier observations were omitted to stay within context.",
-            ),
-        ] + messages[-8:]
 
     # --------------------------------------------------------------- output
 

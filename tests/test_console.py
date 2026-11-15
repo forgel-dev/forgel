@@ -8,11 +8,12 @@ from unittest.mock import patch
 
 from forgel.agent import ProjectAgent
 from forgel.config import Settings
-from forgel.console import run_console
+from forgel.console import _task_snapshot, _task_update_text, run_console
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.projects import create_project
+from forgel.tasks import create_task, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -125,6 +126,38 @@ class ConsoleTest(unittest.TestCase):
         )
         self.assertIn("Recorded.", text)
         self.assertIn("Add a page", text)
+
+    def test_task_status_change_is_reported_in_text(self) -> None:
+        project_id = create_project(
+            self.settings, self.ledger, "Tasks", "A brief."
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        task = create_task(
+            layout,
+            "Fix the README",
+            ["Update README"],
+            ["README is updated"],
+            repo_id="main",
+            test_command=[],
+        )
+        before = _task_snapshot(layout)
+        update_task(
+            layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "repeated action loop",
+                "files_changed": ["README.md"],
+                "report": "docs/program/agent/run.md",
+            },
+        )
+        text = _task_update_text(layout, before)
+        self.assertIn(str(task["id"]), text)
+        self.assertIn("failed", text)
+        self.assertIn("repeated action loop", text)
+        self.assertIn("README.md", text)
 
     def test_quit_and_eof_end_the_console(self) -> None:
         text = self._run(["/quit"])
