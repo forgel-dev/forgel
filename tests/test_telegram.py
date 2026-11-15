@@ -249,6 +249,7 @@ class SelectionAndAgentTest(unittest.TestCase):
         if responses is None:
             return CommandRouter(self.settings, self.ledger)
         client = ScriptedModelClient(responses)
+        self.client = client
         agent = ProjectAgent(self.settings, self.ledger, client)
         return CommandRouter(self.settings, self.ledger, agent=agent)
 
@@ -319,6 +320,9 @@ class SelectionAndAgentTest(unittest.TestCase):
         self.assertEqual(
             reply.text, "Проект принят в работу, задач пока нет."
         )
+        narration_prompt = self.client.requests[1][-1].content
+        self.assertIn("Alpha brief marker.", narration_prompt)
+        self.assertNotIn("layout:", narration_prompt)
 
     def test_task_accept_command_finalizes_a_review(self) -> None:
         router = self._router()

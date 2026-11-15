@@ -25,7 +25,7 @@ from .adopt import (
     publish_repository,
     set_dependencies,
 )
-from .agent import ProjectAgent, append_history
+from .agent import ProjectAgent, append_history, build_context
 from .approvals import ApprovalError, is_approved, latest_approval, record_approval
 from .artifacts import read_json
 from .config import Settings
@@ -1414,8 +1414,11 @@ class CommandRouter:
         if result.kind == "action" and result.action:
             reply = self._execute_action(chat_id, actor, result)
             if result.action in {"status", "tasks"} and self.agent is not None:
+                observation = build_context(
+                    layout, project, self.ledger
+                )
                 narration = self.agent.narrate(
-                    project, text, reply.text
+                    project, text, observation
                 ).strip()
                 if narration:
                     append_history(

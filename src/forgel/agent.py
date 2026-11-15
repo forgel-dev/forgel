@@ -593,11 +593,14 @@ def parse_answer(raw: str) -> dict[str, Any]:
         action_args = {}
     reply = data.get("reply")
     if not isinstance(reply, str) or not reply.strip():
-        reply = (
-            UNFORMATTED_REPLY
-            if _looks_structured(raw)
-            else raw.strip()
-        )
+        if kind == "action" and action in AGENT_ACTIONS:
+            reply = ""
+        else:
+            reply = (
+                UNFORMATTED_REPLY
+                if _looks_structured(raw)
+                else raw.strip()
+            )
     acceptance = data.get("acceptance")
     if not isinstance(acceptance, list):
         acceptance = []

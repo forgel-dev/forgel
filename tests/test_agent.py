@@ -271,6 +271,12 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(result.kind, "answer")
         self.assertEqual(result.text, "Just a plain answer.")
 
+    def test_action_without_a_reply_is_not_a_failed_answer(self) -> None:
+        answer = parse_answer('{"kind": "action", "action": "status"}')
+        self.assertEqual(answer["kind"], "action")
+        self.assertEqual(answer["action"], "status")
+        self.assertEqual(answer["reply"], "")
+
     def test_json_without_a_reply_is_not_dumped(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         agent = ProjectAgent(
