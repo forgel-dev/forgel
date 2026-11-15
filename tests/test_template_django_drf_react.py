@@ -205,10 +205,17 @@ class ComposeServicesTest(unittest.TestCase):
         self.text = (TEMPLATE / "compose.yaml").read_text(encoding="utf-8")
         self.services = services(self.text)
 
-    def test_declares_the_api_web_postgres_and_object_storage(self) -> None:
-        self.assertEqual(
-            set(self.services), {"api", "web", "postgres", "minio"}
+    def test_declares_the_api_postgres_and_object_storage(self) -> None:
+        # The backend slice still declares api, postgres and object storage;
+        # the SPA adds `web` on top of that set.
+        self.assertLessEqual(
+            {"api", "postgres", "minio"}, set(self.services)
         )
+        self.assertIn("postgres:", self.services["postgres"])
+        self.assertIn("${S3_ACCESS_KEY", self.services["minio"])
+
+    def test_declares_the_web_service(self) -> None:
+        self.assertIn("web", self.services)
 
     def test_postgres_is_configured_from_the_environment(self) -> None:
         postgres = self.services["postgres"]
