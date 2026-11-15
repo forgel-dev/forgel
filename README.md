@@ -198,8 +198,15 @@ export FORGEL_MODEL_BASE_URL=https://api.deepseek.com/v1   # optional
 export FORGEL_MODEL_NAME=deepseek-flash                     # optional
 ```
 
-The current agent is the intake stage: it answers from the project context and
-records change requests in `docs/program/requests/`. It does not edit code yet.
+The current agent takes a task end to end. A request in plain language becomes a
+task with explicit requirements and acceptance criteria; the agent then works
+on it in the sandbox, edits the code and writes its report. An independent QA
+pass then runs the commands declared in the project's `environment.yaml`
+(`test`, then `e2e`) in the sandbox, and an independent review checks the
+committed diff against the requirements. The task then waits in `review` for
+a human decision ("accept" in the console, or `forgel task accept`). Long
+tasks run as bounded sessions that hand off state through
+`docs/program/agent/<task>.state.md`. See `PLAN.md` §7.15.
 
 For local runs without a model key, `FORGEL_MODEL_MODE=script` reads responses
 from `$FORGEL_HOME/model-script.json` (`{"responses": ["..."]}`). This is how a
