@@ -6,9 +6,9 @@ test command, from a clean process after the agent has committed.
 
 Acceptance checks are ordinary commands stored in the task record, outside the
 agent's write scope: the agent cannot weaken them from the repository. A check
-whose criterion cannot be automated is marked ``verification: review``; the QA
-verdict is then ``review`` and the task cannot be auto-accepted — a reviewer
-and a human decide.
+whose criterion cannot be automated is marked ``verification: review`` and is
+verified by the independent reviewer from the evidence in the task report; it
+is not a separate human evidence gate.
 
 The verdict is authoritative: a green agent run with a red QA becomes a failed
 task, with the QA report attached. When there is nothing to run, the verdict is

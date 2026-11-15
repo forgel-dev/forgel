@@ -237,9 +237,12 @@ Rules:
   review-only check and leave test_command empty.
 - Give every task at least one executable check per acceptance criterion.
   The check command runs in the repository and must exit 0 when the criterion
-  is met. If a criterion cannot be checked by a command (documentation, UX),
-  set "verification": "review" and explain in the criterion; a human must then
-  accept the task. Never use a vacuous check.
+  is met. If a criterion is subjective or cannot be checked by a command, set
+  "verification": "review" and explain in the criterion; the independent
+  reviewer verifies the evidence. A restriction on the unittest suite (no
+  network, Docker or cloud inside the suite) does not make a criterion
+  review-only when the coding agent can run a separate verification command
+  outside the suite. Never use a vacuous check.
 - Set test_command when the project's test command is evident from the
   environment contract or the repository; otherwise leave it empty.
 - Do not create tasks for production deploys, payments, secrets, data
