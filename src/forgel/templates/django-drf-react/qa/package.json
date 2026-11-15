@@ -1,0 +1,9 @@
+{
+  "name": "django-drf-react-qa",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Headless-browser scenario for the isolated QA stand.",
+  "dependencies": {
+    "playwright-core": "1.49.1"
+  }
+}

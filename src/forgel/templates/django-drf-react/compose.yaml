@@ -1,9 +1,11 @@
-# Local stand: the Django/DRF API, Postgres and MinIO (S3-compatible storage).
+# Local stand: the Django/DRF API, the React SPA, Postgres and MinIO
+# (S3-compatible storage).
 #
 # Every value comes from the environment (see .env.example); no credential is
 # committed. The API container applies migrations, creates the bucket named by
-# S3_BUCKET (api/config/bucket.py) and then serves the API, so the stack stays
-# at the three services this template declares.
+# S3_BUCKET (api/config/bucket.py) and then serves the API. The web container
+# builds the SPA from web/ and nginx proxies /healthz to the API, so the browser
+# never talks to the API port directly.
 services:
   api:
     build:
@@ -32,6 +34,19 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+
+  web:
+    # React SPA: built by web/Dockerfile and served by nginx, which proxies
+    # /healthz to the api service.
+    build:
+      context: web
+      dockerfile: Dockerfile
+    image: django-drf-react-web
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_started
 
   postgres:
     image: postgres:16-alpine
