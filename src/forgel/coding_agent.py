@@ -28,7 +28,6 @@ from . import git_ops, tasks
 from .artifacts import write_text
 from .config import Settings
 from .session_context import (
-    MAX_OBSERVATION_CHARS,
     ContextBudget,
     SessionState,
     budget_for,
@@ -47,7 +46,7 @@ from .project_config import ConfigError, load_project_config
 from .repo_tools import READ_DEFAULT_LINES, read_text_page
 from .sandbox import CommandRunner, SandboxError, docker_runner
 
-MAX_STEPS = 40
+MAX_STEPS = 200
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
@@ -204,6 +203,32 @@ def _safe_env(layout: ProjectLayout) -> dict[str, str]:
     return env
 
 
+def _observation_summary(
+    action: Mapping[str, Any],
+    observation: str,
+    command: Mapping[str, Any] | None,
+) -> str:
+    """A short progress line for the handoff state, never file contents."""
+
+    kind = str(action.get("action"))
+    path = str(action.get("path") or "")
+    if kind in {"read_file", "write_file", "delete_file"}:
+        if kind == "read_file":
+            first = observation.splitlines()[0] if observation else ""
+            return f"read_file {path}: {first[:160]}"
+        return f"{kind} {path}"
+    if kind == "run":
+        argv = []
+        if command is not None:
+            argv = [str(item) for item in (command.get("command") or [])]
+        if not argv:
+            argv = [str(item) for item in (action.get("command") or [])]
+        exit_code = command.get("exit_code") if command else "?"
+        return f"run {shlex.join(argv)} -> exit {exit_code}"
+    first = observation.splitlines()[0] if observation else ""
+    return f"{kind}: {first[:200]}"
+
+
 def _cap(text: str, limit: int = MAX_OBSERVATION) -> str:
     if len(text) <= limit:
         return text
@@ -264,7 +289,7 @@ class CodingAgent:
         self.client = client
         env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
         steps = max_steps or (int(env_steps) if env_steps.isdigit() else MAX_STEPS)
-        self.max_steps = max(4, min(steps, 60))
+        self.max_steps = max(4, min(steps, 500))
         env_sessions = os.environ.get(
             "FORGEL_AGENT_MAX_SESSIONS", ""
         ).strip()
@@ -544,6 +569,10 @@ class CodingAgent:
 
         window = self._context_window(layout)
         budget: ContextBudget = budget_for(window)
+        model_calls = 0
+        estimated_input_tokens = 0
+        provider_input_tokens = 0
+        provider_output_tokens = 0
         state_path = layout.artifact(
             f"docs/program/agent/{task['id']}.state.md"
         )
@@ -601,13 +630,23 @@ class CodingAgent:
                 commands=list(commands),
                 observations=list(recent),
             )
-            write_text(state_path, state.to_markdown())
+            max_state_tokens = max(512, int(window * 0.05))
+            write_text(
+                state_path,
+                state.to_markdown(
+                    max_tokens=max_state_tokens, model=model
+                ),
+            )
             return (
                 [
                     ModelMessage("system", SYSTEM_PROMPT),
                     ModelMessage("user", self._task_prompt(
                         layout, task, repo_id, repo
-                    ) + "\n\n" + handoff_prompt(state)),
+                    ) + "\n\n" + handoff_prompt(
+                        state,
+                        max_tokens=max_state_tokens,
+                        model=model,
+                    )),
                 ],
                 _ref(layout, state_path),
             )
@@ -618,6 +657,7 @@ class CodingAgent:
             handed_off = False
             for _step in range(1, self.max_steps + 1):
                 steps += 1
+                estimated_input_tokens += budget.usage(messages, model)
                 try:
                     raw = self.client.complete(messages, model=model)
                 except ModelError as exc:
@@ -626,6 +666,18 @@ class CodingAgent:
                     failure_kind = "infrastructure"
                     terminal = True
                     break
+                model_calls += 1
+                usage = getattr(self.client, "last_usage", None)
+                if isinstance(usage, dict):
+                    try:
+                        provider_input_tokens += int(
+                            usage.get("prompt_tokens", 0)
+                        )
+                        provider_output_tokens += int(
+                            usage.get("completion_tokens", 0)
+                        )
+                    except (TypeError, ValueError):
+                        pass
                 action = parse_action(raw)
                 if action is None:
                     if (
@@ -736,7 +788,9 @@ class CodingAgent:
                 actions.append(self._action_summary(action))
                 if command is not None:
                     commands.append(command)
-                recent.append(_cap(observation, MAX_OBSERVATION_CHARS))
+                recent.append(
+                    _observation_summary(action, observation, command)
+                )
                 recent = recent[-6:]
                 messages.append(
                     ModelMessage(
@@ -820,6 +874,10 @@ class CodingAgent:
             "usable": budget.usable,
             "sessions": sessions,
             "compactions": compactions,
+            "model_calls": model_calls,
+            "estimated_input_tokens": estimated_input_tokens,
+            "provider_input_tokens": provider_input_tokens,
+            "provider_output_tokens": provider_output_tokens,
             "estimated_tokens": budget.usage(messages, model),
             "state": state_ref if compactions else "",
         }
@@ -1231,9 +1289,12 @@ Files:
 
 ## Context
 
-- Window: {context_stats.get('window', 0)} tokens (usable {context_stats.get('usable', 0)})
+- Window limit: {context_stats.get('window', 0)} tokens (usable {context_stats.get('usable', 0)})
 - Sessions: {context_stats.get('sessions', 1)}
 - Handoffs: {context_stats.get('compactions', 0)}
+- Model calls: {context_stats.get('model_calls', 0)}
+- Estimated input tokens (all calls): {context_stats.get('estimated_input_tokens', 0)}
+- Provider input/output tokens: {context_stats.get('provider_input_tokens', 0)} / {context_stats.get('provider_output_tokens', 0)}
 - Estimated prompt at the end: {context_stats.get('estimated_tokens', 0)} tokens
 {('- State: `' + str(context_stats.get('state')) + '`') if context_stats.get('state') else '- State: not needed'}
 

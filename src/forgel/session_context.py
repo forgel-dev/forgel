@@ -21,8 +21,11 @@ DEFAULT_WINDOW = 1_000_000
 MAX_RESERVE = 8_192
 COMPACT_AT = 0.7
 KEEP_RECENT = 3
-MAX_STATE_CHARS = 240_000
-MAX_OBSERVATION_CHARS = 120_000
+MAX_ACTION_LINES = 20
+MAX_COMMAND_LINES = 10
+MAX_OBSERVATION_LINE = 240
+STATE_CONTEXT_RATIO = 0.05
+MAX_STATE_TOKENS_FALLBACK = 50_000
 
 
 def estimate_tokens(text: str, model: str = "") -> int:
@@ -86,24 +89,28 @@ class SessionState:
     status: str = "in progress"
     next_step: str = ""
 
-    def to_markdown(self) -> str:
+    def to_markdown(
+        self,
+        max_tokens: int | None = None,
+        model: str = "",
+    ) -> str:
         def bullets(values: Sequence[str], empty: str = "none") -> str:
             return "\n".join(f"- {item}" for item in values) or f"- {empty}"
 
         command_lines = (
             "\n".join(
                 f"- `{item.get('command')}` -> exit {item.get('exit_code')}"
-                for item in self.commands
+                for item in self.commands[-MAX_COMMAND_LINES:]
             )
             or "- none"
         )
         observation_lines = (
             "\n".join(
-                f"- {item}"
-                if len(item) <= MAX_OBSERVATION_CHARS
-                else (
-                    f"- {item[:MAX_OBSERVATION_CHARS]}\n"
-                    "  ... [observation truncated; re-read the file]"
+                f"- {item[:MAX_OBSERVATION_LINE]}"
+                + (
+                    " ... [truncated; re-read the file]"
+                    if len(item) > MAX_OBSERVATION_LINE
+                    else ""
                 )
                 for item in self.observations[-KEEP_RECENT:]
             )
@@ -117,8 +124,8 @@ class SessionState:
 
 ## Goal
 
-Implement the task requirements in the repository, run the final test and
-commit. Continue from this state; do not repeat finished work.
+Continue the task in the repository. The repository on disk is the source of
+truth; re-read files with read_file when needed.
 
 ## Requirements
 
@@ -142,7 +149,7 @@ commit. Continue from this state; do not repeat finished work.
 
 ## Actions
 
-{bullets(self.actions)}
+{bullets(self.actions[-MAX_ACTION_LINES:])}
 
 ## Commands
 
@@ -154,20 +161,67 @@ commit. Continue from this state; do not repeat finished work.
 
 ## Next Step
 
-{self.next_step or 'Continue the task from the requirements and the current repository state.'}
+{self.next_step or 'Continue from the current repository state and the changed files.'}
 """
-        if len(text) > MAX_STATE_CHARS:
-            text = text[:MAX_STATE_CHARS] + "\n\n... [state truncated]\n"
-        return text
+        limit = (
+            max_tokens
+            if max_tokens and max_tokens > 0
+            else MAX_STATE_TOKENS_FALLBACK
+        )
+        tokens = count_tokens(text, model)
+        if tokens <= limit:
+            return text
+        # The state is a compact progress summary, not a transcript. Drop the
+        # duplicated task sections first, then trim with an explicit notice.
+        compact = f"""# Session State: {self.title}
+
+- Task: `{self.task_id}`
+- Session: {self.session}
+- Status: {self.status}
+
+## Assumptions
+
+{bullets(self.assumptions)}
+
+## Files Changed
+
+{bullets(self.files_changed)}
+
+## Actions
+
+{bullets(self.actions[-MAX_ACTION_LINES:])}
+
+## Commands
+
+{command_lines}
+
+## Next Step
+
+{self.next_step or 'Continue from the current repository state and the changed files.'}
+"""
+        if count_tokens(compact, model) <= limit:
+            return compact
+        notice = (
+            "\n\n... [state compacted to the context budget; "
+            "re-read files with read_file]"
+        )
+        current = count_tokens(compact, model)
+        allowed = max(0, int(len(compact) * limit / max(1, current)))
+        allowed = max(0, allowed - len(notice))
+        return compact[:allowed] + notice
 
 
-def handoff_prompt(state: SessionState) -> str:
+def handoff_prompt(
+    state: SessionState,
+    max_tokens: int | None = None,
+    model: str = "",
+) -> str:
     """The user message that starts a new session."""
 
     return (
         "SESSION HANDOFF. A previous session of this task ran out of context. "
         "Continue from the durable state below; the repository on disk is the "
         "source of truth. Do not repeat work already reported as done.\n\n"
-        + state.to_markdown()
+        + state.to_markdown(max_tokens=max_tokens, model=model)
         + "\n\nContinue with one JSON action."
     )

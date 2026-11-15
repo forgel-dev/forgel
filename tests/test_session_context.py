@@ -5,13 +5,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from forgel.session_context import (
-    MAX_STATE_CHARS,
     SessionState,
     budget_for,
     handoff_prompt,
     messages_tokens,
 )
-from forgel.tokens import heuristic_tokens
+from forgel.tokens import count_tokens, heuristic_tokens
 
 
 class EstimateTest(unittest.TestCase):
@@ -87,9 +86,9 @@ class SessionStateTest(unittest.TestCase):
             session=1,
             observations=["x" * 5000] * 10,
         )
-        self.assertLessEqual(
-            len(state.to_markdown()), MAX_STATE_CHARS + 40
-        )
+        text = state.to_markdown(max_tokens=300)
+        self.assertLessEqual(count_tokens(text), 500)
+        self.assertNotIn("x" * 5000, text)
 
     def test_handoff_prompt_asks_to_continue(self) -> None:
         state = SessionState(task_id="t1", title="Task", session=1)
