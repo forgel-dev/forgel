@@ -76,16 +76,17 @@
       ]
     }
   ],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T13:13:15+00:00",
+  "finished_at": "2026-11-15T13:21:13+00:00",
   "result": {
-    "summary": "Completed and verified the django-drf-react template at src/forgel/templates/django-drf-react/: FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, scripts/test.sh, docker/entrypoint.sh, plus api/ (manage.py, requirements.txt pinning Django/djangorestframework/psycopg/django-storages/boto3, config/settings.py reading DATABASE_URL or POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY with SQLite + filesystem fallbacks so tests need no server, config/urls.py routing health.urls, health/views.py DRF APIView answering GET /healthz with {\"status\": \"ok\"}, config/bucket.py creating the bucket at container start, and api/tests/test_health.py exercising /healthz via the Django test client). compose.yaml now declares exactly three services (api, postgres, minio) wired through ${...} environment variables, with the bucket created by the API entrypoint; environment.yaml declares test: [\"./scripts/test.sh\"] (wrapper cds into api/ and runs python manage.py test) and leaves e2e for the next task. Fixed settings.py to install django.contrib.auth so DRF's default UNAUTHENTICATED_USER resolves, and hardened the MinIO healthcheck to use curl (the image ships no mc). tests/test_template_django_drf_react.py (18 tests) asserts the required files, the pins, the settings env reads, template independence from hello-web, the parsed environment contract with a non-empty test command running from api/, the compose services, bucket creation, and the registered /healthz route backed by a DRF view tested through the Django client. Verified: python -m unittest discover -s tests (438 tests, OK), python -m unittest tests.test_template_django_drf_react -v (18 tests, OK), python -m compileall -q src/forgel/templates/django-drf-react (exit 0). Docker is unavailable in this sandbox, so docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md and its .compose.md companion contain the ready-to-paste `docker compose up --build` command, the expected output a human must confirm (200 + {\"status\": \"ok\"} and migrations proving the Postgres connection), and the statement that the stand has not been run here.; task QA failed (exit 127)",
+    "summary": "Completed the django-drf-react template (src/forgel/templates/django-drf-react/): FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, scripts/test.sh, docker/entrypoint.sh, plus api/ with a Django/DRF project (manage.py; requirements.txt pinning Django, djangorestframework, psycopg, django-storages and boto3; config/settings.py reading DATABASE_URL or discrete POSTGRES_* and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY with SQLite + local-storage fallbacks so the suite needs no server; config/urls.py routing health.urls; health/views.py DRF APIView answering GET /healthz with {\"status\": \"ok\"}; config/bucket.py creating the bucket at startup; api/tests/test_health.py exercising /healthz via the Django test client). compose.yaml declares exactly the three required services (api, postgres, minio) wired through ${...} variables with the bucket created on startup, and environment.yaml declares test: [\"./scripts/test.sh\"] (wrapper cd's into api/ and runs python manage.py test), leaving e2e for the next task. tests/test_template_django_drf_react.py (18 tests) asserts the required files, the pins, the settings env reads, independence from hello-web, the parsed environment contract with a non-empty test command running from api/, the compose services and bucket creation, and the registered /healthz route backed by a DRF view tested through the Django client. Addressed the previous QA failure (acceptance check `env PYTHONPATH=src python -m unittest ...` exiting 127 with `env: python: No such file or directory`): forgel/environment.py::command_argv now skips a leading `env` and its NAME=value assignments and pins the following python/python3 to sys.executable, rejecting an env invocation with no program; covered by tests/test_environment_env_prefix.py and tests/test_qa_env_command.py (runs the resolved argv under a PATH containing only env and python3). Verified: python -m unittest discover -s tests (443 tests, OK), python -m unittest tests.test_template_django_drf_react -v (18 tests, OK), python -m compileall -q src/forgel/templates/django-drf-react (exit 0). docs/program/agent/<task>.md and its .compose.md companion now carry the ready-to-paste `docker compose up --build` command, the output block for a human to paste, and the expected output showing HTTP 200 {\"status\": \"ok\"} plus migrations proving the Postgres connection; Docker is unavailable in this sandbox so that block is marked as not yet run.",
     "files_changed": [
       "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md",
       "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md",
       "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.state.md",
+      "src/forgel/environment.py",
       "src/forgel/templates/django-drf-react/",
       "src/forgel/templates/django-drf-react/.dockerignore",
       "src/forgel/templates/django-drf-react/.env.example",
@@ -104,20 +105,11 @@
       "src/forgel/templates/django-drf-react/docker/entrypoint.sh",
       "src/forgel/templates/django-drf-react/environment.yaml",
       "src/forgel/templates/django-drf-react/scripts/test.sh",
+      "tests/test_environment_env_prefix.py",
+      "tests/test_qa_env_command.py",
       "tests/test_template_django_drf_react.py"
     ],
     "commands": [
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 0
-      },
       {
         "command": [
           "python",
@@ -130,11 +122,33 @@
       },
       {
         "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_environment",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
           "python",
           "-m",
           "unittest",
-          "tests.test_template_django_drf_react.ComposeServicesTest",
+          "tests.test_environment_env_prefix",
+          "tests.test_environment",
           "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
         ],
         "exit_code": 0
       },
@@ -151,17 +165,10 @@
       {
         "command": [
           "python",
-          "-c",
-          "import importlib.util as u; print(sorted(n for n in ('django','rest_framework','psycopg','storages','boto3') if u.find_spec(n)))"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
           "-m",
           "unittest",
-          "tests.test_template_django_drf_react",
+          "tests.test_qa_env_command",
+          "tests.test_environment_env_prefix",
           "-v"
         ],
         "exit_code": 0
@@ -190,25 +197,26 @@
         "final_test": true
       }
     ],
-    "test_output": "[agent] 20261115131121_inspect-and-finish: context handoff to session 2 (~4784/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9223 chars; rerun with a narrower command or read the file with read_file]",
+    "test_output": "[agent] 20261115132028_inspect-and-finish: context handoff to session 2 (~4783/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9228 chars; rerun with a narrower command or read the file with read_file]",
     "assumptions": [
       "environment.yaml has no working-directory field, so the run-from-api/ test command is the scripts/test.sh wrapper invoked from the contract",
       "The S3 bucket is created by the API container on startup (api/config/bucket.py in docker/entrypoint.sh) so compose.yaml stays at the three services the task names",
       "The container serves Django's built-in runserver since no WSGI/ASGI server was requested",
       "django.contrib.auth is installed because DRF resolves its default UNAUTHENTICATED_USER through that app; no auth endpoints are shipped",
       "The Django suite is not wired into the repository unittest gate (Django is not installed there); the structural test compiles every template .py file instead, and the suite runs via scripts/test.sh wherever Django is installed",
-      "Docker cannot run in the sandbox, so the task report documents the exact compose command and the expected output for a human to confirm"
+      "Docker cannot run in the sandbox, so the task report documents the exact compose command and the expected output for a human to confirm",
+      "The exit-127 QA failure was fixed in shared code (command_argv now resolves python behind a leading `env NAME=value`), because acceptance checks stored outside the repository use that form and must run under QA's stripped PATH"
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 79,
-      "estimated_input_tokens": 1941722,
-      "provider_input_tokens": 2072950,
-      "provider_output_tokens": 53992,
-      "estimated_tokens": 46477,
+      "model_calls": 43,
+      "estimated_input_tokens": 1635778,
+      "provider_input_tokens": 1724919,
+      "provider_output_tokens": 49405,
+      "estimated_tokens": 67173,
       "state": ""
     },
     "test_removals": [
@@ -219,11 +227,12 @@
       }
     ],
     "git": {
-      "base": "80804ee31ada54f7d8a7379c5ef1c670300c4e3e",
-      "head": "7bbbbd02f323ef01abdc71a1bb4cbfedda47bd62",
-      "commit": "7bbbbd02f323ef01abdc71a1bb4cbfedda47bd62",
+      "base": "5890d824d32e57513c1905daa2184c0e9c1d4a50",
+      "head": "0c6c6b27afabeb713f340e9375c1691c9c1584b4",
+      "commit": "0c6c6b27afabeb713f340e9375c1691c9c1584b4",
       "commits": [
-        "7bbbbd02f323ef01abdc71a1bb4cbfedda47bd62"
+        "7bbbbd02f323ef01abdc71a1bb4cbfedda47bd62",
+        "0c6c6b27afabeb713f340e9375c1691c9c1584b4"
       ]
     },
     "report": "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.md",
@@ -286,6 +295,7 @@
     "rework_count": 1,
     "feedback": [
       "QA check failed: Template structural validation test passes (exit 127)"
-    ]
+    ],
+    "failure": {}
   }
 }
