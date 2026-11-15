@@ -1042,6 +1042,24 @@ class CodingAgent:
         constraints = "\n".join(
             f"- {item}" for item in task.get("constraints", [])
         ) or "- none"
+        spec_ref = str(task.get("spec") or "").strip()
+        spec_text = ""
+        if spec_ref:
+            try:
+                spec_text = layout.artifact(spec_ref).read_text(
+                    encoding="utf-8"
+                )
+            except OSError:
+                spec_text = ""
+        if spec_text:
+            requirements = "- see the task specification below"
+            acceptance = "- see the task specification below"
+            constraints = "- see the task specification below"
+        spec_section = (
+            f"\nTask specification (`{spec_ref}`):\n{spec_text}\n"
+            if spec_text
+            else ""
+        )
         assumptions = "\n".join(
             f"- {item}" for item in task.get("assumptions", [])
         ) or "- none"
@@ -1065,7 +1083,7 @@ class CodingAgent:
             f"\n{previous}\n" if previous else ""
         )
         return f"""TASK: {task['title']}
-
+{spec_section}
 Requirements:
 {requirements}
 

@@ -1,13 +1,15 @@
-"""Turn a milestone goal into an ordered backlog of coding tasks.
+"""Turn a milestone goal into an ordered backlog of task intents.
 
 The planner is one model call with clean context: the project brief, the
 repository graph, the environment contract, recent tasks and the goal. It
-returns a small, ordered list of independently verifiable tasks with explicit
-requirements, acceptance criteria and dependencies. The daemon then runs them
-in order; a task whose dependency is not done is not picked up.
+returns a small, ordered list of task intents: a title, the outcome, the
+repository and dependencies. A separate requirements writer expands each
+intent into a formal specification, and a plan review judges the whole set
+against the original problem before any task is queued.
 
-The plan is a project artifact: `docs/program/plans/<plan_id>.md`. `--dry-run`
-shows the backlog without creating tasks.
+The plan is a project artifact: `docs/program/plans/<plan_id>.md`; each task
+specification is `docs/program/specs/<task_id>.md`. `--dry-run` previews the
+specifications without creating tasks.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import language, peak, tasks
+from . import language, peak, specs, tasks
 from .adopt import AdoptError, add_repository, create_repository
 from .agent import build_context
 from .artifacts import write_text
@@ -204,16 +206,8 @@ Return exactly one JSON object:
   "tasks": [
     {{
       "title": "short imperative title",
-      "requirements": ["explicit requirement", "..."],
-      "acceptance": ["observable acceptance criterion", "..."],
-      "constraints": ["constraint", "..."],
+      "summary": "the outcome this task delivers and why it is needed",
       "repo_id": "one of the project repositories, or empty for the sole one",
-      "checks": [
-        {{"criterion": "which acceptance criterion this verifies",
-          "command": ["command", "arg"],
-          "verification": "command" | "review"}}
-      ],
-      "test_command": ["command", "arg"] or [],
       "depends_on": [0]
     }}
   ]
@@ -230,21 +224,12 @@ Rules:
   or an earlier planned one.
 - depends_on uses 0-based indexes of earlier tasks only; no cycles.
 - One repository per task; do not mix repositories in one task.
-- Give every task explicit requirements and acceptance criteria; the agent
-  must not invent unstated features.
-- Tests are for behaviour and code. Do not add tests for documentation,
-  prose, status markers or other text-only changes; verify those with a
-  review-only check and leave test_command empty.
-- Give every task at least one executable check per acceptance criterion.
-  The check command runs in the repository and must exit 0 when the criterion
-  is met. If a criterion is subjective or cannot be checked by a command, set
-  "verification": "review" and explain in the criterion; the independent
-  reviewer verifies the evidence. A restriction on the unittest suite (no
-  network, Docker or cloud inside the suite) does not make a criterion
-  review-only when the coding agent can run a separate verification command
-  outside the suite. Never use a vacuous check.
-- Set test_command when the project's test command is evident from the
-  environment contract or the repository; otherwise leave it empty.
+- A separate requirements writer turns each task intent into a formal
+  specification. Your job is the decomposition: a clear outcome, the right
+  repository and the right order. Do not write the detailed specification
+  here; put uncertainty and ordering rationale in "notes".
+- Every task must be a single repository change that a coding agent can
+  implement, test and commit on its own.
 - Do not create tasks for production deploys, payments, secrets, data
   destruction or legal decisions.
 - Work autonomously: do not ask questions; put assumptions in "notes".
@@ -397,108 +382,31 @@ def _parse_plan(
         if not isinstance(item, dict):
             raise PlanningError(f"task {index} must be an object")
         title = str(item.get("title", "")).strip()
-        requirements = [
-            str(value).strip()
-            for value in item.get("requirements", [])
-            if str(value).strip()
-        ]
-        acceptance = [
-            str(value).strip()
-            for value in item.get("acceptance", [])
-            if str(value).strip()
-        ]
-        constraints = [
-            str(value).strip()
-            for value in item.get("constraints", [])
-            if str(value).strip()
-        ]
+        summary = str(item.get("summary", "")).strip()
         if not title:
             raise PlanningError(f"task {index} has no title")
         if title.lower() in titles:
             raise PlanningError(f"duplicate task title: {title!r}")
         titles.add(title.lower())
-        if not requirements:
-            raise PlanningError(f"task {index} has no requirements")
-        if not acceptance:
-            raise PlanningError(f"task {index} has no acceptance criteria")
         repo_id = str(item.get("repo_id", "")).strip() or default_repo
         if allowed_repos and repo_id not in allowed_repos:
             raise PlanningError(
                 f"task {index} targets unknown repository {repo_id!r}"
             )
-        raw_checks = item.get("checks")
-        if not isinstance(raw_checks, list) or not raw_checks:
-            raise PlanningError(
-                f"task {index} has no acceptance checks"
-            )
-        checks: list[dict[str, Any]] = []
-        for check in raw_checks:
-            if not isinstance(check, dict):
-                raise PlanningError(
-                    f"task {index}: a check must be an object"
-                )
-            criterion = str(check.get("criterion", "")).strip()
-            if not criterion:
-                raise PlanningError(
-                    f"task {index}: a check has no criterion"
-                )
-            verification = str(
-                check.get("verification", "command")
-            ).strip().lower()
-            if verification not in {"command", "review"}:
-                raise PlanningError(
-                    f"task {index}: check verification must be "
-                    "command or review"
-                )
-            check_command = check.get("command", [])
-            if isinstance(check_command, str):
-                check_command = [check_command]
-            if not isinstance(check_command, list):
-                raise PlanningError(
-                    f"task {index}: check command must be a list"
-                )
-            check_command = [
-                str(value) for value in check_command if str(value).strip()
-            ]
-            if verification == "command" and not check_command:
-                raise PlanningError(
-                    f"task {index}: check {criterion!r} has no command"
-                )
-            checks.append(
-                {
-                    "criterion": criterion,
-                    "verification": verification,
-                    "command": check_command,
-                }
-            )
-        command = item.get("test_command", [])
-        if isinstance(command, str):
-            command = [command]
-        if not isinstance(command, list):
-            raise PlanningError(f"task {index} test_command must be a list")
-        depends = item.get("depends_on", [])
-        if not isinstance(depends, list) or not all(
-            isinstance(value, int) and 0 <= value < index
-            for value in depends
+        depends_on = item.get("depends_on") or []
+        if not isinstance(depends_on, list) or any(
+            not isinstance(value, int) or value < 0 or value >= index
+            for value in depends_on
         ):
             raise PlanningError(
-                f"task {index} depends_on must reference earlier indexes"
+                f"task {index}: depends_on must use earlier task indexes"
             )
         items.append(
             {
                 "title": title,
-                "requirements": requirements,
-                "acceptance": acceptance,
-                "constraints": constraints,
+                "summary": summary,
                 "repo_id": repo_id,
-                "checks": checks,
-                "test_command": [str(value) for value in command],
-                "depends_on": list(dict.fromkeys(depends)),
-                "assumptions": [
-                    str(value).strip()
-                    for value in item.get("assumptions", [])
-                    if str(value).strip()
-                ],
+                "depends_on": [int(value) for value in depends_on],
             }
         )
     return notes, items, repositories
@@ -576,6 +484,13 @@ def _apply_repositories(
             raise PlanningError(
                 f"repository setup failed for {repo_id}: {exc}"
             ) from exc
+
+
+def _spec_call(func, *args, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except specs.SpecError as exc:
+        raise PlanningError(str(exc)) from exc
 
 
 def plan_project(
@@ -689,42 +604,118 @@ def plan_project(
         raise PlanningError("the planner did not return a plan")
     notes, items, repositories = parsed
     plan_id = _plan_id(goal)
+    task_language = language.detect(goal)
+    used: set[str] = set()
+    ids: list[str] = []
+    for item in items:
+        candidate = tasks.new_task_id(str(item["title"]))
+        suffix = 2
+        while candidate in used or tasks.task_path(
+            layout, candidate
+        ).exists():
+            candidate = (
+                f"{tasks.new_task_id(str(item['title']))}-{suffix}"
+            )
+            suffix += 1
+        used.add(candidate)
+        ids.append(candidate)
+
     if dry_run:
+        preview: list[dict[str, Any]] = []
+        for index, item in enumerate(items):
+            spec = _spec_call(specs.write_task_spec, 
+                settings, layout, goal, notes, item, model_client, log
+            )
+            preview.append(dict(spec))
+        review = _spec_call(specs.review_plan, 
+            layout, goal, notes, preview, model_client, log
+        )
+        notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
         return PlanResult(
             plan_id=plan_id,
             goal=goal,
             notes=notes,
-            tasks=items,
+            tasks=preview,
             repositories=repositories,
             dry_run=True,
         )
+
     _apply_repositories(settings, ledger, project, repositories)
-    created: list[dict[str, Any]] = []
-    ids: list[str] = []
-    task_language = language.detect(goal)
+    task_specs: list[dict[str, Any]] = []
     for index, item in enumerate(items):
+        log(f"[spec] task {index + 1}/{len(items)}: writing")
+        task_specs.append(
+            _spec_call(specs.write_task_spec, 
+                settings, layout, goal, notes, item, model_client, log
+            )
+        )
+    review = _spec_call(specs.review_plan, 
+        layout, goal, notes, task_specs, model_client, log
+    )
+    if not review.sufficient:
+        log("[plan] review found gaps; revising the specifications")
+        for finding in review.findings:
+            position = int(finding.get("task", -1))
+            if 0 <= position < len(items):
+                task_specs[position] = _spec_call(specs.write_task_spec, 
+                    settings,
+                    layout,
+                    goal,
+                    notes,
+                    items[position],
+                    model_client,
+                    log,
+                    review_issue=str(finding.get("issue") or ""),
+                )
+        review = _spec_call(specs.review_plan, 
+            layout, goal, notes, task_specs, model_client, log
+        )
+    if not review.sufficient:
+        details = "; ".join(
+            f"task {item.get('task')}: {item.get('issue')}"
+            for item in review.findings
+        ) or "no findings"
+        raise PlanningError(
+            "the plan does not solve the stated problem: " + details
+        )
+    notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
+
+    created: list[dict[str, Any]] = []
+    for index, (item, spec) in enumerate(zip(items, task_specs)):
         dependencies = [ids[position] for position in item["depends_on"]]
+        spec_ref = specs.spec_path(ids[index])
         task = tasks.create_task(
             layout,
-            item["title"],
-            item["requirements"],
-            item["acceptance"],
-            item["constraints"],
-            repo_id=item["repo_id"],
-            test_command=item["test_command"],
-            assumptions=item["assumptions"],
-            checks=item["checks"],
+            str(item["title"]),
+            [],
+            [],
+            repo_id=str(item["repo_id"]),
+            test_command=list(spec["test_command"]),
             plan_id=plan_id,
             plan_goal=goal,
             order=index + 1,
             depends_on=dependencies,
+            checks=list(spec["checks"]),
             language=task_language,
+            spec=spec_ref,
+            task_id=ids[index],
         )
-        ids.append(str(task["id"]))
+        write_text(
+            layout.artifact(spec_ref),
+            specs.render_spec(
+                spec,
+                ids[index],
+                plan_id,
+                str(item["repo_id"]),
+                dependencies,
+            ),
+        )
         created.append(
             {
                 **item,
-                "task_id": task["id"],
+                **spec,
+                "task_id": ids[index],
+                "spec": spec_ref,
                 "depends_on": dependencies,
             }
         )
@@ -733,8 +724,8 @@ def plan_project(
         f"{index}. `{item['task_id']}` {item['title']}\n"
         f"   - repo: {item['repo_id'] or '(sole)'}\n"
         f"   - depends on: {', '.join(item['depends_on']) or 'none'}\n"
-        f"   - requirements: {'; '.join(item['requirements'])}\n"
-        f"   - acceptance: {'; '.join(item['acceptance'])}\n"
+        f"   - spec: `{item['spec']}`\n"
+        f"   - summary: {item.get('summary') or '—'}\n"
         f"   - checks: "
         + (
             "; ".join(

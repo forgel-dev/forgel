@@ -365,6 +365,25 @@ def _review_prompt(
     assumptions = "\n".join(
         f"- {item}" for item in task.get("assumptions", [])
     ) or "- none"
+    spec_ref = str(task.get("spec") or "").strip()
+    spec_text = ""
+    if spec_ref:
+        try:
+            spec_text = layout.artifact(spec_ref).read_text(
+                encoding="utf-8"
+            )
+        except OSError:
+            spec_text = ""
+    if spec_text:
+        requirements = "- see the task specification below"
+        acceptance = "- see the task specification below"
+        constraints = "- see the task specification below"
+        assumptions = "- see the task specification below"
+    spec_section = (
+        f"\nTask specification (`{spec_ref}`):\n{spec_text}\n"
+        if spec_text
+        else ""
+    )
     result = dict(task.get("result") or {})
     qa = result.get("qa") if isinstance(result.get("qa"), dict) else {}
     attributed_files, attributed_commits = _attributed(task)
@@ -399,7 +418,7 @@ def _review_prompt(
         for item in test_removals(task)
     ) or "- none"
     return f"""TASK: {task.get('title', task.get('id'))}
-
+{spec_section}
 Requirements:
 {requirements}
 

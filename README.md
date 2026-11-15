@@ -111,10 +111,12 @@ daemon start and continues from its state file, up to three resumes. See
 followed by an independent QA pass over the project's `environment.yaml`
 (`test`, then `e2e`) in the sandbox; a red gate fails the task with
 `docs/program/agent/<task>.qa.md`. `forgel plan` (or `/plan`) turns a
-milestone goal into an ordered backlog of tasks with explicit requirements,
-acceptance and dependencies; `--dry-run` previews it, and the daemon runs a
-task only after its dependencies are done. The plan is committed as
-`docs/program/plans/<id>.md`. See `PLAN.md` §7.15.
+milestone goal into an ordered backlog of task intents; a separate
+requirements writer expands each intent into a formal specification under
+`docs/program/specs/<task>.md`, and a plan review checks the whole set against
+the goal before queueing. `--dry-run` previews the specifications, and the
+daemon runs a task only after its dependencies are done. The plan is committed
+as `docs/program/plans/<id>.md`. See `PLAN.md` §7.15.
 
 **Models and cost.** `deepseek-flash` is the default for every role; a more
 expensive model is an explicit configuration choice. Autonomous work defaults
@@ -205,9 +207,10 @@ export FORGEL_MODEL_NAME=deepseek-flash                     # optional
 The current agent takes a task end to end:
 
 1. A request in plain language becomes a task with explicit requirements and
-   acceptance criteria; for a milestone, `forgel plan` (or `/plan`) turns the
-   goal into an ordered backlog of such tasks, and the daemon starts a task
-   only after its dependencies are done.
+   acceptance criteria; for a milestone, `forgel plan` (or `/plan`) decomposes
+   the goal into task intents, a separate requirements writer writes a formal
+   spec for each, and a plan review checks the plan against the goal before the
+   daemon starts a task whose dependencies are done.
 2. The agent works on the task in the sandbox: it reads the repository, edits
    the code, commits with a bot message and writes its report to
    `docs/program/agent/<task>.md`.
@@ -406,10 +409,12 @@ corrected by the next request. The bot reports the task id, and `/tasks` lists
 it. Cancel a queued task with `/task cancel <id>`.
 
 For a milestone, `forgel plan <project> --goal "..."` (or `/plan <goal>` in the
-chat) asks the model for an ordered backlog of small tasks with explicit
-requirements, acceptance and dependency edges; `--dry-run` previews it. The
-plan is committed as `docs/program/plans/<id>.md`, and the daemon runs a task
-only after its dependencies are done.
+chat) asks the planner for an ordered backlog of task intents; a separate
+requirements writer expands each intent into a formal specification, and a plan
+review checks the whole plan against the goal before queueing. `--dry-run`
+previews the specifications. The plan is committed as
+`docs/program/plans/<id>.md`, and the daemon runs a task only after its
+dependencies are done.
 
 The daemon picks up pending tasks and runs the coding agent inside the
 project's repository. The model returns one JSON action per turn (list, read,

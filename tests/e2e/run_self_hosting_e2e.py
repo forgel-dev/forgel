@@ -51,25 +51,38 @@ PLAN = {
     "tasks": [
         {
             "title": "Add a greeting module",
-            "requirements": [
-                "Create greeting.py with a short greeting message.",
-            ],
-            "acceptance": [
-                "greeting.py exists and the fixture test command stays green.",
-            ],
-            "constraints": ["Python standard library only."],
+            "summary": "Add a small greeting module to the fixture.",
             "repo_id": "main",
-            "checks": [
-                {
-                    "criterion": "The gate command exits 0",
-                    "command": ["python", "-c", "print('ok')"],
-                }
-            ],
-            "test_command": ["python", "--version"],
             "depends_on": [],
         }
     ],
 }
+
+SPEC = {
+    "problem": "The fixture has no greeting module.",
+    "outcome": "greeting.py exists and the fixture test command stays green.",
+    "scope": ["Add greeting.py with a short greeting message."],
+    "non_goals": [],
+    "requirements": [
+        "Create greeting.py with a short greeting message.",
+    ],
+    "acceptance": [
+        "greeting.py exists and the fixture test command stays green.",
+    ],
+    "constraints": ["Python standard library only."],
+    "assumptions": [],
+    "risks": [],
+    "checks": [
+        {
+            "criterion": "The gate command exits 0",
+            "verification": "command",
+            "command": ["python", "-c", "print('ok')"],
+        }
+    ],
+    "test_command": ["python", "--version"],
+}
+
+CRITIC = {"sufficient": True, "findings": []}
 
 AGENT_WRITE = {
     "action": "write_file",
@@ -135,6 +148,17 @@ def _make_fixture(root: Path) -> None:
         "-m",
         "initial",
     )
+    origin = root.parent / "fixture-origin.git"
+    _git(
+        root.parent,
+        "init",
+        "--bare",
+        "-q",
+        "-b",
+        "main",
+        str(origin),
+    )
+    _git(root, "remote", "add", "origin", str(origin))
     if (root / ".git" / "HEAD").exists():
         return
     raise GateError(f"the fixture is not a git repository: {root}")
@@ -157,6 +181,8 @@ def _force_always_peak(layout: ProjectLayout) -> None:
 def _responses() -> list[str]:
     return [
         json.dumps(PLAN),
+        json.dumps(SPEC),
+        json.dumps(CRITIC),
         json.dumps(AGENT_WRITE),
         json.dumps(AGENT_DONE),
         json.dumps(REVIEW),

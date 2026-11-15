@@ -83,6 +83,11 @@ def _normalize_check(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def new_task_id(title: str) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return f"{timestamp}_{_slug(title)}"
+
+
 def create_task(
     layout: ProjectLayout,
     title: str,
@@ -98,21 +103,23 @@ def create_task(
     depends_on: list[str] | None = None,
     checks: list[dict[str, Any]] | None = None,
     language: str = "",
+    spec: str = "",
+    task_id: str = "",
 ) -> dict[str, Any]:
     title = title.strip()
     requirements = [item.strip() for item in requirements if item.strip()]
     acceptance = [item.strip() for item in acceptance if item.strip()]
     if not title:
         raise ValueError("a task needs a title")
-    if not requirements:
+    if not spec and not requirements:
         raise ValueError("a task needs at least one requirement")
-    if not acceptance:
+    if not spec and not acceptance:
         raise ValueError("a task needs at least one acceptance criterion")
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    task_id = f"{timestamp}_{_slug(title)}"
+    task_id = task_id.strip() or new_task_id(title)
     data = {
         "id": task_id,
         "title": title,
+        "spec": spec.strip(),
         "requirements": requirements,
         "acceptance": acceptance,
         "constraints": [

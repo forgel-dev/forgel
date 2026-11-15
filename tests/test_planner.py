@@ -29,32 +29,41 @@ PLAN = {
     "tasks": [
         {
             "title": "Add a health endpoint",
-            "requirements": ["Add GET /health"],
-            "acceptance": ["GET /health returns 200"],
+            "summary": "Expose GET /health",
             "repo_id": "main",
-            "test_command": ["python", "-m", "unittest"],
-            "checks": [
-                {
-                    "criterion": "GET /health returns 200",
-                    "command": ["python", "-m", "unittest", "tests.test_health"],
-                }
-            ],
         },
         {
             "title": "Add an index page",
-            "requirements": ["Add GET /"],
-            "acceptance": ["GET / returns 200"],
+            "summary": "Expose GET /",
             "repo_id": "main",
             "depends_on": [0],
-            "checks": [
-                {
-                    "criterion": "GET / returns 200",
-                    "command": ["python", "-m", "unittest", "tests.test_index"],
-                }
-            ],
         },
     ],
 }
+
+
+def _spec_for(intent: dict) -> dict:
+    return {
+        "problem": intent.get("summary") or intent["title"],
+        "outcome": "The intended outcome is observable.",
+        "scope": ["the change described by the intent"],
+        "non_goals": [],
+        "requirements": [f"Deliver: {intent['title']}"],
+        "acceptance": ["The outcome is observable"],
+        "constraints": [],
+        "assumptions": [],
+        "risks": [],
+        "checks": [
+            {
+                "criterion": "The outcome is observable",
+                "verification": "review",
+            }
+        ],
+        "test_command": [],
+    }
+
+
+CRITIC = {"sufficient": True, "findings": []}
 
 
 class PlannerTest(unittest.TestCase):
@@ -94,8 +103,18 @@ class PlannerTest(unittest.TestCase):
         )
         (self.layout.repo_path("main")).mkdir(parents=True)
 
-    def _plan(self, payload: dict = PLAN, **kwargs):
-        client = ScriptedModelClient([json.dumps(payload)])
+    def _client(self, payload: dict = PLAN, specs=None, critic=None, prefix=None):
+        tasks = payload.get("tasks") or []
+        chosen = specs if specs is not None else [
+            _spec_for(item) for item in tasks
+        ]
+        responses = list(prefix or []) + [json.dumps(payload)]
+        responses += [json.dumps(spec) for spec in chosen]
+        responses.append(json.dumps(critic or CRITIC))
+        return ScriptedModelClient(responses)
+
+    def _plan(self, payload: dict = PLAN, specs=None, critic=None, prefix=None, **kwargs):
+        client = self._client(payload, specs, critic, prefix)
         return plan_project(
             self.settings,
             self.ledger,
@@ -124,6 +143,102 @@ class PlannerTest(unittest.TestCase):
             event["stage"] for event in self.ledger.events(self.project_id)
         ]
         self.assertIn("plan", stages)
+
+    def test_plan_writes_formal_specs(self) -> None:
+        result = self._plan()
+        created = list_tasks(self.layout)
+        self.assertEqual(len(created), 2)
+        for task in created:
+            spec_ref = str(task.get("spec") or "")
+            self.assertTrue(spec_ref)
+            path = self.layout.artifact(spec_ref)
+            self.assertTrue(path.exists(), spec_ref)
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("# Task Spec:", text)
+            self.assertIn("## Requirements", text)
+            self.assertIn("## Acceptance", text)
+            self.assertEqual(task.get("requirements"), [])
+            self.assertEqual(task.get("acceptance"), [])
+        self.assertIn("## Plan review", result.notes)
+        artifact = (self.layout.root / result.artifact).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("spec:", artifact)
+
+    def test_plan_review_rejects_an_insufficient_plan(self) -> None:
+        specs = [_spec_for(item) for item in PLAN["tasks"]]
+        revised = _spec_for(PLAN["tasks"][0])
+        revised["requirements"] = ["Deliver the revised outcome"]
+        client = ScriptedModelClient(
+            [
+                json.dumps(PLAN),
+                json.dumps(specs[0]),
+                json.dumps(specs[1]),
+                json.dumps(
+                    {
+                        "sufficient": False,
+                        "findings": [
+                            {"task": 0, "issue": "the result is missing"}
+                        ],
+                    }
+                ),
+                json.dumps(revised),
+                json.dumps(
+                    {
+                        "sufficient": False,
+                        "findings": [
+                            {"task": 0, "issue": "still missing"}
+                        ],
+                    }
+                ),
+            ]
+        )
+        with self.assertRaises(PlanningError):
+            plan_project(
+                self.settings,
+                self.ledger,
+                self.project,
+                "Bring the project to M1",
+                client=client,
+                log=lambda _m: None,
+            )
+        self.assertEqual(list_tasks(self.layout), [])
+
+    def test_plan_review_can_be_revised(self) -> None:
+        specs = [_spec_for(item) for item in PLAN["tasks"]]
+        revised = _spec_for(PLAN["tasks"][0])
+        revised["requirements"] = ["Deliver the revised outcome"]
+        client = ScriptedModelClient(
+            [
+                json.dumps(PLAN),
+                json.dumps(specs[0]),
+                json.dumps(specs[1]),
+                json.dumps(
+                    {
+                        "sufficient": False,
+                        "findings": [
+                            {"task": 0, "issue": "the result is missing"}
+                        ],
+                    }
+                ),
+                json.dumps(revised),
+                json.dumps({"sufficient": True, "findings": []}),
+            ]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+        first = list_tasks(self.layout)[0]
+        text = (self.layout.artifact(first["spec"])).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Deliver the revised outcome", text)
 
     def test_plan_status_follows_its_tasks(self) -> None:
         result = self._plan()
@@ -161,7 +276,16 @@ class PlannerTest(unittest.TestCase):
             ]
         }
         with self.assertRaises(PlanningError):
-            self._plan(payload)
+            self._plan(
+                payload,
+                specs=[
+                    {
+                        "requirements": ["x"],
+                        "acceptance": ["y"],
+                        "checks": [],
+                    }
+                ],
+            )
 
     def test_a_review_only_check_is_accepted(self) -> None:
         payload = {
@@ -226,7 +350,7 @@ class PlannerTest(unittest.TestCase):
                 }
             ],
         }
-        client = ScriptedModelClient([json.dumps(payload)])
+        client = self._client(payload)
         with patch(
             "forgel.planner.add_repository"
         ) as add, patch(
@@ -295,11 +419,11 @@ class PlannerTest(unittest.TestCase):
         self.assertIn("paused", str(ctx.exception))
 
     def test_research_budget_forces_the_plan(self) -> None:
-        responses = [
+        prefix = [
             json.dumps({"action": "list_files", "path": "."})
             for _ in range(MAX_RESEARCH_STEPS + 1)
-        ] + [json.dumps(PLAN)]
-        client = ScriptedModelClient(responses)
+        ]
+        client = self._client(PLAN, prefix=prefix)
         result = plan_project(
             self.settings,
             self.ledger,
@@ -313,7 +437,8 @@ class PlannerTest(unittest.TestCase):
         self.assertTrue(
             any(
                 "Research budget exhausted" in message.content
-                for message in client.requests[-1]
+                for request in client.requests
+                for message in request
             )
         )
 
@@ -322,7 +447,7 @@ class PlannerTest(unittest.TestCase):
             "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"plan\">"
             "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
         )
-        client = ScriptedModelClient([markup, json.dumps(PLAN)])
+        client = self._client(PLAN, prefix=[markup])
         result = plan_project(
             self.settings,
             self.ledger,
@@ -365,13 +490,13 @@ class PlannerTest(unittest.TestCase):
         )
         project = self.ledger.get_project(adopted.project_id)
         assert project is not None
-        client = ScriptedModelClient(
-            [
+        client = self._client(
+            PLAN,
+            prefix=[
                 json.dumps(
                     {"action": "read_file", "path": "README.md"}
-                ),
-                json.dumps(PLAN),
-            ]
+                )
+            ],
         )
         result = plan_project(
             self.settings,
@@ -418,16 +543,16 @@ class PlannerTest(unittest.TestCase):
         )
         project = self.ledger.get_project(adopted.project_id)
         assert project is not None
-        client = ScriptedModelClient(
-            [
+        client = self._client(
+            PLAN,
+            prefix=[
                 json.dumps(
                     {
                         "action": "read_file",
                         "path": "../../etc/passwd",
                     }
-                ),
-                json.dumps(PLAN),
-            ]
+                )
+            ],
         )
         plan_project(
             self.settings,
