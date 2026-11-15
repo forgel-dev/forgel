@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -73,6 +74,66 @@ class AgentTest(unittest.TestCase):
         self.assertIn(project["id"], system)
         self.assertIn("An alpha brief.", user)
         self.assertTrue(conversation_path(ProjectLayout.detect(project["workspace"])).exists())
+
+    def test_context_uses_documents_not_internal_bookkeeping(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
+        repo = layout.repo_path(repo_id)
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "README.md").write_text(
+            "README-MARKER\n\n# Roadmap\n", encoding="utf-8"
+        )
+        (repo / "PLAN.md").write_text(
+            "PLAN-MARKER\n", encoding="utf-8"
+        )
+        (repo / "AGENTS.md").write_text(
+            "AGENTS-MARKER\n", encoding="utf-8"
+        )
+        (repo / "FORGEL.md").write_text(
+            "FORGEL-MARKER\n", encoding="utf-8"
+        )
+        context = build_context(layout, project, self.ledger)
+        self.assertIn("README-MARKER", context)
+        self.assertIn("PLAN-MARKER", context)
+        self.assertIn("AGENTS-MARKER", context)
+        self.assertIn("FORGEL-MARKER", context)
+        self.assertNotIn("Workspace layout", context)
+        self.assertNotIn("Recent ledger events", context)
+        self.assertNotIn("adopted", context.lower())
+
+    def test_context_reads_only_tracked_documents(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
+        repo = layout.repo_path(repo_id)
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "README.md").write_text(
+            "TRACKED-MARKER\n", encoding="utf-8"
+        )
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "add", "README.md"], cwd=repo, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-q",
+                "-m",
+                "initial",
+            ],
+            cwd=repo,
+            check=True,
+        )
+        (repo / "LOCAL.md").write_text(
+            "UNTRACKED-MARKER\n", encoding="utf-8"
+        )
+        context = build_context(layout, project, self.ledger)
+        self.assertIn("TRACKED-MARKER", context)
+        self.assertNotIn("UNTRACKED-MARKER", context)
 
     def test_change_request_is_recorded_as_an_artifact(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

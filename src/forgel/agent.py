@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,9 +45,11 @@ HISTORY_RECENT_CHARS = 12_000
 HISTORY_COMPACT_CHARS = 24_000
 HISTORY_KEEP_TURNS = 4
 HISTORY_SUMMARY_CHARS = 6_000
-MAX_CONTEXT_CHARS = 6000
+MAX_CONTEXT_CHARS = 24_000
+OVERVIEW_DOC_CHARS = 4_000
+OVERVIEW_TOTAL_CHARS = 14_000
 MAX_RESEARCH_STEPS = 6
-SKIP_DIRS = {
+GENERIC_SKIP_DIRS = {
     ".git",
     ".forgel",
     "node_modules",
@@ -101,10 +104,18 @@ read specific files. Do not read the whole repository. Files already read are
 provided in the context; use them instead of re-reading unchanged files, and
 re-read only when you need a different part or the file changed.
 
-Speak plainly in the user's language. Do not expose internal field names,
-stage names or jargon (adopted, linked, generation, checkpoint, ledger,
-staging) unless the user asks for them. Say what is done, what is pending and
-what needs a decision in ordinary words.
+The user is the product owner, not a Forgel developer. Answer from the
+project documents and code, not from Forgel's process metadata. For any
+question about status, plans or what to do next, use README, PLAN and the
+project's docs (the context already includes them). Do not invent process
+steps such as setting a recipe or a checkpoint.
+
+Never use these words with the user unless they ask for them: adopted,
+linked, generation, checkpoint, staging, production approval, proposal,
+recipe, ledger, program.yaml, forgel.toml, agent run, provider. Describe the
+work in ordinary product language: what is done, what is pending, what needs
+a decision, and the concrete next step from the project's roadmap. Earlier
+turns may contain these terms; keep their facts but restate them plainly.
 
 Reply in the language of the user's message. Return exactly one JSON object:
 {
@@ -181,7 +192,7 @@ SUMMARY_PROMPT = """You compact the conversation of a project assistant.
 
 Preserve decisions, facts, file names, user preferences, open questions and
 what was already done. Write in the same language as the conversation. Be
-concise and concrete. Return plain text, not JSON, and no internal field
+concise and concrete. Return plain text, not JSON, and no process field
 names or identifiers unless they are essential.
 """
 
@@ -314,35 +325,120 @@ def append_history(
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def _read_capped(path: Path, limit: int) -> str:
+def _tracked_files(root: Path) -> list[str]:
+    if not (root / ".git").exists():
+        return []
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+    return [item for item in result.stdout.split("\0") if item]
+
+
+def _repo_files(root: Path) -> list[str]:
+    tracked = _tracked_files(root)
+    if tracked:
+        return tracked
+    files: list[str] = []
+    for directory, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(
+            name for name in dirnames if name not in GENERIC_SKIP_DIRS
+        )
+        for name in sorted(filenames):
+            files.append(
+                (Path(directory) / name).relative_to(root).as_posix()
+            )
+    return files
+
+
+def _unsafe_name(relative: str) -> bool:
+    name = relative.rsplit("/", 1)[-1]
+    if name == ".env.example":
+        return False
+    return (
+        name.startswith(".env")
+        or name.endswith((".pem", ".key"))
+        or name.startswith(("id_rsa", "id_ed25519"))
+    )
+
+
+def _workspace_tree(root: Path, limit: int = 80) -> str:
+    files = [
+        item for item in _repo_files(root) if not _unsafe_name(item)
+    ]
+    lines = files[:limit]
+    if len(files) > limit:
+        lines.append("...")
+    return "\n".join(lines)
+
+
+def _doc_excerpt(path: Path, limit: int) -> str:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return ""
     if len(text) <= limit:
         return text
-    return text[:limit] + "\n... [truncated]"
+    headings = [
+        line for line in text.splitlines() if re.match(r"^#{1,3} ", line)
+    ]
+    return (
+        text[:limit]
+        + "\n... [truncated; document headings] ...\n"
+        + "\n".join(headings[:80])
+    )
 
 
-def _workspace_tree(root: Path, limit: int = 80) -> str:
-    lines: list[str] = []
-    for directory, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(
-            name for name in dirnames if name not in SKIP_DIRS
-        )
-        relative = Path(directory).relative_to(root)
-        depth = len(relative.parts)
-        if depth >= 2:
-            dirnames[:] = []
-        if relative != Path("."):
-            lines.append(f"{relative.as_posix()}/")
-        for name in sorted(filenames):
-            if name in SKIP_DIRS:
-                continue
-            lines.append((relative / name).as_posix())
-            if len(lines) >= limit:
-                return "\n".join(lines)
-    return "\n".join(lines)
+def _repository_overview(
+    layout: ProjectLayout, repos: list[dict[str, Any]]
+) -> str:
+    """Read the project's own documentation from tracked files."""
+
+    if not repos:
+        return ""
+    main_id = next(
+        (str(entry["id"]) for entry in repos if entry["id"] == "main"),
+        str(repos[0]["id"]),
+    )
+    root = layout.repo_path(main_id)
+    documents = []
+    for relative in sorted(_repo_files(root)):
+        if not relative.endswith(".md"):
+            continue
+        if "/" in relative and not (
+            relative.startswith("docs/")
+            and not relative.startswith("docs/program/")
+        ):
+            continue
+        path = root / relative
+        if path.is_file():
+            documents.append(path)
+    parts: list[str] = []
+    budget = OVERVIEW_TOTAL_CHARS
+    for path in documents:
+        if budget <= 0:
+            break
+        relative = path.relative_to(root).as_posix()
+        excerpt = _doc_excerpt(path, min(OVERVIEW_DOC_CHARS, budget))
+        if not excerpt:
+            continue
+        budget -= len(excerpt)
+        parts.append(f"--- {relative} ---\n{excerpt}")
+    return "\n\n".join(parts)
+
+
+def _plain_brief(text: str) -> str:
+    brief = str(text or "").strip()
+    lowered = brief.lower()
+    if lowered.startswith("adopted in place"):
+        return "Existing project, taken over in place."
+    if lowered.startswith("adopted from "):
+        return "Existing project from " + brief[len("Adopted from "):]
+    return brief
 
 
 def build_context(
@@ -350,39 +446,57 @@ def build_context(
     project: Mapping[str, Any],
     ledger: Ledger,
 ) -> str:
-    """Build context from this project's files and ledger only."""
+    """Build a human-facing context from project documents and current work."""
 
     parts = [
-        f"Project id: {project['id']}",
-        f"Project name: {project['name']}",
-        f"Workspace layout: {layout.kind}",
-        f"Brief: {project['brief']}",
+        f"Project: {project['name']} ({project['id']})",
+        f"Brief: {_plain_brief(project.get('brief', ''))}",
     ]
-    for relative in (
-        "forgel.toml",
-        "program.yaml",
-        "docs/program/state.md",
-        "docs/program/requirements.json",
-        "docs/program/reconciliation.md",
-    ):
-        path = layout.artifact(relative)
-        if not path.exists() or not layout.contains(path):
-            continue
-        text = _read_capped(path, 1500)
-        if text:
-            parts.append(f"--- {relative} ---\n{text}")
+    repos = manifest_entries(layout)
+    repo_lines = "\n".join(
+        f"- {entry['id']} ({entry.get('role', 'application')})"
+        for entry in repos
+    ) or "- none"
+    parts.append("Repositories:\n" + repo_lines)
 
-    events = ledger.events(project["id"])[-10:]
-    if events:
-        lines = [
-            f"- {event['stage']} {event['status']} (gen {event['generation']})"
-            for event in events
-        ]
-        parts.append("Recent ledger events:\n" + "\n".join(lines))
+    task_items = tasks.list_tasks(layout)
+    if task_items:
+        counts: dict[str, int] = {}
+        for item in task_items:
+            status = str(item.get("status", ""))
+            counts[status] = counts.get(status, 0) + 1
+        summary = ", ".join(
+            f"{count} {status}" for status, count in sorted(counts.items())
+        )
+        recent = "\n".join(
+            f"- {item.get('title', '')} ({item.get('status', '')})"
+            for item in task_items[-5:]
+        )
+        parts.append(
+            f"Current work: {len(task_items)} task(s) — {summary}\n{recent}"
+        )
+    else:
+        parts.append("Current work: no tasks planned yet.")
 
-    tree = _workspace_tree(layout.root)
-    if tree:
-        parts.append("Workspace files:\n" + tree)
+    plans_dir = layout.artifact("docs/program/plans")
+    plans = sorted(plans_dir.glob("*.md")) if plans_dir.is_dir() else []
+    if plans:
+        first = plans[-1].read_text(encoding="utf-8").splitlines()
+        goal = first[0][len("# Plan: ") :] if first else ""
+        parts.append(f"Current plan: {goal or plans[-1].stem}")
+
+    overview = _repository_overview(layout, repos)
+    if overview:
+        parts.append("Project documents:\n" + overview)
+
+    main_id = next(
+        (str(entry["id"]) for entry in repos if entry["id"] == "main"),
+        str(repos[0]["id"]) if repos else "",
+    )
+    if main_id:
+        tree = _workspace_tree(layout.repo_path(main_id))
+        if tree:
+            parts.append("Files:\n" + tree)
 
     context = "\n\n".join(parts)
     return context[:MAX_CONTEXT_CHARS]
@@ -570,7 +684,7 @@ class ProjectAgent:
                     "into a short natural-language answer in the user's "
                     "language. Use only facts from the observation; never "
                     "invent state. Do not dump raw key:value fields or "
-                    "internal identifiers unless they help. Return plain "
+                    "process identifiers unless they help. Return plain "
                     "text, not JSON."
                 ),
             ),
