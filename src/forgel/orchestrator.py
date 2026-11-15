@@ -37,6 +37,7 @@ from .intake import build_requirements
 from .jurisdiction import resolve_pack
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .proc import merge_output
 from .program_manifest import entries as manifest_entries
 from .program_manifest import repo_control_path, write_program
 from .project_config import (
@@ -1193,13 +1194,13 @@ See `docs/program/jurisdiction/requirements.md` and
                     check=False,
                 )
             except subprocess.TimeoutExpired as exc:
-                partial = (exc.stdout or "") + (exc.stderr or "")
+                partial = merge_output(exc.stdout, exc.stderr)
                 output += f"timed out after 300s\n{partial}"
                 return 124, output
             except (OSError, subprocess.SubprocessError) as exc:
                 output += f"cannot run command: {exc}\n"
                 return 127, output
-            output += completed.stdout + completed.stderr
+            output += merge_output(completed.stdout, completed.stderr)
             if completed.returncode != 0:
                 return completed.returncode, output
         return 0, output
@@ -1247,7 +1248,7 @@ See `docs/program/jurisdiction/requirements.md` and
             timeout=300,
             check=False,
         )
-        output += result.stdout + result.stderr
+        output += merge_output(result.stdout, result.stderr)
         returncode = result.returncode
 
         try:
@@ -1270,7 +1271,9 @@ See `docs/program/jurisdiction/requirements.md` and
                 timeout=120,
                 check=False,
             )
-            output += "\n$ docker compose down -v\n" + down.stdout + down.stderr
+            output += "\n$ docker compose down -v\n" + merge_output(
+                down.stdout, down.stderr
+            )
 
         return returncode, output, "docker + headless Chrome"
 
@@ -1299,7 +1302,9 @@ See `docs/program/jurisdiction/requirements.md` and
                 timeout=300,
                 check=False,
             )
-            output += "$ npm install\n" + install.stdout + install.stderr
+            output += "$ npm install\n" + merge_output(
+                install.stdout, install.stderr
+            )
             if install.returncode != 0:
                 return install.returncode, output
 
@@ -1313,8 +1318,7 @@ See `docs/program/jurisdiction/requirements.md` and
         )
         output += (
             f"\n$ node {affected['runner']} --base-url ...\n"
-            + completed.stdout
-            + completed.stderr
+            + merge_output(completed.stdout, completed.stderr)
         )
         return completed.returncode, output
 

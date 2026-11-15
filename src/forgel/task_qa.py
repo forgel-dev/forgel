@@ -30,6 +30,7 @@ from .config import Settings
 from .environment import Environment, command_argv, load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .proc import merge_output
 from .sandbox import DockerSandbox, SandboxError, docker_runner
 from .tasks import get_task, update_task
 
@@ -182,7 +183,7 @@ def _run_local(
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            partial = (exc.stdout or "") + (exc.stderr or "")
+            partial = merge_output(exc.stdout, exc.stderr)
             results.append(
                 (check, 124, output + f"timed out after 600s\n{partial}")
             )

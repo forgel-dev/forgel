@@ -696,6 +696,29 @@ class CodingAgentTest(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertIn("README.md", result.files_changed)
 
+    def test_a_timed_out_command_with_bytes_output_does_not_crash(
+        self,
+    ) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        expired = subprocess.TimeoutExpired(
+            cmd=["sleep", "1"],
+            timeout=1,
+            output=None,
+            stderr=b"partial error",
+        )
+        with patch(
+            "forgel.coding_agent.subprocess.run",
+            side_effect=expired,
+        ):
+            code, output = agent._run_command(
+                self.layout, self.repo, ["sleep", "1"], timeout=0.1
+            )
+        self.assertEqual(code, 124)
+        self.assertIn("timed out", output)
+        self.assertIn("partial error", output)
+
     def test_agent_env_keeps_docker_client_config(self) -> None:
         parent = self.home / "parent-home"
         (parent / ".docker").mkdir(parents=True)

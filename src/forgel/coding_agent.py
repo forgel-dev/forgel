@@ -42,6 +42,7 @@ from .model import (
     ModelMessage,
     project_model_name,
 )
+from .proc import merge_output
 from .project_config import ConfigError, load_project_config
 from .repo_tools import READ_DEFAULT_LINES, read_text_page
 from .sandbox import CommandRunner, SandboxError, docker_runner
@@ -1296,11 +1297,11 @@ Files:
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
-            output = (exc.stdout or "") + (exc.stderr or "")
+            output = merge_output(exc.stdout, exc.stderr)
             return 124, _cap(f"timed out after {timeout:g}s\n{output}")
         except (OSError, subprocess.SubprocessError) as exc:
             return 127, f"cannot run command: {exc}"
-        output = (completed.stdout or "") + (completed.stderr or "")
+        output = merge_output(completed.stdout, completed.stderr)
         return completed.returncode, _cap(output)
 
     @staticmethod

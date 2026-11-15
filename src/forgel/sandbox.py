@@ -34,6 +34,7 @@ from typing import Any, Callable, Protocol, Sequence
 from .config import Settings
 from .environment import Environment, command_argv
 from .layout import ProjectLayout
+from .proc import merge_output
 
 WORKDIR = "/workspace"
 CONTAINER_NAME = re.compile(r"forgel-sbx-[a-z0-9-]+")
@@ -451,9 +452,7 @@ class DockerSession:
         try:
             return self._exec(list(command), timeout)
         except subprocess.TimeoutExpired as exc:
-            partial = (exc.stdout or "") + (exc.stderr or "")
-            if isinstance(partial, bytes):
-                partial = partial.decode("utf-8", errors="replace")
+            partial = merge_output(exc.stdout, exc.stderr)
             self._dead = True
             self.stop()
             return 124, _cap(
@@ -465,7 +464,7 @@ class DockerSession:
         result = self.sandbox._run(
             ["exec", self.name, *command], timeout=timeout
         )
-        output = (result.stdout or "") + (result.stderr or "")
+        output = merge_output(result.stdout, result.stderr)
         return result.returncode, _cap(output)
 
 

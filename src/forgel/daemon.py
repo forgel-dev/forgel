@@ -8,6 +8,7 @@ on again; new work starts a new iteration.
 from __future__ import annotations
 
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -392,6 +393,9 @@ def _run_task(
                     f"post-agent pipeline crashed: {exc}"
                 )
     except Exception as exc:  # noqa: BLE001 - one task must not kill the daemon
+        trace = traceback.format_exc(limit=12)
+        failure = _classify_crash(exc)
+        failure["traceback"] = trace[-4000:]
         tasks.update_task(
             layout,
             task_id,
@@ -399,10 +403,13 @@ def _run_task(
             finished_at=_now(),
             result={
                 "summary": f"agent crashed: {exc}",
-                "failure": _classify_crash(exc),
+                "failure": failure,
             },
         )
-        log(f"[daemon] {project['id']}: task {task_id} crashed: {exc}")
+        log(
+            f"[daemon] {project['id']}: task {task_id} "
+            f"crashed: {exc}\n{trace}"
+        )
     handle_failure(
         settings, ledger, project, layout, task_id, model, log
     )
