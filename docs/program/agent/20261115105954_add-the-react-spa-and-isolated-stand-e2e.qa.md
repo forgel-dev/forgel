@@ -5,7 +5,7 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-15T17:17:54+00:00
+- Finished: 2026-11-15T17:52:01+00:00
 
 ## Checks
 
@@ -19,7 +19,7 @@
 
 ```
 $ python -m unittest discover -s tests
-[agent] 20261115171703_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
+[agent] 20261115175106_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -446,15 +446,15 @@ $ python -m unittest discover -s tests
 [approval] completed
 [done] running
 [done] completed
-.............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 477 tests in 58.708s
+Ran 488 tests in 64.067s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-f9f36717']]
+PASS the daemon ran the task [['selfhost-c9dbb7e7']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -495,7 +495,7 @@ test_the_spa_fetches_the_health_endpoint (tests.test_template_django_drf_react.W
 test_the_spa_is_bundled_and_served_by_nginx (tests.test_template_django_drf_react.WebAppTest.test_the_spa_is_bundled_and_served_by_nginx) ... ok
 
 ----------------------------------------------------------------------
-Ran 30 tests in 0.017s
+Ran 30 tests in 0.016s
 
 OK
 $ env PYTHONPATH=src python -m unittest tests.test_environment -v
@@ -540,7 +540,7 @@ test_the_repository_declares_a_self_hosting_e2e_gate (tests.test_environment.Rep
 test_the_repository_environment_contract_is_valid (tests.test_environment.RepositoryEnvironmentTest.test_the_repository_environment_contract_is_valid) ... ok
 
 ----------------------------------------------------------------------
-Ran 39 tests in 0.035s
+Ran 39 tests in 0.024s
 
 OK
 

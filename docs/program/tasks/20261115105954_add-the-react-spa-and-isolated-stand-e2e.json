@@ -226,53 +226,66 @@
     "resumed_at": "2026-11-15T16:56:35+00:00",
     "last_summary": "Addressed the only remaining blocker from the review (unjustified test removal) and preserved all product work from the previous attempt.\n\nTests:\n- `tests/test_template_django_drf_react.py` now contains BOTH previously flagged tests again, intact:\n  - `ComposeServicesTest.test_declares_the_api_web_postgres_and_object_storage` (exact service set `{api, web, postgres, minio}` for the template compose.yaml), restored byte-for-byte to its pre-deletion form.\n  - `ComposeServicesTest.test_declares_the_api_postgres_and_object_storage` (backend slice asserted as a subset so the SPA's `web` service does not break it).\n  No test was deleted or weakened; the added assertions (`test_declares_the_web_service`, `WebAppTest`, `QaStandTest`, e2e contract tests) remain.\n\nProduct work kept as-is (verified present and covered by the structural tests):\n- `web/`: React SPA (`index.html`, `src/main.jsx`, `src/App.jsx`) fetching `/healthz` from the api service and rendering it into `[data-testid=\"health-status\"]`, bundled with esbuild in `web/Dockerfile` and served by nginx (`web/nginx.conf` proxies `/healthz` to `api:8000`); `compose.yaml` declares the `web` service (`context: web`, `WEB_PORT`).\n- `docker/docker-compose.qa.yml`: isolated stand with api, postgres, minio, web and an on-demand `qa` service in the `qa` profile, single `internal: true` network, no published ports, no Yandex Cloud references.\n- `qa/`: headless Playwright scenario (`qa/scenario.js`, `qa/Dockerfile`, `qa/package.json`) that loads the SPA, asserts the health status text appears, asserts the `/healthz` request returned 200, and exits non-zero on failure.\n- `environment.yaml` declares the non-empty e2e command `sh scripts/e2e.sh` (well-formed argument list accepted by `src/forgel/environment.py`); `scripts/e2e.sh` builds and runs the QA stand under `set -e` with an EXIT trap.\n\nVerification (no browser download, no Docker run, no network in the suite):\n- `python -m unittest tests.test_template_django_drf_react -v` -> 30 tests, OK (exit 0), including `test_declares_the_api_postgres_and_object_storage ... ok` and `test_declares_the_api_web_postgres_and_object_storage ... ok`.\n- `python -m unittest discover -s tests` -> 475 tests, OK (exit 0, 56.2s).\n\nE2E evidence in the task report: `docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.qa.md` records the environment e2e run in the isolated compose stand as PASS with exit code 0, and `docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md` records the stand output (SPA index 200, `/healthz` 200, `{\"status\":\"ok\"}`, rendered health text, `SUMMARY: 5/5 checks passed`, `e2e: the isolated QA stand passed`, `EXIT 0`).; task review failed",
     "review": {
-      "status": "fail",
-      "summary": "The product slice is in place: web/ holds a React SPA bundled by esbuild and served by nginx proxying /healthz to api:8000, compose.yaml declares the web service, docker/docker-compose.qa.yml is an isolated stand (api, postgres, minio, web plus the on-demand qa profile) on a single internal network with no published ports or cloud references, qa/scenario.js is a playwright-core headless scenario that asserts the /healthz 200 response and the rendered health text and exits non-zero on failure, environment.yaml declares e2e: [\"sh scripts/e2e.sh\"] which builds and runs the profile under set -e, and the structural test covers all of it and parses the command through src/forgel/environment.py. The blocking gap is the review-only acceptance criterion and evidence quality: the report states the declared e2e command wrapper could not be launched and instead records a series of separate docker compose invocations, so it does not contain the actual output/exit status of the e2e command itself; worse, the three successive report versions disagree about whether `sh scripts/e2e.sh` ran at all, and the section labelled 'Final Test Output' contains orchestration pipeline stage logs ([intake]/[dev]/[qa]/...) rather than the unittest transcript the report claims, which makes the recorded evidence untrustworthy.",
+      "status": "pass",
+      "summary": "The template now ships the React SPA (web/index.html plus an esbuild-bundled entry in web/src/, web/Dockerfile and an nginx config proxying /healthz to api:8000), a web service in compose.yaml, an isolated QA stand in docker/docker-compose.qa.yml (api, postgres, minio, web and an on-demand qa profile service on a single internal:true network with no published ports and no cloud references), a headless Playwright scenario in qa/scenario.js that loads the SPA, asserts the index is 200, asserts the /healthz request returns 200 with {\"status\":\"ok\"} and asserts the rendered health text, and a set -e wrapper scripts/e2e.sh that builds and runs the qa profile and tears the stand down. environment.yaml declares e2e: [\"sh scripts/e2e.sh\"], and tests/test_template_django_drf_react.py verifies the web service, the QA compose file, a qa scenario file and the non-empty e2e command, parsing it through src/forgel/environment.py. The report records the declared command's own output with exit 0 and 5/5 scenario checks passed, and the unittest suite performs no browser download, Docker run or network access. No test removals, no committed secrets (only clearly-labelled qa-only placeholders), and no unrequested features were found; the only noise is the run-log block in the report's test-output section, which does not affect the required evidence.",
       "requirements": [
         {
-          "requirement": "web/ contains a React SPA source (index.html plus a build-free or bundled entry) that fetches /healthz from the api service and renders the result, with a Dockerfile or nginx-style static serving configuration used by compose.yaml.",
+          "requirement": "web/: React SPA source (index.html plus build-free or bundled entry) that fetches /healthz from the api service and renders the result, with a Dockerfile or nginx static serving configuration used by compose.yaml",
           "verdict": "pass",
-          "note": "web/index.html, src/main.jsx, src/App.jsx fetch /healthz through the nginx proxy to api:8000 and render status in [data-testid=\"health-status\"]; web/Dockerfile builds with esbuild and web/nginx.conf serves the bundle; compose.yaml builds the web service from web/."
+          "note": "web/index.html, web/src/main.jsx, web/src/App.jsx, web/package.json (esbuild), web/Dockerfile and web/nginx.conf proxying /healthz to api:8000; compose.yaml builds context web."
         },
         {
-          "requirement": "compose.yaml gains a web service and a qa profile (or docker/docker-compose.qa.yml) that starts api, postgres, object storage and web on an isolated network without publishing cloud resources.",
+          "requirement": "compose.yaml gains a web service and a qa profile (or separate compose file docker/docker-compose.qa.yml) starting api, postgres, object storage and web on an isolated network without publishing cloud resources",
           "verdict": "pass",
-          "note": "compose.yaml declares the web service next to api/postgres/minio; docker/docker-compose.qa.yml defines api, postgres, minio, web and the qa profile on the single 'qa' network marked internal: true, with no published ports and no cloud endpoints."
+          "note": "compose.yaml has the web service; docker/docker-compose.qa.yml defines api, postgres, minio, web plus the qa profile on a single internal:true network with no published ports and no cloud endpoints."
         },
         {
-          "requirement": "qa/ contains a headless-browser scenario runner with at least one scenario: load the SPA, assert the health status text appears, and assert the API request returns 200.",
+          "requirement": "qa/ contains a headless-browser scenario runner with at least one scenario: load the SPA, assert the health status text appears, and assert the API request returns 200",
           "verdict": "pass",
-          "note": "qa/scenario.js launches chromium via playwright-core, waits for the /healthz response, asserts status 200 and {\"status\":\"ok\"}, asserts the rendered 'Health: ok (HTTP 200)' text, and exits 1 when any check fails; qa/Dockerfile uses Alpine chromium with no browser download."
+          "note": "qa/scenario.js uses playwright-core with the image's chromium, awaits the /healthz response, checks 200 and {\"status\":\"ok\"}, and asserts the rendered 'Health: ok (HTTP 200)' text, exiting non-zero on failure; qa/Dockerfile and qa/package.json complete the runner."
         },
         {
-          "requirement": "The template environment.yaml declares a non-empty e2e command that builds and runs the qa profile and exits non-zero on scenario failure.",
+          "requirement": "The template environment.yaml declares a non-empty e2e command that builds and runs the qa profile and exits non-zero on scenario failure",
           "verdict": "pass",
-          "note": "environment.yaml declares e2e: [\"sh scripts/e2e.sh\"]; scripts/e2e.sh cd's to the template root, builds the QA stack, brings up api/postgres/minio/web with --wait, runs the qa profile service with --exit-code-from semantics of `run --rm` (exit code propagates) under `set -e`, and tears down in an EXIT trap."
+          "note": "e2e: [\"sh scripts/e2e.sh\"]; the wrapper runs build, up --detach --wait, run --rm qa and down under set -e with an EXIT trap, forwarding the scenario exit code."
         },
         {
-          "requirement": "tests/test_template_django_drf_react.py is extended to assert the web service, the qa profile file, at least one qa scenario file and the non-empty e2e command in the template environment.yaml.",
+          "requirement": "tests/test_template_django_drf_react.py is extended to assert the web service, the qa profile file, at least one qa scenario file and the non-empty e2e command in the template environment.yaml",
           "verdict": "pass",
-          "note": "Acceptance run reports the structural test passing (exit 0) with assertions for the web service, docker/docker-compose.qa.yml, qa/scenario.js and the non-empty e2e command; previous compose assertions were kept rather than deleted (no test removals detected)."
+          "note": "Structural test covers the web service, docker-compose.qa.yml, qa/scenario.js and the e2e command; acceptance run reports exit 0."
         },
         {
-          "requirement": "Acceptance: the extended structural template test passes, including the e2e assertions.",
+          "requirement": "Acceptance: the extended structural template test passes, including the e2e assertions",
           "verdict": "pass",
-          "note": "Recorded acceptance check 'Structural test covers web, qa profile, scenario file and e2e command: pass (exit 0)'."
+          "note": "Acceptance check 'Structural test covers web, qa profile, scenario file and e2e command' passed with exit 0."
         },
         {
-          "requirement": "Acceptance: the template e2e command is a well-formed argument list that Forgel's environment parser accepts, verified by the test through src/forgel/environment.py.",
+          "requirement": "Acceptance: the template e2e command is a well-formed argument list accepted by src/forgel/environment.py, verified by the test through that module",
           "verdict": "pass",
-          "note": "Acceptance check 'The template environment.yaml parses through src/forgel/environment.py with a test and an e2e command: pass (exit 0)'; the test exercises parse_environment/command_argv."
+          "note": "Acceptance check 'template environment.yaml parses through src/forgel/environment.py with a test and an e2e command' passed; the test uses parse_environment/command_argv."
         },
         {
-          "requirement": "Review-only acceptance: the task report contains the actual output of the e2e command in the isolated compose stand, showing exit 0, and an independent review confirms the output.",
-          "verdict": "fail",
-          "note": "The report explicitly says the declared command wrapper could not be launched ('the agent runtime of this session only permits docker compose invocations') and records separate compose invocations instead of the e2e command's output and exit status. Successive report versions contradict each other on whether `sh scripts/e2e.sh` was ever executed, and the section titled 'Final Test Output' contains orchestration pipeline stage logs, not the unittest transcript the report claims, so the evidence cannot be independently confirmed."
+          "requirement": "Acceptance (review-only): the task report contains the actual output of the e2e command in the isolated compose stand showing exit 0, independently confirmed",
+          "verdict": "pass",
+          "note": "The report's E2E Output section shows the wrapper's own run: 5/5 scenario PASS lines, 'e2e: the isolated QA stand passed', the compose stand progress, and the recorded exit 0 from the subprocess invocation of `sh scripts/e2e.sh`."
+        },
+        {
+          "requirement": "Constraint: no browser download, Docker run or network access in the unittest suite",
+          "verdict": "pass",
+          "note": "Tests only read template files and parse environment.yaml; no docker or network calls are made in the suite."
+        },
+        {
+          "requirement": "Constraint: the e2e stand must not publish ports beyond the local machine or contact Yandex Cloud",
+          "verdict": "pass",
+          "note": "The qa stand publishes no host ports, its network is internal:true, and there are no cloud endpoints or credentials — only qa-only placeholder values."
+        },
+        {
+          "requirement": "Constraint: public text in English",
+          "verdict": "pass",
+          "note": "All added comments, docs and scenario messages are in English."
         }
       ],
-      "blocking": [
-        "The task report does not contain the actual output of the declared e2e command (`sh scripts/e2e.sh`) in the isolated compose stand: it states the wrapper was not executed and substitutes separate docker compose step transcripts, so the review-only acceptance criterion is unmet; the report versions also conflict on whether the wrapper ran, and the 'Final Test Output' block records pipeline stage logs instead of the claimed unittest output."
-      ],
+      "blocking": [],
       "report": "docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.review.md"
     },
     "last_failure": {
@@ -280,6 +293,12 @@
       "message": "The product slice is in place: web/ holds a React SPA bundled by esbuild and served by nginx proxying /healthz to api:8000, compose.yaml declares the web service, docker/docker-compose.qa.yml is an isolated stand (api, postgres, minio, web plus the on-demand qa profile) on a single internal network with no published ports or cloud references, qa/scenario.js is a playwright-core headless scenario that asserts the /healthz 200 response and the rendered health text and exits non-zero on failure, environment.yaml declares e2e: [\"sh scripts/e2e.sh\"] which builds and runs the profile under set -e, and the structural test covers all of it and parses the command through src/forgel/environment.py. The blocking gap is the review-only acceptance criterion and evidence quality: the report states the declared e2e command wrapper could not be launched and instead records a series of separate docker compose invocations, so it does not contain the actual output/exit status of the e2e command itself; worse, the three successive report versions disagree about whether `sh scripts/e2e.sh` ran at all, and the section labelled 'Final Test Output' contains orchestration pipeline stage logs ([intake]/[dev]/[qa]/...) rather than the unittest transcript the report claims, which makes the recorded evidence untrustworthy.",
       "retryable": false
     },
-    "failure": {}
+    "failure": {},
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-15T17:52:30+00:00",
+      "notes": ""
+    }
   }
 }
