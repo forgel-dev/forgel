@@ -34,4 +34,4 @@ install-cli:
 	trap 'rm -rf "$$tmp"' EXIT; \
 	git archive HEAD | tar -x -C "$$tmp"; \
 	$(CLI_PIP) uninstall -y forgel >/dev/null 2>&1 || true; \
-	$(CLI_PIP) install "$$tmp[github,tokens]"
+	$(CLI_PIP) install --no-build-isolation "$$tmp[github,tokens]"
