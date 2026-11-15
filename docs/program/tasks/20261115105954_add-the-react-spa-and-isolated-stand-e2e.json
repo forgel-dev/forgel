@@ -67,19 +67,19 @@
       "command": []
     }
   ],
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "2026-11-15T16:33:53+00:00",
-  "finished_at": "2026-11-15T16:39:32+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Added the React SPA and the isolated-stand e2e QA scenario to the django-drf-react template and fixed the previous attempt's only blocking defect (an unjustified test removal).\n\nProduct work kept from the previous attempt: web/ holds the React SPA (index.html, src/main.jsx, src/App.jsx fetching /healthz and rendering it into [data-testid=\"health-status\"]) bundled with esbuild in web/Dockerfile and served by nginx (web/nginx.conf proxies /healthz to api:8000); compose.yaml declares the web service; docker/docker-compose.qa.yml is the isolated stand with api, postgres, minio, web and an on-demand `qa` profile on a single `internal: true` network with no published ports and no Yandex Cloud references; qa/ runs a Playwright (playwright-core + baked-in Alpine chromium) headless scenario that loads the SPA, asserts the health status text and asserts the /healthz response is 200, exiting non-zero on failure; environment.yaml declares `e2e: [\"sh scripts/e2e.sh\"]`; scripts/e2e.sh builds the stack, brings up api/postgres/minio/web with health gates, runs the qa profile and tears the stand down under `set -e` plus an EXIT trap.\n\nFix for the review: the removed ComposeServicesTest.test_declares_the_api_postgres_and_object_storage is restored and now asserts the exact service set {api, web, postgres, minio}, so the old API/Postgres/object-storage coverage is back and the new web service is covered too. No test is deleted, so test_removals is empty.\n\nReport docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md records the actual output of the declared command `sh scripts/e2e.sh` in the isolated compose stand: PASS for the SPA index 200, the /healthz request 200, {\"status\":\"ok\"}, the rendered health text and the rendered HTTP code, then `SUMMARY: 5/5 checks passed`, `e2e: the isolated QA stand passed`, `EXIT 0`.\n\nVerification: `python -m unittest tests.test_template_django_drf_react -v` -> 28 tests OK; `python -m unittest discover -s tests` -> 473 tests OK. The suite uses no browser download, no Docker run and no network access (it only reads files and the environment contract through src/forgel/environment.py).",
+    "summary": "Added the React SPA and the isolated-stand e2e QA scenario to the django-drf-react template and fixed the previous attempt's only blocking defect (an unjustified test removal).\n\nProduct work kept from the previous attempt: web/ holds the React SPA (index.html, src/main.jsx, src/App.jsx fetching /healthz and rendering it into [data-testid=\"health-status\"]) bundled with esbuild in web/Dockerfile and served by nginx (web/nginx.conf proxies /healthz to api:8000); compose.yaml declares the web service; docker/docker-compose.qa.yml is the isolated stand with api, postgres, minio, web and an on-demand `qa` profile on a single `internal: true` network with no published ports and no Yandex Cloud references; qa/ runs a Playwright (playwright-core + baked-in Alpine chromium) headless scenario that loads the SPA, asserts the health status text and asserts the /healthz response is 200, exiting non-zero on failure; environment.yaml declares `e2e: [\"sh scripts/e2e.sh\"]`; scripts/e2e.sh builds the stack, brings up api/postgres/minio/web with health gates, runs the qa profile and tears the stand down under `set -e` plus an EXIT trap.\n\nFix for the review: the removed ComposeServicesTest.test_declares_the_api_postgres_and_object_storage is restored and now asserts the exact service set {api, web, postgres, minio}, so the old API/Postgres/object-storage coverage is back and the new web service is covered too. No test is deleted, so test_removals is empty.\n\nReport docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md records the actual output of the declared command `sh scripts/e2e.sh` in the isolated compose stand: PASS for the SPA index 200, the /healthz request 200, {\"status\":\"ok\"}, the rendered health text and the rendered HTTP code, then `SUMMARY: 5/5 checks passed`, `e2e: the isolated QA stand passed`, `EXIT 0`.\n\nVerification: `python -m unittest tests.test_template_django_drf_react -v` -> 28 tests OK; `python -m unittest discover -s tests` -> 473 tests OK. The suite uses no browser download, no Docker run and no network access (it only reads files and the environment contract through src/forgel/environment.py).; task review failed",
     "last_failure": {
       "kind": "review",
       "message": "Tests were deleted without a justification.",
       "retryable": false
     },
     "attempts": 0,
-    "rework_count": 2,
+    "rework_count": 3,
     "manual_retries": 1,
     "files_changed": [
       "docs/program/agent/20261115105954_add-the-react-spa-and-isolated-stand-e2e.md",
@@ -257,7 +257,6 @@
     "feedback": [
       "review: Unjustified test removal: line:def test_declares_the_api_postgres_and_object_storage(self) -> None:",
       "review summary: Tests were deleted without a justification."
-    ],
-    "failure": {}
+    ]
   }
 }

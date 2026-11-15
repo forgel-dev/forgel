@@ -5,7 +5,7 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-15T16:33:53+00:00
+- Finished: 2026-11-15T16:40:37+00:00
 
 ## Checks
 
@@ -19,7 +19,7 @@
 
 ```
 $ python -m unittest discover -s tests
-[agent] 20261115163257_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
+[agent] 20261115163943_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -448,13 +448,13 @@ $ python -m unittest discover -s tests
 [done] completed
 .........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 473 tests in 66.378s
+Ran 473 tests in 62.882s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-cdb1fa6a']]
+PASS the daemon ran the task [['selfhost-23283f90']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -493,7 +493,7 @@ test_the_spa_fetches_the_health_endpoint (tests.test_template_django_drf_react.W
 test_the_spa_is_bundled_and_served_by_nginx (tests.test_template_django_drf_react.WebAppTest.test_the_spa_is_bundled_and_served_by_nginx) ... ok
 
 ----------------------------------------------------------------------
-Ran 28 tests in 0.017s
+Ran 28 tests in 0.015s
 
 OK
 $ env PYTHONPATH=src python -m unittest tests.test_environment -v
@@ -538,7 +538,7 @@ test_the_repository_declares_a_self_hosting_e2e_gate (tests.test_environment.Rep
 test_the_repository_environment_contract_is_valid (tests.test_environment.RepositoryEnvironmentTest.test_the_repository_environment_contract_is_valid) ... ok
 
 ----------------------------------------------------------------------
-Ran 39 tests in 0.025s
+Ran 39 tests in 0.022s
 
 OK
 
