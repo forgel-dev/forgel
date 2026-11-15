@@ -36,7 +36,7 @@
   "order": 0,
   "depends_on": [],
   "checks": [],
-  "status": "done",
+  "status": "review",
   "created_at": "2026-11-15T00:47:02+00:00",
   "started_at": "2026-11-15T02:23:41+00:00",
   "finished_at": "2026-11-15T02:27:44+00:00",
@@ -185,82 +185,21 @@
     "resumed_at": "2026-11-15T02:20:07+00:00",
     "last_summary": "Updated README.md to remove the stale claim that the agent only accepts the request and does not edit code. It now describes the real cycle: a plain-language request becomes a task, the task runs in a sandbox where the coding agent edits code and writes a report, independent QA replays the commands from environment.yaml, and the task waits for a human decision. Wording is consistent with the planner, independent QA, sessions/handoff sections and PLAN.md 7.15. Only README.md was committed with git commit -s (Signed-off-by present). No code or tests changed; make test passes (76 tests, OK).; task review failed",
     "review": {
-      "status": "fail",
-      "summary": "The README edit removes the stale intake-only/no-code-editing statement and adds the requested English four-step description of the task cycle, and the reported test results show make test passing. However, the submission is not acceptable: it adds docs/program/agent/20261115004702_readme.md outside README.md, violating the explicit README-only constraint and committing internal agent-run notes; the README says the agent commits with a bot message while the added report states git commit was not permitted and the change was left for the pipeline; the required signed commit via git commit -s is absent or unverifiable; and consistency with PLAN.md §7.15 cannot be verified from the diff.",
-      "requirements": [
-        {
-          "requirement": "Remove the README statement that the current agent only takes intake requests and does not edit code.",
-          "verdict": "pass",
-          "note": "The old sentence saying the agent is the intake stage and does not edit code yet was replaced."
-        },
-        {
-          "requirement": "Replace that statement with a description of the actual agent behavior.",
-          "verdict": "fail",
-          "note": "The README now says the agent commits with a bot message, but the added agent report says the sandbox only permits read-only git commands and git commit was not run."
-        },
-        {
-          "requirement": "Describe the product cycle: plain-language request becomes a task, the task runs in a sandbox, the agent writes a report, independent QA runs environment.yaml commands, and the task waits for a human decision.",
-          "verdict": "pass",
-          "note": "The README addition contains all four requested stages, including environment.yaml test/e2e checks and human acceptance in review."
-        },
-        {
-          "requirement": "Align the README wording with existing sections about the planner, independent QA, sessions, and state handoff.",
-          "verdict": "pass",
-          "note": "The new text references forgel plan, independent QA/review, bounded sessions, and state handoff via docs/program/agent/<task>.state.md."
-        },
-        {
-          "requirement": "Align the description with PLAN.md section 7.15.",
-          "verdict": "fail",
-          "note": "PLAN.md is not included in the diff, so the required consistency with section 7.15 is unverified."
-        },
-        {
-          "requirement": "Do not change code, tests, or behavior; make documentation-only changes.",
-          "verdict": "pass",
-          "note": "The diff shows no code or test changes."
-        },
-        {
-          "requirement": "Change only README.md; do not touch PLAN.md, code, or tests.",
-          "verdict": "fail",
-          "note": "The diff adds docs/program/agent/20261115004702_readme.md, which is outside README.md."
-        },
-        {
-          "requirement": "make test passes.",
-          "verdict": "pass",
-          "note": "The QA verdict and the added report both report make test passing with exit 0."
-        },
-        {
-          "requirement": "The changed public text is in English.",
-          "verdict": "pass",
-          "note": "The README addition is in English."
-        },
-        {
-          "requirement": "Commit is signed via git commit -s.",
-          "verdict": "fail",
-          "note": "No commit or signed-off commit is present in the diff, and the added report explicitly says git commit was not permitted."
-        },
-        {
-          "requirement": "Do not weaken existing tests or change their expectations.",
-          "verdict": "pass",
-          "note": "No test files or test expectations were changed."
-        },
-        {
-          "requirement": "Do not commit secrets, .env.local contents, or internal notes.",
-          "verdict": "fail",
-          "note": "No secrets are visible, but the added agent-run report is internal process notes and was committed outside README.md."
-        },
-        {
-          "requirement": "No test was deleted without an allowed justification.",
-          "verdict": "pass",
-          "note": "No test removals were detected."
-        }
-      ],
-      "blocking": [
-        "docs/program/agent/20261115004702_readme.md is added outside README.md, violating the explicit README-only constraint and committing an internal agent-run report.",
-        "The README says the agent commits with a bot message, but the added report states git commit was not permitted; the required signed git commit -s is absent or unverifiable.",
-        "Consistency with PLAN.md section 7.15 is unverified because PLAN.md is not in the diff."
-      ],
+      "status": "error",
+      "summary": "Reviewer returned an unusable answer: the reviewer did not return JSON",
+      "requirements": [],
+      "blocking": [],
       "report": "docs/program/agent/20261115004702_readme.review.md"
     },
-    "failure": {}
+    "failure": {
+      "kind": "external",
+      "message": "Reviewer returned an unusable answer: the reviewer did not return JSON",
+      "retryable": false
+    },
+    "acceptance": {
+      "status": "pending",
+      "reason": "the reviewer could not produce a verdict",
+      "at": "2026-11-15T02:30:14+00:00"
+    }
   }
 }
