@@ -34,12 +34,16 @@ from .model import (
     project_model_name,
 )
 from .program_manifest import entries as manifest_entries
+from .repo_tools import (
+    MAX_READ_CHARS,
+    RESEARCH_ACTIONS,
+    RepoActionError,
+    execute_repo_action,
+)
 
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
 MAX_RESEARCH_STEPS = 8
-MAX_READ_CHARS = 12_000
-MAX_LIST_ENTRIES = 200
 
 
 class PlanningError(RuntimeError):
@@ -423,78 +427,6 @@ def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
     return text[:limit] + "\n... [truncated]"
 
 
-def _research_repo(
-    layout: ProjectLayout,
-    repos: Sequence[Mapping[str, Any]],
-    action: Mapping[str, Any],
-) -> tuple[Path, str]:
-    known = [str(entry["id"]) for entry in repos]
-    requested = str(action.get("repo_id") or "").strip()
-    if not requested:
-        requested = "main" if "main" in known else (known[0] if known else "")
-    if requested not in known:
-        raise PlanningError(f"unknown repository: {requested or '(none)'}")
-    return layout.repo_path(requested), requested
-
-
-def _research_path(repo: Path, value: Any) -> Path:
-    if not isinstance(value, str) or not value.strip():
-        raise PlanningError("a path is required")
-    relative = Path(value)
-    if relative.is_absolute():
-        raise PlanningError("absolute paths are not allowed")
-    candidate = (repo / relative).resolve()
-    try:
-        candidate.relative_to(repo.resolve())
-    except ValueError as exc:
-        raise PlanningError("path escapes the repository") from exc
-    if any(part in {".git", ".forgel"} for part in relative.parts):
-        raise PlanningError("the .git and .forgel directories are off-limits")
-    return candidate
-
-
-def _run_research(
-    layout: ProjectLayout,
-    repos: Sequence[Mapping[str, Any]],
-    action: Mapping[str, Any],
-) -> str:
-    repo, _repo_id = _research_repo(layout, repos, action)
-    kind = str(action.get("action"))
-    if kind == "list_files":
-        path = _research_path(repo, action.get("path") or ".")
-        if not path.exists():
-            return f"not found: {action.get('path')}"
-        if not path.is_dir():
-            return f"not a directory: {action.get('path')}"
-        lines: list[str] = []
-        for item in sorted(path.rglob("*")):
-            relative = item.relative_to(repo)
-            if any(part in {".git", ".forgel"} for part in relative.parts):
-                continue
-            if item.name.endswith((".pyc", ".sqlite3", ".sqlite")):
-                continue
-            lines.append(relative.as_posix() + ("/" if item.is_dir() else ""))
-            if len(lines) >= MAX_LIST_ENTRIES:
-                lines.append("... [list truncated]")
-                break
-        return "\n".join(lines) or "(empty)"
-    if kind == "read_file":
-        path = _research_path(repo, action.get("path"))
-        if (
-            path.name.startswith(".env")
-            or path.name in {"id_rsa", "id_ed25519", "ledger.sqlite3"}
-            or path.suffix in {".pem", ".key"}
-        ):
-            return "secret-like files are not readable"
-        if not path.exists() or not path.is_file():
-            return f"file not found: {action.get('path')}"
-        data = path.read_bytes()
-        if b"\x00" in data:
-            return "binary file; not displayed"
-        return _cap(data.decode("utf-8", errors="replace"))
-    return f"unknown action: {kind}"
-
-
 def plan_project(
     settings: Settings,
     ledger: Ledger,
@@ -546,15 +478,15 @@ def plan_project(
             ) from exc
         data = _json_object(raw)
         action = str(data.get("action", "")) if data else ""
-        if action not in {"list_files", "read_file"}:
+        if action not in RESEARCH_ACTIONS:
             break
         if step == MAX_RESEARCH_STEPS:
             raise PlanningError(
                 "the planner exceeded the research step limit"
             )
         try:
-            observation = _run_research(layout, repos, data)
-        except PlanningError as exc:
+            observation = execute_repo_action(layout, repos, data)
+        except RepoActionError as exc:
             observation = f"error: {exc}"
         messages.append(ModelMessage("assistant", raw.strip()))
         messages.append(

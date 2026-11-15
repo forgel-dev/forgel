@@ -25,7 +25,7 @@ from .adopt import (
     publish_repository,
     set_dependencies,
 )
-from .agent import ProjectAgent
+from .agent import ProjectAgent, append_history
 from .approvals import ApprovalError, is_approved, latest_approval, record_approval
 from .artifacts import read_json
 from .config import Settings
@@ -1406,7 +1406,9 @@ class CommandRouter:
                 "/secret set model.api_key <value>, then restart the gateway."
             )
         try:
-            result = self.agent.handle(project, text, actor)
+            result = self.agent.handle(
+                project, text, actor, session=str(chat_id)
+            )
         except Exception as exc:  # noqa: BLE001 - answer instead of crashing
             return Reply(f"Agent error: {exc}")
         if result.kind == "action" and result.action:
@@ -1416,6 +1418,13 @@ class CommandRouter:
                     project, text, reply.text
                 ).strip()
                 if narration:
+                    append_history(
+                        layout,
+                        "assistant",
+                        narration,
+                        actor,
+                        session=str(chat_id),
+                    )
                     return Reply(narration)
             return reply
         return Reply(result.text)

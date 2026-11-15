@@ -25,6 +25,12 @@ from .config import Settings
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .program_manifest import entries as manifest_entries
+from .repo_tools import (
+    MAX_READ_CHARS,
+    RESEARCH_ACTIONS,
+    RepoActionError,
+    execute_repo_action,
+)
 from .model import (
     ModelClient,
     ModelError,
@@ -33,8 +39,13 @@ from .model import (
 )
 
 CONVERSATION_DIR = ".forgel"
-HISTORY_TURNS = 8
+CONVERSATIONS_DIR = "conversations"
+HISTORY_RECENT_CHARS = 12_000
+HISTORY_COMPACT_CHARS = 24_000
+HISTORY_KEEP_TURNS = 4
+HISTORY_SUMMARY_CHARS = 6_000
 MAX_CONTEXT_CHARS = 6000
+MAX_RESEARCH_STEPS = 6
 SKIP_DIRS = {
     ".git",
     ".forgel",
@@ -76,6 +87,24 @@ answer, to turn the request into a coding task, or to perform a process
 action. Perform the action yourself — never tell the user to type a slash
 command. You cannot edit code, run tests, commit or deploy, and you must
 never claim that you did.
+
+Before answering questions about the project, its documents or its code,
+inspect the repository yourself. Reply with exactly one JSON action:
+{"kind": "action", "action": "list_files", "action_args": {"path": ".", "repo_id": "main"}}
+{"kind": "action", "action": "read_file", "action_args": {"path": "PLAN.md", "repo_id": "main"}}
+Paths are relative and may not leave the repository. Read PLAN.md, README.md,
+FORGEL.md, docs and code instead of guessing. After the observation, return
+the final answer JSON.
+
+Read only what the question needs: list a directory to discover names, then
+read specific files. Do not read the whole repository. Files already read are
+provided in the context; use them instead of re-reading unchanged files, and
+re-read only when you need a different part or the file changed.
+
+Speak plainly in the user's language. Do not expose internal field names,
+stage names or jargon (adopted, linked, generation, checkpoint, ledger,
+staging) unless the user asks for them. Say what is done, what is pending and
+what needs a decision in ordinary words.
 
 Reply in the language of the user's message. Return exactly one JSON object:
 {
@@ -148,6 +177,15 @@ class AgentError(RuntimeError):
     """The agent could not produce a usable answer."""
 
 
+SUMMARY_PROMPT = """You compact the conversation of a project assistant.
+
+Preserve decisions, facts, file names, user preferences, open questions and
+what was already done. Write in the same language as the conversation. Be
+concise and concrete. Return plain text, not JSON, and no internal field
+names or identifiers unless they are essential.
+"""
+
+
 @dataclass(frozen=True)
 class AgentResult:
     text: str
@@ -158,14 +196,74 @@ class AgentResult:
     args: dict[str, Any] | None = None
 
 
-def conversation_path(layout: ProjectLayout) -> Path:
-    return layout.root / CONVERSATION_DIR / "conversation.jsonl"
+def _session_key(session: str) -> str:
+    key = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(session).strip())[:64]
+    return key or "default"
+
+
+def conversations_dir(layout: ProjectLayout) -> Path:
+    return layout.root / CONVERSATION_DIR / CONVERSATIONS_DIR
+
+
+def conversation_path(layout: ProjectLayout, session: str = "") -> Path:
+    path = conversations_dir(layout) / f"{_session_key(session)}.jsonl"
+    legacy = layout.root / CONVERSATION_DIR / "conversation.jsonl"
+    if not path.exists() and legacy.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        legacy.replace(path)
+    return path
+
+
+def session_state_path(layout: ProjectLayout, session: str = "") -> Path:
+    return conversations_dir(layout) / f"{_session_key(session)}.session.json"
+
+
+def load_session_state(
+    layout: ProjectLayout, session: str = ""
+) -> dict[str, Any]:
+    path = session_state_path(layout, session)
+    if not path.exists():
+        return {"summary": "", "compacted": 0}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"summary": "", "compacted": 0}
+    if not isinstance(data, dict):
+        return {"summary": "", "compacted": 0}
+    try:
+        compacted = max(0, int(data.get("compacted", 0)))
+    except (TypeError, ValueError):
+        compacted = 0
+    return {"summary": str(data.get("summary", "")), "compacted": compacted}
+
+
+def save_session_state(
+    layout: ProjectLayout,
+    state: Mapping[str, Any],
+    session: str = "",
+) -> None:
+    path = session_state_path(layout, session)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "summary": str(state.get("summary", "")),
+                "compacted": int(state.get("compacted", 0)),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def load_history(
-    layout: ProjectLayout, limit: int = HISTORY_TURNS
+    layout: ProjectLayout,
+    limit: int | None = None,
+    session: str = "",
 ) -> list[dict[str, Any]]:
-    path = conversation_path(layout)
+    path = conversation_path(layout, session)
     if not path.exists():
         return []
     turns: list[dict[str, Any]] = []
@@ -181,25 +279,38 @@ def load_history(
             if isinstance(item, dict) and item.get("role") in {
                 "user",
                 "assistant",
+                "tool",
             }:
                 turns.append(item)
     except OSError:
         return []
+    if limit is None:
+        return turns
     return turns[-limit:]
 
 
 def append_history(
-    layout: ProjectLayout, role: str, text: str, actor: str = ""
+    layout: ProjectLayout,
+    role: str,
+    text: str,
+    actor: str = "",
+    session: str = "",
+    tool: str = "",
+    path: str = "",
 ) -> None:
-    path = conversation_path(layout)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path_obj = conversation_path(layout, session)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "role": role,
         "text": text,
         "actor": actor,
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    with path.open("a", encoding="utf-8") as handle:
+    if tool:
+        entry["tool"] = tool
+    if path:
+        entry["path"] = path
+    with path_obj.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
@@ -280,6 +391,30 @@ def build_context(
 def _slug(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug[:60] or "request"
+
+
+def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n... [truncated]"
+
+
+def _json_object(raw: str) -> dict[str, Any] | None:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def _looks_structured(text: str) -> bool:
@@ -388,6 +523,24 @@ def parse_answer(raw: str) -> dict[str, Any]:
     }
 
 
+def _turn_chars(turns: list[dict[str, Any]]) -> int:
+    return sum(len(str(turn.get("text", ""))) for turn in turns)
+
+
+def _recent_turns(
+    turns: list[dict[str, Any]], limit: int
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    used = 0
+    for turn in reversed(turns):
+        size = len(str(turn.get("text", "")))
+        if selected and used + size > limit:
+            break
+        selected.append(turn)
+        used += size
+    return list(reversed(selected))
+
+
 class ProjectAgent:
     def __init__(
         self,
@@ -449,15 +602,101 @@ class ProjectAgent:
             )
         return reply
 
+    def _session_history(
+        self, layout: ProjectLayout, session: str
+    ) -> str:
+        history = load_history(layout, session=session)
+        state = load_session_state(layout, session)
+        compacted = min(int(state.get("compacted", 0)), len(history))
+        pending = history[compacted:]
+        if (
+            len(pending) > HISTORY_KEEP_TURNS
+            and _turn_chars(pending) > HISTORY_COMPACT_CHARS
+        ):
+            state = self._compact_session(
+                layout, session, history, state
+            )
+            compacted = min(
+                int(state.get("compacted", 0)), len(history)
+            )
+            pending = history[compacted:]
+        recent = _recent_turns(pending, HISTORY_RECENT_CHARS)
+        parts: list[str] = []
+        summary = str(state.get("summary", "")).strip()
+        if summary:
+            parts.append("Session summary:\n" + summary)
+        if recent:
+            lines: list[str] = []
+            for turn in recent:
+                role = str(turn.get("role", ""))
+                if role == "tool":
+                    label = "Tool result"
+                    tool = str(turn.get("tool", "")).strip()
+                    path = str(turn.get("path", "")).strip()
+                    if tool or path:
+                        label += f" ({tool} {path})".rstrip()
+                else:
+                    label = role.capitalize()
+                lines.append(f"{label}: {turn.get('text', '')}")
+            parts.append("Recent conversation:\n" + "\n".join(lines))
+        return "\n\n".join(parts)
+
+    def _compact_session(
+        self,
+        layout: ProjectLayout,
+        session: str,
+        history: list[dict[str, Any]],
+        state: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        compacted = min(
+            int(state.get("compacted", 0)), len(history)
+        )
+        end = max(compacted, len(history) - HISTORY_KEEP_TURNS)
+        chunk = history[compacted:end]
+        if not chunk:
+            return dict(state)
+        transcript = "\n".join(
+            f"{turn.get('role')}: {turn.get('text', '')}"
+            for turn in chunk
+        )
+        messages = [
+            ModelMessage("system", SUMMARY_PROMPT),
+            ModelMessage(
+                "user",
+                f"Existing summary:\n"
+                f"{state.get('summary') or '(none)'}\n\n"
+                f"Conversation to compact:\n{transcript}",
+            ),
+        ]
+        try:
+            raw = self.client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError:
+            return dict(state)
+        answer = parse_answer(raw)
+        summary = str(answer.get("reply", "")).strip()
+        if not summary or _looks_structured(summary):
+            return dict(state)
+        combined = (
+            str(state.get("summary", "")) + "\n" + summary
+        ).strip()
+        if len(combined) > HISTORY_SUMMARY_CHARS:
+            combined = combined[-HISTORY_SUMMARY_CHARS:]
+        new_state = {"summary": combined, "compacted": end}
+        save_session_state(layout, new_state, session)
+        return new_state
+
     def handle(
-        self, project: Mapping[str, Any], text: str, actor: str
+        self,
+        project: Mapping[str, Any],
+        text: str,
+        actor: str,
+        session: str = "",
     ) -> AgentResult:
         layout = ProjectLayout.detect(project["workspace"])
         context = build_context(layout, project, self.ledger)
-        history = load_history(layout)
-        history_text = "\n".join(
-            f"{turn['role']}: {turn.get('text', '')}" for turn in history
-        )
+        history_text = self._session_history(layout, session)
         messages = [
             ModelMessage(
                 role="system",
@@ -471,18 +710,62 @@ class ProjectAgent:
                 content=(
                     f"Working directory: {os.getcwd()}\n\n"
                     f"Context:\n{context}\n\n"
-                    f"Conversation:\n{history_text or '(none)'}\n\n"
+                    f"Session so far:\n{history_text or '(new session)'}\n\n"
                     f"New message:\n{text}"
                 ),
             ),
         ]
+        append_history(layout, "user", text, actor, session=session)
         model = project_model_name(layout.control)
-        try:
-            raw = self.client.complete(messages, model=model)
-        except ModelError as exc:
-            return AgentResult(
-                text=f"Model call failed: {exc}",
-                kind="error",
+        repos = manifest_entries(layout)
+        raw = ""
+        for step in range(MAX_RESEARCH_STEPS + 1):
+            try:
+                raw = self.client.complete(messages, model=model)
+            except ModelError as exc:
+                return AgentResult(
+                    text=f"Model call failed: {exc}",
+                    kind="error",
+                )
+            data = _json_object(raw)
+            action = str(data.get("action", "")) if data else ""
+            if action not in RESEARCH_ACTIONS:
+                break
+            if step == MAX_RESEARCH_STEPS:
+                return AgentResult(
+                    text=(
+                        "I need more file reads than allowed for one answer. "
+                        "Please narrow the question."
+                    ),
+                    kind="error",
+                )
+            args = dict(data.get("action_args") or {})
+            for key in ("path", "repo_id"):
+                if key in data and key not in args:
+                    args[key] = data[key]
+            research = {"action": action, **args}
+            try:
+                observation = execute_repo_action(layout, repos, research)
+            except RepoActionError as exc:
+                observation = f"error: {exc}"
+            append_history(
+                layout,
+                "tool",
+                _cap(observation),
+                actor,
+                session=session,
+                tool=action,
+                path=str(args.get("path") or ""),
+            )
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Observation:\n"
+                    + _cap(observation)
+                    + "\n\nContinue with another action or the final "
+                    "JSON answer.",
+                )
             )
         answer = parse_answer(raw)
         result_text = answer["reply"]
@@ -507,8 +790,9 @@ class ProjectAgent:
                     "choose one. Tell me which repository to use."
                 )
 
-        append_history(layout, "user", text, actor)
-        append_history(layout, "assistant", result_text)
+        append_history(
+            layout, "assistant", result_text, actor, session=session
+        )
         self._record_call(project, model, answer["kind"])
         return AgentResult(
             text=result_text,

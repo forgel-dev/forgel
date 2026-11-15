@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.agent import (
     ProjectAgent,
@@ -11,6 +12,7 @@ from forgel.agent import (
     build_context,
     conversation_path,
     load_history,
+    load_session_state,
     parse_answer,
 )
 from forgel.artifacts import write_text
@@ -18,6 +20,7 @@ from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger, new_project_id
 from forgel.model import ScriptedModelClient
+from forgel.program_manifest import entries as manifest_entries
 from forgel.program_manifest import set_entries
 from forgel.project_config import render_project_config
 from forgel.projects import create_project
@@ -245,6 +248,148 @@ class AgentTest(unittest.TestCase):
         self.assertNotIn("project:", text)
         self.assertNotIn("layout:", text)
         self.assertTrue(text.strip())
+
+    def test_agent_reads_repository_files_before_answering(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
+        repo = layout.repo_path(repo_id)
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "README.md").write_text(
+            "PROJECT DOC MARKER\n", encoding="utf-8"
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "kind": "action",
+                        "action": "read_file",
+                        "action_args": {
+                            "path": "README.md",
+                            "repo_id": repo_id,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {"kind": "answer", "reply": "Документ прочитан."}
+                ),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        result = agent.handle(project, "Что в README?", "@tester")
+
+        self.assertEqual(result.text, "Документ прочитан.")
+        observation = client.requests[1][-1].content
+        self.assertIn("PROJECT DOC MARKER", observation)
+        turns = load_history(layout)
+        self.assertTrue(
+            any(
+                turn["role"] == "tool"
+                and "PROJECT DOC MARKER" in turn["text"]
+                for turn in turns
+            )
+        )
+
+    def test_session_history_keeps_more_than_eight_turns(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        for index in range(10):
+            append_history(
+                layout, "user", f"USER-{index}", session="7"
+            )
+            append_history(
+                layout, "assistant", f"ANSWER-{index}", session="7"
+            )
+        client = ScriptedModelClient(
+            [json.dumps({"kind": "answer", "reply": "ok"})]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        agent.handle(project, "next", "@tester", session="7")
+
+        prompt = client.requests[0][1].content
+        self.assertIn("USER-0", prompt)
+        self.assertIn("USER-9", prompt)
+
+    def test_switching_projects_keeps_separate_sessions(self) -> None:
+        first = self._project("First", "First brief.")
+        second = self._project("Second", "Second brief.")
+        client = ScriptedModelClient(
+            [
+                json.dumps({"kind": "answer", "reply": "A"}),
+                json.dumps({"kind": "answer", "reply": "B"}),
+                json.dumps({"kind": "answer", "reply": "A2"}),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        agent.handle(first, "FIRST-MARKER", "@tester", session="7")
+        agent.handle(second, "SECOND-MARKER", "@tester", session="7")
+        agent.handle(first, "again", "@tester", session="7")
+
+        prompt = client.requests[2][1].content
+        self.assertIn("FIRST-MARKER", prompt)
+        self.assertNotIn("SECOND-MARKER", prompt)
+
+    def test_older_turns_are_compacted_into_a_session_summary(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        for index in range(6):
+            append_history(
+                layout,
+                "user",
+                f"old turn {index} " + "x" * 60,
+                session="0",
+            )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {"kind": "answer", "reply": "SUMMARY-MARKER"}
+                ),
+                json.dumps({"kind": "answer", "reply": "final"}),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+        with patch("forgel.agent.HISTORY_COMPACT_CHARS", 100), patch(
+            "forgel.agent.HISTORY_KEEP_TURNS", 2
+        ), patch("forgel.agent.HISTORY_RECENT_CHARS", 500):
+            agent.handle(project, "next", "@tester", session="0")
+        state = load_session_state(layout, "0")
+        self.assertEqual(state["summary"], "SUMMARY-MARKER")
+        prompt = client.requests[1][1].content
+        self.assertIn("SUMMARY-MARKER", prompt)
+
+    def test_agent_cannot_read_outside_the_repository(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
+        repo = layout.repo_path(repo_id)
+        repo.mkdir(parents=True, exist_ok=True)
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "kind": "action",
+                        "action": "read_file",
+                        "action_args": {
+                            "path": "../../etc/passwd",
+                            "repo_id": repo_id,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {"kind": "answer", "reply": "Не удалось прочитать."}
+                ),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        agent.handle(project, "Прочитай passwd", "@tester")
+
+        observation = client.requests[1][-1].content
+        self.assertIn("escapes the repository", observation)
+        self.assertNotIn("root:", observation)
 
     def test_model_failure_is_reported_without_a_crash(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
