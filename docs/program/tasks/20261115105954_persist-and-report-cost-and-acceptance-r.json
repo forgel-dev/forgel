@@ -61,34 +61,134 @@
       ]
     }
   ],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T19:36:17+00:00",
+  "finished_at": "2026-11-15T19:51:18+00:00",
   "result": {
-    "summary": "repeated action loop: read_file:src/forgel/chat.py",
-    "files_changed": [],
-    "commands": [],
-    "test_output": "",
-    "assumptions": [],
+    "summary": "Implemented durable cost and acceptance reporting that reads only from the ledger.\n\nWhat changed:\n1. src/forgel/ledger.py\n   - Added aggregation queries over recorded events: total_cost(), cost_by_stage(), cost_by_generation() and cost_summary() (total, per stage, per generation, event count).\n   - Added acceptances() which derives task acceptance/rejection decisions from the approvals table (scope `task:<id>`), returning task id, decision, actor, reason and generation.\n   - Task acceptance/rejection events are now also mirrored into the approvals table on append, so a decision is durable and queryable instead of only printed. Existing rows are untouched: no migration, deletion or rewrite of ledger data.\n2. src/forgel/costs.py (new) — English report builder and the `forgel cost` command implementation. Prints total cost, cost per stage, cost per generation, the acceptance count and each decision with actor and reason.\n3. src/forgel/entry.py (new) + pyproject console script + __main__.py — `forgel cost <project> [--home DIR]` routes to the ledger-only report; every other argv goes to the existing CLI unchanged.\n4. src/forgel/console.py — the local console handles `/cost [project]` (falls back to the selected project), added to tab completion, and prints the same report.\n5. tests/test_costs.py (new, 8 tests) — aggregation of recorded events, empty project, report total equals the sum of event costs, CLI report, acceptance with actor+reason, rejection with reason plus count in the report, the console report on a scripted-model demo home, and the `forgel cost` entry point. All costs and times are injected, no wall-clock or random values.\n\nTesting: full suite `python -m unittest discover -s tests` — 496 tests, OK (the previous run before adding the entry-point test was 495, also OK).",
+    "files_changed": [
+      "pyproject.toml",
+      "src/forgel/__main__.py",
+      "src/forgel/console.py",
+      "src/forgel/costs.py",
+      "src/forgel/entry.py",
+      "src/forgel/ledger.py",
+      "tests/test_costs.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_ledger",
+          "tests.test_task_review",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_costs",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_costs.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_costs.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261115195027_inspect-and-finish: context handoff to session 2 (~4816/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9281 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "Ledger `events` were the only cost source available, so aggregation groups the existing `cost` column by project, generation and stage; no new cost fields were added to the schema.",
+      "Acceptance/rejection already wrote `task_accept` / `task_reject` events with actor, task id and reason; these are now mirrored into the `approvals` table (scope `task:<id>`, notes = reason) so `acceptances()` is a pure approvals-table query, keeping the old event timeline intact.",
+      "The console equivalent of `forgel cost` is the `/cost` command in the local console (the shared chat router was left unused for this command to keep the Telegram surface unchanged); the report text is identical because both call `costs.cost_report`.",
+      "`forgel cost` is wired through a new thin console-script entry point (`forgel.entry:main`) that dispatches only the `cost` subcommand and delegates everything else to `forgel.cli.main`, so the large CLI module was not restructured.",
+      "The report prints money as `$0.00` with two decimals and stays in English regardless of console language."
+    ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 61,
-      "estimated_input_tokens": 2726955,
-      "provider_input_tokens": 2826961,
-      "provider_output_tokens": 22550,
-      "estimated_tokens": 75563,
+      "model_calls": 74,
+      "estimated_input_tokens": 4753525,
+      "provider_input_tokens": 4983049,
+      "provider_output_tokens": 134211,
+      "estimated_tokens": 125496,
       "state": ""
     },
     "test_removals": [],
     "git": {
-      "base": "9b9b91c8104a4c2492d5c0d9118107855b1c40ee",
-      "head": "9b9b91c8104a4c2492d5c0d9118107855b1c40ee",
-      "commit": "",
-      "commits": []
+      "base": "e4db6a794e8b33d1c778560b2c38633e68a4cfaf",
+      "head": "d9708817203586df79787c58f4c0bbb9f5c794f1",
+      "commit": "d9708817203586df79787c58f4c0bbb9f5c794f1",
+      "commits": [
+        "d9708817203586df79787c58f4c0bbb9f5c794f1"
+      ]
     },
     "report": "docs/program/agent/20261115105954_persist-and-report-cost-and-acceptance-r.md",
     "last_failure": {
@@ -97,6 +197,7 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "failure": {}
   }
 }
