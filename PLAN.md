@@ -1249,6 +1249,8 @@ Cost per feature and human minutes are measured from day one and capped by the p
 
 ### M0 — Skeleton (2–3 weeks)
 
+**Status:** done — `make demo` runs the hello-world pipeline from brief to staging (`Makefile`, `src/forgel/cli.py`, `src/forgel/orchestrator.py`, `src/forgel/ledger.py`); the Telegram gateway is in `src/forgel/telegram.py` (closed by default, `TELEGRAM_ALLOWED_CHAT_IDS`); the staging approval gate is `src/forgel/approvals.py` with `forgel approve`; the stub registry/recipe is `registry/recipes.json` with `src/forgel/registry.py`; the draft jurisdiction packs are `jurisdiction/generic.json` and `jurisdiction/ru.json`; the Docker image and quickstart are `Dockerfile` and `compose.yaml` (with the `hello-web` template under `src/forgel/templates/hello-web/`); the context-file resolver is `src/forgel/context.py` with `forgel.toml`; licenses and contribution docs are `LICENSE` and `CONTRIBUTING.md`.
+
 - Ledger, state machine, artifact store, chat gateway (Telegram, closed by default), staging approval gate.
 - One stub recipe, one stub provider.
 - End-to-end hello world: brief → repo → commit → staging URL.
@@ -1259,6 +1261,8 @@ Cost per feature and human minutes are measured from day one and capped by the p
 - **Exit:** the process reaches staging with no manual action except approval; production readiness is reported honestly.
 
 ### M0.5 — Self-Hosting (immediate goal)
+
+**Status:** partial — Telegram gateway (`src/forgel/telegram.py`), planner (`src/forgel/planner.py`), task QA (`src/forgel/task_qa.py`), task review (`src/forgel/task_review.py`), peak policy (`src/forgel/peak.py`), sandbox (`src/forgel/sandbox.py`), adoption (`src/forgel/adopt.py`), the GitHub provider (`src/forgel/providers/github.py`) and the deploy utility (`src/forgel/deploy.py`) exist; what remains is the exit criterion — no Forgel change has yet been specified, implemented, reviewed, QA'd and accepted through Forgel itself — and post-merge smoke with auto-revert, which is still a reserved `[git] auto_revert_on_failure` field (README, "Publish and Merge").
 
 - Telegram gateway: create a project from a brief, status, sync/reconcile, proposals and approvals.
 - Multi-project chat sessions: one daemon, a selected project per chat, isolated project contexts, configuration from chat.

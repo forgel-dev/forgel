@@ -2,7 +2,7 @@
 
 Open-source autonomous software studio. Describe a product; get a working web app with specs, independent QA, and a deploy — on your infrastructure, with your model key.
 
-**Status:** pre-alpha. The plan is in [PLAN.md](PLAN.md).
+**Status:** pre-alpha. M0 — Skeleton: done. M0.5 — Self-Hosting: partial — what remains is the self-hosting exit criterion (a Forgel change specified, implemented, reviewed, QA'd and accepted through Forgel itself) and post-merge smoke with auto-revert. Evidence and remaining items: [PLAN.md §10](PLAN.md#10-roadmap).
 
 ## One Client
 
