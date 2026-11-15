@@ -3,7 +3,7 @@
 - Task: `20261115105954_add-the-react-spa-and-isolated-stand-e2e`
 - Project: `forgel-1d2bf685`
 - Verdict: **FAIL**
-- Finished: 2026-11-15T16:40:37+00:00
+- Finished: 2026-11-15T16:44:39+00:00
 
 ## Summary
 
@@ -16,9 +16,11 @@ Tests were deleted without a justification.
 ## Blocking
 
 - Unjustified test removal: line:def test_declares_the_api_postgres_and_object_storage(self) -> None:
+- Unjustified test removal: line:def test_declares_the_api_web_postgres_and_object_storage(self) -> None:
 
 ## Test Removals
 
 - line:def test_declares_the_api_postgres_and_object_storage(self) -> None:
+- line:def test_declares_the_api_web_postgres_and_object_storage(self) -> None:
 
 
