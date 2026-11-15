@@ -19,6 +19,28 @@
         "regions": ["ru", "eu", "us"]
       },
       "template": "hello-web"
+    },
+    {
+      "id": "django-drf-react",
+      "version": "0.1.0",
+      "kind": "recipe",
+      "status": "conformant",
+      "description": "Django REST backend with a React SPA, Postgres and S3-compatible storage.",
+      "composes": [
+        "stack-django-drf@0.1",
+        "frontend-react@0.1",
+        "db-postgres@0.1",
+        "storage-s3@0.1",
+        "provider-yandex@0.1",
+        "qa-browser@0.1"
+      ],
+      "constraints": {
+        "requires": ["web", "django", "react", "postgres", "object-storage"],
+        "supports": [],
+        "excludes": ["mobile", "regulated"],
+        "regions": ["ru"]
+      },
+      "template": "django-drf-react"
     }
   ]
 }

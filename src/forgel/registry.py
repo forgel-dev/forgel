@@ -1,4 +1,4 @@
-"""Recipe registry loading and deterministic matching."""
+"""Recipe registry loading, validation and deterministic matching."""
 
 from __future__ import annotations
 
@@ -6,6 +6,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+DEFAULT_TEMPLATES_PATH = Path(__file__).resolve().parent / "templates"
+KNOWN_STATUSES = frozenset({"draft", "conformant", "deprecated"})
 
 
 class RegistryError(RuntimeError):
@@ -39,8 +42,63 @@ def _version_key(version: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
-def load_registry(path: Path) -> list[Recipe]:
-    """Load recipes from a JSON registry file."""
+def _is_numeric_version(version: str) -> bool:
+    parts = version.split(".")
+    if not version or not parts:
+        return False
+    return all(part.isdigit() for part in parts)
+
+
+def validate_recipes(
+    recipes: list[Recipe], templates_path: Path | None = None
+) -> None:
+    """Validate loaded recipes, raising :class:`RegistryError` on the first fault.
+
+    The checks are deterministic and follow registry order: duplicate ids,
+    malformed ``composes`` entries, non-numeric versions, unknown statuses and
+    conformant recipes whose template directory is missing.
+    """
+
+    templates = (
+        DEFAULT_TEMPLATES_PATH if templates_path is None else Path(templates_path)
+    )
+    seen: set[str] = set()
+    for recipe in recipes:
+        if recipe.id in seen:
+            raise RegistryError(f"Duplicate recipe id: {recipe.id}")
+        seen.add(recipe.id)
+
+        for entry in recipe.composes:
+            if "@" not in entry:
+                raise RegistryError(
+                    f"Recipe {recipe.id}: malformed composes entry {entry!r} "
+                    "(expected name@version)"
+                )
+
+        if not _is_numeric_version(recipe.version):
+            raise RegistryError(
+                f"Recipe {recipe.id}: version {recipe.version!r} is not numeric"
+            )
+
+        if recipe.status not in KNOWN_STATUSES:
+            raise RegistryError(
+                f"Recipe {recipe.id}: unknown status {recipe.status!r}; "
+                f"expected one of {sorted(KNOWN_STATUSES)}"
+            )
+
+        if recipe.status == "conformant" and not (
+            templates / recipe.template
+        ).is_dir():
+            raise RegistryError(
+                f"Recipe {recipe.id}: template directory not found: "
+                f"{templates / recipe.template}"
+            )
+
+
+def load_registry(
+    path: Path, templates_path: Path | None = None
+) -> list[Recipe]:
+    """Load and validate recipes from a JSON registry file."""
 
     if not path.exists():
         raise RegistryError(f"Registry not found: {path}")
@@ -67,6 +125,7 @@ def load_registry(path: Path) -> list[Recipe]:
         )
     if not recipes:
         raise RegistryError(f"Registry contains no recipes: {path}")
+    validate_recipes(recipes, templates_path)
     return recipes
 
 
