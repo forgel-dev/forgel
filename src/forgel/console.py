@@ -481,6 +481,8 @@ def _drain(
     agent: ProjectAgent | None = None,
     project: dict | None = None,
     session: str = "",
+    user_text: str = "",
+    actor: str = "local",
 ) -> None:
     """Run until no immediately runnable work remains.
 
@@ -488,17 +490,41 @@ def _drain(
     prompt without losing the task.
     """
 
+    layout = (
+        ProjectLayout.detect(project["workspace"])
+        if project is not None
+        else None
+    )
     while True:
+        before = _task_snapshot(layout) if layout is not None else {}
         try:
             processed = run_once(settings, ledger, log=output)
         except Exception as exc:  # noqa: BLE001 - the console must stay up
             output(_t(lang, "daemon_error", error=exc))
             return
+        if layout is not None:
+            explanation = _explain_outcomes(
+                agent,
+                project,
+                layout,
+                before,
+                lang,
+                user_text,
+                session=session,
+            )
+            if explanation:
+                output(explanation)
+                append_history(
+                    layout,
+                    "assistant",
+                    explanation,
+                    actor,
+                    session=session,
+                )
         if processed:
             continue
         wait = next_retry_wait(ledger)
         if wait is None:
-            # The caller prints the outcome of tasks whose status changed.
             return
         moment = None
         for project in ledger.list_projects():
@@ -811,14 +837,6 @@ def run_console(
                 project = (
                     ledger.get_project(selected) if selected else None
                 )
-                layout = (
-                    ProjectLayout.detect(project["workspace"])
-                    if project is not None
-                    else None
-                )
-                before = (
-                    _task_snapshot(layout) if layout is not None else {}
-                )
                 try:
                     _drain(
                         settings,
@@ -829,31 +847,14 @@ def run_console(
                         agent=router.agent,
                         project=project,
                         session=str(chat_id),
+                        user_text=text,
+                        actor=actor,
                     )
                 except KeyboardInterrupt:
                     if interactive:
                         output("Stopped; back to the prompt.")
                         continue
                     raise
-                if layout is not None:
-                    explanation = _explain_outcomes(
-                        router.agent,
-                        project,
-                        layout,
-                        before,
-                        lang,
-                        text,
-                        session=str(chat_id),
-                    )
-                    if explanation:
-                        output(explanation)
-                        append_history(
-                            layout,
-                            "assistant",
-                            explanation,
-                            actor,
-                            session=str(chat_id),
-                        )
     finally:
         if interactive:
             _save_history(settings)
