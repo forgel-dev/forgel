@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from forgel.agent import (
     ProjectAgent,
+    UNFORMATTED_REPLY,
     append_history,
     build_context,
     conversation_path,
@@ -277,6 +278,65 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(answer["kind"], "action")
         self.assertEqual(answer["action"], "status")
         self.assertEqual(answer["reply"], "")
+
+    def test_tool_call_markup_is_never_shown_to_the_user(self) -> None:
+        markup = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"action\">"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+        answer = parse_answer(markup)
+        self.assertEqual(answer["reply"], UNFORMATTED_REPLY)
+        self.assertNotIn("DSML", answer["reply"])
+
+    def test_the_agent_retries_after_tool_call_markup(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        markup = (
+            "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"action\">"
+            "</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>"
+        )
+        client = ScriptedModelClient(
+            [
+                markup,
+                json.dumps(
+                    {"kind": "answer", "reply": "Вот план работы."}
+                ),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+        result = agent.handle(project, "Какой план?", "@tester")
+        self.assertEqual(result.text, "Вот план работы.")
+        self.assertIn(
+            "tool-call markup", client.requests[1][-1].content
+        )
+
+    def test_process_tool_results_are_not_replayed(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        append_history(
+            layout,
+            "tool",
+            "PROCESS-MARKER",
+            "@tester",
+            session="s",
+            tool="read_file",
+            path="docs/program/state.md",
+        )
+        append_history(
+            layout,
+            "tool",
+            "DOC-MARKER",
+            "@tester",
+            session="s",
+            tool="read_file",
+            path="README.md",
+        )
+        append_history(layout, "user", "hello", "@tester", session="s")
+        agent = ProjectAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        history = agent._session_history(layout, "s")
+        self.assertNotIn("PROCESS-MARKER", history)
+        self.assertIn("DOC-MARKER", history)
 
     def test_json_without_a_reply_is_not_dumped(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

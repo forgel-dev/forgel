@@ -96,8 +96,12 @@ inspect the repository yourself. Reply with exactly one JSON action:
 {"kind": "action", "action": "list_files", "action_args": {"path": ".", "repo_id": "main"}}
 {"kind": "action", "action": "read_file", "action_args": {"path": "PLAN.md", "repo_id": "main"}}
 Paths are relative and may not leave the repository. Read PLAN.md, README.md,
-FORGEL.md, docs and code instead of guessing. After the observation, return
-the final answer JSON.
+FORGEL.md, docs and code instead of guessing. Do not read files under
+docs/program: that is Forgel's process state, not project documentation. After
+the observation, return the final answer JSON.
+
+Return JSON only. Never emit tool-call markup such as <｜｜DSML｜｜> or XML;
+the runtime understands only the JSON forms above.
 
 Read only what the question needs: list a directory to discover names, then
 read specific files. Do not read the whole repository. Files already read are
@@ -109,6 +113,10 @@ project documents and code, not from Forgel's process metadata. For any
 question about status, plans or what to do next, use README, PLAN and the
 project's docs (the context already includes them). Do not invent process
 steps such as setting a recipe or a checkpoint.
+
+The runtime is already configured. Never tell the user to set
+FORGEL_MODEL_API_KEY, run `forgel setup`, or configure GitHub unless the
+runtime output explicitly says it is missing.
 
 Never use these words with the user unless they ask for them: adopted,
 linked, generation, checkpoint, staging, production approval, proposal,
@@ -531,9 +539,23 @@ def _json_object(raw: str) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def _looks_like_tool_markup(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "<｜｜dsml｜｜",
+            "<tool_call",
+            "<function_call",
+        )
+    )
+
+
 def _looks_structured(text: str) -> bool:
     """True when a model reply is a raw structure, not prose."""
 
+    if _looks_like_tool_markup(text):
+        return True
     stripped = text.strip()
     if stripped.startswith("```"):
         stripped = stripped.strip("`").strip()
@@ -747,6 +769,9 @@ class ProjectAgent:
             for turn in recent:
                 role = str(turn.get("role", ""))
                 if role == "tool":
+                    path = str(turn.get("path", ""))
+                    if path.startswith("docs/program/"):
+                        continue
                     label = "Tool result"
                     tool = str(turn.get("tool", "")).strip()
                     path = str(turn.get("path", "")).strip()
@@ -836,6 +861,7 @@ class ProjectAgent:
         model = project_model_name(layout.control)
         repos = manifest_entries(layout)
         raw = ""
+        markup_retries = 0
         for step in range(MAX_RESEARCH_STEPS + 1):
             try:
                 raw = self.client.complete(messages, model=model)
@@ -847,6 +873,22 @@ class ProjectAgent:
             data = _json_object(raw)
             action = str(data.get("action", "")) if data else ""
             if action not in RESEARCH_ACTIONS:
+                if _looks_like_tool_markup(raw) and markup_retries < 2:
+                    messages.append(
+                        ModelMessage("assistant", raw.strip())
+                    )
+                    messages.append(
+                        ModelMessage(
+                            "user",
+                            "Return exactly one JSON object, not tool-call "
+                            "markup. Read files with "
+                            '{"kind": "action", "action": "read_file", '
+                            '"action_args": {"path": "..."}} and answer with '
+                            '{"kind": "answer", "reply": "..."}.',
+                        )
+                    )
+                    markup_retries += 1
+                    continue
                 break
             if step == MAX_RESEARCH_STEPS:
                 return AgentResult(
