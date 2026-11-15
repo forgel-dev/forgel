@@ -61,9 +61,138 @@
       ]
     }
   ],
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-15T17:24:20+00:00",
+  "finished_at": "2026-11-15T17:29:04+00:00",
+  "result": {
+    "summary": "Registered the django-drf-react recipe and added deterministic registry validation.\n\n- registry/recipes.json: added a second entry `django-drf-react` @ 0.1.0, status `conformant`, composing stack-django-drf, frontend-react, db-postgres, storage-s3, provider-yandex, qa-browser (each pinned with `@0.1` like the existing hello-web entry), requires [web, django, react, postgres, object-storage], regions [ru], excludes [mobile, regulated], template `django-drf-react`. The existing hello-web entry is untouched and key order is stable.\n- src/forgel/registry.py: added `validate_recipes(recipes, templates_path=None)` and made `load_registry(path, templates_path=None)` call it before returning. It rejects duplicate ids, composes entries without `@`, non-numeric versions, unknown statuses (draft/conformant/deprecated) and conformant recipes whose template directory is missing under src/forgel/templates/ (default templates root = the package `templates/` dir). Every fault raises `RegistryError` with a message naming the recipe. `select_recipe` is unchanged, so existing callers keep filtering by requires/excludes/status/region and no recipe id is hardcoded.\n- tests/test_registry.py: kept all existing tests and added coverage for the new recipe (registered fields), selection for {requires: [web, django, react, postgres, object-storage], region: ru} returning django-drf-react, non-selection with region us (RegistryError), plus validation cases for duplicate id, missing template directory, malformed composes, non-numeric version, unknown status, and a draft recipe allowed to omit its template.\n\nTesting: `python -m unittest discover -s tests` — 487 tests, OK (including the 14 registry tests). `python -m compileall -q -x templates src tests` passes. `python -m forgel demo --home /tmp/forgel-demo-check` runs the full hello-web pipeline to the staging-approval checkpoint, confirming existing projects are unaffected. `make demo` against the checked-out `.forgel-demo` home failed with `sqlite3.OperationalError: no such column: generation` — that is pre-existing local demo state whose ledger schema predates the generation column; no ledger/code path was changed here, and a fresh home runs the demo fine.",
+    "files_changed": [
+      "registry/recipes.json",
+      "src/forgel/registry.py",
+      "tests/test_registry.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-c",
+          "print(1)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-k",
+          "registry"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-k",
+          "registry",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "make",
+          "demo"
+        ],
+        "exit_code": 2
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "forgel",
+          "demo",
+          "--home",
+          "/tmp/forgel-demo-check"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "compileall",
+          "-q",
+          "-x",
+          "templates",
+          "src",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261115172814_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9272 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "Composes entries use name@version with the same `@0.1` suffix convention as the existing hello-web recipe.",
+      "Known statuses are draft, conformant and deprecated; unknown values are rejected.",
+      "The template-directory check only applies to conformant recipes, so drafts may point at a not-yet-created template.",
+      "Validation defaults to the package templates directory (src/forgel/templates) and accepts an optional override for tests.",
+      "Template existence is checked with is_dir() and does not inspect template contents."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 39,
+      "estimated_input_tokens": 727000,
+      "provider_input_tokens": 771634,
+      "provider_output_tokens": 18741,
+      "estimated_tokens": 37164,
+      "state": ""
+    },
+    "test_removals": [],
+    "git": {
+      "base": "74dfeb58504cbb2ed9d3c24f4b32af4d532d7178",
+      "head": "dbf0aff0db211eb28509db0d6fc404a0ff09321f",
+      "commit": "dbf0aff0db211eb28509db0d6fc404a0ff09321f",
+      "commits": [
+        "dbf0aff0db211eb28509db0d6fc404a0ff09321f"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261115105954_register-the-django-drf-react-recipe-and.md"
+  }
 }
