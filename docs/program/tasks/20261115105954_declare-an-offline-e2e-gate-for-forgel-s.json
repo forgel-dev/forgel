@@ -73,65 +73,34 @@
       ]
     }
   ],
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-15T10:59:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-15T13:47:23+00:00",
+  "finished_at": "2026-11-15T13:47:28+00:00",
   "result": {
-    "summary": "repeated action loop: read_file:src/forgel/environment.py",
+    "summary": "model call failed: model endpoint returned an empty answer",
     "files_changed": [
       "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.state.md"
     ],
-    "commands": [
-      {
-        "command": [
-          "python",
-          "-c",
-          "import os; print('\\n'.join(sorted(os.listdir('tests'))))"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import os; print(chr(10).join(sorted(os.listdir('tests/e2e'))))"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import os; print(chr(10).join(sorted(os.listdir('tests'))))"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.test_environment",
-          "-v"
-        ],
-        "exit_code": 0
-      }
-    ],
+    "commands": [],
     "test_output": "",
     "assumptions": [],
     "context": {
       "window": 1000000,
       "usable": 991808,
-      "sessions": 4,
-      "compactions": 3,
-      "estimated_tokens": 14819,
-      "state": "docs/program/agent/20261115105954_declare-an-offline-e2e-gate-for-forgel-s.state.md"
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 2,
+      "estimated_input_tokens": 28108,
+      "provider_input_tokens": 19555,
+      "provider_output_tokens": 151,
+      "estimated_tokens": 9527,
+      "state": ""
     },
     "test_removals": [],
     "git": {
-      "base": "3f7fb46e94203a665b78717a91f3abda58c9a31e",
-      "head": "3f7fb46e94203a665b78717a91f3abda58c9a31e",
+      "base": "09eac9f4b18ad51cd0d259219864156fe4648105",
+      "head": "09eac9f4b18ad51cd0d259219864156fe4648105",
       "commit": "",
       "commits": []
     },
@@ -142,6 +111,13 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "resume_count": 1,
+    "resumed_at": "2026-11-15T13:47:23+00:00",
+    "last_summary": "repeated action loop: read_file:src/forgel/environment.py",
+    "failure": {
+      "kind": "infrastructure",
+      "message": "model call failed: model endpoint returned an empty answer"
+    }
   }
 }
