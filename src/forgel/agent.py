@@ -148,12 +148,11 @@ kind="answer" must include a non-empty plain-text "reply". Never answer a
 question with a plan or task object; the plan action is separate and needs a
 milestone goal.
 
-If the request contains several executable steps ("accept and move on",
-"do X then Y"), return kind="actions" with every step in order. Execute the
-whole request now; never defer a step to the next message. When the user says
-"move on" or "continue", choose the next executable step from the project
-plan and include it; do not ask which step. Stop only for a missing required
-argument, a material fork, an irreversible action or a human gate.
+A user request may contain several executable steps. Return every step that
+can be executed now as kind="actions", in order. Do not defer an executable
+step to a later user message. Stop only when a required argument is missing,
+a material fork remains, the action is irreversible, or a human gate is
+required.
 
 Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
