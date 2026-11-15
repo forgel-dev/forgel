@@ -127,10 +127,13 @@ turns may contain these terms; keep their facts but restate them plainly.
 
 Reply in the language of the user's message. Return exactly one JSON object:
 {
-  "kind": "answer" | "change_request" | "action",
+  "kind": "answer" | "change_request" | "action" | "actions",
   "reply": "text for the user",
   "action": "one of the actions below, action only",
   "action_args": {"...": "action parameters"},
+  "actions": [
+    {"action": "one of the actions below", "action_args": {"...": "..."}}
+  ],
   "title": "short title, change_request only",
   "summary": "one paragraph, change_request only",
   "requirements": ["explicit requirement", "..."],
@@ -144,6 +147,13 @@ Reply in the language of the user's message. Return exactly one JSON object:
 kind="answer" must include a non-empty plain-text "reply". Never answer a
 question with a plan or task object; the plan action is separate and needs a
 milestone goal.
+
+If the request contains several executable steps ("accept and move on",
+"do X then Y"), return kind="actions" with every step in order. Execute the
+whole request now; never defer a step to the next message. When the user says
+"move on" or "continue", choose the next executable step from the project
+plan and include it; do not ask which step. Stop only for a missing required
+argument, a material fork, an irreversible action or a human gate.
 
 Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
@@ -217,6 +227,7 @@ class AgentResult:
     task_id: str | None = None
     action: str = ""
     args: dict[str, Any] | None = None
+    actions: list[dict[str, Any]] | None = None
 
 
 def _session_key(session: str) -> str:
@@ -609,7 +620,7 @@ def parse_answer(raw: str) -> dict[str, Any]:
             ),
         }
     kind = data.get("kind")
-    if kind not in {"answer", "change_request", "action"}:
+    if kind not in {"answer", "change_request", "action", "actions"}:
         kind = "answer"
     action = str(data.get("action", "")).strip()
     action_args = data.get("action_args")
@@ -619,9 +630,31 @@ def parse_answer(raw: str) -> dict[str, Any]:
         kind = "answer"
         action = ""
         action_args = {}
+    actions: list[dict[str, Any]] = []
+    raw_actions = data.get("actions")
+    if isinstance(raw_actions, list):
+        for item in raw_actions:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("action", "")).strip()
+            if name not in AGENT_ACTIONS:
+                continue
+            args = item.get("action_args")
+            actions.append(
+                {
+                    "action": name,
+                    "action_args": args if isinstance(args, dict) else {},
+                }
+            )
+    if kind == "action" and action and not actions:
+        actions.append(
+            {"action": action, "action_args": action_args}
+        )
+    if kind == "actions" and not actions:
+        kind = "answer"
     reply = data.get("reply")
     if not isinstance(reply, str) or not reply.strip():
-        if kind == "action" and action in AGENT_ACTIONS:
+        if kind in {"action", "actions"}:
             reply = ""
         else:
             reply = (
@@ -649,6 +682,7 @@ def parse_answer(raw: str) -> dict[str, Any]:
         "reply": reply.strip(),
         "action": action,
         "action_args": action_args,
+        "actions": actions,
         "title": str(data.get("title", "")).strip(),
         "summary": str(data.get("summary", "")).strip(),
         "requirements": [
@@ -997,6 +1031,7 @@ class ProjectAgent:
                 if answer["kind"] == "action"
                 else None
             ),
+            actions=answer.get("actions") or [],
         )
 
     def _record_request(

@@ -279,6 +279,28 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(answer["action"], "status")
         self.assertEqual(answer["reply"], "")
 
+    def test_multiple_actions_are_parsed_in_order(self) -> None:
+        answer = parse_answer(
+            json.dumps(
+                {
+                    "kind": "actions",
+                    "reply": "",
+                    "actions": [
+                        {"action": "accept"},
+                        {"action": "plan", "action_args": {"goal": "M1"}},
+                    ],
+                }
+            )
+        )
+        self.assertEqual(answer["kind"], "actions")
+        self.assertEqual(
+            [item["action"] for item in answer["actions"]],
+            ["accept", "plan"],
+        )
+        self.assertEqual(
+            answer["actions"][1]["action_args"], {"goal": "M1"}
+        )
+
     def test_tool_call_markup_is_never_shown_to_the_user(self) -> None:
         markup = (
             "<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name=\"action\">"

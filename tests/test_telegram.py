@@ -296,6 +296,28 @@ class SelectionAndAgentTest(unittest.TestCase):
         reply = router.handle(7, "What is this project?", "@tester")
         self.assertEqual(reply.text, "project answer")
 
+    def test_multiple_actions_run_in_one_message(self) -> None:
+        router = self._router(
+            [
+                json.dumps(
+                    {
+                        "kind": "actions",
+                        "reply": "Pausing and resuming.",
+                        "actions": [
+                            {"action": "pause"},
+                            {"action": "resume"},
+                        ],
+                    }
+                )
+            ]
+        )
+        project = self._project("Alpha", "Alpha brief marker.")
+        self.ledger.set_session(7, project)
+        reply = router.handle(7, "pause and resume", "@tester")
+        self.assertIn("paused", reply.text.lower())
+        self.assertIn("running", reply.text.lower())
+        self.assertFalse(is_paused(self.settings.home))
+
     def test_status_question_is_answered_in_natural_language(self) -> None:
         router = self._router(
             [

@@ -13,6 +13,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 from . import config_store, daemon_config, peak
@@ -1411,25 +1412,51 @@ class CommandRouter:
             )
         except Exception as exc:  # noqa: BLE001 - answer instead of crashing
             return Reply(f"Agent error: {exc}")
-        if result.kind == "action" and result.action:
-            reply = self._execute_action(chat_id, actor, result)
-            if result.action in {"status", "tasks"} and self.agent is not None:
+        if result.kind in {"action", "actions"} and result.actions:
+            replies = []
+            narration = False
+            actions = result.actions[:4]
+            for index, item in enumerate(actions):
+                action = str(item.get("action") or "")
+                args = item.get("action_args") or {}
+                proxy = SimpleNamespace(
+                    action=action,
+                    args=args,
+                    text=result.text if index == 0 else "",
+                )
+                reply = self._execute_action(chat_id, actor, proxy)
+                replies.append(reply)
+                if action in {"status", "tasks"}:
+                    narration = True
+                lowered = reply.text.strip().lower()
+                if lowered.startswith(
+                    ("error", "tell me", "usage", "i can't")
+                ):
+                    break
+            combined = "\n\n".join(
+                reply.text for reply in replies if reply.text
+            )
+            if (
+                narration
+                and len(actions) == 1
+                and self.agent is not None
+            ):
                 observation = build_context(
                     layout, project, self.ledger
                 )
-                narration = self.agent.narrate(
+                narrated = self.agent.narrate(
                     project, text, observation
                 ).strip()
-                if narration:
+                if narrated:
                     append_history(
                         layout,
                         "assistant",
-                        narration,
+                        narrated,
                         actor,
                         session=str(chat_id),
                     )
-                    return Reply(narration)
-            return reply
+                    return Reply(narrated)
+            return Reply(combined)
         return Reply(result.text)
 
     # -------------------------------------------------------------- helpers
