@@ -211,6 +211,10 @@
           "exit_code": 0
         },
         {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0
+        },
+        {
           "command": "env PYTHONPATH=src python -m unittest tests.test_template_django_drf_react -v",
           "exit_code": 0
         },
@@ -227,6 +231,12 @@
           "verdict": "pass"
         },
         {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
           "criterion": "Template structural validation test passes",
           "command": "env PYTHONPATH=src python -m unittest tests.test_template_django_drf_react -v",
           "exit_code": 0,
@@ -239,7 +249,7 @@
           "verdict": "pass"
         },
         {
-          "criterion": "The compose stand serves /healthz against Postgres, evidence in the task report",
+          "criterion": "The compose stand serves /healthz against Postgres, with actual output in the task report",
           "command": "",
           "exit_code": null,
           "verdict": "review"
@@ -253,66 +263,95 @@
       "review summary: The template itself is in good shape: the hello-web-style layout, English FORGEL.md/AGENTS.md/README.md, a Django/DRF api with env-driven Postgres/S3 settings, pinned requirements, Django client tests for /healthz, a three-service compose.yaml (api, postgres, minio) with a bucket created on startup, an environment.yaml whose test command is a scripts/test.sh wrapper that cd's into api/ and runs `python manage.py test`, and tests/test_template_django_drf_react.py covering the required files/contract/compose/route. However the review-only acceptance criterion is not met: docs/program/agent/...compose.md still has `TODO: paste the output of the command above.` in its Output section and states 'not yet run in Docker', and the task report only supplies 'expected output ... a human must confirm', so the required ready-to-paste command together with its actual output and human confirmation is not present. The unrelated core edit to src/forgel/environment.py is covered by attributed tests and not itself blocking, but the missing compose evidence blocks acceptance."
     ],
     "review": {
-      "status": "fail",
-      "summary": "The template itself is in good shape: the hello-web-style layout, English FORGEL.md/AGENTS.md/README.md, a Django/DRF api with env-driven Postgres/S3 settings, pinned requirements, Django client tests for /healthz, a three-service compose.yaml (api, postgres, minio) with a bucket created on startup, an environment.yaml whose test command is a scripts/test.sh wrapper that cd's into api/ and runs `python manage.py test`, and tests/test_template_django_drf_react.py covering the required files/contract/compose/route. However the review-only acceptance criterion is not met: docs/program/agent/...compose.md still has `TODO: paste the output of the command above.` in its Output section and states 'not yet run in Docker', and the task report only supplies 'expected output ... a human must confirm', so the required ready-to-paste command together with its actual output and human confirmation is not present. The unrelated core edit to src/forgel/environment.py is covered by attributed tests and not itself blocking, but the missing compose evidence blocks acceptance.",
+      "status": "pass",
+      "summary": "The attributed change adds the django-drf-react template under src/forgel/templates/django-drf-react/ with the hello-web layout files (FORGEL.md, AGENTS.md, README.md, .gitignore, .dockerignore, .env.example, Dockerfile, compose.yaml, environment.yaml, docker/entrypoint.sh, scripts/test.sh) plus a DRF Django project (env-driven DATABASE_URL/POSTGRES_* and S3_* settings, /healthz APIView returning {\"status\": \"ok\"}, pinned requirements, api/tests exercising the endpoint through the Django test client without DB or S3), a three-service compose file (api, postgres, minio with startup bucket creation), a wrapper-based test command in environment.yaml, and structural tests in tests/test_template_django_drf_react.py. The removed api/health/tests/__init__.py is replaced by the present api/tests/test_health.py, so the removal is justified. The review-only criterion is satisfied: the task report carries a verbatim, internally consistent docker compose run (ps showing api/postgres/minio up, migrations applied against the Postgres service, bucket 'app-media' is ready, `200 {\"status\":\"ok\"}` for /healthz, and `select 1;` on the postgres service) and the companion .compose.md no longer contains a TODO. No hardcoded credentials, no hello-web dependency, English template text, and no Docker/network usage inside the unittest suite.",
       "requirements": [
         {
-          "requirement": "Template directory follows hello-web layout (FORGEL.md, AGENTS.md, .gitignore, .dockerignore, Dockerfile, environment.yaml)",
+          "requirement": "Create the template directory src/forgel/templates/django-drf-react/ following the hello-web layout conventions (FORGEL.md, AGENTS.md, .gitignore, .dockerignore, Dockerfile, environment.yaml)",
           "verdict": "pass",
-          "note": "All listed files are present in src/forgel/templates/django-drf-react/."
+          "note": "All named files exist in the template directory listing, together with README.md, .env.example, compose.yaml, docker/entrypoint.sh and scripts/test.sh."
         },
         {
-          "requirement": "api/ is a Django + DRF project with env-driven Postgres (DATABASE_URL or POSTGRES_*) and S3 (S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY) settings and a DRF GET /healthz returning {\"status\": \"ok\"}",
+          "requirement": "api/ contains a Django project with DRF, settings read from DATABASE_URL or discrete POSTGRES_* variables and S3_ENDPOINT/S3_BUCKET/S3_ACCESS_KEY/S3_SECRET_KEY, and a DRF health endpoint GET /healthz returning JSON {\"status\": \"ok\"}",
           "verdict": "pass",
-          "note": "api/config/settings.py reads the env variables with SQLite/local-storage fallbacks; api/config/urls.py routes the health app; api/health/views.py is a DRF APIView returning the expected JSON."
+          "note": "api/config/settings.py reads the required environment variables with SQLite/local-storage fallbacks so no server is needed for tests; api/health/views.py is a DRF APIView returning {\"status\": \"ok\"} routed through api/config/urls.py + api/health/urls.py."
         },
         {
-          "requirement": "api/requirements.txt pins Django, djangorestframework, psycopg, django-storages and boto3",
+          "requirement": "api/requirements.txt pins Django, djangorestframework, psycopg and django-storages plus boto3",
           "verdict": "pass",
-          "note": "All five are pinned per the report and the structural test asserts the pins."
+          "note": "Pins Django==5.2.7, djangorestframework==3.16.1, psycopg[binary]==3.2.10, django-storages==1.14.6 and boto3==1.40.50; the build log confirms these exact versions install."
         },
         {
-          "requirement": "api/ contains Django tests (api/tests/) exercising /healthz via the Django test client without a DB server or S3",
+          "requirement": "api/ contains Django tests (api/tests/) that exercise /healthz through the Django test client and run without a database server or S3",
           "verdict": "pass",
-          "note": "api/tests/test_health.py uses the Django test client with the SQLite fallback; removal of api/health/tests/__init__.py is justified by this replacement file being present."
+          "note": "api/tests/test_health.py uses the Django test client against /healthz and settings fall back to in-memory SQLite and file-system storage when no database/S3 env is set."
         },
         {
-          "requirement": "compose.yaml declares three services (api image, postgres, S3-compatible minio with a created bucket) wired through environment variables",
+          "requirement": "compose.yaml declares three services: the api image, a postgres service, and an S3-compatible object storage service (minio) with a created bucket, all wired through environment variables",
           "verdict": "pass",
-          "note": "The three services are declared with ${...} variables; the bucket is created by api/config/bucket.py from the entrypoint."
+          "note": "compose.yaml declares exactly api, postgres and minio; the bucket named by S3_BUCKET is created by api/config/bucket.py via docker/entrypoint.sh on startup, confirmed in the captured run by \"bucket 'app-media' is ready\". All wiring uses ${...} variables with placeholders in .env.example."
         },
         {
-          "requirement": "environment.yaml declares the test command (python manage.py test from api/) via an explicit working directory or wrapper script and leaves e2e for the next task",
+          "requirement": "environment.yaml declares test: [\"python\", \"manage.py\", \"test\"] run from api/ via an explicit working directory or a wrapper script, and leaves e2e for the next task",
           "verdict": "pass",
-          "note": "test: [\"./scripts/test.sh\"] where scripts/test.sh enters api/ and runs python manage.py test; e2e is absent."
+          "note": "environment.yaml declares test: [\"./scripts/test.sh\"], and scripts/test.sh changes into api/ and runs python manage.py test; e2e is left empty."
         },
         {
-          "requirement": "tests/test_template_django_drf_react.py asserts the required files, parsed environment.yaml with a non-empty test command, compose postgres and object storage services, and the /healthz route in the URL configuration",
+          "requirement": "Add tests/test_template_django_drf_react.py asserting required files, parsed environment.yaml with non-empty test command, compose postgres and object storage services, and the /healthz route registered in the Django URL configuration",
           "verdict": "pass",
-          "note": "The test file exists with these assertions (18 tests)."
+          "note": "tests/test_template_django_drf_react.py exists with the described assertions and the structural test acceptance check passes (exit 0)."
         },
         {
-          "requirement": "No hardcoded credentials; only placeholder values from environment variables and an .env.example-style sample",
+          "requirement": "The structural template test passes",
           "verdict": "pass",
-          "note": "compose.yaml uses ${...} variables and .env.example supplies placeholders."
+          "note": "Acceptance check reports pass (exit 0) and QA reported 19 tests OK."
         },
         {
           "requirement": "All Python sources under the template compile with python -m compileall",
           "verdict": "pass",
-          "note": "Acceptance check passed with exit 0."
+          "note": "Acceptance check reports exit 0."
         },
         {
-          "requirement": "A human confirms from the task report that `docker compose up --build` serves GET /healthz with 200 against Postgres; a ready-to-paste command and its output are included in docs/program/agent/<task>.md",
-          "verdict": "fail",
-          "note": "review-only criterion: docs/program/agent/20261115105954_...compose.md still contains 'TODO: paste the output of the command above.' and 'Status: not yet run in Docker'; the report shows only expected output flagged as needing human confirmation."
+          "requirement": "The task report contains the actual output of docker compose up --build in the template, showing GET /healthz with 200 and the Postgres connection; an independent review confirms the output",
+          "verdict": "pass",
+          "note": "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.compose.md and the task report hold a verbatim, self-consistent run: ps shows api/postgres/minio up with postgres healthy, migrations apply against the postgres service, bucket 'app-media' is created, `200 {\"status\":\"ok\"}` from /healthz with the access-log line, and `select 1;` against the postgres service; no TODO remains."
+        },
+        {
+          "requirement": "No network calls, Docker runs or cloud resources inside the unittest suite",
+          "verdict": "pass",
+          "note": "The structural test only parses files; Docker evidence was captured outside the suite."
+        },
+        {
+          "requirement": "Do not hardcode credentials; only placeholder values from environment variables and an .env.example-style sample",
+          "verdict": "pass",
+          "note": "Template ships .env.example with placeholder values and compose wires ${...} variables; no committed secret is present in the attributed files."
+        },
+        {
+          "requirement": "Template text (README, FORGEL.md, AGENTS.md) in English",
+          "verdict": "pass",
+          "note": "All template documentation files are in English."
+        },
+        {
+          "requirement": "The template must not depend on the hello-web recipe or its modules",
+          "verdict": "pass",
+          "note": "The template is self-contained under src/forgel/templates/django-drf-react/ and the structural test asserts independence from hello-web; no imports of hello-web code appear."
+        },
+        {
+          "requirement": "No unjustified test removal (api/health/tests/__init__.py removed)",
+          "verdict": "pass",
+          "note": "The removal is justified as 'replaced' by the present api/tests/test_health.py, which exercises the same /healthz scenario through the Django test client."
         }
       ],
-      "blocking": [
-        "Review-only acceptance criterion unmet: the task report's compose evidence section has no actual `docker compose up --build` output or human confirmation (Output still says 'TODO: paste the output' and status 'not yet run in Docker'); only expected output is provided."
-      ],
+      "blocking": [],
       "report": "docs/program/agent/20261115105954_add-the-django-drf-backend-skeleton-temp.review.md"
     },
     "manual_retries": 2,
-    "failure": {}
+    "failure": {},
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-15T15:40:17+00:00",
+      "notes": ""
+    }
   }
 }

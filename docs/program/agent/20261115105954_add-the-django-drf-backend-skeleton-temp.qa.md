@@ -5,20 +5,21 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-15T13:36:08+00:00
+- Finished: 2026-11-15T15:39:59+00:00
 
 ## Checks
 
 - environment test: pass (exit 0)
+- environment e2e: pass (exit 0)
 - Template structural validation test passes: pass (exit 0)
 - Template Python sources compile: pass (exit 0)
-- The compose stand serves /healthz against Postgres, evidence in the task report: review
+- The compose stand serves /healthz against Postgres, with actual output in the task report: review
 
 ## Output
 
 ```
 $ python -m unittest discover -s tests
-[agent] 20261115133520_inspect-and-finish: context handoff to session 2 (~4784/3072 tokens)
+[agent] 20261115153909_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -445,11 +446,22 @@ $ python -m unittest discover -s tests
 [approval] completed
 [done] running
 [done] completed
-...........................................................................................................................................................................................................................................................................................................................................................................................................................................................
+...........................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 443 tests in 56.678s
+Ran 459 tests in 58.852s
 
 OK
+$ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
+=== SELF-HOSTING E2E ===
+PASS a milestone was planned [1]
+PASS the daemon ran the task [['selfhost-d2954bcf']]
+PASS FORGEL_MODEL_MODE=script [script]
+PASS the task stopped at the staging approval gate [review]
+PASS task QA passed [pass]
+PASS task review passed [pass]
+PASS acceptance is pending a human decision [pending]
+PASS the project never reached done [None]
+PASS self-hosting gate is green and parked for human approval
 $ env PYTHONPATH=src python -m unittest tests.test_template_django_drf_react -v
 test_declares_the_api_postgres_and_object_storage (tests.test_template_django_drf_react.ComposeServicesTest.test_declares_the_api_postgres_and_object_storage) ... ok
 test_no_credential_literals_are_committed (tests.test_template_django_drf_react.ComposeServicesTest.test_no_credential_literals_are_committed) ... ok
@@ -457,6 +469,7 @@ test_object_storage_is_configured_from_the_environment (tests.test_template_djan
 test_postgres_is_configured_from_the_environment (tests.test_template_django_drf_react.ComposeServicesTest.test_postgres_is_configured_from_the_environment) ... ok
 test_the_api_is_wired_to_both_services (tests.test_template_django_drf_react.ComposeServicesTest.test_the_api_is_wired_to_both_services) ... ok
 test_the_bucket_is_created_on_startup (tests.test_template_django_drf_react.ComposeServicesTest.test_the_bucket_is_created_on_startup) ... ok
+test_the_default_object_storage_image_is_minio (tests.test_template_django_drf_react.ComposeServicesTest.test_the_default_object_storage_image_is_minio) ... ok
 test_django_tests_use_the_client_without_services (tests.test_template_django_drf_react.HealthRouteTest.test_django_tests_use_the_client_without_services) ... ok
 test_the_health_route_is_registered (tests.test_template_django_drf_react.HealthRouteTest.test_the_health_route_is_registered) ... ok
 test_the_health_view_is_a_drf_endpoint (tests.test_template_django_drf_react.HealthRouteTest.test_the_health_view_is_a_drf_endpoint) ... ok
@@ -471,7 +484,7 @@ test_the_template_directory_exists (tests.test_template_django_drf_react.Templat
 test_the_template_does_not_depend_on_the_hello_web_recipe (tests.test_template_django_drf_react.TemplateLayoutTest.test_the_template_does_not_depend_on_the_hello_web_recipe) ... ok
 
 ----------------------------------------------------------------------
-Ran 18 tests in 0.010s
+Ran 19 tests in 0.011s
 
 OK
 $ python -m compileall -q src/forgel/templates/django-drf-react
