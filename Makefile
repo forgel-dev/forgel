@@ -1,7 +1,8 @@
 PYTHON ?= python3
+CLI_PIP ?= $(HOME)/.forgel-cli/bin/pip
 export PYTHONPATH := src
 
-.PHONY: test lint demo chat clean e2e-blog
+.PHONY: test lint demo chat clean e2e-blog install-cli
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
@@ -23,3 +24,14 @@ e2e-blog:
 
 clean:
 	rm -rf .forgel-demo .venv
+
+# The self-hosting CLI runs from its own non-editable copy: the coding agent
+# edits src/forgel while the daemon works, so a live import would load
+# half-edited modules and break the running console. Build from the committed
+# tree, never install with -e.
+install-cli:
+	@tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	git archive HEAD | tar -x -C "$$tmp"; \
+	$(CLI_PIP) uninstall -y forgel >/dev/null 2>&1 || true; \
+	$(CLI_PIP) install "$$tmp[github,tokens]"
