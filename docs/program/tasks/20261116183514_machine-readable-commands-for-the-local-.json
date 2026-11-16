@@ -52,12 +52,12 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-16T18:35:14+00:00",
-  "started_at": "2026-11-16T18:35:14+00:00",
-  "finished_at": "2026-11-16T19:37:41+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Реализован машинно-читаемый интерфейс локального клиента. Добавлены модули src/forgel/session.py (долговременная сессия на стороне движка, ключ по умолчанию `local` = chat id 0 консоли; set/get/clear, просмотр истории), src/forgel/outcome.py (единая точка `forgel say`: один вызов существующего CommandRouter, результат — answer / change_request с очередной задачей / plan / action с текстом ответа), src/forgel/client_cli.py (обёртки над ядром: say, projects, session, use, history, tasks, status, task accept/reject/retry/cancel/add, plan --status/--goal, daemon, pause, resume; плоский конверт ok/kind/text/error + payload), src/forgel/client.py (парсер и диспетчер: новые команды всегда у клиента, status/task/plan/pause/resume/daemon перехватываются только с --json, поэтому человекочитаемое поведение и существующие тесты не меняются) и обновлён src/forgel/entry.py. Добавлены тесты tests/test_client.py (15 тестов: конверт каждой команды, ошибка с ненулевым кодом и одним JSON, сессии, история, say с маршрутизацией change_request в очередь в script-режиме) и публичная документация docs/program/commands.md с набором команд и конвертом. Полный прогон `python3 -m unittest discover -s tests` — 527 тестов, OK.",
+    "summary": "Реализован машинно-читаемый интерфейс локального клиента. Добавлены модули src/forgel/session.py (долговременная сессия на стороне движка, ключ по умолчанию `local` = chat id 0 консоли; set/get/clear, просмотр истории), src/forgel/outcome.py (единая точка `forgel say`: один вызов существующего CommandRouter, результат — answer / change_request с очередной задачей / plan / action с текстом ответа), src/forgel/client_cli.py (обёртки над ядром: say, projects, session, use, history, tasks, status, task accept/reject/retry/cancel/add, plan --status/--goal, daemon, pause, resume; плоский конверт ok/kind/text/error + payload), src/forgel/client.py (парсер и диспетчер: новые команды всегда у клиента, status/task/plan/pause/resume/daemon перехватываются только с --json, поэтому человекочитаемое поведение и существующие тесты не меняются) и обновлён src/forgel/entry.py. Добавлены тесты tests/test_client.py (15 тестов: конверт каждой команды, ошибка с ненулевым кодом и одним JSON, сессии, история, say с маршрутизацией change_request в очередь в script-режиме) и публичная документация docs/program/commands.md с набором команд и конвертом. Полный прогон `python3 -m unittest discover -s tests` — 527 тестов, OK.; task review failed",
     "files_changed": [
       "docs/program/commands.md",
       "src/forgel/client.py",
@@ -175,7 +175,148 @@
         "5a511a99a7539ec6ab7b957099b8f868564255e8"
       ]
     },
-    "failure": {},
-    "report": "docs/program/agent/20261116183514_machine-readable-commands-for-the-local-.md"
+    "report": "docs/program/agent/20261116183514_machine-readable-commands-for-the-local-.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261116183514_machine-readable-commands-for-the-local-.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0
+        },
+        {
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "task test command",
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass"
+        }
+      ],
+      "review_required": false
+    },
+    "review": {
+      "status": "fail",
+      "summary": "The command surface itself is implemented well: client.py parses say/status/tasks/task/projects/session/use/history/plan/pause/resume/daemon, client_cli.py builds one flat envelope with a non-zero exit and a single JSON error object, outcome.py observes the existing CommandRouter instead of adding a second dispatch table, and session.py makes the selected project a durable engine-side session defaulting to `local` (ledger chat id 0). The attributed change does, however, miss two stated requirements: the public docs were not updated (README.md and PLAN.md are untouched; only a new docs/program/commands.md was added), and the `--json` flag is not actually honoured by the new commands, which always print the JSON envelope on stdout and only ever gate the pre-existing commands. Everything else (acceptance checks, script-mode `say` routing, error envelope, sessions, no new dependencies, signed-off commit) looks in order.",
+      "requirements": [
+        {
+          "requirement": "Every local-client operation is reachable as a parameterized, non-interactive `forgel` subcommand (say, status, milestone status, task list, accept/reject/retry, daemon, pause, resume, plan from goal, projects, select project)",
+          "verdict": "pass",
+          "note": "client.build_parser defines say, status, tasks, task accept|reject|retry|cancel|add, plan --goal/--status, daemon, pause, resume, projects, session/use."
+        },
+        {
+          "requirement": "`forgel say` is the single free-text engine entry point returning the router's structured outcome (answer, change_request, plan, action) with reply text",
+          "verdict": "pass",
+          "note": "client_cli.say calls outcome.handle_outcome, which delegates to CommandRouter.handle and records the agent result kind."
+        },
+        {
+          "requirement": "Each subcommand accepts `--json` and then writes exactly one JSON object to stdout; without the flag the human-readable text is the output",
+          "verdict": "fail",
+          "note": "`run()` ignores args.json and every client_cli function calls write() unconditionally, so `forgel say ...` (and projects/session/use/history/tasks) print the JSON envelope even without `--json`, contradicting the documented contract; only the legacy status/task/plan/pause/resume/daemon commands are gated on the flag."
+        },
+        {
+          "requirement": "Stable envelope (success flag, kind, reply text, operation payload) and a failed call exits non-zero with exactly one JSON error object",
+          "verdict": "pass",
+          "note": "envelope() emits ok/kind/text/error plus payload; fail() writes one error object and returns 1; argparse errors with --json produce a usage envelope."
+        },
+        {
+          "requirement": "The active project is a durable session on the engine side, keyed with default `local`, with commands to set and read it",
+          "verdict": "pass",
+          "note": "session.py maps `local` to ledger chat id 0; `forgel session [<project>]` and `forgel use <project>` set/read, `--session` overrides."
+        },
+        {
+          "requirement": "Free text goes through the same router logic as console and Telegram; no duplicated dispatch table or second command implementation in the CLI",
+          "verdict": "pass",
+          "note": "outcome.py observes a single router.handle call and only classifies the resulting reply/agent result; no per-command reimplementation in the client layer."
+        },
+        {
+          "requirement": "Recent conversation of a session is readable as a command returning it in JSON",
+          "verdict": "pass",
+          "note": "`forgel history [--limit N]` returns the `history` payload read through session.conversation/agent.load_history, not by parsing project files."
+        },
+        {
+          "requirement": "Existing behaviour unchanged: forgel, forgel chat, forgel telegram, interactive commands and their texts keep working; chat mode and console are not moved/deleted",
+          "verdict": "pass",
+          "note": "entry.py only short-circuits client commands and `--json` forms of existing commands; legacy CLI/console/chat paths are untouched."
+        },
+        {
+          "requirement": "Command set and JSON envelope documented in the public docs (README.md and the relevant section of PLAN.md)",
+          "verdict": "fail",
+          "note": "The attributed commit only adds docs/program/commands.md; README.md and PLAN.md are not part of the change and still describe the old one-line `forgel <command>` contract."
+        },
+        {
+          "requirement": "unittest tests assert the JSON envelope for each new command, the error envelope and exit codes, and that `forgel say` turns a change request into a queued task in script model mode",
+          "verdict": "pass",
+          "note": "tests/test_client.py builds a temp home and asserts one stdout line, envelope fields and exit codes for status, tasks, task accept/reject and (in the truncated tail) the remaining commands, the error case and the script-mode `say` change_request; the recorded test command exits 0."
+        },
+        {
+          "requirement": "Acceptance: `python3 -m unittest discover -s tests` passes including new command-interface tests",
+          "verdict": "pass",
+          "note": "Recorded task test command passed with exit 0."
+        },
+        {
+          "requirement": "Acceptance: with script model mode `forgel say --project <id> --json --text \"add a health endpoint\"` returns kind `change_request` and the queued task id",
+          "verdict": "pass",
+          "note": "say maps the recorder result kind change_request to the payload task/task_id through _task_payload and task_view; covered by a test in the same file."
+        },
+        {
+          "requirement": "Acceptance: `status`, `tasks`, `task accept/reject/retry`, `plan --status`, `projects` covered by tests and documented",
+          "verdict": "pass",
+          "note": "All appear in docs/program/commands.md and in the client parser/dispatch; tests for status/tasks/accept are visible and the suite is green."
+        },
+        {
+          "requirement": "Acceptance: session commands set and read the active project for a session key and default to `local`, covered by a test",
+          "verdict": "pass",
+          "note": "session_key/ledger_key make empty and \"0\" map to `local`; session and use commands exercise set/read."
+        },
+        {
+          "requirement": "Acceptance: existing console and Telegram tests still pass unchanged",
+          "verdict": "pass",
+          "note": "No test removals detected in the attributed commit and the full suite check exits 0."
+        },
+        {
+          "requirement": "Constraints: no new third-party dependencies, artifacts in English, commit signed off, no secrets in the JSON payload",
+          "verdict": "pass",
+          "note": "Only stdlib imports added; docstrings/commit message are English and the commit carries Signed-off-by; payloads are project/task/session views without secret material."
+        }
+      ],
+      "blocking": [
+        "Public documentation requirement not met: README.md and PLAN.md were not updated with the command set and JSON envelope; only a new docs/program/commands.md was added.",
+        "The `--json` flag is not honoured for the new commands: say/projects/session/use/history/tasks always print the JSON envelope, so without the flag the documented human-readable output is not produced."
+      ],
+      "report": "docs/program/agent/20261116183514_machine-readable-commands-for-the-local-.review.md"
+    },
+    "rework_count": 1,
+    "feedback": [
+      "review: Public documentation requirement not met: README.md and PLAN.md were not updated with the command set and JSON envelope; only a new docs/program/commands.md was added.",
+      "review: The `--json` flag is not honoured for the new commands: say/projects/session/use/history/tasks always print the JSON envelope, so without the flag the documented human-readable output is not produced.",
+      "review summary: The command surface itself is implemented well: client.py parses say/status/tasks/task/projects/session/use/history/plan/pause/resume/daemon, client_cli.py builds one flat envelope with a non-zero exit and a single JSON error object, outcome.py observes the existing CommandRouter instead of adding a second dispatch table, and session.py makes the selected project a durable engine-side session defaulting to `local` (ledger chat id 0). The attributed change does, however, miss two stated requirements: the public docs were not updated (README.md and PLAN.md are untouched; only a new docs/program/commands.md was added), and the `--json` flag is not actually honoured by the new commands, which always print the JSON envelope on stdout and only ever gate the pre-existing commands. Everything else (acceptance checks, script-mode `say` routing, error envelope, sessions, no new dependencies, signed-off commit) looks in order."
+    ],
+    "last_failure": {
+      "kind": "review",
+      "message": "The command surface itself is implemented well: client.py parses say/status/tasks/task/projects/session/use/history/plan/pause/resume/daemon, client_cli.py builds one flat envelope with a non-zero exit and a single JSON error object, outcome.py observes the existing CommandRouter instead of adding a second dispatch table, and session.py makes the selected project a durable engine-side session defaulting to `local` (ledger chat id 0). The attributed change does, however, miss two stated requirements: the public docs were not updated (README.md and PLAN.md are untouched; only a new docs/program/commands.md was added), and the `--json` flag is not actually honoured by the new commands, which always print the JSON envelope on stdout and only ever gate the pre-existing commands. Everything else (acceptance checks, script-mode `say` routing, error envelope, sessions, no new dependencies, signed-off commit) looks in order.",
+      "retryable": false
+    }
   }
 }
