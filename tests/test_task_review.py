@@ -745,6 +745,30 @@ class TaskReviewTest(unittest.TestCase):
             final["result"]["acceptance"]["status"], "pending"
         )
 
+    def test_reviewer_handles_a_batch_of_actions_and_a_verdict(
+        self,
+    ) -> None:
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    [
+                        {"action": "list_files", "path": "."},
+                        json.loads(PASS),
+                    ]
+                )
+            ]
+        )
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "pass", result.summary)
+
     def test_a_review_without_requirements_is_an_error(self) -> None:
         task = self._task()
         result = run_task_review(

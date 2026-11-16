@@ -1301,6 +1301,12 @@ def cmd_plan(args: argparse.Namespace) -> int:
             )
         except PlanningError as exc:
             print(f"error: {exc}", file=sys.stderr)
+            print(
+                "The plan was not created and no tasks were queued. The "
+                "plan is invalid or incomplete; adjust the goal or retry "
+                "after the model returns a valid plan.",
+                file=sys.stderr,
+            )
             return 1
         print(
             f"Plan {result.plan_id}: {len(result.tasks)} task(s)"

@@ -29,6 +29,7 @@ from .config import Settings
 from .environment import load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .model_output import json_objects
 from .model import (
     ModelClient,
     ModelError,
@@ -412,24 +413,6 @@ def _parse_plan(
     return notes, items, repositories
 
 
-def _json_object(raw: str) -> dict[str, Any] | None:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    try:
-        data = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
     if len(text) <= limit:
         return text
@@ -538,7 +521,8 @@ def plan_project(
     ) = None
     plan_retries = 0
     budget_notice = False
-    for step in range(MAX_RESEARCH_STEPS + 4):
+    research_steps = 0
+    for _ in range(MAX_RESEARCH_STEPS + 4):
         try:
             raw = model_client.complete(
                 messages, model=project_model_name(layout.control)
@@ -547,32 +531,82 @@ def plan_project(
             raise PlanningError(
                 f"planner model call failed: {exc}"
             ) from exc
-        data = _json_object(raw)
-        action = str(data.get("action", "")) if data else ""
-        if action not in RESEARCH_ACTIONS:
+        objects = json_objects(raw)
+        actions = [
+            item
+            for item in objects
+            if str(item.get("action", "")) in RESEARCH_ACTIONS
+        ]
+        finals = [
+            item
+            for item in objects
+            if str(item.get("action", "")) not in RESEARCH_ACTIONS
+        ]
+        observations: list[str] = []
+        for action_data in actions:
+            if research_steps >= MAX_RESEARCH_STEPS:
+                break
+            try:
+                observation = execute_repo_action(
+                    layout, repos, action_data
+                )
+            except RepoActionError as exc:
+                observation = f"error: {exc}"
+            observations.append(observation)
+            research_steps += 1
+        if observations:
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Observations:\n"
+                    + "\n\n".join(_cap(item) for item in observations)
+                    + "\n\nReply with another action or the final plan "
+                    "JSON object.",
+                )
+            )
+        if finals:
+            final = finals[-1]
             try:
                 parsed = _parse_plan(
-                    raw, known, default_repo, max_tasks
+                    json.dumps(final), known, default_repo, max_tasks
                 )
                 break
             except PlanningError as exc:
                 if plan_retries < 2:
-                    messages.append(
-                        ModelMessage("assistant", raw.strip())
-                    )
+                    if not observations:
+                        messages.append(
+                            ModelMessage("assistant", raw.strip())
+                        )
                     messages.append(
                         ModelMessage(
                             "user",
-                            "Return exactly one JSON plan object with "
-                            "notes and tasks. Do not use tool-call markup, "
-                            "XML, provider-specific function calls or "
-                            "prose.",
+                            f"The plan is invalid: {exc}. Return a "
+                            "corrected, complete JSON plan object with notes "
+                            "and tasks. Existing repositories are context: do "
+                            "not list one in repositories; use its id in a "
+                            "task. Do not use tool-call markup, XML, "
+                            "provider-specific function calls or prose.",
                         )
                     )
                     plan_retries += 1
                     continue
                 raise PlanningError(str(exc)) from exc
-        if step >= MAX_RESEARCH_STEPS:
+        if not actions:
+            if plan_retries < 2:
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Return exactly one JSON plan object with notes and "
+                        "tasks. Do not use tool-call markup, XML, "
+                        "provider-specific function calls or prose.",
+                    )
+                )
+                plan_retries += 1
+                continue
+            raise PlanningError("the planner did not return a plan")
+        if research_steps >= MAX_RESEARCH_STEPS and not observations:
             if budget_notice:
                 raise PlanningError(
                     "the planner exceeded the research step limit"
@@ -587,19 +621,6 @@ def plan_project(
             )
             budget_notice = True
             continue
-        try:
-            observation = execute_repo_action(layout, repos, data)
-        except RepoActionError as exc:
-            observation = f"error: {exc}"
-        messages.append(ModelMessage("assistant", raw.strip()))
-        messages.append(
-            ModelMessage(
-                "user",
-                "Observation:\n"
-                + _cap(observation)
-                + "\n\nReply with another action or the final plan JSON object.",
-            )
-        )
     if parsed is None:
         raise PlanningError("the planner did not return a plan")
     notes, items, repositories = parsed

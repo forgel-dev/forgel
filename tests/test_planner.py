@@ -12,6 +12,7 @@ from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
+from forgel import specs
 from forgel.planner import (
     MAX_RESEARCH_STEPS,
     PlanningError,
@@ -252,6 +253,110 @@ class PlannerTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("Deliver the revised outcome", text)
+
+    def test_planner_handles_a_batch_of_actions(self) -> None:
+        batch = [
+            {"action": "list_files", "path": "."},
+            {"action": "read_file", "path": "README.md"},
+            PLAN,
+        ]
+        client = ScriptedModelClient(
+            [json.dumps(batch)]
+            + [json.dumps(_spec_for(item)) for item in PLAN["tasks"]]
+            + [json.dumps(CRITIC)]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            dry_run=True,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+
+    def test_an_invalid_plan_is_corrected_by_the_model(self) -> None:
+        bad = dict(PLAN)
+        bad["repositories"] = [
+            {"id": "main", "create": False, "path": "."}
+        ]
+        client = ScriptedModelClient(
+            [json.dumps(bad), json.dumps(PLAN)]
+            + [json.dumps(_spec_for(item)) for item in PLAN["tasks"]]
+            + [json.dumps(CRITIC)]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            dry_run=True,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+        correction = client.requests[1][-1].content
+        self.assertIn("duplicates or already exists", correction)
+
+    def test_spec_writer_handles_a_batch_of_actions(self) -> None:
+        intent = {
+            "title": "Add a health endpoint",
+            "summary": "Expose GET /health",
+            "repo_id": "main",
+            "depends_on": [],
+        }
+        spec = _spec_for(intent)
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    [
+                        {"action": "list_files", "path": "."},
+                        {"action": "read_file", "path": "README.md"},
+                        spec,
+                    ]
+                )
+            ]
+        )
+        written = specs.write_task_spec(
+            self.settings,
+            self.layout,
+            "Bring the project to M1",
+            "notes",
+            intent,
+            client,
+        )
+        self.assertEqual(written["requirements"], spec["requirements"])
+
+    def test_spec_writer_budget_forces_the_spec(self) -> None:
+        intent = {
+            "title": "Add a health endpoint",
+            "summary": "Expose GET /health",
+            "repo_id": "main",
+            "depends_on": [],
+        }
+        spec = _spec_for(intent)
+        prefix = [
+            json.dumps({"action": "list_files", "path": "."})
+            for _ in range(specs.MAX_SPEC_STEPS + 1)
+        ]
+        client = ScriptedModelClient(prefix + [json.dumps(spec)])
+        written = specs.write_task_spec(
+            self.settings,
+            self.layout,
+            "Bring the project to M1",
+            "notes",
+            intent,
+            client,
+        )
+        self.assertEqual(written["requirements"], spec["requirements"])
+        self.assertTrue(
+            any(
+                "Research budget exhausted" in message.content
+                for request in client.requests
+                for message in request
+            )
+        )
 
     def test_plan_status_follows_its_tasks(self) -> None:
         result = self._plan()

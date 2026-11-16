@@ -1434,8 +1434,9 @@ class CommandRouter:
         except Exception as exc:  # noqa: BLE001 - answer instead of crashing
             return Reply(f"Agent error: {exc}")
         if result.kind in {"action", "actions"} and result.actions:
-            replies = []
+            replies: list[Reply] = []
             narration = False
+            error_reply: Reply | None = None
             actions = result.actions[:4]
             for index, item in enumerate(actions):
                 action = str(item.get("action") or "")
@@ -1446,14 +1447,27 @@ class CommandRouter:
                     text=result.text if index == 0 else "",
                 )
                 reply = self._execute_action(chat_id, actor, proxy)
-                replies.append(reply)
                 if action in {"status", "tasks"}:
                     narration = True
                 lowered = reply.text.strip().lower()
                 if lowered.startswith(
                     ("error", "tell me", "usage", "i can't")
                 ):
+                    error_reply = reply
                     break
+                replies.append(reply)
+            if error_reply is not None:
+                done = "\n\n".join(
+                    reply.text for reply in replies if reply.text
+                )
+                error_text = error_reply.text.strip()
+                if not error_text.lower().startswith("error"):
+                    error_text = f"error: {error_text}"
+                if done:
+                    error_text += (
+                        "\n\nEarlier in this request:\n" + done
+                    )
+                return Reply(error_text)
             combined = "\n\n".join(
                 reply.text for reply in replies if reply.text
             )

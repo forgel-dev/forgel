@@ -318,6 +318,33 @@ class SelectionAndAgentTest(unittest.TestCase):
         self.assertIn("running", reply.text.lower())
         self.assertFalse(is_paused(self.settings.home))
 
+    def test_an_action_error_keeps_earlier_results(self) -> None:
+        router = self._router(
+            [
+                json.dumps(
+                    {
+                        "kind": "actions",
+                        "reply": "",
+                        "actions": [
+                            {"action": "pause"},
+                            {"action": "plan", "action_args": {}},
+                            {"action": "resume"},
+                        ],
+                    }
+                )
+            ]
+        )
+        project = self._project("Alpha", "Alpha brief marker.")
+        self.ledger.set_session(7, project)
+        reply = router.handle(7, "pause then plan", "@tester")
+        self.assertIn("error: Tell me the milestone goal.", reply.text)
+        self.assertLess(
+            reply.text.index("error: Tell me the milestone goal."),
+            reply.text.index("Earlier in this request:"),
+        )
+        self.assertIn("daemon is paused", reply.text.lower())
+        self.assertTrue(is_paused(self.settings.home))
+
     def test_status_question_is_answered_in_natural_language(self) -> None:
         router = self._router(
             [

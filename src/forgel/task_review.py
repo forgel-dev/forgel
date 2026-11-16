@@ -24,6 +24,7 @@ from .artifacts import write_text
 from .config import Settings
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .model_output import json_objects
 from .model import (
     ModelClient,
     ModelError,
@@ -107,24 +108,6 @@ def _attributed(task: Mapping[str, Any]) -> tuple[list[str], list[str]]:
     if legacy and legacy not in commits:
         commits.append(legacy)
     return files, commits
-
-
-def _json_object(raw: str) -> dict[str, Any] | None:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    try:
-        data = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
 
 
 def _attributed_diff(
@@ -771,17 +754,55 @@ def run_task_review(
                 ),
                 log,
             )
-        data = _json_object(raw)
-        action = str(data.get("action", "")) if data else ""
-        if action not in RESEARCH_ACTIONS:
+        objects = json_objects(raw)
+        actions = [
+            item
+            for item in objects
+            if str(item.get("action", "")) in RESEARCH_ACTIONS
+        ]
+        finals = [
+            item
+            for item in objects
+            if str(item.get("action", "")) not in RESEARCH_ACTIONS
+        ]
+        observations: list[str] = []
+        for data in actions:
+            args = dict(data.get("action_args") or {})
+            for key in ("path", "repo_id"):
+                if key in data and key not in args:
+                    args[key] = data[key]
             try:
-                parsed = _parse_review(raw)
+                observation = execute_repo_action(
+                    layout,
+                    manifest_entries(layout),
+                    {"action": str(data["action"]), **args},
+                )
+            except RepoActionError as exc:
+                observation = f"error: {exc}"
+            observations.append(observation)
+        if observations:
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Observations:\n"
+                    + "\n\n".join(
+                        _cap(item, 6_000) for item in observations
+                    )
+                    + "\n\nReturn another action or the final verdict "
+                    "JSON.",
+                )
+            )
+        if finals:
+            try:
+                parsed = _parse_review(json.dumps(finals[-1]))
                 break
             except (ValueError, json.JSONDecodeError) as exc:
                 if answer_retries < 2:
-                    messages.append(
-                        ModelMessage("assistant", raw.strip())
-                    )
+                    if not observations:
+                        messages.append(
+                            ModelMessage("assistant", raw.strip())
+                        )
                     messages.append(
                         ModelMessage(
                             "user",
@@ -808,26 +829,31 @@ def run_task_review(
                     ),
                     log,
                 )
-        args = dict(data.get("action_args") or {})
-        for key in ("path", "repo_id"):
-            if key in data and key not in args:
-                args[key] = data[key]
-        research = {"action": action, **args}
-        try:
-            observation = execute_repo_action(
-                layout, manifest_entries(layout), research
+        if not actions:
+            if answer_retries < 2:
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Return exactly one JSON verdict object with "
+                        "verdict, summary, requirements and blocking. "
+                        "Do not use tool-call markup, XML, "
+                        "provider-specific function calls or prose.",
+                    )
+                )
+                answer_retries += 1
+                continue
+            return _record_review(
+                ledger,
+                layout,
+                project,
+                task,
+                ReviewResult(
+                    status="error",
+                    summary="the reviewer returned no usable JSON",
+                ),
+                log,
             )
-        except RepoActionError as exc:
-            observation = f"error: {exc}"
-        messages.append(ModelMessage("assistant", raw.strip()))
-        messages.append(
-            ModelMessage(
-                "user",
-                "Observation:\n"
-                + _cap(observation, 6_000)
-                + "\n\nReturn another action or the final verdict JSON.",
-            )
-        )
     if parsed is None:
         return _record_review(
             ledger,

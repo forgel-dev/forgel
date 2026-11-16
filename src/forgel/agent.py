@@ -32,6 +32,7 @@ from .repo_tools import (
     RepoActionError,
     execute_repo_action,
 )
+from .model_output import json_objects
 from .model import (
     ModelClient,
     ModelError,
@@ -602,24 +603,6 @@ def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
     )
 
 
-def _json_object(raw: str) -> dict[str, Any] | None:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    try:
-        data = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def _looks_like_tool_markup(text: str) -> bool:
     lowered = text.lower()
     return any(
@@ -655,28 +638,9 @@ UNFORMATTED_REPLY = (
 def parse_answer(raw: str) -> dict[str, Any]:
     """Parse a model answer, falling back to plain text for non-JSON output."""
 
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start >= 0 and end > start:
-        text = text[start : end + 1]
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return {
-            "kind": "answer",
-            "reply": (
-                UNFORMATTED_REPLY
-                if _looks_structured(raw)
-                else raw.strip()
-            ),
-        }
-    if not isinstance(data, dict):
+    objects = json_objects(raw)
+    data = objects[-1] if objects else None
+    if data is None:
         return {
             "kind": "answer",
             "reply": (
@@ -1044,6 +1008,7 @@ class ProjectAgent:
         model = project_model_name(layout.control)
         repos = manifest_entries(layout)
         raw = ""
+        answer: dict[str, Any] | None = None
         markup_retries = 0
         answer_retries = 0
         for step in range(MAX_RESEARCH_STEPS + 1):
@@ -1054,85 +1019,105 @@ class ProjectAgent:
                     text=f"Model call failed: {exc}",
                     kind="error",
                 )
-            data = _json_object(raw)
-            action = str(data.get("action", "")) if data else ""
-            if action not in RESEARCH_ACTIONS:
-                if _looks_like_tool_markup(raw) and markup_retries < 2:
-                    messages.append(
-                        ModelMessage("assistant", raw.strip())
+            objects = json_objects(raw)
+            actions = [
+                item
+                for item in objects
+                if str(item.get("action", "")) in RESEARCH_ACTIONS
+            ]
+            finals = [
+                item
+                for item in objects
+                if str(item.get("action", "")) not in RESEARCH_ACTIONS
+            ]
+            if actions and step == MAX_RESEARCH_STEPS:
+                if not finals:
+                    return AgentResult(
+                        text=(
+                            "I need more file reads than allowed for one "
+                            "answer. Please narrow the question."
+                        ),
+                        kind="error",
                     )
-                    messages.append(
-                        ModelMessage(
-                            "user",
-                            "Return exactly one JSON object, not tool-call "
-                            "markup. Read files with "
-                            '{"kind": "action", "action": "read_file", '
-                            '"action_args": {"path": "..."}} and answer with '
-                            '{"kind": "answer", "reply": "..."}.',
+                actions = []
+            if actions:
+                observations: list[str] = []
+                for data in actions:
+                    args = dict(data.get("action_args") or {})
+                    for key in ("path", "repo_id"):
+                        if key in data and key not in args:
+                            args[key] = data[key]
+                    try:
+                        observation = execute_repo_action(
+                            layout,
+                            repos,
+                            {"action": str(data["action"]), **args},
                         )
+                    except RepoActionError as exc:
+                        observation = f"error: {exc}"
+                    observations.append(observation)
+                    append_history(
+                        layout,
+                        "tool",
+                        _cap(observation),
+                        actor,
+                        session=session,
+                        tool=str(data["action"]),
+                        path=str(args.get("path") or ""),
                     )
-                    markup_retries += 1
-                    continue
-                candidate = parse_answer(raw)
-                unreadable = candidate["kind"] == "answer" and (
-                    not str(candidate["reply"]).strip()
-                    or candidate["reply"] == UNFORMATTED_REPLY
-                )
-                if unreadable and answer_retries < 2:
-                    messages.append(
-                        ModelMessage("assistant", raw.strip())
-                    )
-                    messages.append(
-                        ModelMessage(
-                            "user",
-                            "That reply cannot be shown to the user. Return "
-                            "exactly one JSON object with kind=answer and a "
-                            "non-empty plain-text reply. Do not return a "
-                            "plan, a task list, tool-call markup or an "
-                            "empty reply. Use a read_file action if you "
-                            "still need a file.",
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Observations:\n"
+                        + "\n\n".join(
+                            _cap(item) for item in observations
                         )
+                        + "\n\nContinue with another action or the final "
+                        "JSON answer.",
                     )
-                    answer_retries += 1
+                )
+                if not finals:
                     continue
-                break
-            if step == MAX_RESEARCH_STEPS:
-                return AgentResult(
-                    text=(
-                        "I need more file reads than allowed for one answer. "
-                        "Please narrow the question."
-                    ),
-                    kind="error",
+            if _looks_like_tool_markup(raw) and markup_retries < 2:
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Return exactly one JSON object, not tool-call "
+                        "markup. Read files with "
+                        '{"kind": "action", "action": "read_file", '
+                        '"action_args": {"path": "..."}} and answer with '
+                        '{"kind": "answer", "reply": "..."}.',
+                    )
                 )
-            args = dict(data.get("action_args") or {})
-            for key in ("path", "repo_id"):
-                if key in data and key not in args:
-                    args[key] = data[key]
-            research = {"action": action, **args}
-            try:
-                observation = execute_repo_action(layout, repos, research)
-            except RepoActionError as exc:
-                observation = f"error: {exc}"
-            append_history(
-                layout,
-                "tool",
-                _cap(observation),
-                actor,
-                session=session,
-                tool=action,
-                path=str(args.get("path") or ""),
+                markup_retries += 1
+                continue
+            candidate = parse_answer(
+                json.dumps(finals[-1]) if finals else raw
             )
-            messages.append(ModelMessage("assistant", raw.strip()))
-            messages.append(
-                ModelMessage(
-                    "user",
-                    "Observation:\n"
-                    + _cap(observation)
-                    + "\n\nContinue with another action or the final "
-                    "JSON answer.",
+            unreadable = candidate["kind"] == "answer" and (
+                not str(candidate["reply"]).strip()
+                or candidate["reply"] == UNFORMATTED_REPLY
+            )
+            if unreadable and answer_retries < 2:
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "That reply cannot be shown to the user. Return "
+                        "exactly one JSON object with kind=answer and a "
+                        "non-empty plain-text reply. Do not return a plan, "
+                        "a task list, tool-call markup or an empty reply. "
+                        "Use a read_file action if you still need a file.",
+                    )
                 )
-            )
-        answer = parse_answer(raw)
+                answer_retries += 1
+                continue
+            answer = candidate
+            break
+        if answer is None:
+            answer = parse_answer(raw)
         result_text = answer["reply"]
         request = None
         task_id = None

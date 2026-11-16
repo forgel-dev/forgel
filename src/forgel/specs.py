@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import requirements as requirements_doc
 from .layout import ProjectLayout
+from .model_output import json_objects
 from .model import (
     ModelClient,
     ModelError,
@@ -132,24 +133,6 @@ Return exactly one JSON object:
 Use sufficient=true only when the plan as written solves the problem. Do not
 rewrite the specifications; report the gaps. Return JSON only.
 """
-
-
-def _json_object(raw: str) -> dict[str, Any] | None:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    try:
-        data = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
 
 
 def _strings(value: Any) -> list[str]:
@@ -291,14 +274,28 @@ def write_task_spec(
     model = project_model_name(layout.control)
     parsed: dict[str, Any] | None = None
     retries = 0
-    for step in range(MAX_SPEC_STEPS + 2):
+    research_steps = 0
+    budget_notice = False
+    for _ in range(MAX_SPEC_STEPS + 4):
         try:
             raw = client.complete(messages, model=model)
         except ModelError as exc:
             raise SpecError(f"the requirements writer failed: {exc}") from exc
-        data = _json_object(raw)
-        action = str(data.get("action", "")) if data else ""
-        if action in RESEARCH_ACTIONS and step < MAX_SPEC_STEPS:
+        objects = json_objects(raw)
+        actions = [
+            item
+            for item in objects
+            if str(item.get("action", "")) in RESEARCH_ACTIONS
+        ]
+        finals = [
+            item
+            for item in objects
+            if str(item.get("action", "")) not in RESEARCH_ACTIONS
+        ]
+        observations: list[str] = []
+        for data in actions:
+            if research_steps >= MAX_SPEC_STEPS:
+                break
             args = dict(data.get("action_args") or {})
             for key in ("path", "repo_id"):
                 if key in data and key not in args:
@@ -307,26 +304,50 @@ def write_task_spec(
                 observation = execute_repo_action(
                     layout,
                     manifest_entries(layout),
-                    {"action": action, **args},
+                    {"action": str(data["action"]), **args},
                 )
             except RepoActionError as exc:
                 observation = f"error: {exc}"
+            observations.append(observation)
+            research_steps += 1
+        if observations:
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
                     "user",
-                    "Observation:\n"
-                    + observation[:MAX_SPEC_CHARS]
+                    "Observations:\n"
+                    + "\n\n".join(
+                        item[:MAX_SPEC_CHARS] for item in observations
+                    )
                     + "\n\nReturn another action or the final spec JSON.",
                 )
             )
-            continue
-        try:
-            parsed = _normalize_spec(data or {}, intent)
-            break
-        except SpecError:
+        if finals:
+            try:
+                parsed = _normalize_spec(finals[-1], intent)
+                break
+            except SpecError as exc:
+                if retries >= 1:
+                    keys = sorted(finals[-1].keys())
+                    raise SpecError(
+                        f"{exc}; model keys: {keys}; output: {raw[:600]}"
+                    ) from exc
+                if not observations:
+                    messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Return a complete JSON specification with explicit "
+                        "requirements, acceptance criteria and checks.",
+                    )
+                )
+                retries += 1
+                continue
+        if not actions:
             if retries >= 1:
-                raise
+                raise SpecError(
+                    "the requirements writer did not return a specification"
+                )
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
@@ -336,6 +357,22 @@ def write_task_spec(
                 )
             )
             retries += 1
+            continue
+        if research_steps >= MAX_SPEC_STEPS and not observations:
+            if budget_notice:
+                raise SpecError(
+                    "the requirements writer exceeded the research step limit"
+                )
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Research budget exhausted. Return the final spec JSON "
+                    "now; do not read or list more files.",
+                )
+            )
+            budget_notice = True
+            continue
     if parsed is None:
         raise SpecError("the requirements writer did not return a spec")
     return parsed
@@ -377,9 +414,21 @@ def review_plan(
         )
     except ModelError as exc:
         raise SpecError(f"the plan review failed: {exc}") from exc
-    data = _json_object(raw)
-    if data is None or not isinstance(data.get("sufficient"), bool):
-        raise SpecError("the plan review did not return a verdict")
+    objects = json_objects(raw)
+    data = next(
+        (
+            item
+            for item in objects
+            if isinstance(item.get("sufficient"), bool)
+        ),
+        None,
+    )
+    if data is None:
+        keys = [sorted(item.keys()) for item in objects]
+        raise SpecError(
+            "the plan review did not return a verdict; "
+            f"model objects: {keys}; output: {raw[:600]}"
+        )
     findings = [
         {
             "task": int(item.get("task", 0)),

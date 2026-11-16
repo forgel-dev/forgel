@@ -137,6 +137,27 @@ class AgentTest(unittest.TestCase):
         self.assertIn("TRACKED-MARKER", context)
         self.assertNotIn("UNTRACKED-MARKER", context)
 
+    def test_a_batch_of_actions_and_an_answer_is_handled(self) -> None:
+        project = self._project("Batch", "A batch brief.")
+        response = json.dumps(
+            [
+                {
+                    "kind": "action",
+                    "action": "list_files",
+                    "action_args": {"path": "."},
+                },
+                {"kind": "answer", "reply": "Batch answer"},
+            ]
+        )
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([response]),
+        )
+        result = agent.handle(project, "What is here?", "@tester")
+        self.assertEqual(result.kind, "answer")
+        self.assertEqual(result.text, "Batch answer")
+
     def test_failure_is_explained_to_the_user(self) -> None:
         project = self._project("Failure", "A failure brief.")
         response = {
