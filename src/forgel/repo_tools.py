@@ -47,7 +47,7 @@ def _repo(
     repos: Sequence[Mapping[str, Any]],
     action: Mapping[str, Any],
 ) -> Path:
-    return layout.repo_path(_repo_id(repos, action))
+    return layout.repo_path(_repo_id(repos, action)).resolve()
 
 
 def _path(repo: Path, value: Any) -> Path:
