@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.adopt import (
     AdoptError,
@@ -20,6 +21,7 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.program_manifest import entries
 from forgel.projects import create_project
+from forgel.providers.github_auth import GithubAuthError
 from forgel.sync import reconcile_project, sync_project
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +64,16 @@ class AdoptTest(unittest.TestCase):
         )
         self.ledger = Ledger(self.settings.db_path)
         self.addCleanup(self.ledger.close)
+        # A test fixture without an origin must never create a real GitHub
+        # repository, even when the host has GitHub App credentials.
+        self._auth_patch = patch(
+            "forgel.adopt.GithubAuth",
+            side_effect=GithubAuthError(
+                "remote creation disabled in tests"
+            ),
+        )
+        self._auth_patch.start()
+        self.addCleanup(self._auth_patch.stop)
 
     def _source(self, name: str, filename: str = "README.md") -> Path:
         return _make_repo(self.home / "sources" / name, filename)

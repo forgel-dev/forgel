@@ -114,6 +114,9 @@ def _make_source(path: Path) -> None:
         "-m",
         "initial",
     )
+    origin = path.parent / f"{path.name}-origin.git"
+    _git(path.parent, "init", "--bare", "-q", "-b", "main", str(origin))
+    _git(path, "remote", "add", "origin", str(origin))
 
 
 def _checks(project: dict, layout: ProjectLayout, task: dict) -> list[tuple[str, bool, str]]:
