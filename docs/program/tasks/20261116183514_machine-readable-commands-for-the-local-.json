@@ -52,9 +52,130 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-16T18:35:14+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-16T18:35:14+00:00",
+  "finished_at": "2026-11-16T19:37:41+00:00",
+  "result": {
+    "summary": "Реализован машинно-читаемый интерфейс локального клиента. Добавлены модули src/forgel/session.py (долговременная сессия на стороне движка, ключ по умолчанию `local` = chat id 0 консоли; set/get/clear, просмотр истории), src/forgel/outcome.py (единая точка `forgel say`: один вызов существующего CommandRouter, результат — answer / change_request с очередной задачей / plan / action с текстом ответа), src/forgel/client_cli.py (обёртки над ядром: say, projects, session, use, history, tasks, status, task accept/reject/retry/cancel/add, plan --status/--goal, daemon, pause, resume; плоский конверт ok/kind/text/error + payload), src/forgel/client.py (парсер и диспетчер: новые команды всегда у клиента, status/task/plan/pause/resume/daemon перехватываются только с --json, поэтому человекочитаемое поведение и существующие тесты не меняются) и обновлён src/forgel/entry.py. Добавлены тесты tests/test_client.py (15 тестов: конверт каждой команды, ошибка с ненулевым кодом и одним JSON, сессии, история, say с маршрутизацией change_request в очередь в script-режиме) и публичная документация docs/program/commands.md с набором команд и конвертом. Полный прогон `python3 -m unittest discover -s tests` — 527 тестов, OK.",
+    "files_changed": [
+      "docs/program/commands.md",
+      "src/forgel/client.py",
+      "src/forgel/client_cli.py",
+      "src/forgel/entry.py",
+      "src/forgel/outcome.py",
+      "src/forgel/session.py",
+      "tests/test_client.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import os; print(sorted(os.listdir('tests')))"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_client",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_client",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_client",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261116193643_inspect-and-finish: context handoff to session 2 (~4819/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptan\n... [output truncated, 9412 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "The session key defaults to `local`, matching the console's chat id 0, and is passed with `--session` when another value is needed.",
+      "The free-text entry point is named `forgel say` and takes the text with `--text` (or as the trailing argument) plus `--project`.",
+      "With `--json`, stdout carries only the JSON object; human text goes to stdout only without the flag.",
+      "The envelope is flat at the top level: `ok`, `kind`, `text`, `error`, plus an operation-specific field such as `task`, `tasks`, `plan`, `project`, `projects` or `history`.",
+      "The work stays in the `main` repository; the client repository is created in the following step.",
+      "Ключ сессии по умолчанию `local` отображается на chat id 0, поэтому выбор проекта в консоли и через клиент общий; произвольный ключ хэшируется в отдельную строку сессии.",
+      "Подкоманды status/task/plan/pause/resume/daemon перехватываются клиентом только при наличии --json; без флага работает прежний CLI-парсер и прежний текст.",
+      "Для say текст берётся из --text или из завершающих аргументов (--project задаётся флагом, так как позиционный аргумент занят словами).",
+      "Список задач и задач-решений отдаёт сокращённое представление задачи (id, title, status, repo_id, plan_id, summary, created_at), а поле task_id дублируется на верхнем уровне для change_request.",
+      "Полный контракт записан в docs/program/commands.md; раздел README не переписывался целиком, чтобы не рисковать потерей содержимого большого публичного файла — раздел доступен по этому документу."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 139,
+      "estimated_input_tokens": 25713981,
+      "provider_input_tokens": 26353801,
+      "provider_output_tokens": 829114,
+      "estimated_tokens": 566175,
+      "state": ""
+    },
+    "test_removals": [],
+    "git": {
+      "base": "8638051a3aec388e6413e63a79bc82b0de742ab7",
+      "head": "5a511a99a7539ec6ab7b957099b8f868564255e8",
+      "commit": "5a511a99a7539ec6ab7b957099b8f868564255e8",
+      "commits": [
+        "5a511a99a7539ec6ab7b957099b8f868564255e8"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261116183514_machine-readable-commands-for-the-local-.md"
+  }
 }
