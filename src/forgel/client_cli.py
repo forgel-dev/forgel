@@ -18,6 +18,7 @@ import json
 import sys
 from typing import Any
 
+from . import language
 from . import session as session_store
 from . import tasks as task_store
 from .agent import ProjectAgent
@@ -27,6 +28,8 @@ from .chat import CommandRouter
 from .config import Settings
 from .control import is_paused, set_paused
 from .daemon import project_state, run_daemon
+from .i18n import has as _has
+from .i18n import t as _t
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
@@ -36,6 +39,49 @@ from .projects import ProjectError, resolve_project
 from .proposals import summarize_proposals
 from .sync import reconciliation_status_path
 from .task_review import accept_task, reject_task
+
+
+def _values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        result: list[str] = []
+        for item in value:
+            result.extend(_values(item))
+        return result
+    return []
+
+
+def _lang(args: Any) -> str:
+    values: list[str] = []
+    for value in vars(args).values():
+        values.extend(_values(value))
+    return (
+        "ru"
+        if any(
+            language.detect(value, "en") == "ru"
+            for value in values
+        )
+        else "en"
+    )
+
+
+def _say(args: Any, key: str, **values: Any) -> str:
+    return _t(_lang(args), key, **values)
+
+
+def _status_name(args: Any, status: object) -> str:
+    key = str(status or "")
+    lang = _lang(args)
+    return _t(lang, key) if _has(lang, key) else key
+
+
+def _plan_status_name(args: Any, status: object) -> str:
+    key = f"plan_{status or 'none'}"
+    lang = _lang(args)
+    return (
+        _t(lang, key) if _has(lang, key) else str(status or "")
+    )
 
 
 def envelope(
@@ -71,7 +117,7 @@ def emit(args: Any, data: dict[str, Any]) -> None:
 def fail(args: Any, kind: str, message: str) -> int:
     """Report an error; a JSON client still gets exactly one object."""
 
-    print(f"error: {message}", file=sys.stderr)
+    print(_say(args, "cli_error", error=message), file=sys.stderr)
     if getattr(args, "json", False):
         write(envelope(False, kind, "", message))
     return 1
@@ -97,10 +143,7 @@ def target(ledger: Ledger, args: Any) -> dict[str, Any]:
             or ""
         )
     if not token:
-        raise ProjectError(
-            "no project selected; pass a project id or run "
-            "`forgel session <project>`"
-        )
+        raise ProjectError(_say(args, "client_no_project"))
     return resolve_project(ledger, token)
 
 
@@ -127,7 +170,7 @@ def say(settings: Settings, ledger: Ledger, args: Any) -> int:
         return fail(
             args,
             "say",
-            'say needs text: --text "..." or a trailing argument',
+            _say(args, "client_say_requires"),
         )
     try:
         project = target(ledger, args)
@@ -156,15 +199,26 @@ def say(settings: Settings, ledger: Ledger, args: Any) -> int:
     return 0
 
 
-def projects_text(items: list[dict[str, Any]]) -> str:
+def projects_text(
+    items: list[dict[str, Any]], lang: str = "en"
+) -> str:
     if not items:
-        return "no projects"
-    lines = ["Projects: " + str(len(items))]
+        return _t(lang, "client_no_projects")
+    lines = [
+        _t(lang, "client_projects_header", count=len(items))
+    ]
     for item in items:
         marker = "*" if item["selected"] else " "
         lines.append(
-            f"{marker} {item['id']}  {item['name']}\n"
-            f"    gen {item['generation']}  {item['state']}"
+            _t(
+                lang,
+                "client_project_entry",
+                marker=marker,
+                id=item["id"],
+                name=item["name"],
+                generation=item["generation"],
+                state=item["state"],
+            )
         )
     return "\n".join(lines)
 
@@ -185,7 +239,7 @@ def projects(settings: Settings, ledger: Ledger, args: Any) -> int:
     emit(
         args,
         envelope(
-            True, "projects", projects_text(items), session=key, projects=items
+            True, "projects", projects_text(items, _lang(args)), session=key, projects=items
         ),
     )
     return 0
@@ -204,7 +258,13 @@ def use(settings: Settings, ledger: Ledger, args: Any) -> int:
         envelope(
             True,
             "use",
-            f"Selected {project['name']} ({project['id']}) for session {key}.",
+            _say(
+                args,
+                "client_use_selected",
+                name=project["name"],
+                project=project["id"],
+                session=key,
+            ),
             session=key,
             project=project_ref(project),
         ),
@@ -233,9 +293,17 @@ def session(settings: Settings, ledger: Ledger, args: Any) -> int:
         else None
     )
     if record is not None:
-        text = f"Session {key} selects {record['name']} ({record['id']})."
+        text = _say(
+            args,
+            "client_session_selects",
+            session=key,
+            name=record["name"],
+            project=record["id"],
+        )
     else:
-        text = f"Session {key} has no project selected."
+        text = _say(
+            args, "client_session_none", session=key
+        )
     emit(args, envelope(True, "session", text, session=key, project=record))
     return 0
 
@@ -250,13 +318,21 @@ def history(settings: Settings, ledger: Ledger, args: Any) -> int:
         if view["project"]
         else None
     )
-    project = record["id"] if record else "no project"
+    project = (
+        record["id"] if record else _say(args, "client_no_project_word")
+    )
     emit(
         args,
         envelope(
             True,
             "history",
-            f"History of session {key}: {len(items)} turn(s) in {project}.",
+            _say(
+                args,
+                "client_history",
+                session=key,
+                count=len(items),
+                project=project,
+            ),
             session=key,
             project=record,
             history=items,
@@ -275,14 +351,20 @@ def tasks(settings: Settings, ledger: Ledger, args: Any) -> int:
     layout = ProjectLayout.detect(project["workspace"])
     items = [task_view(task) for task in task_store.list_tasks(layout)]
     if items:
-        lines = [f"Tasks: {len(items)}"]
+        lines = [
+            _say(args, "client_tasks_header", count=len(items))
+        ]
         for item in items:
-            lines.append(f"{item['id']}  {item['status']}  {item['title']}")
+            lines.append(
+                f"{item['id']}  "
+                f"{_status_name(args, item['status'])}  "
+                f"{item['title']}"
+            )
             if item["summary"]:
                 lines.append(f"  {item['summary']}")
         text = "\n".join(lines)
     else:
-        text = "No tasks. A change request sent as a plain message queues one."
+        text = _say(args, "client_tasks_none")
     emit(
         args,
         envelope(
@@ -335,10 +417,19 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
         task_store.commit_task(
             layout, created["id"], f"Add task {created['id']}"
         )
-        return _finish_task(args, project, created, f"Queued {created['id']}.")
+        return _finish_task(
+            args,
+            project,
+            created,
+            _say(args, "client_queued", task=created["id"]),
+        )
     task_id = str(getattr(args, "task_id", "") or "").strip()
     if not task_id:
-        return fail(args, "task", f"task {action} requires --task")
+        return fail(
+            args,
+            "task",
+            _say(args, "client_task_requires", action=action),
+        )
     if action in {"retry", "cancel"}:
         try:
             updated = (
@@ -353,11 +444,24 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
             updated["id"],
             f"{action.capitalize()} task {updated['id']}",
         )
-        verb = "Requeued" if action == "retry" else "Cancelled"
-        return _finish_task(args, project, updated, f"{verb} {updated['id']}.")
+        verb_key = (
+            "client_task_requeued"
+            if action == "retry"
+            else "client_task_cancelled"
+        )
+        return _finish_task(
+            args,
+            project,
+            updated,
+            _say(args, verb_key, task=updated["id"]),
+        )
     stored = task_store.get_task(layout, task_id)
     if stored is None:
-        return fail(args, "task", f"unknown task {task_id!r}")
+        return fail(
+            args,
+            "task",
+            _say(args, "client_unknown_task", task=task_id),
+        )
     actor = str(getattr(args, "actor", "") or "owner")
     notes = str(getattr(args, "notes", "") or "")
     decide = accept_task if action == "accept" else reject_task
@@ -371,7 +475,14 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
         args,
         project,
         updated,
-        f"{action.capitalize()}ed {updated['id']} ({updated['status']}).",
+        _say(
+            args,
+            "client_task_accepted"
+            if action == "accept"
+            else "client_task_rejected",
+            task=updated["id"],
+            status=_status_name(args, updated["status"]),
+        ),
     )
 
 
@@ -441,9 +552,14 @@ def status(settings: Settings, ledger: Ledger, args: Any) -> int:
         envelope(
             True,
             "status",
-            f"{project['id']}: {view['state']} "
-            f"(generation {view['generation']}, "
-            f"checkpoint {view['checkpoint']})",
+            _say(
+                args,
+                "client_status_line",
+                project=project["id"],
+                state=view["state"],
+                generation=view["generation"],
+                checkpoint=view["checkpoint"],
+            ),
             project=view,
         ),
     )
@@ -459,11 +575,14 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
     if getattr(args, "status", False):
         summary = plan_status(layout)
         if summary["status"] == "none":
-            text = "no plans"
+            text = _say(args, "cli_no_plans")
         else:
-            text = (
-                f"Plan {summary['plan_id']}: {summary['status']} "
-                f"({len(summary['tasks'])} tasks)"
+            text = _say(
+                args,
+                "chat_plan_status_header",
+                plan=summary["plan_id"],
+                status=_plan_status_name(args, summary["status"]),
+                count=len(summary["tasks"]),
             )
         emit(
             args,
@@ -478,7 +597,9 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
         return 0
     goal = str(getattr(args, "goal", "") or "").strip()
     if not goal:
-        return fail(args, "plan", 'provide --goal "..." or --status')
+        return fail(
+            args, "plan", _say(args, "client_plan_requires")
+        )
     try:
         result = plan_project(
             settings,
@@ -495,8 +616,17 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
         envelope(
             True,
             "plan",
-            f"Plan {result.plan_id}: {len(result.tasks)} task(s)"
-            + (" (dry run)" if result.dry_run else ""),
+            _say(
+                args,
+                "cli_plan_header",
+                plan=result.plan_id,
+                count=len(result.tasks),
+                dry_run=(
+                    _say(args, "cli_plan_dry_run_suffix")
+                    if result.dry_run
+                    else ""
+                ),
+            ),
             project=project_ref(project),
             plan={
                 "id": result.plan_id,
@@ -521,13 +651,26 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
 
 def pause(settings: Settings, ledger: Ledger, args: Any) -> int:
     set_paused(settings.home, True)
-    emit(args, envelope(True, "control", "Daemon paused.", paused=True))
+    emit(
+        args,
+        envelope(
+            True, "control", _say(args, "cli_daemon_paused"), paused=True
+        ),
+    )
     return 0
 
 
 def resume(settings: Settings, ledger: Ledger, args: Any) -> int:
     set_paused(settings.home, False)
-    emit(args, envelope(True, "control", "Daemon resumed.", paused=False))
+    emit(
+        args,
+        envelope(
+            True,
+            "control",
+            _say(args, "cli_daemon_resumed"),
+            paused=False,
+        ),
+    )
     return 0
 
 
@@ -545,7 +688,7 @@ def daemon(settings: Settings, ledger: Ledger, args: Any) -> int:
         envelope(
             True,
             "daemon",
-            f"Daemon ran {cycles} cycle(s).",
+            _say(args, "client_daemon_ran", count=cycles),
             cycles=cycles,
             paused=is_paused(settings.home),
         ),

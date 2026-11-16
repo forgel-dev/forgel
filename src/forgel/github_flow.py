@@ -531,7 +531,7 @@ def status_text(
     auth = GithubAuth(settings.home)
     lines = [
         _t(lang, "github_status_project", project=project["id"]),
-        _t(lang, "github_status_auth", auth=auth.status()),
+        _t(lang, "github_status_auth", auth=auth.status(lang)),
         _t(lang, "github_status_merge", policy=git_config.merge),
         _t(
             lang,

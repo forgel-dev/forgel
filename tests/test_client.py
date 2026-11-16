@@ -357,6 +357,23 @@ class ClientCommandsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("History of session local", text)
 
+    def test_human_text_follows_a_russian_argument(self) -> None:
+        code, data, _ = self._call(
+            "task",
+            "add",
+            "--project",
+            self.project_id,
+            "--title",
+            "Добавь страницу",
+            "--require",
+            "Страница существует",
+            "--accept",
+            "Она открывается",
+            "--json",
+        )
+        self.assertEqual(code, 0, data)
+        self.assertIn("поставлена в очередь", data["text"])
+
     def test_failing_call_without_json_prints_no_object(self) -> None:
         code, text = self._raw("tasks", "missing-project")
         self.assertNotEqual(code, 0)

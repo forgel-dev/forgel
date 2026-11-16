@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..i18n import t as _t
 from ..secrets import get_secret
 
 DEFAULT_API_BASE = "https://api.github.com"
@@ -102,18 +103,20 @@ class GithubAuth:
     def app_ready(self) -> bool:
         return bool(self.app_id() and self.private_key())
 
-    def status(self) -> str:
+    def status(self, lang: str = "en") -> str:
         parts: list[str] = []
         try:
             app_ready = self.app_ready()
         except GithubAuthError as exc:
-            parts.append(f"GitHub App misconfigured: {exc}")
+            parts.append(
+                _t(lang, "github_auth_app_error", error=exc)
+            )
             app_ready = False
         if app_ready:
-            parts.append("GitHub App configured")
+            parts.append(_t(lang, "github_auth_app"))
         if self.pat():
-            parts.append("PAT configured")
-        return ", ".join(parts) or "no GitHub credentials"
+            parts.append(_t(lang, "github_auth_pat"))
+        return ", ".join(parts) or _t(lang, "github_auth_none")
 
     # --------------------------------------------------------------- tokens
 

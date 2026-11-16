@@ -345,6 +345,16 @@ class SelectionAndAgentTest(unittest.TestCase):
         self.assertIn("daemon is paused", reply.text.lower())
         self.assertTrue(is_paused(self.settings.home))
 
+    def test_fixed_replies_follow_the_user_language(self) -> None:
+        router = self._router()
+        project = self._project("Lang", "A brief.")
+        self.ledger.set_session(7, project)
+        self.ledger.set_session(8, project)
+        russian = router.handle(7, "/tasks задачи", "@tester")
+        self.assertIn("Задач нет", russian.text)
+        english = router.handle(8, "/tasks", "@tester")
+        self.assertIn("No tasks", english.text)
+
     def test_status_question_is_answered_in_natural_language(self) -> None:
         router = self._router(
             [

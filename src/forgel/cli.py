@@ -78,6 +78,61 @@ from .secrets import (
 )
 from .sync import SyncError, reconcile_project, sync_project
 from .telegram import TelegramConfig, TelegramConfigError, run_bot
+from .i18n import has as _has
+from .i18n import t as _t
+
+_UI_LANG = "en"
+
+
+def _say(key: str, **values: object) -> str:
+    return _t(_UI_LANG, key, **values)
+
+
+def _status_name(status: object) -> str:
+    key = str(status or "")
+    return _t(_UI_LANG, key) if _has(_UI_LANG, key) else key
+
+
+def _plan_status_name(status: object) -> str:
+    key = f"plan_{status or 'none'}"
+    return (
+        _t(_UI_LANG, key)
+        if _has(_UI_LANG, key)
+        else str(status or "")
+    )
+
+
+_DOCTOR_LABELS = {
+    "home writable": "cli_doctor_home_writable",
+    "registry": "cli_doctor_registry",
+    "jurisdictions": "cli_doctor_jurisdictions",
+    "templates": "cli_doctor_templates",
+    "ledger": "cli_doctor_ledger",
+    "control": "cli_doctor_control",
+    "context window": "cli_doctor_context_window",
+    "tokenizer": "cli_doctor_tokenizer",
+    "task pipeline": "cli_doctor_task_pipeline",
+    "model schedule": "cli_doctor_model_schedule",
+    "sandbox": "cli_doctor_sandbox",
+    "sandbox images": "cli_doctor_sandbox_images",
+    "sandbox limits": "cli_doctor_sandbox_limits",
+    "telegram": "cli_doctor_telegram",
+    "model": "cli_doctor_model",
+    "github auth": "cli_doctor_github_auth",
+    "git version": "cli_doctor_git_version",
+}
+
+
+def _set_ui_language(argv: Sequence[str]) -> None:
+    global _UI_LANG
+    _UI_LANG = (
+        "ru"
+        if any(
+            language.detect(str(item), "en") == "ru"
+            for item in argv
+        )
+        else "en"
+    )
 
 
 def _settings(args: argparse.Namespace) -> Settings:
@@ -98,7 +153,7 @@ def _settings(args: argparse.Namespace) -> Settings:
         )
         load_local_env(None, home.expanduser())
     except LocalEnvError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         raise SystemExit(2) from exc
     return Settings.from_env(args.home)
 
@@ -107,14 +162,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
     try:
         path = init_local_env(Path.cwd(), force=args.force)
     except LocalEnvError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
-    print(f"Created {path}")
-    print(
-        "Fill FORGEL_MODEL_API_KEY (and GitHub credentials if you publish), "
-        "then run `forgel`."
-    )
-    print("`forgel doctor` shows anything still missing.")
+    print(_say("cli_created", item=path))
+    print(_say("cli_setup_hint"))
+    print(_say("cli_doctor_hint"))
     return 0
 
 
@@ -139,19 +191,45 @@ def _print_result(
         scope = approval.get("scope", "staging")
         decision = approval.get("decision", "pending")
         print(
-            f"Project {project_id} is awaiting {scope} approval "
-            f"({decision}, generation {approval.get('generation')})."
+            _say(
+                "cli_awaiting",
+                project=project_id,
+                scope=_say(f"cli_scope_{scope}"),
+                decision=decision,
+                generation=approval.get("generation"),
+            )
         )
         if staging:
-            print(f"Staging: {staging.get('url', 'unknown')}")
-        print(f"Approve: forgel approve {project_id} --scope {scope}")
-        print(f"Then run: forgel run {project_id}")
+            print(
+                _say(
+                    "cli_staging",
+                    url=staging.get("url", _say("cli_unknown")),
+                )
+            )
+        print(
+            _say(
+                "cli_approve",
+                project=project_id,
+                scope=scope,
+            )
+        )
+        print(_say("cli_then_run", project=project_id))
         return
-    print(f"Project {project_id} is done.")
+    print(_say("cli_done", project=project_id))
     if staging:
-        print(f"Staging: {staging.get('url', 'unknown')}")
-        print(f"Command: {staging.get('command', 'unknown')}")
-    print(f"Serve it with: forgel serve {project_id}")
+        print(
+            _say(
+                "cli_staging",
+                url=staging.get("url", _say("cli_unknown")),
+            )
+        )
+        print(
+            _say(
+                "cli_command",
+                command=staging.get("command", _say("cli_unknown")),
+            )
+        )
+    print(_say("cli_serve_hint", project=project_id))
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -162,7 +240,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(project_id)
         return 0
     except ProjectError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 2
     finally:
         ledger.close()
@@ -174,13 +252,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         result = Orchestrator(settings, ledger).run(args.project_id)
         _print_result(ledger, args.project_id, result)
         return 0
     except StageError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
     finally:
         ledger.close()
@@ -192,36 +270,74 @@ def cmd_status(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         state = ledger.checkpoint_state(args.project_id)
-        checkpoint = state[0] if state is not None else "none"
+        checkpoint = (
+            state[0] if state is not None else _say("cli_none")
+        )
         generation = (
             state[1] if state is not None else ledger.current_generation(args.project_id)
         )
-        print(f"project:    {project['id']}")
-        print(f"name:       {project['name']}")
-        print(f"recipe:     {project.get('recipe_id') or 'none'}")
-        print(f"workspace:  {project['workspace']}")
-        print(f"generation: {generation}")
-        print(f"checkpoint: {checkpoint}")
-        print(f"state:      {project_state(ledger, project)}")
+        print(_say("cli_status_project", project=project["id"]))
+        print(_say("cli_status_name", name=project["name"]))
+        print(
+            _say(
+                "cli_status_recipe",
+                recipe=project.get("recipe_id")
+                or _say("cli_none"),
+            )
+        )
+        print(
+            _say(
+                "cli_status_workspace",
+                workspace=project["workspace"],
+            )
+        )
+        print(
+            _say("cli_status_generation", generation=generation)
+        )
+        print(
+            _say("cli_status_checkpoint", checkpoint=checkpoint)
+        )
+        print(
+            _say(
+                "cli_status_state",
+                state=project_state(ledger, project),
+            )
+        )
         for scope in ("staging", "production"):
             approval = latest_approval(ledger, project["id"], scope, generation)
             if approval is None:
-                value = "none"
+                value = _say("cli_none")
             else:
-                value = (
-                    f"{approval['decision']} by {approval['actor']} "
-                    f"at {approval['created_at']}"
+                value = _say(
+                    "cli_status_approval_value",
+                    decision=approval["decision"],
+                    actor=approval["actor"],
+                    at=approval["created_at"],
                 )
-            print(f"{scope + ':':<12}{value}")
+            print(
+                _say(
+                    "cli_status_approval",
+                    scope=_say(f"cli_scope_{scope}") + ":",
+                    value=value,
+                )
+            )
         print(
-            "proposals:  "
-            f"{len(summarize_proposals(ProjectLayout.detect(project['workspace']).control))}"
+            _say(
+                "cli_status_proposals",
+                count=len(
+                    summarize_proposals(
+                        ProjectLayout.detect(
+                            project["workspace"]
+                        ).control
+                    )
+                ),
+            )
         )
         print()
-        print(f"{'seq':>4}  {'gen':>3}  {'stage':<14} {'status':<10} artifacts")
+        print(_say("cli_events_header"))
         for event in ledger.events(args.project_id):
             try:
                 refs = json.loads(event["artifact_refs"])
@@ -243,12 +359,14 @@ def cmd_list(args: argparse.Namespace) -> int:
     try:
         projects = ledger.list_projects()
         if not projects:
-            print("no projects")
+            print(_say("cli_no_projects"))
             return 0
-        print(f"{'id':<36} {'name':<24} {'gen':>3} {'checkpoint':<14} created")
+        print(_say("cli_list_header"))
         for project in projects:
             state = ledger.checkpoint_state(project["id"])
-            checkpoint = state[0] if state is not None else "none"
+            checkpoint = (
+                state[0] if state is not None else _say("cli_none")
+            )
             generation = (
                 state[1]
                 if state is not None
@@ -268,12 +386,12 @@ def cmd_demo(args: argparse.Namespace) -> int:
     ledger = _ledger(settings)
     try:
         project_id = create_project(settings, ledger, args.name, args.brief)
-        print(f"Created {project_id}")
+        print(_say("cli_created", item=project_id))
         result = Orchestrator(settings, ledger).run(project_id)
         _print_result(ledger, project_id, result)
         return 0
     except (ProjectError, StageError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
     finally:
         ledger.close()
@@ -285,7 +403,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         try:
             result = sync_project(
@@ -298,46 +416,66 @@ def cmd_sync(args: argparse.Namespace) -> int:
                 notes=args.notes,
             )
         except (SyncError, ValueError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         if result.get("brownfield"):
             print(
-                f"Reconciliation: {result['decision']} "
-                f"({result['status']}). No generation started "
-                "(brownfield project)."
+                _say(
+                    "cli_sync_brownfield",
+                    decision=result["decision"],
+                    status=result["status"],
+                )
             )
         elif result.get("started"):
             decision = result.get("decision") or "forced"
             print(
-                f"Reconciliation applied: {decision}. "
-                f"Generation {result['generation']} started; "
-                f"re-run from {result['from_stage']}."
+                _say(
+                    "cli_sync_applied",
+                    decision=decision,
+                    generation=result["generation"],
+                    stage=result["from_stage"],
+                )
             )
-            print(f"Run: forgel run {args.project_id}")
+            print(_say("cli_run_hint", project=args.project_id))
         elif result.get("pending"):
             analysis = result.get("analysis", {})
             print(
-                f"External changes: {result['count']} file(s). "
-                "Decision required."
+                _say(
+                    "cli_sync_pending",
+                    count=result["count"],
+                )
             )
             labels = (
-                ("Violations", "violations"),
-                ("Requirements changed", "requirements"),
-                ("Documented modifications", "documented"),
-                ("Undocumented changes", "undocumented"),
-                ("Deletions", "deletions"),
+                "violations",
+                "requirements",
+                "documented",
+                "undocumented",
+                "deletions",
             )
-            for label, key in labels:
+            for key in labels:
                 items = analysis.get(key, [])
                 if items:
-                    print(f"  {label}: {len(items)}")
-            print(f"See {result.get('reconciliation')}.")
+                    print(
+                        "  "
+                        + _say(
+                            f"chat_sync_{key}",
+                            count=len(items),
+                        )
+                    )
             print(
-                f"Run: forgel reconcile {args.project_id} "
-                "--decision accept|fix|rollback|ignore [--notes ...]"
+                _say(
+                    "cli_sync_see",
+                    path=result.get("reconciliation"),
+                )
+            )
+            print(
+                _say(
+                    "cli_reconcile_hint",
+                    project=args.project_id,
+                )
             )
         else:
-            print("No external changes detected.")
+            print(_say("cli_no_changes"))
         return 0
     finally:
         ledger.close()
@@ -349,7 +487,7 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         try:
             result = reconcile_project(
@@ -361,21 +499,27 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
                 from_stage=args.from_stage,
             )
         except (SyncError, ValueError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         if result.get("brownfield"):
             print(
-                f"Reconciliation: {result['decision']} "
-                f"({result['status']}). No generation started "
-                "(brownfield project)."
+                _say(
+                    "cli_sync_brownfield",
+                    decision=result["decision"],
+                    status=result["status"],
+                )
             )
         else:
             print(
-                f"Reconciliation: {result['decision']} ({result['status']}). "
-                f"Generation {result['generation']} started; "
-                f"re-run from {result['from_stage']}."
+                _say(
+                    "cli_sync_started",
+                    decision=result["decision"],
+                    status=result["status"],
+                    generation=result["generation"],
+                    stage=result["from_stage"],
+                )
             )
-            print(f"Run: forgel run {args.project_id}")
+            print(_say("cli_run_hint", project=args.project_id))
         return 0
     finally:
         ledger.close()
@@ -387,27 +531,55 @@ def cmd_config(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         control = ProjectLayout.detect(project["workspace"]).control
         try:
             config = load_project_config(control)
         except ConfigError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         if config is None:
-            print("no forgel.toml; defaults apply")
+            print(_say("cli_no_config"))
             return 0
-        print(f"config:       {control / 'forgel.toml'}")
-        print(f"project:      {config.name or '—'}")
-        print(f"recipe:       {config.recipe or '—'}")
-        print(f"qa.runtime:   {config.qa.runtime}")
-        print(f"jurisdiction: {config.jurisdiction.pack}")
-        print(f"models:       {config.models.default} / {config.models.architecture}")
         print(
-            "budget:       "
-            f"${config.budget.per_feature_usd:g}/feature, "
-            f"${config.budget.per_project_usd:g}/project"
+            _say(
+                "cli_config_path",
+                path=control / "forgel.toml",
+            )
+        )
+        print(
+            _say(
+                "cli_config_project",
+                name=config.name or "—",
+            )
+        )
+        print(
+            _say(
+                "cli_config_recipe",
+                recipe=config.recipe or "—",
+            )
+        )
+        print(_say("cli_config_qa", runtime=config.qa.runtime))
+        print(
+            _say(
+                "cli_config_jurisdiction",
+                pack=config.jurisdiction.pack,
+            )
+        )
+        print(
+            _say(
+                "cli_config_models",
+                model=config.models.default,
+                architecture=config.models.architecture,
+            )
+        )
+        print(
+            _say(
+                "cli_config_budget",
+                feature=f"${config.budget.per_feature_usd:g}",
+                project=f"${config.budget.per_project_usd:g}",
+            )
         )
         return 0
     finally:
@@ -420,22 +592,29 @@ def cmd_context(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         control = ProjectLayout.detect(project["workspace"]).control
         files = resolve_context(control)
         if not files:
-            print("no context files")
+            print(_say("cli_no_context"))
             return 0
-        print("context files (priority order):")
+        print(_say("cli_context_header"))
         for item in files:
             if item.native:
-                kind = "native"
+                kind = _say("cli_context_native")
             elif item.name == "CLAUDE.md":
-                kind = "local shim"
+                kind = _say("cli_context_shim")
             else:
-                kind = "canon"
-            print(f"  {item.name:<12} {kind:<10} {len(item.text)} bytes")
+                kind = _say("cli_context_canon")
+            print(
+                _say(
+                    "cli_context_entry",
+                    name=item.name,
+                    kind=kind,
+                    size=len(item.text),
+                )
+            )
         if args.raw:
             print()
             print(effective_context(control))
@@ -450,28 +629,40 @@ def cmd_complexity(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
         try:
             config = load_project_config(layout.control)
         except ConfigError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         simplicity = config.simplicity if config is not None else SimplicityConfig()
         metrics = measure_patch(layout.root)
         violations = evaluate(metrics, simplicity)
         path = write_report(layout.control, metrics, violations)
-        print(f"report: {path.relative_to(layout.root)}")
         print(
-            f"added: {metrics.added_lines}, removed: {metrics.removed_lines}, "
-            f"files: {metrics.files_changed}"
+            _say(
+                "cli_report",
+                path=path.relative_to(layout.root),
+            )
         )
         print(
-            f"new config keys: {metrics.new_config_keys}, "
-            f"compat markers: {metrics.compat_markers}, "
-            f"branches: {metrics.branches_added}, "
-            f"append-only files: {metrics.append_only_files}"
+            _say(
+                "cli_complexity_metrics",
+                added=metrics.added_lines,
+                removed=metrics.removed_lines,
+                files=metrics.files_changed,
+            )
+        )
+        print(
+            _say(
+                "cli_complexity_extra",
+                keys=metrics.new_config_keys,
+                markers=metrics.compat_markers,
+                branches=metrics.branches_added,
+                append_only=metrics.append_only_files,
+            )
         )
         if violations:
             print("NEEDS_SIMPLIFICATION")
@@ -490,7 +681,7 @@ def cmd_propose(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         control = ProjectLayout.detect(project["workspace"]).control
         try:
@@ -504,7 +695,7 @@ def cmd_propose(args: argparse.Namespace) -> int:
                 risk=args.risk,
             )
         except (ConfigError, ProposalError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         print(path.relative_to(control))
         return 0
@@ -518,12 +709,12 @@ def cmd_proposals(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         control = ProjectLayout.detect(project["workspace"]).control
         proposals = summarize_proposals(control)
         if not proposals:
-            print("no proposals")
+            print(_say("cli_no_proposals"))
             return 0
         for proposal in proposals:
             print(
@@ -559,21 +750,30 @@ def cmd_serve(args: argparse.Namespace) -> int:
     try:
         project = ledger.get_project(args.project_id)
         if project is None:
-            print(f"error: unknown project {args.project_id}", file=sys.stderr)
+            print(_say("cli_unknown_project", project=args.project_id), file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
         script = layout.repo_path("api") / "app.py"
         if not script.exists():
-            print(f"error: {script} does not exist; run the project first", file=sys.stderr)
+            print(
+                _say("cli_serve_missing", path=script),
+                file=sys.stderr,
+            )
             return 1
         staging_path = layout.artifact("staging.json")
         if not staging_path.exists():
             print(
-                f"error: {staging_path} does not exist; run the project first",
+                _say("cli_serve_missing", path=staging_path),
                 file=sys.stderr,
             )
             return 1
-        print(f"Serving {project['name']} at http://127.0.0.1:{args.port}")
+        print(
+            _say(
+                "cli_serving",
+                name=project["name"],
+                port=args.port,
+            )
+        )
         env = {**os.environ, "PORT": str(args.port)}
         try:
             subprocess.run(
@@ -596,7 +796,7 @@ def _record_decision(args: argparse.Namespace, decision: str) -> int:
         try:
             project = resolve_project(ledger, args.project_id)
         except ProjectError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         actor = args.actor or os.environ.get("USER") or "cli"
         compliance = bool(
@@ -613,27 +813,28 @@ def _record_decision(args: argparse.Namespace, decision: str) -> int:
                 notes=args.notes,
             )
         except ApprovalError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         print(
-            f"Decision recorded: {record['scope']} {record['decision']} "
-            f"for {record['project_id']} (generation {record['generation']}) "
-            f"by {record['actor']}."
+            _say(
+                "cli_decision_recorded",
+                scope=_say(f"cli_scope_{record['scope']}"),
+                decision=record["decision"],
+                project=record["project_id"],
+                generation=record["generation"],
+                actor=record["actor"],
+            )
         )
         if record["decision"] != "approved":
-            print(
-                "The project stays at the approval gate. Start a new "
-                "generation with sync/reconcile before deciding again."
-            )
+            print(_say("cli_decision_gate"))
         elif record["scope"] == "production":
-            print(
-                "No deploy provider is configured; the release stays manual "
-                "and the approval is recorded for the audit trail."
-            )
+            print(_say("cli_decision_production"))
         else:
             print(
-                f"Run: forgel run {record['project_id']} "
-                "(or let the daemon continue)."
+                _say(
+                    "cli_decision_run",
+                    project=record["project_id"],
+                )
             )
         return 0
     finally:
@@ -651,14 +852,14 @@ def cmd_reject(args: argparse.Namespace) -> int:
 def cmd_pause(args: argparse.Namespace) -> int:
     settings = _settings(args)
     set_paused(settings.home, True)
-    print("Daemon paused.")
+    print(_say("cli_daemon_paused"))
     return 0
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
     settings = _settings(args)
     set_paused(settings.home, False)
-    print("Daemon resumed.")
+    print(_say("cli_daemon_resumed"))
     return 0
 
 
@@ -669,37 +870,49 @@ def cmd_task(args: argparse.Namespace) -> int:
         try:
             project = resolve_project(ledger, args.project_id)
         except ProjectError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
         if args.action == "retry":
             if not args.task_id:
-                print("error: task retry requires --task", file=sys.stderr)
+                print(
+                    _say("cli_task_retry_requires"),
+                    file=sys.stderr,
+                )
                 return 2
             try:
                 task = tasks.retry_task(layout, args.task_id)
             except ValueError as exc:
-                print(f"error: {exc}", file=sys.stderr)
+                print(_say("cli_error", error=exc), file=sys.stderr)
                 return 1
             tasks.commit_task(
                 layout, task["id"], f"Retry task {task['id']}"
             )
             print(
-                f"Requeued {task['id']} "
-                f"(manual retry {task['result'].get('manual_retries', 0)})."
+                _say(
+                    "cli_task_requeued",
+                    task=task["id"],
+                    count=task["result"].get("manual_retries", 0),
+                )
             )
             return 0
         if args.action in {"accept", "reject"}:
             if not args.task_id:
                 print(
-                    f"error: task {args.action} requires --task",
+                    _say(
+                        "cli_task_action_requires",
+                        action=args.action,
+                    ),
                     file=sys.stderr,
                 )
                 return 2
             task = tasks.get_task(layout, args.task_id)
             if task is None:
                 print(
-                    f"error: unknown task {args.task_id!r}",
+                    _say(
+                        "cli_unknown_task",
+                        task=args.task_id,
+                    ),
                     file=sys.stderr,
                 )
                 return 1
@@ -727,34 +940,41 @@ def cmd_task(args: argparse.Namespace) -> int:
                 f"{args.action.capitalize()} task {updated['id']}",
             )
             print(
-                f"{args.action.capitalize()}ed {updated['id']} "
-                f"({updated['status']})."
+                _say(
+                    f"cli_task_{args.action}ed",
+                    task=updated["id"],
+                    status=_status_name(updated["status"]),
+                )
             )
             return 0
         if args.action == "cancel":
             if not args.task_id:
-                print("error: task cancel requires --task", file=sys.stderr)
+                print(
+                    _say("cli_task_cancel_requires"),
+                    file=sys.stderr,
+                )
                 return 2
             try:
                 task = tasks.cancel_task(layout, args.task_id)
             except ValueError as exc:
-                print(f"error: {exc}", file=sys.stderr)
+                print(_say("cli_error", error=exc), file=sys.stderr)
                 return 1
             tasks.commit_task(
                 layout, task["id"], f"Cancel task {task['id']}"
             )
-            print(f"Cancelled {task['id']}.")
+            print(_say("cli_task_cancelled", task=task["id"]))
             return 0
         if args.action == "list":
             entries = tasks.list_tasks(layout)
             if not entries:
-                print("no tasks")
+                print(_say("cli_no_tasks"))
                 return 0
             for task in entries:
                 result = task.get("result", {})
                 summary = result.get("summary", "") if result else ""
                 print(
-                    f"{task['id']:<40} {task['status']:<8} "
+                    f"{task['id']:<40} "
+                    f"{_status_name(task['status']):<8} "
                     f"{task['title']}"
                 )
                 if summary:
@@ -780,7 +1000,7 @@ def cmd_task(args: argparse.Namespace) -> int:
                 ),
             )
         except ValueError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         try:
             if (layout.control / ".git").exists():
@@ -803,10 +1023,10 @@ def cmd_github(args: argparse.Namespace) -> int:
         try:
             project = resolve_project(ledger, args.project_id)
         except ProjectError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         if args.action == "status":
-            print(status_text(settings, project))
+            print(status_text(settings, project, lang=_UI_LANG))
             return 0
         try:
             if args.action == "publish":
@@ -841,17 +1061,40 @@ def cmd_github(args: argparse.Namespace) -> int:
             GithubAuthError,
             GitOperationError,
         ) as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
-        print(f"repository: {result.repo_id} ({result.full_name})")
-        print(f"branch:     {result.branch} -> {result.base}")
-        print(f"pull:       #{result.pr_number} {result.pr_url}")
-        print(f"checks:     {result.checks}")
         print(
-            f"merged:     {str(result.merged).lower()}"
+            _say(
+                "cli_github_repository",
+                repo=result.repo_id,
+                full=result.full_name,
+            )
+        )
+        print(
+            _say(
+                "cli_github_branch",
+                branch=result.branch,
+                base=result.base,
+            )
+        )
+        print(
+            _say(
+                "cli_github_pull",
+                number=result.pr_number,
+                url=result.pr_url,
+            )
+        )
+        print(_say("cli_github_checks", checks=result.checks))
+        print(
+            _say(
+                "cli_github_merged",
+                merged=_say(
+                    "chat_yes" if result.merged else "chat_no"
+                ),
+            )
             + (f" ({result.merge_sha})" if result.merge_sha else "")
         )
-        print(f"status:     {result.status}")
+        print(_say("cli_github_status", status=result.status))
         return 0 if result.status not in {"checks_failed", "merge_failed"} else 1
     finally:
         ledger.close()
@@ -870,7 +1113,7 @@ def cmd_adopt(args: argparse.Namespace) -> int:
                 name=args.name,
             )
         except (AdoptError, ProviderError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         project = ledger.get_project(result.project_id)
         layout = (
@@ -878,24 +1121,30 @@ def cmd_adopt(args: argparse.Namespace) -> int:
             if project is not None
             else None
         )
-        print(f"project:  {result.project_id}")
-        print(f"repo:     {result.repo_id} ({result.provider})")
-        print(f"url:      {result.url}")
+        print(_say("cli_adopt_project", project=result.project_id))
+        print(
+            _say(
+                "cli_adopt_repo",
+                repo=result.repo_id,
+                provider=result.provider,
+            )
+        )
+        print(_say("cli_adopt_url", url=result.url))
         if layout is not None and layout.is_linked:
-            print("mode:     brownfield (linked in place)")
+            print(_say("cli_adopt_mode_linked"))
             print(
-                "control:  "
-                + layout.control.relative_to(layout.root).as_posix()
-                + "/"
+                _say(
+                    "cli_adopt_control",
+                    path=layout.control.relative_to(
+                        layout.root
+                    ).as_posix(),
+                )
             )
         else:
-            print("mode:     brownfield (cloned into the project)")
-        print(f"auth:     {result.auth.detail}")
+            print(_say("cli_adopt_mode_cloned"))
+        print(_say("cli_adopt_auth", detail=result.auth.detail))
         if result.provider == "local":
-            print(
-                "note:     no origin remote; the folder is local only "
-                "until you add one"
-            )
+            print(_say("cli_adopt_note"))
         return 0
     finally:
         ledger.close()
@@ -908,28 +1157,35 @@ def cmd_repo(args: argparse.Namespace) -> int:
         try:
             project = resolve_project(ledger, args.project_id)
         except ProjectError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
         if args.action == "list":
             repos = manifest_entries(layout)
             if not repos:
-                print("no repositories")
+                print(_say("cli_no_repositories"))
                 return 0
             for entry in repos:
-                depends = ", ".join(entry["depends_on"]) or "none"
+                depends = (
+                    ", ".join(entry["depends_on"])
+                    or _say("cli_none")
+                )
                 print(
-                    f"{entry['id']:<12} {entry['role']:<16} "
-                    f"{entry['provider']:<8} "
-                    f"{repo_location(layout, entry) or '—'}"
-                    f"  depends_on={depends}"
+                    _say(
+                        "cli_repo_line",
+                        id=entry["id"],
+                        role=entry["role"],
+                        provider=entry["provider"],
+                        url=repo_location(layout, entry) or "—",
+                        depends=depends,
+                    )
                 )
             return 0
         depends = [item for item in args.depends_on.split(",") if item]
         if args.action == "create":
             if not args.id:
                 print(
-                    "error: repo create requires --id <repository-id>",
+                    _say("cli_repo_create_requires"),
                     file=sys.stderr,
                 )
                 return 2
@@ -947,11 +1203,15 @@ def cmd_repo(args: argparse.Namespace) -> int:
                     path=args.path,
                 )
             except (AdoptError, ProviderError, GithubAuthError) as exc:
-                print(f"error: {exc}", file=sys.stderr)
+                print(_say("cli_error", error=exc), file=sys.stderr)
                 return 1
             print(
-                f"Created {created.entry['id']} at {created.url} "
-                f"and added it to {project['id']}."
+                _say(
+                    "cli_repo_created",
+                    repo=created.entry["id"],
+                    url=created.url,
+                    project=project["id"],
+                )
             )
             return 0
         if args.action == "publish":
@@ -965,7 +1225,7 @@ def cmd_repo(args: argparse.Namespace) -> int:
                 ]
             )
             if not targets:
-                print("nothing to publish")
+                print(_say("cli_repo_nothing_to_publish"))
                 return 0
             for repo_id in targets:
                 try:
@@ -984,15 +1244,26 @@ def cmd_repo(args: argparse.Namespace) -> int:
                     GithubAuthError,
                 ) as exc:
                     print(
-                        f"error: {repo_id}: {exc}", file=sys.stderr
+                        _say(
+                            "cli_repo_publish_error",
+                            repo=repo_id,
+                            error=exc,
+                        ),
+                        file=sys.stderr,
                     )
                     return 1
-                print(f"Published {repo_id} to {published.url}")
+                print(
+                    _say(
+                        "cli_repo_published",
+                        repo=repo_id,
+                        url=published.url,
+                    )
+                )
             return 0
         if args.action == "link":
             if not args.url:
                 print(
-                    "error: repo link requires a repository id",
+                    _say("cli_repo_link_requires"),
                     file=sys.stderr,
                 )
                 return 2
@@ -1005,13 +1276,22 @@ def cmd_repo(args: argparse.Namespace) -> int:
                     depends,
                 )
             except (AdoptError, ValueError) as exc:
-                print(f"error: {exc}", file=sys.stderr)
+                print(_say("cli_error", error=exc), file=sys.stderr)
                 return 1
-            edges = ", ".join(entry["depends_on"]) or "none"
-            print(f"Updated dependencies for {entry['id']}: {edges}.")
+            edges = (
+                ", ".join(entry["depends_on"])
+                or _say("cli_none")
+            )
+            print(
+                _say(
+                    "cli_repo_updated",
+                    repo=entry["id"],
+                    edges=edges,
+                )
+            )
             return 0
         if not args.url:
-            print("error: repo add requires a URL", file=sys.stderr)
+            print(_say("cli_repo_add_requires"), file=sys.stderr)
             return 2
         try:
             result = add_repository(
@@ -1024,18 +1304,25 @@ def cmd_repo(args: argparse.Namespace) -> int:
                 role=args.role,
             )
         except (AdoptError, ProviderError) as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         print(
-            f"Added {result.entry['id']} ({result.entry['provider']}) "
-            f"to {project['id']}."
+            _say(
+                "cli_repo_added",
+                repo=result.entry["id"],
+                provider=result.entry["provider"],
+                project=project["id"],
+            )
         )
         if result.entry["depends_on"]:
             print(
-                "depends_on: " + ", ".join(result.entry["depends_on"])
+                _say(
+                    "cli_repo_depends_on",
+                    edges=", ".join(result.entry["depends_on"]),
+                )
             )
         else:
-            print("no dependency edges; maintained separately in the project")
+            print(_say("cli_repo_standalone"))
         return 0
     finally:
         ledger.close()
@@ -1046,14 +1333,18 @@ def cmd_deploy(args: argparse.Namespace) -> int:
     try:
         if args.action == "init":
             path = deploy_init(target)
-            print(f"Created {path} (mode 0600); edit it and run forgel deploy up.")
+            print(_say("cli_deploy_created", path=path))
             return 0
         config = DeployConfig.from_file(target)
         try:
             mode = target.stat().st_mode & 0o777
             if mode & 0o077:
                 print(
-                    f"warning: {target} is mode {mode:o}; use chmod 600",
+                    _say(
+                        "cli_chmod_warning",
+                        path=target,
+                        mode=f"{mode:o}",
+                    ),
                     file=sys.stderr,
                 )
         except OSError:
@@ -1084,7 +1375,7 @@ def cmd_deploy(args: argparse.Namespace) -> int:
             deploy_backup(config, output)
         return 0
     except DeployError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
 
 
@@ -1093,11 +1384,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     issues: list[str] = []
 
     def report(label: str, value: str, ok: bool = True) -> None:
-        print(f"{'OK  ' if ok else 'WARN'} {label:<22} {value}")
+        key = _DOCTOR_LABELS.get(label)
+        name = _say(key) if key else label
+        print(f"{'OK  ' if ok else 'WARN'} {name:<22} {value}")
         if not ok:
-            issues.append(label)
+            issues.append(name)
 
-    print(f"home: {settings.home}")
+    print(_say("cli_doctor_home", path=settings.home))
     try:
         settings.home.mkdir(parents=True, exist_ok=True)
         probe = settings.home / ".forgel-doctor"
@@ -1129,12 +1422,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             count = len(ledger.list_projects())
         finally:
             ledger.close()
-        report("ledger", f"{settings.db_path} ({count} projects)")
+        report(
+            "ledger",
+            _say(
+                "cli_doctor_projects",
+                path=settings.db_path,
+                count=count,
+            ),
+        )
     except Exception as exc:  # noqa: BLE001 - doctor reports, never crashes
         report("ledger", str(exc), False)
 
-    paused = "paused" if is_paused(settings.home) else "running"
-    report("control", paused)
+    report(
+        "control",
+        _say(
+            "cli_doctor_paused"
+            if is_paused(settings.home)
+            else "cli_doctor_running"
+        ),
+    )
     report(
         "context window",
         str(settings.context_window),
@@ -1142,9 +1448,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     report("tokenizer", tokenizer_name())
     report(
         "task pipeline",
-        f"qa={'on' if settings.task_qa else 'off'}, "
-        f"review={'on' if settings.task_review else 'off'}, "
-        f"accept={settings.task_accept}",
+        _say(
+            "cli_doctor_pipeline",
+            qa=_say("cli_on" if settings.task_qa else "cli_off"),
+            review=_say(
+                "cli_on" if settings.task_review else "cli_off"
+            ),
+            accept=settings.task_accept,
+        ),
     )
     if peak.should_defer(
         settings.peak_policy, hours=settings.peak_hours
@@ -1152,13 +1463,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         boundary = peak.next_off_peak(hours=settings.peak_hours)
         report(
             "model schedule",
-            f"{settings.peak_policy}; peak until "
-            f"{boundary.strftime('%H:%M UTC')}",
+            _say(
+                "cli_doctor_peak",
+                policy=settings.peak_policy,
+                moment=boundary.strftime("%H:%M UTC"),
+            ),
         )
     else:
         report(
             "model schedule",
-            f"{settings.peak_policy}; off-peak now",
+            _say(
+                "cli_doctor_off_peak",
+                policy=settings.peak_policy,
+            ),
         )
     if settings.sandbox == "docker":
         sandbox = DockerSandbox(settings)
@@ -1170,44 +1487,65 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
         report(
             "sandbox images",
-            ", ".join(settings.sandbox_images) or "any image",
+            ", ".join(settings.sandbox_images)
+            or _say("cli_doctor_any_image"),
         )
         report(
             "sandbox limits",
-            f"{settings.sandbox_cpus} cpu, {settings.sandbox_memory}, "
-            f"{settings.sandbox_pids} pids, network {settings.sandbox_network}"
-            + (", digest required" if settings.sandbox_require_digest else ""),
+            _say(
+                "cli_doctor_limits",
+                cpus=settings.sandbox_cpus,
+                memory=settings.sandbox_memory,
+                pids=settings.sandbox_pids,
+                network=settings.sandbox_network,
+                digest=(
+                    _say("cli_doctor_digest")
+                    if settings.sandbox_require_digest
+                    else ""
+                ),
+            ),
         )
     else:
-        report("sandbox", "local (single-tenant)")
+        report("sandbox", _say("cli_doctor_local"))
 
     try:
         telegram = TelegramConfig.from_env(home=settings.home)
         report(
             "telegram",
-            f"{len(telegram.allowed_chat_ids)} allowed chat(s), "
-            f"poll {telegram.poll_timeout}s",
+            _say(
+                "cli_doctor_telegram_value",
+                count=len(telegram.allowed_chat_ids),
+                timeout=telegram.poll_timeout,
+            ),
         )
     except TelegramConfigError as exc:
         report("telegram", str(exc), False)
 
     model = build_model_client(settings.home, log=lambda _m: None)
     if model is None:
-        report("model", "not configured; free text disabled", False)
+        report(
+            "model",
+            _say("cli_doctor_model_missing"),
+            False,
+        )
     else:
         report("model", type(model).__name__)
 
     github = GithubAuth(settings.home)
-    status = github.status()
+    status = github.status(_UI_LANG)
     report(
         "github auth",
         status,
-        status != "no GitHub credentials",
+        status != _say("github_auth_none"),
     )
 
     for tool in ("git", "docker", "node", "npm"):
         path = shutil.which(tool)
-        report(tool, path or "not found", path is not None)
+        report(
+            tool,
+            path or _say("cli_doctor_not_found"),
+            path is not None,
+        )
     if shutil.which("git"):
         version = subprocess.run(
             ["git", "--version"], capture_output=True, text=True, check=False
@@ -1215,9 +1553,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         report("git version", version)
 
     if issues:
-        print("RESULT: ISSUES (" + ", ".join(issues) + ")")
+        print(_say("cli_doctor_result_issues", items=", ".join(issues)))
         return 1
-    print("RESULT: OK")
+    print(_say("cli_doctor_result_ok"))
     return 0
 
 
@@ -1228,7 +1566,7 @@ def cmd_secret(args: argparse.Namespace) -> int:
             print(f"{key:<26} {state}")
         return 0
     if not args.key:
-        print("error: a secret key is required", file=sys.stderr)
+        print(_say("cli_secret_key_required"), file=sys.stderr)
         return 2
     try:
         if args.action == "set":
@@ -1237,19 +1575,28 @@ def cmd_secret(args: argparse.Namespace) -> int:
             else:
                 value = sys.stdin.readline().strip()
             if not value:
-                print("error: the value must not be empty", file=sys.stderr)
+                print(
+                    _say("cli_secret_empty"),
+                    file=sys.stderr,
+                )
                 return 2
             path = set_secret(settings.home, args.key, value)
-            print(f"Saved {args.key} to {path} (mode 0600).")
+            print(
+                _say(
+                    "cli_secret_saved",
+                    key=args.key,
+                    file=path,
+                )
+            )
         else:
             removed = delete_secret(settings.home, args.key)
             if removed:
-                print(f"Deleted {args.key}.")
+                print(_say("cli_secret_deleted", key=args.key))
             else:
-                print(f"{args.key} is not set in the file.")
+                print(_say("cli_secret_missing", key=args.key))
         return 0
     except (SecretError, OSError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
 
 
@@ -1260,35 +1607,49 @@ def cmd_plan(args: argparse.Namespace) -> int:
         try:
             project = resolve_project(ledger, args.project_id)
         except ProjectError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         if args.status:
             layout = ProjectLayout.detect(project["workspace"])
             summary = plan_status(layout)
             if summary["status"] == "none":
-                print("no plans")
+                print(_say("cli_no_plans"))
                 return 0
             print(
-                f"Plan {summary['plan_id']}: {summary['status']} "
-                f"({len(summary['tasks'])} tasks)"
+                _say(
+                    "chat_plan_status_header",
+                    plan=summary["plan_id"],
+                    status=_plan_status_name(summary["status"]),
+                    count=len(summary["tasks"]),
+                )
             )
             if summary["goal"]:
-                print(f"Goal: {summary['goal']}")
+                print(
+                    _say(
+                        "chat_plan_goal",
+                        goal=summary["goal"],
+                    )
+                )
             for item in summary["tasks"]:
                 suffix = (
-                    f" blocked_by={item['blocked_by']}"
+                    _say(
+                        "cli_plan_blocked",
+                        blocked=item["blocked_by"],
+                    )
                     if item["blocked_by"]
                     else ""
                 )
                 print(
-                    f"  {item['status']:<8} {item['title']}{suffix}"
+                    _say(
+                        "cli_plan_status_task",
+                        status=_status_name(item["status"]),
+                        title=item["title"],
+                        suffix=suffix,
+                    )
                 )
             return 0
         if not args.goal:
-            print(
-                "error: provide --goal \"...\" or --status",
-                file=sys.stderr,
-            )
+            print(_say("cli_plan_requires"), file=sys.stderr)
             return 2
         try:
             result = plan_project(
@@ -1300,38 +1661,58 @@ def cmd_plan(args: argparse.Namespace) -> int:
                 dry_run=args.dry_run,
             )
         except PlanningError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            print(
-                "The plan was not created and no tasks were queued. The "
-                "plan is invalid or incomplete; adjust the goal or retry "
-                "after the model returns a valid plan.",
-                file=sys.stderr,
-            )
+            print(_say("cli_error", error=exc), file=sys.stderr)
+            print(_say("cli_plan_not_created"), file=sys.stderr)
             return 1
         print(
-            f"Plan {result.plan_id}: {len(result.tasks)} task(s)"
-            + (" (dry run)" if result.dry_run else "")
+            _say(
+                "cli_plan_header",
+                plan=result.plan_id,
+                count=len(result.tasks),
+                dry_run=(
+                    _say("cli_plan_dry_run_suffix")
+                    if result.dry_run
+                    else ""
+                ),
+            )
         )
         if result.notes:
             print(result.notes)
         for index, item in enumerate(result.tasks, 1):
-            depends = ", ".join(
-                str(value) for value in item["depends_on"]
-            ) or "none"
+            depends = (
+                ", ".join(
+                    str(value) for value in item["depends_on"]
+                )
+                or _say("cli_none")
+            )
             identifier = item.get("task_id") or "-"
             print(
-                f"{index}. {item['title']} "
-                f"[{item.get('repo_id') or 'sole'}] "
-                f"deps={depends} task={identifier}"
+                _say(
+                    "cli_plan_entry",
+                    index=index,
+                    title=item["title"],
+                    repo=item.get("repo_id") or _say("cli_sole"),
+                    deps=depends,
+                    task=identifier,
+                )
             )
             checks = item.get("checks") or []
             if checks:
                 print(
-                    "   checks: "
-                    + "; ".join(check["criterion"] for check in checks)
+                    _say(
+                        "cli_plan_checks",
+                        checks="; ".join(
+                            check["criterion"] for check in checks
+                        ),
+                    )
                 )
         if result.artifact:
-            print(f"artifact: {result.artifact}")
+            print(
+                _say(
+                    "cli_plan_artifact",
+                    path=result.artifact,
+                )
+            )
         return 0
     finally:
         ledger.close()
@@ -1345,18 +1726,21 @@ def cmd_control(args: argparse.Namespace) -> int:
     try:
         project = resolve_project(ledger, args.project_id)
         if args.action != "extract":
-            print("Usage: forgel control extract <project> [--path DIR]", file=sys.stderr)
+            print(_say("cli_control_usage"), file=sys.stderr)
             return 2
         result = extract_control(settings, ledger, project, args.path)
-        print(f"control:  {result.control}")
-        print("moved:    " + (", ".join(result.moved) or "nothing"))
+        print(_say("cli_control", path=result.control))
         print(
-            "The project state now lives in a separate repository; "
-            "the product repository no longer tracks it."
+            _say(
+                "cli_control_moved",
+                items=", ".join(result.moved)
+                or _say("cli_control_nothing"),
+            )
         )
+        print(_say("cli_control_note"))
         return 0
     except (ProjectError, AdoptError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
     finally:
         ledger.close()
@@ -1382,13 +1766,15 @@ def cmd_telegram(args: argparse.Namespace) -> int:
     try:
         config = TelegramConfig.from_env(home=settings.home)
     except TelegramConfigError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
     ledger = _ledger(settings)
     try:
         print(
-            f"Telegram gateway started; allowed chats: "
-            f"{len(config.allowed_chat_ids)}.",
+            _say(
+                "cli_telegram_started",
+                count=len(config.allowed_chat_ids),
+            ),
             file=sys.stderr,
         )
         run_bot(
@@ -1755,16 +2141,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not arguments:
         # `forgel` alone is the local client, like opening a chat.
         arguments = ["chat"]
+    _set_ui_language(arguments)
     args = parser.parse_args(arguments)
     try:
         return int(args.func(args))
     except KeyboardInterrupt:
         raise
     except Exception as exc:  # noqa: BLE001 - never abort without an answer
-        print(f"error: {exc}", file=sys.stderr)
-        print(
-            "The operation stopped before completing. Fix the cause and "
-            "retry; `forgel doctor` checks the environment.",
-            file=sys.stderr,
-        )
+        print(_say("cli_error", error=exc), file=sys.stderr)
+        print(_say("cli_operation_stopped"), file=sys.stderr)
         return 1
