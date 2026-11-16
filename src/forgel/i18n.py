@@ -32,11 +32,11 @@ def _load(lang: str) -> dict[str, str]:
     return _CACHE[code]
 
 
-def t(lang: str, key: str, **values: Any) -> str:
+def t(lang: str, text_key: str, **values: Any) -> str:
     table = _load(lang)
-    template = table.get(key)
+    template = table.get(text_key)
     if template is None:
-        template = _load(DEFAULT).get(key, key)
+        template = _load(DEFAULT).get(text_key, text_key)
     try:
         return template.format(**values)
     except (KeyError, ValueError):

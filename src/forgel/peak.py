@@ -16,6 +16,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Mapping, Sequence
 
+from .i18n import t as _t
 from .model_profiles import default_profile
 
 DEFAULT_HOURS = default_profile().peak_windows
@@ -189,16 +190,18 @@ def defer_message(
     now: datetime | None = None,
     hours: str = DEFAULT_HOURS,
     tz_name: str = "",
+    lang: str = "en",
 ) -> str:
     moment = now or datetime.now(UTC)
     boundary = next_off_peak(moment, hours)
     wait = humanize(seconds_until_off_peak(moment, hours))
-    return (
-        f"Model work is paused during {default_profile().display} peak "
-        f"hours ({windows_text(hours)}, weekdays). The window closes at "
-        f"{_moment(boundary, tz_name)} (in {wait}); work resumes "
-        "automatically. Override: /peak always or "
-        '[models] peak_policy = "always".'
+    return _t(
+        lang,
+        "peak_defer",
+        model=default_profile().display,
+        windows=windows_text(hours),
+        moment=_moment(boundary, tz_name),
+        wait=wait,
     )
 
 
@@ -207,24 +210,50 @@ def status_text(
     now: datetime | None = None,
     hours: str = DEFAULT_HOURS,
     tz_name: str = "",
+    lang: str = "en",
 ) -> str:
     moment = now or datetime.now(UTC)
-    state = "off-peak" if is_off_peak(moment, hours) else "peak"
-    if policy == "always":
-        action = "Running at peak rates is allowed."
-    else:
-        action = "Model work is deferred during peak windows."
+    state = _t(
+        lang,
+        "peak_state_off_peak"
+        if is_off_peak(moment, hours)
+        else "peak_state_peak",
+    )
+    action = _t(
+        lang,
+        "peak_allowed" if policy == "always" else "peak_deferred",
+    )
     boundary = next_off_peak(moment, hours)
     upcoming = next_peak(moment, hours)
     lines = [
-        f"Peak policy: {policy} ({default_profile().display})",
-        f"Now: {state} ({_moment(moment, tz_name)})",
-        f"Windows: {windows_text(hours)} (weekends off-peak)",
+        _t(
+            lang,
+            "peak_policy",
+            policy=policy,
+            model=default_profile().display,
+        ),
+        _t(
+            lang,
+            "peak_now",
+            state=state,
+            moment=_moment(moment, tz_name),
+        ),
+        _t(lang, "peak_windows", windows=windows_text(hours)),
         action,
-        f"Next off-peak: {_moment(boundary, tz_name)} "
-        f"(in {humanize(seconds_until_off_peak(moment, hours))})",
+        _t(
+            lang,
+            "peak_next_off",
+            moment=_moment(boundary, tz_name),
+            wait=humanize(seconds_until_off_peak(moment, hours)),
+        ),
     ]
     if upcoming is not None:
-        lines.append(f"Next peak: {_moment(upcoming, tz_name)}")
-    lines.append("Override: /peak always | /peak off_peak")
+        lines.append(
+            _t(
+                lang,
+                "peak_next",
+                moment=_moment(upcoming, tz_name),
+            )
+        )
+    lines.append(_t(lang, "peak_override"))
     return "\n".join(lines)

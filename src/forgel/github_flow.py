@@ -21,6 +21,7 @@ from .artifacts import write_text
 from .config import Settings
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .i18n import t as _t
 from .program_manifest import entries as manifest_entries
 from .project_config import GitConfig, load_project_config
 from .providers.github import GithubProvider
@@ -520,21 +521,33 @@ def merge_pr(
     return outcome
 
 
-def status_text(settings: Settings, project: dict[str, Any]) -> str:
+def status_text(
+    settings: Settings,
+    project: dict[str, Any],
+    lang: str = "en",
+) -> str:
     layout = ProjectLayout.detect(project["workspace"])
     git_config = _git_config(layout)
     auth = GithubAuth(settings.home)
     lines = [
-        f"project: {project['id']}",
-        f"github auth: {auth.status()}",
-        f"merge policy: {git_config.merge}",
-        f"base branch: {git_config.base_branch}",
-        f"require CI: {str(git_config.require_ci).lower()}",
-        "repositories:",
+        _t(lang, "github_status_project", project=project["id"]),
+        _t(lang, "github_status_auth", auth=auth.status()),
+        _t(lang, "github_status_merge", policy=git_config.merge),
+        _t(
+            lang,
+            "github_status_base",
+            branch=git_config.base_branch,
+        ),
+        _t(
+            lang,
+            "github_status_ci",
+            value=str(git_config.require_ci).lower(),
+        ),
+        _t(lang, "github_status_repositories"),
     ]
     repos = manifest_entries(layout)
     if not repos:
-        lines.append("  none")
+        lines.append(_t(lang, "github_status_none"))
         return "\n".join(lines)
     for entry in repos:
         local = layout.repo_path(entry["id"])
@@ -543,12 +556,27 @@ def status_text(settings: Settings, project: dict[str, Any]) -> str:
         if (local / ".git").exists():
             try:
                 branch = git_ops.current_branch(local)
-                dirty = "dirty" if git_ops.is_dirty(local) else "clean"
+                dirty = _t(
+                    lang,
+                    "github_status_dirty"
+                    if git_ops.is_dirty(local)
+                    else "github_status_clean",
+                )
             except Exception:  # noqa: BLE001 - status must not crash
-                branch = "detached"
+                branch = _t(lang, "github_status_detached")
+        depends = ", ".join(entry["depends_on"]) or _t(
+            lang, "github_status_depends_none"
+        )
         lines.append(
-            f"  {entry['id']}: {entry['provider']} {entry['url'] or '—'}\n"
-            f"    branch: {branch}, worktree: {dirty}, "
-            f"depends on: {', '.join(entry['depends_on']) or 'none'}"
+            _t(
+                lang,
+                "github_status_entry",
+                id=entry["id"],
+                provider=entry["provider"],
+                url=entry["url"] or "—",
+                branch=branch,
+                worktree=dirty,
+                depends=depends,
+            )
         )
     return "\n".join(lines)

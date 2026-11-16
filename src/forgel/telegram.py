@@ -29,6 +29,7 @@ from .chat import HELP, CommandRouter, Reply  # noqa: F401 - HELP is re-exported
 from .config import Settings
 from .control import is_paused
 from .daemon import project_state, run_once
+from .i18n import t as _t
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
@@ -320,8 +321,10 @@ class TelegramGateway:
                 self.log(f"[telegram] deleteMessage failed: {exc}")
                 reply = Reply(
                     reply.text
-                    + "\n\nWarning: the source message could not be deleted; "
-                    "delete it manually."
+                    + _t(
+                        self.router.language(chat_id),
+                        "tg_delete_warning",
+                    )
                 )
         self._send(chat_id, reply)
         return True
@@ -405,17 +408,24 @@ class TelegramGateway:
 
     def _announce_online(self) -> None:
         if not self.daemon_enabled:
-            mode = "commands only"
+            mode_key = "tg_mode_commands"
         elif is_paused(self.settings.home):
-            mode = "paused"
+            mode_key = "tg_mode_paused"
         else:
-            mode = "running"
-        agent = "configured" if self.router.agent is not None else "disabled"
-        text = (
-            f"Forgel gateway is online. Daemon: {mode}. "
-            f"Agent: {agent}. /help"
+            mode_key = "tg_mode_running"
+        agent_key = (
+            "tg_agent_configured"
+            if self.router.agent is not None
+            else "tg_agent_disabled"
         )
         for chat_id in sorted(self.config.allowed_chat_ids):
+            lang = self.router.language(chat_id)
+            text = _t(
+                lang,
+                "tg_online",
+                mode=_t(lang, mode_key),
+                agent=_t(lang, agent_key),
+            )
             self._send(chat_id, Reply(text))
 
     def _notify_transitions(self) -> None:
@@ -429,68 +439,89 @@ class TelegramGateway:
             project = self.ledger.get_project(project_id)
             if project is None:
                 continue
-            message = self._transition_message(project, state)
-            if message:
-                for chat_id in sorted(self.config.allowed_chat_ids):
+            for chat_id in sorted(self.config.allowed_chat_ids):
+                message = self._transition_message(
+                    project,
+                    state,
+                    self.router.language(chat_id),
+                )
+                if message:
                     self._send(chat_id, Reply(message))
         self._states = current
 
     def _transition_message(
-        self, project: dict[str, Any], state: str
+        self, project: dict[str, Any], state: str, lang: str
     ) -> str | None:
         project_id = project["id"]
         if state == "awaiting staging approval":
-            return (
-                f"{project['name']} ({project_id}) is ready for staging review.\n"
-                f"Approve: /approve {project_id} staging\n"
-                f"Details: /status {project_id}"
+            return _t(
+                lang,
+                "tg_staging_ready",
+                name=project["name"],
+                project=project_id,
             )
         if state == "staging rejected":
-            return (
-                f"Staging was rejected for {project_id}.\n"
-                "Change the scope with /sync, then approve the next generation."
+            return _t(
+                lang,
+                "tg_staging_rejected",
+                project=project_id,
             )
         if state == "reconciliation pending":
-            return (
-                f"External changes detected in {project_id}.\n"
-                f"Review: /sync {project_id}\n"
-                f"Decide: /reconcile {project_id} accept|fix|rollback|ignore"
+            return _t(
+                lang,
+                "tg_reconcile",
+                project=project_id,
             )
         if state.startswith("failed at "):
             stage = state[len("failed at ") :]
-            return (
-                f"{project_id} stopped at stage {stage}.\n"
-                f"Check /status {project_id} and the daemon log."
+            return _t(
+                lang,
+                "tg_failed",
+                project=project_id,
+                stage=stage,
             )
         if state == "task pending":
-            return (
-                f"A task is queued for {project['name']} ({project_id}). "
-                "The daemon will start it in this cycle."
+            return _t(
+                lang,
+                "tg_task_pending",
+                name=project["name"],
+                project=project_id,
             )
         if state == "task done":
             task = latest_task(ProjectLayout.detect(project["workspace"]))
-            title = task["title"] if task else "task"
-            return (
-                f"Agent finished {title} for {project_id}.\n"
-                f"Details: /status {project_id}"
+            title = task["title"] if task else _t(
+                lang, "tg_task_default_title"
+            )
+            return _t(
+                lang,
+                "tg_task_done",
+                title=title,
+                project=project_id,
             )
         if state == "task cancelled":
-            return f"Task cancelled for {project_id}."
+            return _t(
+                lang,
+                "tg_task_cancelled",
+                project=project_id,
+            )
         if state == "task failed":
             task = latest_task(ProjectLayout.detect(project["workspace"]))
             reason = ""
             if task:
                 reason = str(task.get("result", {}).get("summary", ""))
-            return (
-                f"Agent task failed for {project_id}."
-                + (f"\n{reason}" if reason else "")
-                + f"\nDetails: /status {project_id}"
+            return _t(
+                lang,
+                "tg_task_failed",
+                project=project_id,
+                reason=f"\n{reason}" if reason else "",
             )
         if state == "done":
-            return self._done_message(project)
+            return self._done_message(project, lang)
         return None
 
-    def _done_message(self, project: dict[str, Any]) -> str:
+    def _done_message(
+        self, project: dict[str, Any], lang: str
+    ) -> str:
         project_id = project["id"]
         layout = ProjectLayout.detect(project["workspace"])
         staging_path = layout.artifact("staging.json")
@@ -500,10 +531,17 @@ class TelegramGateway:
                 url = str(read_json(staging_path).get("url", ""))
             except (OSError, json.JSONDecodeError):
                 url = ""
-        lines = [f"{project['name']} ({project_id}) is done."]
+        lines = [
+            _t(
+                lang,
+                "tg_done",
+                name=project["name"],
+                project=project_id,
+            )
+        ]
         if url:
-            lines.append(f"Staging: {url}")
-        lines.append(f"Status: /status {project_id}")
+            lines.append(_t(lang, "tg_staging_url", url=url))
+        lines.append(_t(lang, "tg_status", project=project_id))
         return "\n".join(lines)
 
     def _send(self, chat_id: int, reply: Reply) -> None:

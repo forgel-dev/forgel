@@ -448,7 +448,7 @@ class SelectionAndAgentTest(unittest.TestCase):
             "forgel.chat.plan_project", return_value=planned
         ) as plan:
             reply = router.handle(7, "доведи до M1", "@tester")
-        self.assertIn("Plan plan-nl", reply.text)
+        self.assertIn("План plan-nl", reply.text)
         self.assertEqual(plan.call_args.args[3], "Bring it to M1")
 
     def test_plain_language_accept_action(self) -> None:
@@ -471,7 +471,7 @@ class SelectionAndAgentTest(unittest.TestCase):
         reply = router.handle(
             7, "прими последнюю задачу", "@tester"
         )
-        self.assertIn("Accepted", reply.text)
+        self.assertIn("принята", reply.text)
         stored = get_task(layout, task["id"])
         assert stored is not None
         self.assertEqual(stored["status"], "done")
@@ -768,7 +768,7 @@ class AdoptCommandsTest(unittest.TestCase):
         )
         listing = self.router.handle(7, "/tasks", "@tester")
         self.assertIn(task["id"], listing.text)
-        self.assertIn("pending", listing.text)
+        self.assertIn("queued", listing.text)
         cancelled = self.router.handle(
             7, f"/task cancel {task['id']}", "@tester"
         )

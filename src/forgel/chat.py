@@ -17,6 +17,9 @@ from types import SimpleNamespace
 from typing import Any, Callable
 
 from . import config_store, daemon_config, peak
+from .i18n import has as _has
+from .i18n import t as _t
+from .language import detect as detect_language
 from .adopt import (
     AdoptError,
     add_repository,
@@ -86,33 +89,7 @@ SECRET_PATTERNS = (
     re.compile(r"(^|[^A-Za-z0-9])AKIA[0-9A-Z]{16}([^A-Za-z0-9]|$)"),
 )
 
-HELP = """Forgel
-
-Talk in plain language. I decide what to do: answer, queue a code change,
-plan a milestone, show the state, accept or send work back, retry, pause, or
-adopt a repository. You do not need to remember commands.
-
-Examples
-  adopt this repository
-  plan the milestone: bring the project to M1
-  what is happening?
-  accept the latest task
-  send it back: the header is wrong
-  retry the failed task
-  work in peak hours / only off-peak
-  pause / resume
-
-Entry points and sensitive operations stay explicit
-/adopt <url> [| brief]   adopt a repository and select it
-/new <name> | <brief>    create a template project
-/secret ...              secret names, set, delete
-/config [set ...]        effective settings
-/help
-/quit                    exit the console
-
-Project ids can be shortened to any unique prefix. Secrets sent to a bot pass
-through Telegram, which has no end-to-end encryption for bots; prefer
-environment variables or `forgel secret set` over SSH in production."""
+HELP = _t("en", "help")
 
 
 @dataclass(frozen=True)
@@ -121,6 +98,7 @@ class Reply:
     reply_markup: dict[str, Any] | None = None
     callback_text: str = ""
     delete_source: bool = False
+    failed: bool = False
 
 
 def looks_like_secret(text: str) -> bool:
@@ -145,18 +123,59 @@ class CommandRouter:
         self.github_api = github_api
         self._production_tokens: dict[str, tuple[str, float]] = {}
         self._token_ttl = 900.0
+        self._languages: dict[int, str] = {}
+
+    # ------------------------------------------------------------- language
+
+    def _language(self, chat_id: int) -> str:
+        return self._languages.get(chat_id, "en")
+
+    def language(self, chat_id: int) -> str:
+        """The last language seen in this chat (used by channel notices)."""
+
+        return self._language(chat_id)
+
+    def _text(self, chat_id: int, text_key: str, **values: Any) -> str:
+        return _t(self._language(chat_id), text_key, **values)
+
+    def _error(self, chat_id: int, key: str, **values: Any) -> Reply:
+        return Reply(
+            self._text(chat_id, key, **values),
+            failed=True,
+        )
+
+    def _status_name(self, chat_id: int, status: object) -> str:
+        key = str(status or "")
+        lang = self._language(chat_id)
+        return _t(lang, key) if _has(lang, key) else key
+
+    def _plan_status_name(self, chat_id: int, status: object) -> str:
+        key = f"plan_{status or 'none'}"
+        lang = self._language(chat_id)
+        return (
+            _t(lang, key)
+            if _has(lang, key)
+            else str(status or "")
+        )
 
     # ------------------------------------------------------------- dispatch
 
     def handle(self, chat_id: int, text: str, actor: str) -> Reply:
+        probe = (
+            text
+            if not text.strip().startswith("/")
+            else text.partition(" ")[2]
+        )
+        self._languages[chat_id] = detect_language(
+            probe, self._language(chat_id)
+        )
         try:
             reply = self._dispatch(chat_id, text, actor)
         except Exception as exc:  # noqa: BLE001 - the router must stay up
-            reply = Reply(f"error: {exc}")
-        if (
-            self.agent is not None
-            and reply.text.lstrip().lower().startswith("error")
-        ):
+            reply = self._error(
+                chat_id, "chat_error", error=exc
+            )
+        if self.agent is not None and reply.failed:
             selected = self._selected(chat_id)
             if not isinstance(selected, Reply):
                 try:
@@ -172,7 +191,7 @@ class CommandRouter:
     def _dispatch(self, chat_id: int, text: str, actor: str) -> Reply:
         text = text.strip()
         if not text:
-            return Reply("Send a command or a message. /help")
+            return Reply(self._text(chat_id, "chat_empty"))
         if not text.startswith("/"):
             return self._message(chat_id, text, actor)
         command_token, _, rest = text.partition(" ")
@@ -180,8 +199,12 @@ class CommandRouter:
         rest = rest.strip()
 
         handlers: dict[str, Callable[[int, str, str], Reply]] = {
-            "/start": lambda _chat, _rest, _actor: Reply(HELP),
-            "/help": lambda _chat, _rest, _actor: Reply(HELP),
+            "/start": lambda chat, _rest, _actor: Reply(
+                self._text(chat, "help")
+            ),
+            "/help": lambda chat, _rest, _actor: Reply(
+                self._text(chat, "help")
+            ),
             "/new": self._new,
             "/adopt": self._adopt,
             "/repo": self._repo,
@@ -208,28 +231,50 @@ class CommandRouter:
         }
         handler = handlers.get(command)
         if handler is None:
-            return Reply(f"Unknown command {command}. /help lists them.")
+            return self._error(
+                chat_id,
+                "chat_unknown_command",
+                command=command,
+            )
         return handler(chat_id, rest, actor)
 
     def handle_callback(self, chat_id: int, data: str, actor: str) -> Reply:
         parts = data.split(":")
         if len(parts) != 3 or parts[0] != "ap":
-            return Reply("Unknown action.", callback_text="Unknown action")
+            return Reply(
+                self._text(chat_id, "chat_unknown_action"),
+                callback_text=self._text(
+                    chat_id, "chat_callback_unknown"
+                ),
+            )
         _, token, action = parts
         entry = self._production_tokens.pop(token, None)
         if entry is None or time.time() - entry[1] > self._token_ttl:
             return Reply(
-                "This approval request expired. Run /approve again.",
-                callback_text="Expired",
+                self._text(chat_id, "chat_approval_expired"),
+                callback_text=self._text(
+                    chat_id, "chat_callback_expired"
+                ),
             )
         project_id = entry[0]
         if action == "no":
             return Reply(
-                f"Production approval cancelled for {project_id}.",
-                callback_text="Cancelled",
+                self._text(
+                    chat_id,
+                    "chat_production_cancelled",
+                    project=project_id,
+                ),
+                callback_text=self._text(
+                    chat_id, "chat_callback_cancelled"
+                ),
             )
         if action != "ok":
-            return Reply("Unknown action.", callback_text="Unknown action")
+            return Reply(
+                self._text(chat_id, "chat_unknown_action"),
+                callback_text=self._text(
+                    chat_id, "chat_callback_unknown"
+                ),
+            )
         try:
             record = record_approval(
                 self.ledger,
@@ -241,20 +286,27 @@ class CommandRouter:
                 notes="confirmed in Telegram",
             )
         except ApprovalError as exc:
-            return Reply(f"error: {exc}", callback_text="Not approved")
+            return Reply(
+                self._text(chat_id, "chat_error", error=exc),
+                callback_text=self._text(
+                    chat_id, "chat_callback_not_approved"
+                ),
+                failed=True,
+            )
         return Reply(
-            self._approval_text(record, production=True),
-            callback_text="Approved",
+            self._approval_text(
+                chat_id, record, production=True
+            ),
+            callback_text=self._text(
+                chat_id, "chat_callback_approved"
+            ),
         )
 
     # ------------------------------------------------------------- projects
 
     def _new(self, chat_id: int, rest: str, _actor: str) -> Reply:
         if not rest:
-            return Reply(
-                "Usage: /new <name> | <brief>\n"
-                "or: /new <brief> to derive the name."
-            )
+            return self._error(chat_id, "chat_new_usage")
         if "|" in rest:
             name, brief = rest.split("|", 1)
         else:
@@ -264,27 +316,28 @@ class CommandRouter:
                 self.settings, self.ledger, name, brief
             )
         except ProjectError as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
         self.ledger.set_session(chat_id, project_id)
         return Reply(
-            f"Project {project_id} created and selected.\n"
-            "The daemon will run it and report back."
+            self._text(
+                chat_id, "chat_new_created", project=project_id
+            )
         )
 
     def _adopt(self, chat_id: int, rest: str, _actor: str) -> Reply:
         if not rest:
-            return Reply(
-                "Usage: /adopt <repository-url> [| brief]\n"
-                "Supports GitHub URLs, SSH remotes, owner/repo and local paths."
-            )
+            return self._error(chat_id, "chat_adopt_usage")
         url, _, brief = rest.partition("|")
         try:
             result = adopt_repository(
                 self.settings, self.ledger, url.strip(), brief.strip()
             )
         except (AdoptError, ProviderError) as exc:
-            return Reply(
-                f"error: {exc}" + self._github_hint(url, str(exc))
+            return self._error(
+                chat_id,
+                "chat_error_with_hint",
+                error=exc,
+                hint=self._github_hint(url, str(exc)),
             )
         self.ledger.set_session(chat_id, result.project_id)
         project = self.ledger.get_project(result.project_id)
@@ -296,48 +349,60 @@ class CommandRouter:
         if layout is not None and layout.is_linked:
             control = layout.control.relative_to(layout.root).as_posix()
             lines = [
-                f"Adopted the folder in place as {result.project_id} and "
-                "selected it.",
-                f"Repository: {result.repo_id} ({result.provider}).",
-                "Mode: brownfield — the source folder is the repository; "
-                "there is no second copy.",
-                f"Control artifacts live in {control}/.",
+                self._text(
+                    chat_id,
+                    "chat_adopted_linked",
+                    project=result.project_id,
+                ),
+                self._text(
+                    chat_id,
+                    "chat_repository",
+                    repo=result.repo_id,
+                    provider=result.provider,
+                ),
+                self._text(chat_id, "chat_brownfield_in_place"),
+                self._text(
+                    chat_id, "chat_control_artifacts", path=control
+                ),
             ]
         else:
             lines = [
-                f"Adopted {result.url} as {result.project_id} and selected "
-                "it.",
-                f"Repository: {result.repo_id} ({result.provider}).",
-                "Mode: brownfield — Forgel will not regenerate this "
-                "repository.",
-                "Config initialized in program/forgel.toml and program.yaml.",
+                self._text(
+                    chat_id,
+                    "chat_adopted",
+                    url=result.url,
+                    project=result.project_id,
+                ),
+                self._text(
+                    chat_id,
+                    "chat_repository",
+                    repo=result.repo_id,
+                    provider=result.provider,
+                ),
+                self._text(chat_id, "chat_brownfield_no_regen"),
+                self._text(chat_id, "chat_config_initialized"),
             ]
         if result.provider == "local":
-            lines.append(
-                "No origin remote was found. The folder stays local; "
-                "configure GitHub and ask me to publish it, or add a remote "
-                "yourself."
-            )
+            lines.append(self._text(chat_id, "chat_no_origin"))
         if result.provider == "github":
             if result.auth.configured:
-                lines.append("GitHub: " + result.auth.detail + ".")
+                lines.append(
+                    self._text(
+                        chat_id,
+                        "chat_github_detail",
+                        detail=result.auth.detail,
+                    )
+                )
             else:
                 lines.append(
-                    "GitHub: " + result.auth.detail + ". For private "
-                    "repositories and later push/PR set FORGEL_GITHUB_TOKEN "
-                    "on the host or /secret set github.token <token>; a "
-                    "fine-grained token needs Contents read/write."
+                    self._text(
+                        chat_id,
+                        "chat_github_private",
+                        detail=result.auth.detail,
+                    )
                 )
-        lines.append(
-            "If a related repository belongs here, tell me to add it and "
-            "which repository it depends on."
-        )
-        lines.append(
-            "Link repositories only when their code depends on each other "
-            "(for example a frontend consumes a backend contract). "
-            "Independent repositories can be linked, but Forgel will simply "
-            "maintain them separately."
-        )
+        lines.append(self._text(chat_id, "chat_link_hint"))
+        lines.append(self._text(chat_id, "chat_link_when"))
         return Reply("\n".join(lines))
 
     def _repo(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -350,22 +415,35 @@ class CommandRouter:
             layout = ProjectLayout.detect(project["workspace"])
             repos = manifest_entries(layout)
             if not repos:
-                return Reply("This project has no repositories recorded.")
-            lines = [f"Repositories: {len(repos)}"]
+                return Reply(self._text(chat_id, "chat_repo_none"))
+            lines = [
+                self._text(
+                    chat_id, "chat_repo_list", count=len(repos)
+                )
+            ]
             for entry in repos:
-                depends = ", ".join(entry["depends_on"]) or "none"
+                depends = (
+                    ", ".join(entry["depends_on"])
+                    or self._text(chat_id, "chat_none")
+                )
                 lines.append(
-                    f"{entry['id']}  {entry['role']}  {entry['provider']}\n"
-                    f"  url: {repo_location(layout, entry) or '—'}\n"
-                    f"  depends on: {depends}"
+                    self._text(
+                        chat_id,
+                        "chat_repo_entry",
+                        id=entry["id"],
+                        role=entry["role"],
+                        provider=entry["provider"],
+                        url=repo_location(layout, entry) or "—",
+                        depends=depends,
+                    )
                 )
             return Reply("\n".join(lines))
         if action == "link":
             if len(tokens) < 2:
-                return Reply("Usage: /repo link <id> depends_on=<id,id>")
+                return self._error(chat_id, "chat_repo_link_usage")
             parts = tokens[1].split()
             if not parts:
-                return Reply("Usage: /repo link <id> depends_on=<id,id>")
+                return self._error(chat_id, "chat_repo_link_usage")
             repo_id = parts[0]
             depends_on: list[str] = []
             found = False
@@ -378,7 +456,7 @@ class CommandRouter:
                         if item
                     ]
             if not found:
-                return Reply("Usage: /repo link <id> depends_on=<id,id>")
+                return self._error(chat_id, "chat_repo_link_usage")
             try:
                 entry = set_dependencies(
                     self.settings,
@@ -388,16 +466,23 @@ class CommandRouter:
                     depends_on,
                 )
             except (AdoptError, ValueError) as exc:
-                return Reply(f"error: {exc}")
-            edges = ", ".join(entry["depends_on"]) or "none"
+                return self._error(chat_id, "chat_error", error=exc)
+            edges = (
+                ", ".join(entry["depends_on"])
+                or self._text(chat_id, "chat_none")
+            )
             return Reply(
-                f"Updated dependencies for {entry['id']}: {edges}."
+                self._text(
+                    chat_id,
+                    "chat_repo_updated",
+                    repo=entry["id"],
+                    edges=edges,
+                )
             )
         if action in {"create", "publish"}:
             if len(tokens) < 2 and action == "create":
-                return Reply(
-                    "Usage: /repo create <id> [org=<name>] [public] "
-                    "[depends_on=<id,id>] [| description]"
+                return self._error(
+                    chat_id, "chat_repo_create_usage"
                 )
             payload, _, description = (
                 tokens[1] if len(tokens) > 1 else ""
@@ -435,7 +520,11 @@ class CommandRouter:
                         if item
                     ]
                 else:
-                    return Reply(f"unexpected argument: {token}")
+                    return self._error(
+                        chat_id,
+                        "chat_unexpected_argument",
+                        token=token,
+                    )
             description = description.strip()
             try:
                 if action == "create":
@@ -451,8 +540,13 @@ class CommandRouter:
                         path=path,
                     )
                     return Reply(
-                        f"Created {created.entry['id']} at {created.url} "
-                        f"and added it to {project['id']}."
+                        self._text(
+                            chat_id,
+                            "chat_repo_created",
+                            repo=created.entry["id"],
+                            url=created.url,
+                            project=project["id"],
+                        )
                     )
                 if repo_id:
                     targets = [repo_id]
@@ -464,7 +558,11 @@ class CommandRouter:
                         if "github.com" not in (entry.get("url") or "")
                     ]
                 if not targets:
-                    return Reply("Nothing to publish.")
+                    return Reply(
+                        self._text(
+                            chat_id, "chat_repo_nothing_to_publish"
+                        )
+                    )
                 lines: list[str] = []
                 for target in targets:
                     published = publish_repository(
@@ -480,7 +578,11 @@ class CommandRouter:
                         f"{target}: {published.url}"
                     )
                 return Reply(
-                    "Published repositories:\n" + "\n".join(lines)
+                    self._text(
+                        chat_id,
+                        "chat_repo_published",
+                        items="\n".join(lines),
+                    )
                 )
             except (
                 AdoptError,
@@ -488,24 +590,22 @@ class CommandRouter:
                 GithubAuthError,
                 GithubAPIError,
             ) as exc:
-                hint = self._github_hint("github.com", str(exc))
-                return Reply(f"error: {exc}{hint}")
+                hint = self._github_hint(
+                    chat_id, "github.com", str(exc)
+                )
+                return self._error(
+                    chat_id,
+                    "chat_error_with_hint",
+                    error=exc,
+                    hint=hint,
+                )
         if action != "add":
-            return Reply(
-                "Usage: /repo list, /repo add <url> [id] "
-                "[depends_on=<id,id>], /repo create <id>, "
-                "/repo publish [id] or /repo link <id> "
-                "depends_on=<id,id>"
-            )
+            return self._error(chat_id, "chat_repo_usage")
         if len(tokens) < 2:
-            return Reply(
-                "Usage: /repo add <url> [id] [depends_on=<id,id>]"
-            )
+            return self._error(chat_id, "chat_repo_add_usage")
         parts = tokens[1].split()
         if not parts:
-            return Reply(
-                "Usage: /repo add <url> [id] [depends_on=<id,id>]"
-            )
+            return self._error(chat_id, "chat_repo_add_usage")
         url = parts[0]
         repo_id = ""
         depends_on: list[str] = []
@@ -519,7 +619,11 @@ class CommandRouter:
             elif not repo_id:
                 repo_id = token
             else:
-                return Reply(f"unexpected argument: {token}")
+                return self._error(
+                    chat_id,
+                    "chat_unexpected_argument",
+                    token=token,
+                )
         try:
             result = add_repository(
                 self.settings,
@@ -530,25 +634,38 @@ class CommandRouter:
                 depends_on=depends_on,
             )
         except (AdoptError, ProviderError) as exc:
-            return Reply(
-                f"error: {exc}" + self._github_hint(url, str(exc))
+            return self._error(
+                chat_id,
+                "chat_error_with_hint",
+                error=exc,
+                hint=self._github_hint(chat_id, url, str(exc)),
             )
         entry = result.entry
         lines = [
-            f"Added repository {entry['id']} to {project['id']}.",
-            f"Provider: {entry['provider']}; "
-            f"url: {entry.get('path') or entry['url'] or '—'}.",
+            self._text(
+                chat_id,
+                "chat_repo_added",
+                repo=entry["id"],
+                project=project["id"],
+            ),
+            self._text(
+                chat_id,
+                "chat_repo_provider",
+                provider=entry["provider"],
+                url=entry.get("path") or entry["url"] or "—",
+            ),
         ]
         if entry["depends_on"]:
             lines.append(
-                "Dependency edges: "
-                + ", ".join(entry["depends_on"])
-                + "."
+                self._text(
+                    chat_id,
+                    "chat_repo_dependency_edges",
+                    edges=", ".join(entry["depends_on"]),
+                )
             )
         else:
             lines.append(
-                "No dependency edges recorded: this repository is maintained "
-                "separately inside the project."
+                self._text(chat_id, "chat_repo_separate")
             )
         return Reply("\n".join(lines))
 
@@ -559,31 +676,31 @@ class CommandRouter:
         layout = ProjectLayout.detect(project["workspace"])
         entries = list_tasks(layout)
         if not entries:
-            return Reply(
-                "No tasks. A change request sent as a plain message queues one."
+            return Reply(self._text(chat_id, "chat_tasks_none"))
+        lines = [
+            self._text(
+                chat_id, "chat_tasks_header", count=len(entries)
             )
-        lines = [f"Tasks: {len(entries)}"]
+        ]
         for task in entries:
             summary = str(task.get("result", {}).get("summary", ""))
             lines.append(
-                f"{task['id']}  {task['status']}  {task['title']}"
+                f"{task['id']}  "
+                f"{self._status_name(chat_id, task['status'])}  "
+                f"{task['title']}"
             )
             if summary:
                 lines.append(f"  {summary}")
         return Reply("\n".join(lines))
 
     def _task(self, chat_id: int, rest: str, _actor: str) -> Reply:
-        usage = (
-            "Usage: /task cancel|retry <task-id>, "
-            "/task accept <task-id> [note] or "
-            "/task reject <task-id> [note]"
-        )
+        usage = self._text(chat_id, "chat_task_usage")
         tokens = rest.split(maxsplit=2)
         action = tokens[0].lower() if tokens else ""
         if action not in {"cancel", "retry", "accept", "reject"}:
-            return Reply(usage)
+            return Reply(usage, failed=True)
         if len(tokens) < 2:
-            return Reply(usage)
+            return Reply(usage, failed=True)
         project = self._selected(chat_id)
         if isinstance(project, Reply):
             return project
@@ -598,19 +715,26 @@ class CommandRouter:
                     else retry_task(layout, task_id)
                 )
             except ValueError as exc:
-                return Reply(f"error: {exc}")
+                return self._error(chat_id, "chat_error", error=exc)
             commit_task(
                 layout,
                 task["id"],
                 f"{action.capitalize()} task {task['id']}",
             )
             return Reply(
-                f"{'Cancelled' if action == 'cancel' else 'Requeued'} "
-                f"task {task['id']}."
+                self._text(
+                    chat_id,
+                    "chat_task_cancelled"
+                    if action == "cancel"
+                    else "chat_task_requeued",
+                    task=task["id"],
+                )
             )
         task = get_task(layout, task_id)
         if task is None:
-            return Reply(f"error: unknown task {task_id!r}")
+            return self._error(
+                chat_id, "chat_unknown_task", task=task_id
+            )
         if action == "accept":
             updated = accept_task(
                 self.settings,
@@ -635,15 +759,23 @@ class CommandRouter:
             f"{action.capitalize()} task {updated['id']}",
         )
         return Reply(
-            f"{action.capitalize()}ed task {updated['id']} "
-            f"({updated['status']})."
+            self._text(
+                chat_id,
+                "chat_task_accepted"
+                if action == "accept"
+                else "chat_task_rejected",
+                task=updated["id"],
+                status=self._status_name(
+                    chat_id, updated["status"]
+                ),
+            )
         )
 
     def _control(self, chat_id: int, rest: str, _actor: str) -> Reply:
         tokens = rest.split(maxsplit=1)
         action = tokens[0].lower() if tokens else ""
         if action != "extract":
-            return Reply("Usage: /control extract [path]")
+            return self._error(chat_id, "chat_control_usage")
         project = self._selected(chat_id)
         if isinstance(project, Reply):
             return project
@@ -653,10 +785,11 @@ class CommandRouter:
                 self.settings, self.ledger, project, path
             )
         except AdoptError as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
         return Reply(
-            f"Project state moved to {result.control}. "
-            "The product repository no longer tracks it."
+            self._text(
+                chat_id, "chat_control_moved", path=result.control
+            )
         )
 
     def _github(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -666,12 +799,15 @@ class CommandRouter:
         tokens = rest.split(maxsplit=1)
         action = tokens[0].lower() if tokens else "status"
         if action == "status":
-            return Reply(status_text(self.settings, project))
-        if action not in {"publish", "merge"}:
             return Reply(
-                "Usage: /github, /github publish [repo] <title>, "
-                "/github merge [repo] [pr]"
+                status_text(
+                    self.settings,
+                    project,
+                    lang=self._language(chat_id),
+                )
             )
+        if action not in {"publish", "merge"}:
+            return self._error(chat_id, "chat_github_usage")
         payload = tokens[1].strip() if len(tokens) > 1 else ""
         known = {entry["id"] for entry in manifest_entries(
             ProjectLayout.detect(project["workspace"])
@@ -698,9 +834,10 @@ class CommandRouter:
                     if part.isdigit():
                         number = int(part)
                     else:
-                        return Reply(
-                            f"unexpected argument: {part}; usage: "
-                            "/github merge [repo] [pr]"
+                        return self._error(
+                            chat_id,
+                            "chat_github_merge_arg",
+                            token=part,
                         )
                 result = merge_pr(
                     self.settings,
@@ -717,48 +854,99 @@ class CommandRouter:
             GithubAuthError,
             GitOperationError,
         ) as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
+        merged = self._text(
+            chat_id, "chat_yes" if result.merged else "chat_no"
+        )
         lines = [
-            f"repository: {result.repo_id} ({result.full_name})",
-            f"branch: {result.branch} -> {result.base}",
-            f"pull request: #{result.pr_number} {result.pr_url}",
-            f"checks: {result.checks}",
-            f"merged: {'yes' if result.merged else 'no'}"
+            self._text(
+                chat_id,
+                "chat_github_result_repository",
+                repo=result.repo_id,
+                full=result.full_name,
+            ),
+            self._text(
+                chat_id,
+                "chat_github_result_branch",
+                branch=result.branch,
+                base=result.base,
+            ),
+            self._text(
+                chat_id,
+                "chat_github_result_pr",
+                number=result.pr_number,
+                url=result.pr_url,
+            ),
+            self._text(
+                chat_id,
+                "chat_github_result_checks",
+                checks=result.checks,
+            ),
+            self._text(
+                chat_id,
+                "chat_github_result_merged",
+                merged=merged,
+            )
             + (f" ({result.merge_sha})" if result.merge_sha else ""),
-            f"status: {result.status}",
+            self._text(
+                chat_id,
+                "chat_github_result_status",
+                status=result.status,
+            ),
         ]
         return Reply("\n".join(lines))
 
     def _projects(self, chat_id: int, _rest: str, _actor: str) -> Reply:
         projects = self.ledger.list_projects()
         if not projects:
-            return Reply("No projects. Create one with /new <name> | <brief>.")
+            return Reply(self._text(chat_id, "chat_projects_none"))
         selected = self.ledger.get_session(chat_id)
-        lines = [f"Projects: {len(projects)}"]
+        lines = [
+            self._text(
+                chat_id, "chat_projects_header", count=len(projects)
+            )
+        ]
         for project in projects[:30]:
             state = project_state(self.ledger, project)
             generation = self.ledger.current_generation(project["id"])
             marker = "*" if project["id"] == selected else " "
             lines.append(
-                f"{marker} {project['id']}\n    gen {generation}  {state}"
+                self._text(
+                    chat_id,
+                    "chat_project_entry",
+                    marker=marker,
+                    project=project["id"],
+                    generation=generation,
+                    state=state,
+                )
             )
         if len(projects) > 30:
-            lines.append(f"... and {len(projects) - 30} more")
-        lines.append("Select with /use <id>.")
+            lines.append(
+                self._text(
+                    chat_id,
+                    "chat_projects_more",
+                    count=len(projects) - 30,
+                )
+            )
+        lines.append(self._text(chat_id, "chat_projects_select"))
         return Reply("\n".join(lines))
 
     def _use(self, chat_id: int, rest: str, _actor: str) -> Reply:
         if not rest:
-            return Reply("Usage: /use <id or unique prefix>")
-        project = self._resolve(rest.split()[0])
+            return self._error(chat_id, "chat_use_usage")
+        project = self._resolve(chat_id, rest.split()[0])
         if isinstance(project, Reply):
             return project
         self.ledger.set_session(chat_id, project["id"])
         state = project_state(self.ledger, project)
         return Reply(
-            f"Selected {project['name']} ({project['id']}).\n"
-            f"State: {state}.\n"
-            "Messages without a command now go to this project's agent."
+            self._text(
+                chat_id,
+                "chat_use_selected",
+                name=project["name"],
+                project=project["id"],
+                state=state,
+            )
         )
 
     def _status(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -767,21 +955,49 @@ class CommandRouter:
             return project
         project_id = project["id"]
         generation = self.ledger.current_generation(project_id)
-        checkpoint = self.ledger.checkpoint(project_id) or "none"
+        checkpoint = self.ledger.checkpoint(project_id) or self._text(
+            chat_id, "chat_none"
+        )
         layout = ProjectLayout.detect(project["workspace"])
         task = latest_task(layout)
         lines = [
-            f"project: {project_id}",
-            f"name: {project['name']}",
-            f"layout: {layout.kind}",
-            f"recipe: {project.get('recipe_id') or 'none'}",
-            f"generation: {generation}",
-            f"checkpoint: {checkpoint}",
-            f"state: {project_state(self.ledger, project)}",
+            self._text(
+                chat_id, "chat_status_project", project=project_id
+            ),
+            self._text(
+                chat_id, "chat_status_name", name=project["name"]
+            ),
+            self._text(
+                chat_id, "chat_status_layout", layout=layout.kind
+            ),
+            self._text(
+                chat_id,
+                "chat_status_recipe",
+                recipe=project.get("recipe_id")
+                or self._text(chat_id, "chat_none"),
+            ),
+            self._text(
+                chat_id,
+                "chat_status_generation",
+                generation=generation,
+            ),
+            self._text(
+                chat_id, "chat_status_checkpoint", checkpoint=checkpoint
+            ),
+            self._text(
+                chat_id,
+                "chat_status_state",
+                state=project_state(self.ledger, project),
+            ),
         ]
         if task is not None:
             lines.append(
-                f"task: {task['title']} ({task['status']})"
+                self._text(
+                    chat_id,
+                    "chat_status_task",
+                    title=task["title"],
+                    status=self._status_name(chat_id, task["status"]),
+                )
             )
         staging_path = layout.artifact("staging.json")
         if staging_path.exists():
@@ -790,29 +1006,56 @@ class CommandRouter:
             except (OSError, json.JSONDecodeError):
                 staging = {}
             lines.append(
-                f"staging: {staging.get('status', 'unknown')} "
-                f"{staging.get('url', '')}".rstrip()
+                self._text(
+                    chat_id,
+                    "chat_status_staging",
+                    status=self._status_name(
+                        chat_id, staging.get("status", "unknown")
+                    ),
+                    url=staging.get("url", ""),
+                ).rstrip()
             )
         for scope in ("staging", "production"):
             approval = latest_approval(self.ledger, project_id, scope, generation)
+            scope_name = self._text(chat_id, f"chat_scope_{scope}")
             if approval is None:
-                lines.append(f"{scope} approval: none")
+                lines.append(
+                    self._text(
+                        chat_id,
+                        "chat_status_approval_none",
+                        scope=scope_name,
+                    )
+                )
             else:
                 lines.append(
-                    f"{scope} approval: {approval['decision']} "
-                    f"by {approval['actor']}"
+                    self._text(
+                        chat_id,
+                        "chat_status_approval",
+                        scope=scope_name,
+                        decision=approval["decision"],
+                        actor=approval["actor"],
+                    )
                 )
         lines.append(
-            "reconciliation: "
-            + reconciliation_status_path(
-                layout.artifact("docs/program/reconciliation.md")
+            self._text(
+                chat_id,
+                "chat_status_reconciliation",
+                status=reconciliation_status_path(
+                    layout.artifact("docs/program/reconciliation.md")
+                ),
             )
         )
         proposals = summarize_proposals(layout.control)
-        lines.append(f"proposals: {len(proposals)}")
+        lines.append(
+            self._text(
+                chat_id,
+                "chat_status_proposals",
+                count=len(proposals),
+            )
+        )
         events = self.ledger.events(project_id, generation)[-8:]
         if events:
-            lines.append("recent stages:")
+            lines.append(self._text(chat_id, "chat_status_recent"))
             for event in events:
                 lines.append(f"  {event['stage']} {event['status']}")
         return Reply("\n".join(lines))
@@ -825,44 +1068,73 @@ class CommandRouter:
             return project
         project_id = project["id"]
         if project_is_done(self.ledger, project_id):
-            return Reply(f"{project_id} is already done.")
+            return Reply(
+                self._text(
+                    chat_id, "chat_run_done", project=project_id
+                )
+            )
         if not self.daemon_enabled:
             return Reply(
-                "This gateway does not run iterations. "
-                f"Run `forgel run {project_id}` on the host."
+                self._text(
+                    chat_id,
+                    "chat_run_gateway",
+                    project=project_id,
+                )
             )
         if is_paused(self.settings.home):
-            return Reply("The daemon is paused. Send /resume first.")
+            return Reply(self._text(chat_id, "chat_daemon_paused"))
         state = project_state(self.ledger, project)
         if state == "task cancelled":
-            return Reply(f"{project_id}: the task was cancelled.")
+            return Reply(
+                self._text(
+                    chat_id,
+                    "chat_run_cancelled",
+                    project=project_id,
+                )
+            )
         if state.startswith("task "):
             return Reply(
-                f"{project_id}: {state}. The daemon will process queued tasks."
+                self._text(
+                    chat_id,
+                    "chat_run_state",
+                    project=project_id,
+                    state=state,
+                )
             )
         if state == "adopted":
             return Reply(
-                f"{project_id} is a brownfield project: the template pipeline "
-                "does not run. Send a change request as a plain message or "
-                "inspect it with /status."
+                self._text(
+                    chat_id,
+                    "chat_run_brownfield",
+                    project=project_id,
+                )
             )
         if state.startswith("awaiting staging approval") or state.startswith(
             "staging "
         ):
             return Reply(
-                f"{project_id}: {state}.\n"
-                f"Approve: /approve {project_id} staging"
+                self._text(
+                    chat_id,
+                    "chat_run_approval",
+                    project=project_id,
+                    state=state,
+                )
             )
         layout = ProjectLayout.detect(project["workspace"])
         if reconciliation_status_path(
             layout.artifact("docs/program/reconciliation.md")
         ) in {"pending", "fix_required"}:
             return Reply(
-                f"{project_id} needs a reconciliation decision.\n"
-                f"Review: /sync {project_id}"
+                self._text(
+                    chat_id,
+                    "chat_run_reconcile",
+                    project=project_id,
+                )
             )
         return Reply(
-            f"{project_id} is queued; the daemon will run it in this cycle."
+            self._text(
+                chat_id, "chat_run_queued", project=project_id
+            )
         )
 
     def _sync(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -874,36 +1146,58 @@ class CommandRouter:
                 Path(project["workspace"]), self.ledger, project["id"]
             )
         except (SyncError, ValueError) as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
         if result.get("started"):
             return Reply(
-                f"Reconciliation: {result.get('decision', 'forced')}. "
-                f"Generation {result['generation']} started from "
-                f"{result['from_stage']}."
+                self._text(
+                    chat_id,
+                    "chat_sync_started",
+                    decision=result.get("decision", "forced"),
+                    generation=result["generation"],
+                    stage=result["from_stage"],
+                )
             )
         if result.get("pending"):
             analysis = result.get("analysis", {})
             lines = [
-                f"External changes: {result['count']} file(s). "
-                "A decision is required."
+                self._text(
+                    chat_id,
+                    "chat_sync_pending",
+                    count=result["count"],
+                )
             ]
-            for label, key in (
-                ("Violations", "violations"),
-                ("Requirements changed", "requirements"),
-                ("Documented modifications", "documented"),
-                ("Undocumented changes", "undocumented"),
-                ("Deletions", "deletions"),
+            for key in (
+                "violations",
+                "requirements",
+                "documented",
+                "undocumented",
+                "deletions",
             ):
                 items = analysis.get(key, [])
                 if items:
-                    lines.append(f"{label}: {len(items)}")
-            lines.append(f"See {result.get('reconciliation')}.")
+                    lines.append(
+                        self._text(
+                            chat_id,
+                            f"chat_sync_{key}",
+                            count=len(items),
+                        )
+                    )
             lines.append(
-                f"Decide: /reconcile {project['id']} "
-                "accept|fix|rollback|ignore [notes]"
+                self._text(
+                    chat_id,
+                    "chat_sync_see",
+                    path=result.get("reconciliation"),
+                )
+            )
+            lines.append(
+                self._text(
+                    chat_id,
+                    "chat_sync_decide",
+                    project=project["id"],
+                )
             )
             return Reply("\n".join(lines))
-        return Reply("No external changes detected.")
+        return Reply(self._text(chat_id, "chat_sync_none"))
 
     def _reconcile(self, chat_id: int, rest: str, _actor: str) -> Reply:
         project, remainder = self._target_args(chat_id, rest, DECISIONS)
@@ -911,9 +1205,7 @@ class CommandRouter:
             return project
         tokens = remainder.split(maxsplit=1)
         if not tokens or tokens[0].lower() not in DECISIONS:
-            return Reply(
-                "Usage: /reconcile [id] accept|fix|rollback|ignore [notes]"
-            )
+            return self._error(chat_id, "chat_reconcile_usage")
         decision = tokens[0].lower()
         notes = tokens[1] if len(tokens) > 1 else ""
         try:
@@ -925,17 +1217,24 @@ class CommandRouter:
                 notes=notes,
             )
         except (SyncError, ValueError) as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
         if result.get("brownfield"):
-            tail = "No generation started (brownfield project)."
+            tail = self._text(chat_id, "chat_reconcile_brownfield")
         else:
-            tail = (
-                f"Generation {result['generation']} will re-run from "
-                f"{result['from_stage']}."
+            tail = self._text(
+                chat_id,
+                "chat_reconcile_rerun",
+                generation=result["generation"],
+                stage=result["from_stage"],
             )
         return Reply(
-            f"Reconciliation: {result['decision']} "
-            f"({result['status']}). {tail}"
+            self._text(
+                chat_id,
+                "chat_reconcile_result",
+                decision=result["decision"],
+                status=result["status"],
+                tail=tail,
+            )
         )
 
     def _proposals(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -945,8 +1244,12 @@ class CommandRouter:
         layout = ProjectLayout.detect(project["workspace"])
         proposals = summarize_proposals(layout.control)
         if not proposals:
-            return Reply("No proposals.")
-        lines = [f"Proposals: {len(proposals)}"]
+            return Reply(self._text(chat_id, "chat_proposals_none"))
+        lines = [
+            self._text(
+                chat_id, "chat_proposals_header", count=len(proposals)
+            )
+        ]
         for proposal in proposals:
             lines.append(
                 f"{proposal['kind'] or '?'}  {proposal['status'] or '?'}  "
@@ -985,17 +1288,26 @@ class CommandRouter:
             state = self.ledger.checkpoint_state(project_id)
             if state is None or state[0] != "done":
                 return Reply(
-                    "Production approval requires a completed release.\n"
-                    f"Current checkpoint: {state[0] if state else 'none'}. "
-                    "Approve staging and let the daemon finish it first."
+                    self._text(
+                        chat_id,
+                        "chat_production_needs_release",
+                        checkpoint=(
+                            state[0]
+                            if state
+                            else self._text(chat_id, "chat_none")
+                        ),
+                    )
                 )
             generation = self.ledger.current_generation(project_id)
             if not is_approved(
                 self.ledger, project_id, "staging", generation
             ):
                 return Reply(
-                    "Approve staging before production:\n"
-                    f"/approve {project_id} staging"
+                    self._text(
+                        chat_id,
+                        "chat_production_after_staging",
+                        project=project_id,
+                    )
                 )
             token = secrets.token_hex(4)
             self._production_tokens[token] = (project_id, time.time())
@@ -1003,15 +1315,24 @@ class CommandRouter:
                 "inline_keyboard": [
                     [
                         {
-                            "text": "I accept responsibility",
+                            "text": self._text(
+                                chat_id, "chat_button_accept"
+                            ),
                             "callback_data": f"ap:{token}:ok",
                         }
                     ],
-                    [{"text": "Cancel", "callback_data": f"ap:{token}:no"}],
+                    [
+                        {
+                            "text": self._text(
+                                chat_id, "chat_button_cancel"
+                            ),
+                            "callback_data": f"ap:{token}:no",
+                        }
+                    ],
                 ]
             }
             return Reply(
-                self._production_prompt(project),
+                self._production_prompt(chat_id, project),
                 reply_markup=markup,
             )
 
@@ -1026,9 +1347,13 @@ class CommandRouter:
                 notes=notes,
             )
         except ApprovalError as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
         return Reply(
-            self._approval_text(record, production=scope == "production")
+            self._approval_text(
+                chat_id,
+                record,
+                production=scope == "production",
+            )
         )
 
     # ------------------------------------------------------------ config
@@ -1046,27 +1371,50 @@ class CommandRouter:
             layout = ProjectLayout.detect(project["workspace"])
             summary = plan_status(layout)
             if summary["status"] == "none":
-                return Reply("No plans for this project.")
+                return Reply(self._text(chat_id, "chat_plan_none"))
             lines = [
-                f"Plan {summary['plan_id']}: {summary['status']} "
-                f"({len(summary['tasks'])} tasks)"
+                self._text(
+                    chat_id,
+                    "chat_plan_status_header",
+                    plan=summary["plan_id"],
+                    status=self._plan_status_name(
+                        chat_id, summary["status"]
+                    ),
+                    count=len(summary["tasks"]),
+                )
             ]
             if summary["goal"]:
-                lines.append(f"Goal: {summary['goal']}")
+                lines.append(
+                    self._text(
+                        chat_id,
+                        "chat_plan_goal",
+                        goal=summary["goal"],
+                    )
+                )
             for item in summary["tasks"]:
                 suffix = (
-                    f" (blocked by {item['blocked_by']})"
+                    self._text(
+                        chat_id,
+                        "chat_plan_blocked",
+                        blocked=item["blocked_by"],
+                    )
                     if item["blocked_by"]
                     else ""
                 )
                 lines.append(
-                    f"- {item['status']}: {item['title']}{suffix}"
+                    self._text(
+                        chat_id,
+                        "chat_plan_task",
+                        status=self._status_name(
+                            chat_id, item["status"]
+                        ),
+                        title=item["title"],
+                        suffix=suffix,
+                    )
                 )
             return Reply("\n".join(lines))
         if not goal:
-            return Reply(
-                "Usage: /plan [--dry-run] <milestone goal> or /plan status"
-            )
+            return self._error(chat_id, "chat_plan_usage")
         try:
             result = plan_project(
                 self.settings,
@@ -1076,27 +1424,42 @@ class CommandRouter:
                 dry_run=dry_run,
             )
         except PlanningError as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
         lines = [
-            f"Plan {result.plan_id}: {len(result.tasks)} task(s)."
+            self._text(
+                chat_id,
+                "chat_plan_header",
+                plan=result.plan_id,
+                count=len(result.tasks),
+            )
         ]
         if result.notes:
             lines.append(result.notes)
         for index, item in enumerate(result.tasks, 1):
             checks = item.get("checks") or []
-            suffix = f" ({len(checks)} checks)" if checks else ""
+            suffix = (
+                self._text(
+                    chat_id, "chat_plan_checks", count=len(checks)
+                )
+                if checks
+                else ""
+            )
             lines.append(
-                f"{index}. {item['title']} "
-                f"[{item.get('repo_id') or 'sole'}] -> "
-                f"{item.get('task_id') or '-'}{suffix}"
+                self._text(
+                    chat_id,
+                    "chat_plan_entry",
+                    index=index,
+                    title=item["title"],
+                    repo=item.get("repo_id")
+                    or self._text(chat_id, "chat_sole"),
+                    task=item.get("task_id") or "-",
+                    suffix=suffix,
+                )
             )
         if dry_run:
-            lines.append("(dry run; no tasks created)")
+            lines.append(self._text(chat_id, "chat_plan_dry_run"))
         else:
-            lines.append(
-                "The daemon runs them in order; a task waits for its "
-                "dependencies."
-            )
+            lines.append(self._text(chat_id, "chat_plan_queued"))
         return Reply("\n".join(lines))
 
     def _peak(self, chat_id: int, rest: str, _actor: str) -> Reply:
@@ -1111,17 +1474,18 @@ class CommandRouter:
                     layout.control, "models.peak_policy", argument
                 )
             except ConfigError as exc:
-                return Reply(f"error: {exc}")
+                return self._error(chat_id, "chat_error", error=exc)
             policy = argument
         elif argument in {"", "status"}:
             policy = peak.project_policy(self.settings, layout.control)
         else:
-            return Reply("Usage: /peak [always|off_peak]")
+            return self._error(chat_id, "chat_peak_usage")
         return Reply(
             peak.status_text(
                 policy,
                 hours=self.settings.peak_hours,
                 tz_name=self.settings.timezone,
+                lang=self._language(chat_id),
             )
         )
 
@@ -1139,31 +1503,40 @@ class CommandRouter:
                     self.settings.home, control
                 )
             except (ConfigError, daemon_config.DaemonConfigError) as exc:
-                return Reply(f"error: {exc}")
-            lines = [view, "", "Secrets:"]
+                return self._error(chat_id, "chat_error", error=exc)
+            lines = [
+                view,
+                "",
+                self._text(chat_id, "chat_config_secrets_header"),
+            ]
             for key, state in secret_status(self.settings.home).items():
                 lines.append(f"  {key}: {state}")
             return Reply("\n".join(lines))
         if tokens[0] != "set" or len(tokens) < 3:
-            return Reply("Usage: /config or /config set <key> <value>")
+            return self._error(chat_id, "chat_config_usage")
         key, value = tokens[1], tokens[2]
 
         if key in daemon_config.SCHEMA:
             try:
                 daemon_config.set_value(self.settings.home, key, value)
             except daemon_config.DaemonConfigError as exc:
-                return Reply(f"error: {exc}")
+                return self._error(chat_id, "chat_error", error=exc)
             current = daemon_config.get_value(self.settings.home, key)
             note = ""
             if key in {"daemon.interval", "telegram.poll_timeout"}:
-                note = "\nRestart the gateway to apply it."
+                note = self._text(chat_id, "chat_config_restart")
             return Reply(
-                f"Set {key} = {config_store.format_value(current)} "
-                f"(daemon).{note}"
+                self._text(
+                    chat_id,
+                    "chat_config_set_daemon",
+                    key=key,
+                    value=config_store.format_value(current),
+                    note=note,
+                )
             )
         if key in SECRET_KEYS:
             return Reply(
-                f"{key} is a secret. Use: /secret set {key} <value>"
+                self._text(chat_id, "chat_config_secret", key=key)
             )
         if key in config_store.PROJECT_KINDS:
             project = self._selected(chat_id)
@@ -1179,86 +1552,98 @@ class CommandRouter:
             try:
                 typed = config_store.set_project_value(control, key, value)
             except (ConfigError, OSError) as exc:
-                return Reply(f"error: {exc}")
+                return self._error(chat_id, "chat_error", error=exc)
             return Reply(
-                f"Set {key} = {config_store.format_value(typed)} "
-                f"(project {project['id']})."
+                self._text(
+                    chat_id,
+                    "chat_config_set_project",
+                    key=key,
+                    value=config_store.format_value(typed),
+                    project=project["id"],
+                )
             )
         return Reply(
-            "Unknown setting.\n"
-            "Project keys: "
-            + ", ".join(sorted(config_store.PROJECT_KINDS))
-            + "\nDaemon keys: "
-            + ", ".join(sorted(daemon_config.SCHEMA))
+            self._text(
+                chat_id,
+                "chat_config_unknown",
+                project_keys=", ".join(
+                    sorted(config_store.PROJECT_KINDS)
+                ),
+                daemon_keys=", ".join(sorted(daemon_config.SCHEMA)),
+            )
         )
 
-    def _secret(self, _chat_id: int, rest: str, _actor: str) -> Reply:
+    def _secret(self, chat_id: int, rest: str, _actor: str) -> Reply:
         tokens = rest.split(maxsplit=1)
-        note = (
-            "\nTelegram bots have no end-to-end encryption. This message is "
-            "deleted after the command, but prefer environment variables or "
-            "`forgel secret set` over SSH in production."
-        )
+        note = self._text(chat_id, "chat_secret_note")
         if not tokens:
-            lines = ["Secrets (env overrides the file):"]
+            lines = [
+                self._text(chat_id, "chat_secret_header"),
+            ]
             for key, state in secret_status(self.settings.home).items():
                 lines.append(f"  {key}: {state}")
-            lines.append(
-                "Set with /secret set <key> <value>; the message is deleted."
-            )
+            lines.append(self._text(chat_id, "chat_secret_hint"))
             return Reply("\n".join(lines))
 
         action = tokens[0].lower()
         if action == "set":
             if len(tokens) < 2:
-                return Reply("Usage: /secret set <key> <value>")
+                return self._error(chat_id, "chat_secret_set_usage")
             parts = tokens[1].split(maxsplit=1)
             if len(parts) < 2:
-                return Reply("Usage: /secret set <key> <value>")
+                return self._error(chat_id, "chat_secret_set_usage")
             key, value = parts
             try:
                 path = set_secret(self.settings.home, key, value)
             except (SecretError, OSError) as exc:
-                return Reply(f"error: {exc}")
+                return self._error(chat_id, "chat_error", error=exc)
             restart = (
-                "\nRestart the gateway to use a new telegram.bot_token."
+                self._text(chat_id, "chat_secret_restart")
                 if key == "telegram.bot_token"
                 else ""
             )
             return Reply(
-                f"Saved {key} to {path.name} (mode 0600). "
-                "The value was not echoed and the source message is being "
-                "deleted." + restart + note,
+                self._text(
+                    chat_id,
+                    "chat_secret_saved",
+                    key=key,
+                    file=path.name,
+                    restart=restart,
+                    note=note,
+                ),
                 delete_source=True,
             )
         if action == "delete":
             if len(tokens) < 2:
-                return Reply("Usage: /secret delete <key>")
+                return self._error(chat_id, "chat_secret_delete_usage")
             key = tokens[1].strip()
             try:
                 removed = delete_secret(self.settings.home, key)
             except (SecretError, OSError) as exc:
-                return Reply(f"error: {exc}")
+                return self._error(chat_id, "chat_error", error=exc)
             if removed:
-                return Reply(f"Deleted {key} from {SECRETS_FILENAME}.")
-            return Reply(f"{key} is not set in the file.")
-        return Reply(
-            "Usage: /secret, /secret set <key> <value>, "
-            "/secret delete <key>"
-        )
+                return Reply(
+                    self._text(
+                        chat_id,
+                        "chat_secret_deleted",
+                        key=key,
+                        file=SECRETS_FILENAME,
+                    )
+                )
+            return Reply(
+                self._text(chat_id, "chat_secret_missing", key=key)
+            )
+        return self._error(chat_id, "chat_secret_usage")
 
     # ----------------------------------------------------------- daemon
 
-    def _pause(self, _chat_id: int, _rest: str, _actor: str) -> Reply:
+    def _pause(self, chat_id: int, _rest: str, _actor: str) -> Reply:
         set_paused(self.settings.home, True)
-        return Reply(
-            "The daemon is paused. Tell me to resume when you want it "
-            "running again."
-        )
+        return Reply(self._text(chat_id, "chat_pause"))
 
-    def _resume(self, _chat_id: int, _rest: str, _actor: str) -> Reply:
+    def _resume(self, chat_id: int, _rest: str, _actor: str) -> Reply:
         set_paused(self.settings.home, False)
-        return Reply("The daemon is running again.")
+        return Reply(self._text(chat_id, "chat_resume"))
 
     # --------------------------------------------------------------- actions
 
@@ -1274,6 +1659,7 @@ class CommandRouter:
                     f"{text}\n\n{reply.text}",
                     reply.reply_markup,
                     reply.callback_text,
+                    failed=reply.failed,
                 )
             return reply
 
@@ -1282,7 +1668,7 @@ class CommandRouter:
         if action == "plan":
             goal = str(args.get("goal") or "").strip()
             if not goal:
-                return Reply("Tell me the milestone goal.")
+                return self._error(chat_id, "chat_action_no_goal")
             return combine(self._plan(chat_id, goal, actor))
         if action == "status":
             return combine(self._status(chat_id, "", actor))
@@ -1311,8 +1697,8 @@ class CommandRouter:
                     None,
                 )
                 if task is None:
-                    return Reply(
-                        "There is no task waiting for that decision."
+                    return self._error(
+                        chat_id, "chat_action_no_decision"
                     )
                 task_id = str(task["id"])
             notes = str(args.get("notes") or "").strip()
@@ -1322,7 +1708,7 @@ class CommandRouter:
             url = str(args.get("url") or "").strip()
             brief = str(args.get("brief") or "").strip()
             if not url:
-                return Reply("Tell me the repository URL or path.")
+                return self._error(chat_id, "chat_action_no_url")
             payload = f"{url} | {brief}" if brief else url
             return combine(self._adopt(chat_id, payload, actor))
         if action == "control_extract":
@@ -1335,7 +1721,7 @@ class CommandRouter:
         if action == "repo_add":
             url = str(args.get("url") or "").strip()
             if not url:
-                return Reply("Tell me the repository URL.")
+                return self._error(chat_id, "chat_action_no_repo_url")
             parts = [url]
             repo_id = str(args.get("id") or "").strip()
             if repo_id:
@@ -1351,7 +1737,7 @@ class CommandRouter:
         if action == "repo_create":
             repo_id = str(args.get("id") or "").strip()
             if not repo_id:
-                return Reply("Tell me the new repository id.")
+                return self._error(chat_id, "chat_action_no_repo_id")
             parts = [repo_id]
             org = str(args.get("org") or "").strip()
             if org:
@@ -1395,18 +1781,14 @@ class CommandRouter:
             return combine(self._resume(chat_id, "", actor))
         if action == "approve_staging":
             return combine(self._approve(chat_id, "staging", actor))
-        return Reply(
-            "I can't perform that action. Configuration, secrets and "
-            "production approval stay explicit."
-        )
+        return self._error(chat_id, "chat_action_not_allowed")
 
     # ------------------------------------------------------------- agent
 
     def _message(self, chat_id: int, text: str, actor: str) -> Reply:
         if looks_like_secret(text):
             return Reply(
-                "This looks like a secret and was not processed. Use "
-                "/secret set <key> <value>; the message is being deleted.",
+                self._text(chat_id, "chat_secret_looks"),
                 delete_source=True,
             )
         project = self._selected(chat_id)
@@ -1419,20 +1801,21 @@ class CommandRouter:
                 peak.defer_message(
                     hours=self.settings.peak_hours,
                     tz_name=self.settings.timezone,
+                    lang=self._language(chat_id),
                 )
             )
         if self.agent is None:
             return Reply(
-                "The project agent is not configured. Set "
-                "FORGEL_MODEL_API_KEY on the host or use "
-                "/secret set model.api_key <value>, then restart the gateway."
+                self._text(chat_id, "chat_agent_missing")
             )
         try:
             result = self.agent.handle(
                 project, text, actor, session=str(chat_id)
             )
         except Exception as exc:  # noqa: BLE001 - answer instead of crashing
-            return Reply(f"Agent error: {exc}")
+            return self._error(
+                chat_id, "chat_agent_error", error=exc
+            )
         if result.kind in {"action", "actions"} and result.actions:
             replies: list[Reply] = []
             narration = False
@@ -1449,10 +1832,7 @@ class CommandRouter:
                 reply = self._execute_action(chat_id, actor, proxy)
                 if action in {"status", "tasks"}:
                     narration = True
-                lowered = reply.text.strip().lower()
-                if lowered.startswith(
-                    ("error", "tell me", "usage", "i can't")
-                ):
+                if reply.failed:
                     error_reply = reply
                     break
                 replies.append(reply)
@@ -1461,13 +1841,18 @@ class CommandRouter:
                     reply.text for reply in replies if reply.text
                 )
                 error_text = error_reply.text.strip()
-                if not error_text.lower().startswith("error"):
-                    error_text = f"error: {error_text}"
-                if done:
-                    error_text += (
-                        "\n\nEarlier in this request:\n" + done
+                error_word = self._text(chat_id, "chat_error_word")
+                if not error_text.lower().startswith(error_word):
+                    error_text = self._text(
+                        chat_id,
+                        "chat_error_prefix",
+                        text=error_text,
                     )
-                return Reply(error_text)
+                if done:
+                    error_text += self._text(
+                        chat_id, "chat_earlier", results=done
+                    )
+                return Reply(error_text, failed=True)
             combined = "\n\n".join(
                 reply.text for reply in replies if reply.text
             )
@@ -1496,8 +1881,7 @@ class CommandRouter:
 
     # -------------------------------------------------------------- helpers
 
-    @staticmethod
-    def _github_hint(url: str, message: str) -> str:
+    def _github_hint(self, chat_id: int, url: str, message: str) -> str:
         if "github.com" not in url:
             return ""
         lowered = message.lower()
@@ -1511,15 +1895,10 @@ class CommandRouter:
                 "temporary failure in name resolution",
             )
         ):
-            return (
-                "\n\nGitHub API is not reachable by DNS. Check VPN/network "
-                "and retry the same command."
-            )
+            return "\n\n" + self._text(chat_id, "chat_github_dns")
         if "resource not accessible by integration" in lowered:
-            return (
-                "\n\nThe GitHub App cannot perform this action. Grant the "
-                "installation repository administration/creation for the "
-                "organization, or use a PAT with repo scope."
+            return "\n\n" + self._text(
+                chat_id, "chat_github_app_permission"
             )
         if not any(
             marker in lowered
@@ -1531,31 +1910,23 @@ class CommandRouter:
             )
         ):
             return ""
-        return (
-            "\n\nGitHub authentication failed. Set FORGEL_GITHUB_TOKEN on "
-            "the host or /secret set github.token <token>; a fine-grained "
-            "token needs Contents read/write."
-        )
+        return "\n\n" + self._text(chat_id, "chat_github_auth")
 
     def _selected(self, chat_id: int) -> dict[str, Any] | Reply:
         project_id = self.ledger.get_session(chat_id)
         if project_id is None:
-            return Reply(
-                "No project selected. Use /projects, then /use <id>."
-            )
+            return self._error(chat_id, "chat_no_project_selected")
         project = self.ledger.get_project(project_id)
         if project is None:
             self.ledger.clear_session(chat_id)
-            return Reply(
-                "The selected project no longer exists. Use /projects."
-            )
+            return self._error(chat_id, "chat_project_gone")
         return project
 
-    def _resolve(self, token: str) -> dict[str, Any] | Reply:
+    def _resolve(self, chat_id: int, token: str) -> dict[str, Any] | Reply:
         try:
             return resolve_project(self.ledger, token)
         except ProjectError as exc:
-            return Reply(f"error: {exc}")
+            return self._error(chat_id, "chat_error", error=exc)
 
     def _target(
         self, chat_id: int, rest: str
@@ -1566,7 +1937,7 @@ class CommandRouter:
         if not rest:
             return self._selected(chat_id), ""
         token, _, remainder = rest.partition(" ")
-        project = self._resolve(token)
+        project = self._resolve(chat_id, token)
         return project, remainder.strip()
 
     def _target_args(
@@ -1580,45 +1951,59 @@ class CommandRouter:
         token, _, remainder = rest.partition(" ")
         if token in argument_tokens:
             return self._selected(chat_id), rest
-        project = self._resolve(token)
+        project = self._resolve(chat_id, token)
         return project, remainder.strip()
 
-    def _approval_text(self, record: dict[str, Any], production: bool) -> str:
-        scope = "Production" if production else "Staging"
-        if record["decision"] == "approved":
-            text = f"{scope} approval recorded"
-        else:
-            text = f"{scope} rejected"
-        text += (
-            f" for {record['project_id']} (generation {record['generation']}"
+    def _approval_text(
+        self,
+        chat_id: int,
+        record: dict[str, Any],
+        production: bool,
+    ) -> str:
+        scope = "production" if production else "staging"
+        decision = (
+            "recorded"
+            if record["decision"] == "approved"
+            else "rejected"
         )
-        if record.get("release_sha"):
-            text += f", release {record['release_sha']}"
-        text += f") by {record['actor']}."
-        if record["decision"] != "approved":
-            text += (
-                "\nThe project stays at the approval gate. Use /sync to start "
-                "a new generation, then decide again."
+        release = (
+            self._text(
+                chat_id,
+                "chat_approval_release",
+                sha=record["release_sha"],
             )
+            if record.get("release_sha")
+            else ""
+        )
+        text = self._text(
+            chat_id, f"chat_approval_{scope}_{decision}"
+        )
+        text += self._text(
+            chat_id,
+            "chat_approval_details",
+            project=record["project_id"],
+            generation=record["generation"],
+            release=release,
+            actor=record["actor"],
+        )
+        if record["decision"] != "approved":
+            text += self._text(chat_id, "chat_approval_gate")
         elif production:
-            text += (
-                "\nNo deploy provider is configured, so this release stays "
-                "manual; the approval is recorded in the ledger and "
-                "docs/program/approvals.md."
+            text += self._text(
+                chat_id, "chat_approval_production_manual"
             )
         else:
-            text += "\nThe daemon will continue on its next cycle."
+            text += self._text(chat_id, "chat_approval_next_cycle")
         return text
 
-    def _production_prompt(self, project: dict[str, Any]) -> str:
+    def _production_prompt(
+        self, chat_id: int, project: dict[str, Any]
+    ) -> str:
         generation = self.ledger.current_generation(project["id"])
-        return (
-            f"Production approval for {project['name']} "
-            f"({project['id']}), generation {generation}.\n\n"
-            "Forgel is a software development tool, not a law firm. "
-            "Jurisdiction packs are advisory and do not establish legal "
-            "compliance. By accepting, you confirm that you are responsible "
-            "for the product's regulatory compliance in its target markets. "
-            "See docs/program/jurisdiction/disclaimer.md.\n\n"
-            "Approve production?"
+        return self._text(
+            chat_id,
+            "chat_production_prompt",
+            name=project["name"],
+            project=project["id"],
+            generation=generation,
         )
