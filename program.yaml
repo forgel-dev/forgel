@@ -8,3 +8,9 @@ repos:
     provider: github
     url: "git@github.com:forgel-dev/forgel.git"
     depends_on: []
+  - id: code
+    role: application
+    path: ../code
+    provider: github
+    url: "https://github.com/forgel-dev/code.git"
+    depends_on: []
