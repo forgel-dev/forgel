@@ -11,7 +11,9 @@ import argparse
 import sys
 from typing import Any, Sequence
 
+from . import language
 from .config import Settings
+from .i18n import t as _t
 from .ledger import Ledger
 from .projects import ProjectError, resolve_project
 
@@ -26,38 +28,57 @@ def acceptance_counts(acceptances: list[dict[str, Any]]) -> tuple[int, int]:
     return accepted, rejected
 
 
-def cost_report(ledger: Ledger, project_id: str) -> str:
-    """Return the English cost report for one project."""
+def cost_report(
+    ledger: Ledger, project_id: str, lang: str = "en"
+) -> str:
+    """Return the cost report for one project in ``lang``."""
 
     summary = ledger.cost_summary(project_id)
     acceptances = ledger.acceptances(project_id)
     accepted, rejected = acceptance_counts(acceptances)
 
-    lines = [f"Cost report for {project_id}", ""]
-    lines.append(f"Total cost: {money(summary['total'])}")
-    lines.append("Cost per stage:")
+    lines = [_t(lang, "cost_title", project=project_id), ""]
+    lines.append(_t(lang, "cost_total", money=money(summary["total"])))
+    lines.append(_t(lang, "cost_per_stage"))
     if summary["by_stage"]:
         for stage in sorted(summary["by_stage"]):
-            lines.append(f"  {stage:<16} {money(summary['by_stage'][stage])}")
+            lines.append(
+                f"  {stage:<16} {money(summary['by_stage'][stage])}"
+            )
     else:
-        lines.append("  (no recorded events)")
-    lines.append("Cost per generation:")
+        lines.append(_t(lang, "cost_none"))
+    lines.append(_t(lang, "cost_per_generation"))
     if summary["by_generation"]:
         for generation in sorted(summary["by_generation"]):
             lines.append(
                 f"  g{generation:<15} {money(summary['by_generation'][generation])}"
             )
     else:
-        lines.append("  (no recorded events)")
+        lines.append(_t(lang, "cost_none"))
     lines.append(
-        f"Acceptance count: {len(acceptances)} "
-        f"(accepted {accepted}, rejected {rejected})"
+        _t(
+            lang,
+            "cost_acceptance",
+            count=len(acceptances),
+            accepted=accepted,
+            rejected=rejected,
+        )
     )
     for item in acceptances:
-        reason = f" — {item['reason']}" if item["reason"] else ""
+        reason = (
+            _t(lang, "cost_reason", reason=item["reason"])
+            if item["reason"]
+            else ""
+        )
         lines.append(
-            f"  {item['decision']:<9} {item['task_id']} "
-            f"by {item['actor']}{reason}"
+            _t(
+                lang,
+                "cost_acceptance_line",
+                decision=item["decision"],
+                task=item["task_id"],
+                actor=item["actor"],
+                reason=reason,
+            )
         )
     return "\n".join(lines)
 
@@ -72,19 +93,26 @@ def cost_command(argv: Sequence[str]) -> int:
     parser.add_argument("project_id")
     parser.add_argument("--home", default=None)
     args = parser.parse_args(list(argv))
+    lang = language.detect(" ".join(argv), "en")
     settings = Settings.from_env(args.home)
     try:
         ledger = Ledger(settings.db_path, read_only=True)
     except Exception as exc:  # noqa: BLE001 - report, do not migrate
-        print(f"error: cannot read the ledger: {exc}", file=sys.stderr)
+        print(
+            _t(lang, "cost_ledger_error", error=exc),
+            file=sys.stderr,
+        )
         return 1
     try:
         try:
             project = resolve_project(ledger, args.project_id)
         except ProjectError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(
+                _t(lang, "cli_error", error=exc),
+                file=sys.stderr,
+            )
             return 1
-        print(cost_report(ledger, str(project["id"])))
+        print(cost_report(ledger, str(project["id"]), lang))
         return 0
     finally:
         ledger.close()

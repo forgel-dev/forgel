@@ -666,14 +666,15 @@ def run_console(
     """Run the local console until EOF or ``/quit``."""
 
     chat_id = 0
+    lang = "en"
     if project_id:
         try:
             project = resolve_project(ledger, project_id)
         except ProjectError as exc:
-            output(f"error: {exc}")
+            output(_t(lang, "console_error", error=exc))
             return
         ledger.set_session(chat_id, str(project["id"]))
-        output(f"Selected {project['id']}.")
+        output(_t(lang, "console_selected", project=project["id"]))
 
     if agent is None:
         client = build_model_client(settings.home, log=output)
@@ -683,48 +684,38 @@ def run_console(
                 settings.home / ".env.local",
             ]
             existing = [path for path in candidates if path.exists()]
-            output("Forgel is not fully configured:")
+            output(_t(lang, "console_not_configured"))
             if existing:
                 targets = " or ".join(str(path) for path in existing)
-                output(
-                    f"  model: set FORGEL_MODEL_API_KEY in {targets}"
-                )
-                output(
-                    "         (`forgel setup` creates ./.env.local; "
-                    "it is never committed)"
-                )
+                output(_t(lang, "console_model_path", targets=targets))
+                output(_t(lang, "console_setup_hint"))
             else:
                 output(
-                    "  model: set FORGEL_MODEL_API_KEY in the environment, "
-                    "./.env.local, or "
-                    f"{settings.home / '.env.local'} "
-                    "(`forgel setup` creates ./.env.local)"
+                    _t(
+                        lang,
+                        "console_model_env",
+                        path=settings.home / ".env.local",
+                    )
                 )
-            output(
-                "  github: optional locally; needed to publish branches "
-                "or create repositories"
-            )
-            output(
-                "Commands and /adopt work; planning and code changes need "
-                "the model. `forgel doctor` checks the rest."
-            )
+            output(_t(lang, "console_github_optional"))
+            output(_t(lang, "console_commands"))
         else:
             agent = ProjectAgent(settings, ledger, client)
     router = CommandRouter(
         settings, ledger, daemon_enabled=daemon, agent=agent
     )
+    output(_t(lang, "console_greeting"))
     output(
-        "Forgel console. Describe the work or use /help; "
-        "/cost reports spend and acceptance; /quit exits."
-    )
-    output(
-        "Mode: "
-        + (
-            "after each command the daemon runs until it needs you"
-            if daemon
-            else "commands only"
+        _t(
+            lang,
+            "console_mode",
+            mode=_t(
+                lang,
+                "console_mode_daemon"
+                if daemon
+                else "console_mode_commands",
+            ),
         )
-        + "."
     )
     interactive = (
         input_fn is input
@@ -736,14 +727,18 @@ def run_console(
         selected = ledger.get_session(chat_id)
         project = ledger.get_project(selected) if selected else None
         output(
-            f"Project: {project['name'] if project else 'none'}  ·  "
-            f"cwd: {Path.cwd()}"
+            _t(
+                lang,
+                "console_project",
+                project=(
+                    project["name"]
+                    if project
+                    else _t(lang, "console_none")
+                ),
+                cwd=Path.cwd(),
+            )
         )
-        output(
-            "Tab completes commands; ↑/↓ history; \\ continues a line; "
-            "Ctrl-C stops input; Ctrl-D exits."
-        )
-    lang = "en"
+        output(_t(lang, "console_history"))
     try:
         while True:
             if interactive:
@@ -771,20 +766,23 @@ def run_console(
                     ledger.get_session(chat_id) or ""
                 )
                 if not selector:
-                    output(
-                        "No project selected. Use /cost <project> "
-                        "or /use <project>."
-                    )
+                    output(_t(lang, "console_no_project"))
                     continue
                 try:
                     project = resolve_project(ledger, selector)
                 except ProjectError as exc:
-                    output(f"error: {exc}")
+                    output(_t(lang, "console_error", error=exc))
                     continue
-                output(cost_report(ledger, str(project["id"])))
+                output(
+                    cost_report(ledger, str(project["id"]), lang)
+                )
                 continue
-            if not text.startswith("/"):
-                lang = detect_language(text, lang)
+            probe = (
+                text
+                if not text.startswith("/")
+                else text.partition(" ")[2]
+            )
+            lang = detect_language(probe, lang)
             if router.agent is None:
                 client = build_model_client(settings.home, log=output)
                 if client is not None:
@@ -794,7 +792,7 @@ def run_console(
                     reply = router.handle(chat_id, text, actor)
             except KeyboardInterrupt:
                 if interactive:
-                    output("Stopped.")
+                    output(_t(lang, "console_stopped"))
                     continue
                 raise
             except Exception as exc:  # noqa: BLE001 - keep the console up
@@ -824,10 +822,10 @@ def run_console(
                     )
                 except KeyboardInterrupt:
                     if interactive:
-                        output("Stopped; back to the prompt.")
+                        output(_t(lang, "console_stopped_back"))
                         continue
                     raise
     finally:
         if interactive:
             _save_history(settings)
-    output("Bye.")
+    output(_t(lang, "console_bye"))
