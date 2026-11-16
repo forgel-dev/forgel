@@ -24,6 +24,7 @@ from .artifacts import write_text
 from .config import Settings
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .model_output import json_objects
 from .model import (
     ModelClient,
     ModelError,
@@ -143,19 +144,17 @@ Diff:
 
 
 def _parse(raw: str) -> dict[str, Any]:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        raise ValueError("the arbiter did not return JSON")
-    data = json.loads(text[start : end + 1])
-    if not isinstance(data, dict):
-        raise ValueError("the arbitration must be a JSON object")
+    objects = json_objects(raw)
+    data = next(
+        (item for item in objects if "verdict" in item),
+        None,
+    )
+    if data is None:
+        keys = [sorted(item.keys()) for item in objects]
+        raise ValueError(
+            "the arbiter did not return a verdict; "
+            f"model objects: {keys}; output: {raw[:600]}"
+        )
     verdict = str(data.get("verdict", "")).strip().lower()
     if verdict not in {"accept", "fix", "criteria"}:
         raise ValueError("the arbiter verdict must be accept, fix or criteria")

@@ -217,6 +217,28 @@ class ArbiterTest(unittest.TestCase):
             stored["result"]["arbiter"]["verdict"], "accept"
         )
 
+    def test_the_arbiter_reads_a_verdict_from_a_batch(self) -> None:
+        project, layout = self._project()
+        task = self._failed_task(layout, reworks=1)
+        reply = (
+            json.dumps({"note": "reading the diff"}) + "\n" + ACCEPT
+        )
+        handle_failure(
+            self.settings,
+            self.ledger,
+            project,
+            layout,
+            task["id"],
+            ScriptedModelClient([reply]),
+            log=lambda _m: None,
+        )
+        stored = get_task(layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "done")
+        self.assertEqual(
+            stored["result"]["arbiter"]["verdict"], "accept"
+        )
+
     def test_the_arbiter_can_rule_that_the_criteria_are_wrong(self) -> None:
         project, layout = self._project()
         task = self._failed_task(layout, reworks=1)

@@ -220,6 +220,18 @@ class CodingAgentTest(unittest.TestCase):
         ]
         self.assertEqual(events[-1]["status"], "done")
 
+    def test_agent_executes_a_batch_of_actions(self) -> None:
+        task = self._task()
+        actions = [json.loads(item) for item in self._responses()]
+        client = ScriptedModelClient([json.dumps(actions)])
+        result = CodingAgent(self.settings, self.ledger, client).run(
+            self.project, task, log=lambda _m: None
+        )
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertTrue((self.repo / "calc.py").exists())
+        self.assertTrue((self.repo / "tests/test_calc.py").exists())
+        self.assertIn("OK", result.test_output)
+
     def test_resumed_task_reads_previous_state(self) -> None:
         task = create_task(
             self.layout,

@@ -1,7 +1,8 @@
 """Coding agent: execute a task inside one repository.
 
-The model returns one JSON action per turn. The runtime executes it, returns a
-bounded observation and loops. This protocol works with any chat model (no
+The model returns one JSON action per turn; if it sends a batch, the runtime
+executes the actions in order. After each action the runtime returns a bounded
+observation and loops. This protocol works with any chat model (no
 provider-specific function calling), which also makes a subagent bridge and a
 scripted local run possible.
 
@@ -41,6 +42,7 @@ from .environment import (
 )
 from .layout import ProjectLayout
 from .ledger import Ledger
+from .model_output import json_objects
 from .model import (
     ModelClient,
     ModelError,
@@ -317,27 +319,14 @@ def _looks_like_tool_markup(text: str) -> bool:
     )
 
 
-def parse_action(raw: str) -> dict[str, Any] | None:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
-        text = text.strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    try:
-        data = json.loads(text[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, dict):
-        return None
-    action = data.get("action")
-    if action not in ALLOWED_ACTIONS:
-        return None
-    return data
+def parse_actions(raw: str) -> list[dict[str, Any]]:
+    """Every allowed action object in a model reply, in order."""
+
+    return [
+        item
+        for item in json_objects(raw)
+        if str(item.get("action", "")) in ALLOWED_ACTIONS
+    ]
 
 
 def _preserved_evidence(path: Path) -> str:
@@ -804,8 +793,8 @@ class CodingAgent:
                         )
                     except (TypeError, ValueError):
                         pass
-                action = parse_action(raw)
-                if action is None:
+                batch = parse_actions(raw)
+                if not batch:
                     if (
                         _looks_like_tool_markup(raw)
                         and markup_retries < 2
@@ -846,112 +835,119 @@ class CodingAgent:
                     continue
                 invalid = 0
                 markup_retries = 0
-                kind = str(action["action"])
-                messages.append(
-                    ModelMessage(
-                        "assistant",
-                        json.dumps(action, ensure_ascii=False),
+                for action in batch:
+                    kind = str(action["action"])
+                    messages.append(
+                        ModelMessage(
+                            "assistant",
+                            json.dumps(action, ensure_ascii=False),
+                        )
                     )
-                )
-                if kind == "done":
-                    status = "done"
-                    summary = str(action.get("summary", "")).strip() or (
-                        "agent reported done"
-                    )
-                    for item in action.get("assumptions", []):
-                        value = str(item).strip()
-                        if value and value not in assumptions:
-                            assumptions.append(value)
-                    for item in action.get("test_removals", []):
-                        if not isinstance(item, dict):
-                            continue
-                        test = str(item.get("test", "")).strip()
-                        reason = str(item.get("reason", "")).strip().lower()
-                        replacement = str(
-                            item.get("replacement", "")
-                        ).strip()
-                        if (
-                            test
-                            and reason in {"removed", "replaced", "wrong"}
-                        ):
-                            test_removals.append(
-                                {
-                                    "test": test,
-                                    "reason": reason,
-                                    "replacement": replacement,
-                                }
-                            )
-                    terminal = True
-                    break
-                if kind == "fail":
-                    status = "failed"
-                    summary = str(action.get("reason", "")).strip() or (
-                        "agent reported failure"
-                    )
-                    terminal = True
-                    break
-                signature = self._signature(action)
-                repeats = 0
-                if kind in {"read_file", "write_file", "run"}:
-                    repeats = signatures.get(signature, 0) + 1
-                    signatures[signature] = repeats
-                    if repeats >= MAX_REPEATED_ACTIONS:
-                        status = "failed"
-                        failure_kind = "agent"
+                    if kind == "done":
+                        status = "done"
                         summary = (
-                            f"repeated action loop: {signature}"
+                            str(action.get("summary", "")).strip()
+                            or "agent reported done"
+                        )
+                        for item in action.get("assumptions", []):
+                            value = str(item).strip()
+                            if value and value not in assumptions:
+                                assumptions.append(value)
+                        for item in action.get("test_removals", []):
+                            if not isinstance(item, dict):
+                                continue
+                            test = str(item.get("test", "")).strip()
+                            reason = (
+                                str(item.get("reason", "")).strip().lower()
+                            )
+                            replacement = str(
+                                item.get("replacement", "")
+                            ).strip()
+                            if (
+                                test
+                                and reason in {"removed", "replaced", "wrong"}
+                            ):
+                                test_removals.append(
+                                    {
+                                        "test": test,
+                                        "reason": reason,
+                                        "replacement": replacement,
+                                    }
+                                )
+                        terminal = True
+                        break
+                    if kind == "fail":
+                        status = "failed"
+                        summary = (
+                            str(action.get("reason", "")).strip()
+                            or "agent reported failure"
                         )
                         terminal = True
                         break
-                observation, command = self._execute(
-                    layout,
-                    repo,
-                    action,
-                    touched,
-                    runner,
-                    environment.env_map if environment else None,
-                )
-                actions.append(self._action_summary(action))
-                if command is not None:
-                    commands.append(command)
-                recent.append(
-                    _observation_summary(action, observation, command)
-                )
-                recent = recent[-6:]
-                messages.append(
-                    ModelMessage(
-                        "user", f"OBSERVATION:\n{_cap(observation)}"
+                    signature = self._signature(action)
+                    repeats = 0
+                    if kind in {"read_file", "write_file", "run"}:
+                        repeats = signatures.get(signature, 0) + 1
+                        signatures[signature] = repeats
+                        if repeats >= MAX_REPEATED_ACTIONS:
+                            status = "failed"
+                            failure_kind = "agent"
+                            summary = (
+                                f"repeated action loop: {signature}"
+                            )
+                            terminal = True
+                            break
+                    observation, command = self._execute(
+                        layout,
+                        repo,
+                        action,
+                        touched,
+                        runner,
+                        environment.env_map if environment else None,
                     )
-                )
-                if repeats >= 3:
-                    warning = (
-                        "You have repeated this action several times. Its "
-                        "result is already above. Do not repeat it; make the "
-                        "edit or call done."
+                    actions.append(self._action_summary(action))
+                    if command is not None:
+                        commands.append(command)
+                    recent.append(
+                        _observation_summary(action, observation, command)
                     )
-                    messages.append(ModelMessage("user", warning))
-                    recent.append(warning)
-                if kind in {"write_file", "delete_file"} and (
-                    observation.startswith(("wrote ", "deleted "))
-                ):
-                    signatures.clear()
-                if budget.should_compact(messages, model):
-                    if session < self.max_sessions:
-                        used = budget.usage(messages, model)
-                        messages, state_ref = handoff(session)
-                        invalid = 0
-                        compactions += 1
-                        handed_off = True
-                        print(
-                            f"[agent] {task['id']}: context handoff to "
-                            f"session {session + 1} "
-                            f"(~{used}/{budget.usable} tokens)"
+                    recent = recent[-6:]
+                    messages.append(
+                        ModelMessage(
+                            "user", f"OBSERVATION:\n{_cap(observation)}"
                         )
+                    )
+                    if repeats >= 3:
+                        warning = (
+                            "You have repeated this action several times. "
+                            "Its result is already above. Do not repeat it; "
+                            "make the edit or call done."
+                        )
+                        messages.append(ModelMessage("user", warning))
+                        recent.append(warning)
+                    if kind in {"write_file", "delete_file"} and (
+                        observation.startswith(("wrote ", "deleted "))
+                    ):
+                        signatures.clear()
+                    if budget.should_compact(messages, model):
+                        if session < self.max_sessions:
+                            used = budget.usage(messages, model)
+                            messages, state_ref = handoff(session)
+                            invalid = 0
+                            compactions += 1
+                            handed_off = True
+                            print(
+                                f"[agent] {task['id']}: context handoff to "
+                                f"session {session + 1} "
+                                f"(~{used}/{budget.usable} tokens)"
+                            )
+                            break
+                        status = "failed"
+                        failure_kind = "agent"
+                        summary = "context session limit reached"
+                        terminal = True
                         break
-                    status = "failed"
-                    failure_kind = "agent"
-                    summary = "context session limit reached"
-                    terminal = True
+                if terminal or handed_off:
                     break
             if terminal:
                 break
