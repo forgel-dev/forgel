@@ -32,6 +32,8 @@ from .config import Settings
 from .control import is_paused
 from .costs import cost_report
 from .daemon import next_retry_wait, run_once
+from . import i18n
+from .i18n import t as _t
 from .language import detect as detect_language
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -43,73 +45,9 @@ from .tasks import latest_task, list_tasks, retry_moment
 PROMPT = "forgel> "
 QUIT = {"/quit", "/exit", "quit", "exit", "bye"}
 
-STRINGS: dict[str, dict[str, str]] = {
-    "en": {
-        "done": "done",
-        "failed": "failed",
-        "review": "needs your decision",
-        "pending": "queued",
-        "running": "running",
-        "blocked": "blocked",
-        "cancelled": "cancelled",
-        "plan_done": "done",
-        "plan_review": "awaiting a decision",
-        "plan_stalled": "stalled",
-        "plan_running": "running",
-        "plan_none": "none",
-        "milestone": "Milestone {plan}: {status} ({counts}).",
-        "count_done": "done",
-        "count_failed": "failed",
-        "count_blocked": "blocked",
-        "count_review": "in review",
-        "count_pending": "queued",
-        "explain_question": "The user's last message: {text}\n\nExplain the result in plain language, in the language of that message. Start with the concrete thing that did not work and why, not with the task status or plan counts. Synthesize the whole context: what happened and why, what is now blocked or waiting, what the runtime will do next on its own, and what — if anything — the user must decide. If the task is not complete, name the real cause from the evidence, not a generic \"process error\". Do not restate the status dump, do not list raw fields, and do not invent facts. If nothing is needed from the user, say so directly.",
-        "explain_state_question": "Explain the current state in plain language, in the language of the user's message. Synthesize the plan and the latest result: what happened, what is blocked or waiting, what the runtime will do next on its own, and what — if anything — the user must decide. Do not restate the status dump or invent facts.",
-        "explain_missing_model": "No model is configured, so this result cannot be explained in plain language. Task {task}: {status}. Reports: {reports}.",
-        "explain_failed": "I couldn't explain the result just now. The task is {status}. Reports: {reports}.",
-        "waiting": "Waiting for a scheduled retry at {moment} (about {minutes} min). Ctrl-C returns to the prompt.",
-        "stopped": "Stopped waiting; the retry stays scheduled.",
-        "daemon_error": "daemon error: {error}",
-    },
-    "ru": {
-        "done": "готово",
-        "failed": "провал",
-        "review": "нужно решение",
-        "pending": "в очереди",
-        "running": "в работе",
-        "blocked": "заблокировано",
-        "cancelled": "отменено",
-        "plan_done": "завершён",
-        "plan_review": "ждёт решения",
-        "plan_stalled": "застрял",
-        "plan_running": "в работе",
-        "plan_none": "нет",
-        "milestone": "План {plan}: {status} ({counts}).",
-        "count_done": "готово",
-        "count_failed": "провал",
-        "count_blocked": "заблокировано",
-        "count_review": "на проверке",
-        "count_pending": "в очереди",
-        "explain_question": "Пользователь только что написал: «{text}».\n\nОбъясни результат на языке этого сообщения. Начни с конкретного места, которое не сработало, и почему, а не со статуса задачи или счётчиков плана. Собери весь контекст: что произошло и почему, что сейчас заблокировано или ждёт, что система сделает дальше сама и что, если вообще что-то, должен решить пользователь. Если задача не выполнена, назови реальную причину по фактам, а не общее «процесс завершился ошибкой». Не пересказывай статус и не перечисляй поля; не выдумывай факты. Если от пользователя ничего не требуется, скажи это прямо.",
-        "explain_state_question": "Объясни текущее состояние на языке сообщения пользователя. Собери картину из плана и последнего результата: что произошло, что заблокировано или ждёт, что система сделает дальше сама и что, если что-то, должен решить пользователь. Не пересказывай статус и не выдумывай факты.",
-        "explain_missing_model": "Модель не настроена, поэтому объяснить результат человеческим языком нельзя. Задача {task}: {status}. Отчёты: {reports}.",
-        "explain_failed": "Не удалось объяснить результат. Статус задачи: {status}. Отчёты: {reports}.",
-        "waiting": "Ждём запланированный повтор в {moment} (около {minutes} мин). Ctrl-C вернёт к приглашению.",
-        "stopped": "Ожидание остановлено; повтор остаётся запланированным.",
-        "daemon_error": "ошибка демона: {error}",
-    },
-}
-
-
-def _t(lang: str, key: str, **values: object) -> str:
-    table = STRINGS.get(lang) or STRINGS["en"]
-    template = table.get(key) or STRINGS["en"].get(key, key)
-    return template.format(**values)
-
-
 def _status_name(lang: str, status: str) -> str:
     key = str(status or "")
-    if key in STRINGS["en"]:
+    if i18n.has(lang, key):
         return _t(lang, key)
     return key
 
@@ -156,7 +94,7 @@ def _tail_text(value: object, limit: int) -> str:
 
 
 def _recent_conversation(
-    layout: ProjectLayout, session: str = "", limit: int = 6
+    layout: ProjectLayout, session: str = "", limit: int = 20
 ) -> list[dict]:
     rows = load_history(layout, limit=limit * 2, session=session)
     items = [
@@ -343,6 +281,16 @@ def _conversation_observation(
     return _recent_conversation(layout, session=session)
 
 
+def _decision_log(layout: ProjectLayout) -> str:
+    try:
+        text = layout.artifact("docs/program/decisions.md").read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return ""
+    return _cap_text(text, 6000)
+
+
 def _explain_outcomes(
     agent: ProjectAgent | None,
     project: dict | None,
@@ -380,6 +328,7 @@ def _explain_outcomes(
             "recent_conversation": _conversation_observation(
                 layout, session
             ),
+            "user_decisions": _decision_log(layout),
         },
         ensure_ascii=False,
         indent=2,
@@ -433,6 +382,7 @@ def _report_state(
                 "recent_conversation": _conversation_observation(
                     layout, session
                 ),
+                "user_decisions": _decision_log(layout),
             },
             ensure_ascii=False,
             indent=2,
@@ -848,7 +798,7 @@ def run_console(
                     continue
                 raise
             except Exception as exc:  # noqa: BLE001 - keep the console up
-                output(f"error: {exc}")
+                output(_t(lang, "operation_failed", error=exc))
                 continue
             if reply.text:
                 output(reply.text)

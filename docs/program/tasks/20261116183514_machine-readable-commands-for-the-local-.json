@@ -1,7 +1,7 @@
 {
   "id": "20261116183514_machine-readable-commands-for-the-local-",
   "title": "Machine-readable commands for the local client",
-  "spec": "",
+  "spec": "docs/program/requests/20261116183514541802_machine-readable-commands-for-the-local-client.md",
   "requirements": [
     "Every operation the local client shows must be reachable as a parameterized `forgel` subcommand that needs no interactive prompt: free text, project status, milestone status, task list, accept a task, reject a task, retry a task, run the daemon now, pause, resume, plan a milestone from a goal, list projects, select the active project.",
     "Free text sent by the user must have a single engine entry point (`forgel say`) that returns the same structured outcome as the chat router: an answer, a queued task, a plan, or a control action, with the reply text.",

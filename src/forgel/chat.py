@@ -149,6 +149,27 @@ class CommandRouter:
     # ------------------------------------------------------------- dispatch
 
     def handle(self, chat_id: int, text: str, actor: str) -> Reply:
+        try:
+            reply = self._dispatch(chat_id, text, actor)
+        except Exception as exc:  # noqa: BLE001 - the router must stay up
+            reply = Reply(f"error: {exc}")
+        if (
+            self.agent is not None
+            and reply.text.lstrip().lower().startswith("error")
+        ):
+            selected = self._selected(chat_id)
+            if not isinstance(selected, Reply):
+                try:
+                    explanation = self.agent.explain_failure(
+                        selected, text, reply.text
+                    )
+                except Exception:  # noqa: BLE001 - keep the original error
+                    explanation = ""
+                if explanation:
+                    reply = Reply(explanation)
+        return reply
+
+    def _dispatch(self, chat_id: int, text: str, actor: str) -> Reply:
         text = text.strip()
         if not text:
             return Reply("Send a command or a message. /help")
@@ -1466,6 +1487,20 @@ class CommandRouter:
         if "github.com" not in url:
             return ""
         lowered = message.lower()
+        if any(
+            marker in lowered
+            for marker in (
+                "nodename nor servname",
+                "name or service not known",
+                "errno 8",
+                "not reachable by dns",
+                "temporary failure in name resolution",
+            )
+        ):
+            return (
+                "\n\nGitHub API is not reachable by DNS. Check VPN/network "
+                "and retry the same command."
+            )
         if not any(
             marker in lowered
             for marker in (

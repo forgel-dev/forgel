@@ -137,6 +137,25 @@ class AgentTest(unittest.TestCase):
         self.assertIn("TRACKED-MARKER", context)
         self.assertNotIn("UNTRACKED-MARKER", context)
 
+    def test_failure_is_explained_to_the_user(self) -> None:
+        project = self._project("Failure", "A failure brief.")
+        response = {
+            "kind": "answer",
+            "reply": "GitHub is unreachable; check the VPN and retry.",
+        }
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(response)]),
+        )
+        text = agent.explain_failure(
+            project,
+            "создай репозиторий",
+            "error: GitHub auth request failed",
+        )
+        self.assertIn("GitHub", text)
+        self.assertIn("VPN", text)
+
     def test_change_request_is_recorded_as_an_artifact(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         response = {
@@ -158,8 +177,19 @@ class AgentTest(unittest.TestCase):
         artifact = Path(project["workspace"]) / result.request
         self.assertTrue(artifact.exists())
         text = artifact.read_text(encoding="utf-8")
-        self.assertIn("Change Request: Add a dark theme", text)
+        self.assertIn("Feature: Add a dark theme", text)
         self.assertIn("The theme can be toggled.", text)
+        for heading in (
+            "## Document Information",
+            "## User Decisions",
+            "## Functional Requirements",
+            "## Tests",
+            "## Risks",
+            "## Affected Files",
+            "## Revision History",
+        ):
+            self.assertIn(heading, text)
+        self.assertNotIn("Please add dark mode.", text)
         stages = [event["stage"] for event in self.ledger.events(project["id"])]
         self.assertIn("request", stages)
         self.assertIn("agent", stages)

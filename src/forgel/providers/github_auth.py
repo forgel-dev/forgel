@@ -16,6 +16,7 @@ import base64
 import json
 import os
 import time
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -27,6 +28,17 @@ from ..secrets import get_secret
 
 DEFAULT_API_BASE = "https://api.github.com"
 API_VERSION = "2022-11-28"
+DNS_MARKERS = (
+    "nodename nor servname",
+    "name or service not known",
+    "errno 8",
+    "temporary failure in name resolution",
+)
+
+
+def is_dns_error(exc: BaseException) -> bool:
+    text = str(getattr(exc, "reason", exc)).lower()
+    return any(marker in text for marker in DNS_MARKERS)
 
 
 class GithubAuthError(RuntimeError):
@@ -236,22 +248,41 @@ class GithubAuth:
                 "Content-Type": "application/json",
             },
         )
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                body = response.read()
-        except urllib.error.HTTPError as exc:
+        attempts = 3
+        backoff = (0.0, 1.0, 3.0)
+        for attempt in range(1, attempts + 1):
             try:
-                detail = json.loads(exc.read().decode("utf-8"))
-                message = str(detail.get("message", exc.reason))
-            except (OSError, ValueError):
-                message = str(exc.reason)
-            raise GithubAuthError(
-                self._redact(f"GitHub auth failed ({exc.code}): {message}")
-            ) from exc
-        except (urllib.error.URLError, OSError) as exc:
-            raise GithubAuthError(
-                self._redact(f"GitHub auth request failed: {exc}")
-            ) from exc
+                with urllib.request.urlopen(
+                    request, timeout=30
+                ) as response:
+                    body = response.read()
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code in {429, 500, 502, 503, 504} and attempt < attempts:
+                    time.sleep(backoff[min(attempt - 1, len(backoff) - 1)])
+                    continue
+                try:
+                    detail = json.loads(exc.read().decode("utf-8"))
+                    message = str(detail.get("message", exc.reason))
+                except (OSError, ValueError):
+                    message = str(exc.reason)
+                raise GithubAuthError(
+                    self._redact(
+                        f"GitHub auth failed ({exc.code}): {message}"
+                    )
+                ) from exc
+            except (urllib.error.URLError, OSError) as exc:
+                if is_dns_error(exc):
+                    raise GithubAuthError(
+                        "GitHub API is not reachable by DNS "
+                        "(api.github.com). Check VPN/network and retry."
+                    ) from exc
+                if attempt < attempts:
+                    time.sleep(backoff[min(attempt - 1, len(backoff) - 1)])
+                    continue
+                raise GithubAuthError(
+                    self._redact(f"GitHub auth request failed: {exc}")
+                ) from exc
         if not body:
             return None
         try:

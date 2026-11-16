@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from . import language, tasks
+from . import i18n, language, requirements as requirements_doc, tasks
 from .artifacts import write_text
 from .config import Settings
 from .layout import ProjectLayout
@@ -139,6 +139,16 @@ Reply in the language of the user's message. Return exactly one JSON object:
   "requirements": ["explicit requirement", "..."],
   "acceptance": ["criterion", "..."],
   "constraints": ["constraint", "..."],
+  "user_decisions": [
+    {"decision": "product decision the user stated", "source": "where they said it"}
+  ],
+  "goals": ["outcome the request must achieve"],
+  "non_goals": ["explicitly out of scope"],
+  "user_stories": ["as a ... I want ... so that ..."],
+  "tests": ["what must be tested"],
+  "risks": ["what can make this fail or miss the goal"],
+  "open_questions": ["only a question that cannot be decided reversibly"],
+  "affected_files": ["path or area"],
   "repo_id": "one of the repositories in program.yaml, or empty",
   "test_command": ["command", "arg"] or [],
   "assumptions": ["what you decided where the request was silent"]
@@ -198,8 +208,20 @@ Autonomy (D-075):
   required access is missing. Ask one consolidated question, not a dialogue.
 
 For a change request:
-- list the explicit requirements and acceptance criteria; do not guess
-  unstated features;
+- Treat the user's explicit product decisions as binding requirements. Scan
+  the whole conversation — earlier messages, answers to clarifying questions,
+  implementation remarks and later follow-ups — not only the last message.
+  Put every decision in "user_decisions"; never omit one and never ask the
+  user to confirm a decision already made. A later decision overrides an
+  earlier one.
+- Write the change-request document in English even when the chat reply is in
+  the user's language. State the request as requirements and decisions; do
+  not paste the user's raw message into the document.
+- Fill goals, non-goals, user stories, tests, risks, open questions and
+  affected files for the document. Leave a list empty only when the
+  conversation truly has nothing to add.
+- list the explicit functional requirements and acceptance criteria; do not
+  guess unstated features;
 - set repo_id from program.yaml. With several repositories, choose the one the
   request most likely targets from the roles, dependency edges and recent
   tasks, and record why in "assumptions"; do not ask which repository. Leave
@@ -235,6 +257,9 @@ Rules:
 - If the evidence is insufficient to name a cause, say which evidence is
   missing; never guess and never substitute "a process error", "an internal
   error" or "something went wrong".
+- Recorded user decisions are binding. Never ask the owner to confirm a
+  decision already in the conversation or in the user-decision log; ask only
+  for a detail that is genuinely missing.
 - Use only facts present in the context. Never invent files, results, state or
   decisions.
 - Return plain prose in the user's language. No JSON, no key:value dump, no
@@ -544,6 +569,11 @@ def build_context(
     overview = _repository_overview(layout, repos)
     if overview:
         parts.append("Project documents:\n" + overview)
+
+    decisions_path = layout.artifact("docs/program/decisions.md")
+    if decisions_path.is_file():
+        decisions = decisions_path.read_text(encoding="utf-8")
+        parts.append("User decisions (binding):\n" + _cap(decisions, 6000))
 
     main_id = next(
         (str(entry["id"]) for entry in repos if entry["id"] == "main"),
@@ -858,6 +888,38 @@ class ProjectAgent:
             )
         return reply
 
+    def explain_failure(
+        self,
+        project: Mapping[str, Any],
+        operation: str,
+        error: str,
+        fallback: str = "",
+    ) -> str:
+        """Explain a failed operation and the next step, in the user's language."""
+
+        lang = language.detect(operation)
+        question = i18n.t(lang, "failure_question")
+        default = i18n.t(lang, "failure_default", error=error)
+        observation = json.dumps(
+            {
+                "operation": operation,
+                "error": error,
+                "project": {
+                    "id": project.get("id"),
+                    "name": project.get("name"),
+                    "brief": project.get("brief"),
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        try:
+            return self.explain(
+                project, question, observation, fallback=fallback or default
+            )
+        except Exception:  # noqa: BLE001 - the fallback is the answer
+            return fallback or default
+
     def _session_history(
         self, layout: ProjectLayout, session: str
     ) -> str:
@@ -1078,7 +1140,7 @@ class ProjectAgent:
             request = self._record_request(
                 layout, project, text, actor, answer
             )
-            task = self._queue_task(layout, text, answer)
+            task = self._queue_task(layout, text, answer, spec=request)
             if task is not None:
                 task_id = str(task["id"])
                 result_text += (
@@ -1111,6 +1173,73 @@ class ProjectAgent:
             actions=answer.get("actions") or [],
         )
 
+    def _record_decisions(
+        self,
+        layout: ProjectLayout,
+        decisions: Any,
+        actor: str,
+        title: str,
+    ) -> list[tuple[str, str, str]]:
+        """Append explicit user decisions to the project decision log."""
+
+        entries = [
+            item for item in (decisions or []) if isinstance(item, dict)
+        ]
+        path = layout.artifact("docs/program/decisions.md")
+        header = (
+            "# User Decisions\n\n"
+            "Product decisions explicitly stated by the user. Requirements "
+            "documents must carry the relevant decisions and must not "
+            "re-open them.\n\n"
+            "| ID | Decision | Source |\n"
+            "|----|----------|--------|\n"
+        )
+        existing = path.read_text(encoding="utf-8") if path.exists() else header
+        known: dict[str, tuple[str, str, str]] = {}
+        for line in existing.splitlines():
+            if not line.strip().startswith("| D-"):
+                continue
+            parts = [item.strip() for item in line.split("|")]
+            if len(parts) >= 4 and parts[1]:
+                known[parts[2].lower()] = (
+                    parts[1],
+                    parts[2],
+                    parts[3],
+                )
+        numbers = [
+            int(match.group(1))
+            for match in re.finditer(r"\| D-(\d+) \|", existing)
+        ]
+        next_number = (max(numbers) if numbers else 0) + 1
+        rows: list[tuple[str, str, str]] = []
+        added: list[tuple[str, str, str]] = []
+        for item in entries:
+            decision = str(item.get("decision") or "").strip()
+            if not decision:
+                continue
+            if decision.lower() in known:
+                rows.append(known[decision.lower()])
+                continue
+            source = str(
+                item.get("source") or f"request: {title} ({actor})"
+            ).strip()
+            decision_id = f"D-{next_number:03d}"
+            next_number += 1
+            row = (decision_id, decision, source)
+            known[decision.lower()] = row
+            rows.append(row)
+            added.append(row)
+        if added:
+            addition = "\n".join(
+                f"| {item[0]} | {item[1]} | {item[2]} |"
+                for item in added
+            )
+            write_text(
+                path,
+                existing.rstrip() + "\n" + addition + "\n",
+            )
+        return rows
+
     def _record_request(
         self,
         layout: ProjectLayout,
@@ -1119,53 +1248,98 @@ class ProjectAgent:
         actor: str,
         answer: Mapping[str, Any],
     ) -> str:
-        title = answer.get("title") or text.strip().splitlines()[0][:80]
+        title = str(answer.get("title") or "Change request").strip()
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
         relative = f"docs/program/requests/{timestamp}_{_slug(title)}.md"
-        acceptance = answer.get("acceptance") or []
-        criteria = "\n".join(f"- {item}" for item in acceptance) or "- Not stated."
-        requirements = "\n".join(
-            f"- {item}" for item in (answer.get("requirements") or [])
-        ) or "- See the request."
-        constraints = "\n".join(
-            f"- {item}" for item in (answer.get("constraints") or [])
-        ) or "- None stated."
-        assumptions = "\n".join(
-            f"- {item}" for item in (answer.get("assumptions") or [])
-        ) or "- None; the request was explicit enough."
+
+        def items(key: str) -> list[str]:
+            value = answer.get(key)
+            if isinstance(value, str):
+                value = [value]
+            if not isinstance(value, list):
+                return []
+            return [
+                str(item).strip() for item in value if str(item).strip()
+            ]
+
+        requirements = items("requirements")
+        acceptance = items("acceptance")
+        constraints = items("constraints")
+        assumptions = items("assumptions")
+        goals = items("goals") or requirements
+        non_goals = items("non_goals")
+        user_stories = items("user_stories")
+        tests = items("tests")
+        risks = items("risks")
+        open_questions = items("open_questions")
+        affected = items("affected_files")
+        decisions = self._record_decisions(
+            layout, answer.get("user_decisions"), actor, title
+        )
+        test_command = [str(item) for item in (answer.get("test_command") or [])]
+
+        created = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        test_text = requirements_doc.bullets(tests)
+        if test_command:
+            test_text += (
+                "\n- Command: `" + " ".join(test_command) + "`"
+            )
+        values = {
+            "kind": "Feature",
+            "title": title,
+            "project": f"`{project['id']}`",
+            "task": "—",
+            "plan": "—",
+            "repository": "—",
+            "depends_on": "—",
+            "status": "New",
+            "version": "1.0.0",
+            "created": created,
+            "source": f"Local console request ({actor})",
+            "author": "Forgel project agent",
+            "overview": answer.get("summary") or "—",
+            "goals": requirements_doc.bullets(goals),
+            "non_goals": requirements_doc.bullets(
+                non_goals, "None stated."
+            ),
+            "user_decisions": requirements_doc.decisions_table(decisions),
+            "functional_requirements": requirements_doc.numbered(
+                "FR", requirements
+            ),
+            "technical_requirements": requirements_doc.bullets(
+                constraints, "None stated."
+            ),
+            "user_stories": requirements_doc.bullets(
+                user_stories, "None stated."
+            ),
+            "tests": test_text,
+            "acceptance": requirements_doc.numbered("AC", acceptance),
+            "scope": requirements_doc.bullets(
+                list(non_goals) + list(constraints), "None stated."
+            ),
+            "risks": requirements_doc.bullets(risks, "None stated."),
+            "open_questions": requirements_doc.bullets(
+                open_questions, "None."
+            ),
+            "affected_files": requirements_doc.bullets(
+                affected, "Not identified yet."
+            ),
+            "assumptions": requirements_doc.bullets(
+                assumptions, "None; the request was explicit enough."
+            ),
+            "related_documents": requirements_doc.bullets(
+                [
+                    "`docs/program/decisions.md`",
+                    "`docs/program/state.md`",
+                ]
+            ),
+            "revision_history": requirements_doc.bullets(
+                [f"1.0.0 — {created[:10]} — Initial request recorded."]
+            ),
+        }
         write_text(
             layout.artifact(relative),
-            f"""# Change Request: {title}
-
-- Status: `new`
-- Project: `{project['id']}`
-- Created: {datetime.now(timezone.utc).isoformat(timespec="seconds")}
-- Source: Telegram ({actor})
-
-## Request
-
-{text}
-
-## Summary
-
-{answer.get('summary') or '—'}
-
-## Requirements
-
-{requirements}
-
-## Acceptance Criteria
-
-{criteria}
-
-## Constraints
-
-{constraints}
-
-## Assumptions
-
-{assumptions}
-""",
+            requirements_doc.render(values),
         )
         generation = self.ledger.current_generation(project["id"])
         self.ledger.append_event(
@@ -1187,6 +1361,7 @@ class ProjectAgent:
         layout: ProjectLayout,
         text: str,
         answer: Mapping[str, Any],
+        spec: str = "",
     ) -> dict[str, Any] | None:
         repos = manifest_entries(layout)
         if not repos:
@@ -1200,12 +1375,10 @@ class ProjectAgent:
         if not repo_id:
             return None
         title = (
-            str(answer.get("title") or "").strip()
-            or text.strip().splitlines()[0][:80]
-            or "Change request"
+            str(answer.get("title") or "").strip() or "Change request"
         )
         requirements = answer.get("requirements") or [
-            answer.get("summary") or text.strip()
+            answer.get("summary") or "The requested change is implemented"
         ]
         acceptance = answer.get("acceptance") or [
             "The explicit requirements are implemented",
@@ -1228,6 +1401,7 @@ class ProjectAgent:
                 str(item) for item in (answer.get("assumptions") or [])
             ],
             language=language.detect(text),
+            spec=spec,
         )
         tasks.commit_task(
             layout, str(task["id"]), f"Queue task {task['id']}"

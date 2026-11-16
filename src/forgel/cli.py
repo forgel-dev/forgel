@@ -1750,4 +1750,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         # `forgel` alone is the local client, like opening a chat.
         arguments = ["chat"]
     args = parser.parse_args(arguments)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:  # noqa: BLE001 - never abort without an answer
+        print(f"error: {exc}", file=sys.stderr)
+        print(
+            "The operation stopped before completing. Fix the cause and "
+            "retry; `forgel doctor` checks the environment.",
+            file=sys.stderr,
+        )
+        return 1

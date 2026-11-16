@@ -15,7 +15,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .github_auth import API_VERSION, DEFAULT_API_BASE
+from .github_auth import API_VERSION, DEFAULT_API_BASE, is_dns_error
 
 FAILED_CONCLUSIONS = {
     "failure",
@@ -78,16 +78,34 @@ class GithubAPI:
                 ),
             },
         )
-        try:
-            with self._opener(request, timeout=self.timeout) as response:
-                body = response.read()
-        except urllib.error.HTTPError as exc:
-            message = self._error_message(exc)
-            raise GithubAPIError(exc.code, message) from exc
-        except (urllib.error.URLError, OSError) as exc:
-            raise GithubAPIError(
-                0, self._redact(f"GitHub request failed: {exc}")
-            ) from exc
+        attempts = 3
+        backoff = (0.0, 1.0, 3.0)
+        for attempt in range(1, attempts + 1):
+            try:
+                with self._opener(
+                    request, timeout=self.timeout
+                ) as response:
+                    body = response.read()
+                break
+            except urllib.error.HTTPError as exc:
+                if exc.code in {429, 500, 502, 503, 504} and attempt < attempts:
+                    time.sleep(backoff[min(attempt - 1, len(backoff) - 1)])
+                    continue
+                message = self._error_message(exc)
+                raise GithubAPIError(exc.code, message) from exc
+            except (urllib.error.URLError, OSError) as exc:
+                if is_dns_error(exc):
+                    raise GithubAPIError(
+                        0,
+                        "GitHub API is not reachable by DNS "
+                        "(api.github.com). Check VPN/network and retry.",
+                    ) from exc
+                if attempt < attempts:
+                    time.sleep(backoff[min(attempt - 1, len(backoff) - 1)])
+                    continue
+                raise GithubAPIError(
+                    0, self._redact(f"GitHub request failed: {exc}")
+                ) from exc
         if not body:
             return None
         try:
