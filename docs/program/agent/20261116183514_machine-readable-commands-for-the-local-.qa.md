@@ -5,7 +5,7 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-16T19:39:54+00:00
+- Finished: 2026-11-16T19:59:24+00:00
 
 ## Checks
 
@@ -17,7 +17,7 @@
 
 ```
 $ python -m unittest discover -s tests
-[agent] 20261116193754_inspect-and-finish: context handoff to session 2 (~4818/3072 tokens)
+[agent] 20261116195718_inspect-and-finish: context handoff to session 2 (~4816/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -445,16 +445,17 @@ $ python -m unittest discover -s tests
 [done] running
 [done] completed
 ....................................................error: unknown project 'missing-project'
-........error: say needs text: --text "..." or a trailing argument
-...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+..error: unknown project 'missing-project'
+.......error: say needs text: --text "..." or a trailing argument
+....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 527 tests in 68.420s
+Ran 529 tests in 69.853s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-5955fc93']]
+PASS the daemon ran the task [['selfhost-24765c62']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -463,7 +464,7 @@ PASS acceptance is pending a human decision [pending]
 PASS the project never reached done [None]
 PASS self-hosting gate is green and parked for human approval
 $ python3 -m unittest discover -s tests
-[agent] 20261116193903_inspect-and-finish: context handoff to session 2 (~4815/3072 tokens)
+[agent] 20261116195829_inspect-and-finish: context handoff to session 2 (~4817/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -891,10 +892,11 @@ $ python3 -m unittest discover -s tests
 [done] running
 [done] completed
 ....................................................error: unknown project 'missing-project'
-........error: say needs text: --text "..." or a trailing argument
-...................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+..error: unknown project 'missing-project'
+.......error: say needs text: --text "..." or a trailing argument
+....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 527 tests in 62.740s
+Ran 529 tests in 67.257s
 
 OK
 
