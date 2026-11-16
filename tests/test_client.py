@@ -61,12 +61,15 @@ class ClientCommandsTest(unittest.TestCase):
             "FORGEL_PEAK_POLICY": "always",
         }
 
-    def _call(self, *argv: str) -> tuple[int, dict, str]:
+    def _raw(self, *argv: str) -> tuple[int, str]:
         out = io.StringIO()
         with patch.dict(os.environ, self.env, clear=False):
             with redirect_stdout(out):
                 code = entry.main([*argv, "--home", str(self.home)])
-        text = out.getvalue()
+        return code, out.getvalue()
+
+    def _call(self, *argv: str) -> tuple[int, dict, str]:
+        code, text = self._raw(*argv)
         lines = [line for line in text.splitlines() if line.strip()]
         self.assertEqual(len(lines), 1, text)
         data = json.loads(lines[0])
@@ -321,6 +324,43 @@ class ClientCommandsTest(unittest.TestCase):
         self.assertEqual(data["kind"], "answer")
         self.assertEqual(data["text"], "It is an app.")
         self.assertEqual(list_tasks(self.layout), [])
+
+    def test_without_json_the_human_readable_text_is_printed(self) -> None:
+        task_id = self._review_task()
+        code, text = self._raw("tasks", self.project_id)
+        self.assertEqual(code, 0)
+        self.assertNotIn('"ok"', text)
+        self.assertIn("Tasks: 1", text)
+        self.assertIn(task_id, text)
+
+        code, text = self._raw("projects")
+        self.assertEqual(code, 0)
+        self.assertIn("Projects: 1", text)
+        self.assertNotIn('"projects"', text)
+
+        response = {"kind": "answer", "reply": "It is an app."}
+        (self.home / "model-script.json").write_text(
+            json.dumps({"responses": [json.dumps(response)]}),
+            encoding="utf-8",
+        )
+        code, text = self._raw(
+            "say", "--project", self.project_id, "--text", "what is this?"
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(text.strip(), "It is an app.")
+
+        code, text = self._raw("session", self.project_id)
+        self.assertEqual(code, 0)
+        self.assertIn("Session local selects", text)
+
+        code, text = self._raw("history")
+        self.assertEqual(code, 0)
+        self.assertIn("History of session local", text)
+
+    def test_failing_call_without_json_prints_no_object(self) -> None:
+        code, text = self._raw("tasks", "missing-project")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(text.strip(), "")
 
     def test_existing_commands_are_not_taken_over(self) -> None:
         self.assertIsNone(maybe_dispatch(["status", self.project_id]))

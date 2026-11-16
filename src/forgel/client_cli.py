@@ -59,11 +59,21 @@ def write(data: dict[str, Any]) -> None:
     print(json.dumps(data, ensure_ascii=False))
 
 
-def fail(kind: str, message: str) -> int:
-    """One JSON object on stdout and a non-zero exit; detail on stderr."""
+def emit(args: Any, data: dict[str, Any]) -> None:
+    """JSON with ``--json``; the human-readable text otherwise."""
+
+    if getattr(args, "json", False):
+        write(data)
+    else:
+        print(data.get("text") or "")
+
+
+def fail(args: Any, kind: str, message: str) -> int:
+    """Report an error; a JSON client still gets exactly one object."""
 
     print(f"error: {message}", file=sys.stderr)
-    write(envelope(False, kind, "", message))
+    if getattr(args, "json", False):
+        write(envelope(False, kind, "", message))
     return 1
 
 
@@ -115,12 +125,14 @@ def say(settings: Settings, ledger: Ledger, args: Any) -> int:
         text = " ".join(getattr(args, "words", None) or []).strip()
     if not text:
         return fail(
-            "say", 'say needs text: --text "..." or a trailing argument'
+            args,
+            "say",
+            'say needs text: --text "..." or a trailing argument',
         )
     try:
         project = target(ledger, args)
     except ProjectError as exc:
-        return fail("say", str(exc))
+        return fail(args, "say", str(exc))
     key = session_store.set_session_project(
         ledger, getattr(args, "session", None), project["id"]
     )
@@ -135,12 +147,12 @@ def say(settings: Settings, ledger: Ledger, args: Any) -> int:
             router, session_store.ledger_key(key), text, actor
         )
     except Exception as exc:  # noqa: BLE001 - one bad turn must not crash
-        return fail("say", str(exc))
+        return fail(args, "say", str(exc))
     payload = dict(outcome.payload)
     if payload.get("task") is not None:
         payload["task"] = task_view(payload["task"])
         payload["task_id"] = payload["task"].get("id")
-    write(envelope(True, outcome.kind, outcome.text, **payload))
+    emit(args, envelope(True, outcome.kind, outcome.text, **payload))
     return 0
 
 
@@ -170,10 +182,11 @@ def projects(settings: Settings, ledger: Ledger, args: Any) -> int:
         }
         for project in ledger.list_projects()
     ]
-    write(
+    emit(
+        args,
         envelope(
             True, "projects", projects_text(items), session=key, projects=items
-        )
+        ),
     )
     return 0
 
@@ -182,18 +195,19 @@ def use(settings: Settings, ledger: Ledger, args: Any) -> int:
     try:
         project = resolve_project(ledger, str(args.project_id or ""))
     except ProjectError as exc:
-        return fail("use", str(exc))
+        return fail(args, "use", str(exc))
     key = session_store.set_session_project(
         ledger, getattr(args, "session", None), project["id"]
     )
-    write(
+    emit(
+        args,
         envelope(
             True,
             "use",
             f"Selected {project['name']} ({project['id']}) for session {key}.",
             session=key,
             project=project_ref(project),
-        )
+        ),
     )
     return 0
 
@@ -206,7 +220,7 @@ def session(settings: Settings, ledger: Ledger, args: Any) -> int:
         try:
             project = resolve_project(ledger, token)
         except ProjectError as exc:
-            return fail("session", str(exc))
+            return fail(args, "session", str(exc))
         key = session_store.set_session_project(
             ledger, getattr(args, "session", None), project["id"]
         )
@@ -222,7 +236,7 @@ def session(settings: Settings, ledger: Ledger, args: Any) -> int:
         text = f"Session {key} selects {record['name']} ({record['id']})."
     else:
         text = f"Session {key} has no project selected."
-    write(envelope(True, "session", text, session=key, project=record))
+    emit(args, envelope(True, "session", text, session=key, project=record))
     return 0
 
 
@@ -237,7 +251,8 @@ def history(settings: Settings, ledger: Ledger, args: Any) -> int:
         else None
     )
     project = record["id"] if record else "no project"
-    write(
+    emit(
+        args,
         envelope(
             True,
             "history",
@@ -245,7 +260,7 @@ def history(settings: Settings, ledger: Ledger, args: Any) -> int:
             session=key,
             project=record,
             history=items,
-        )
+        ),
     )
     return 0
 
@@ -256,7 +271,7 @@ def tasks(settings: Settings, ledger: Ledger, args: Any) -> int:
     try:
         project = target(ledger, args)
     except ProjectError as exc:
-        return fail("tasks", str(exc))
+        return fail(args, "tasks", str(exc))
     layout = ProjectLayout.detect(project["workspace"])
     items = [task_view(task) for task in task_store.list_tasks(layout)]
     if items:
@@ -268,25 +283,27 @@ def tasks(settings: Settings, ledger: Ledger, args: Any) -> int:
         text = "\n".join(lines)
     else:
         text = "No tasks. A change request sent as a plain message queues one."
-    write(
+    emit(
+        args,
         envelope(
             True, "tasks", text, project=project_ref(project), tasks=items
-        )
+        ),
     )
     return 0
 
 
 def _finish_task(
-    project: dict[str, Any], updated: dict[str, Any], text: str
+    args: Any, project: dict[str, Any], updated: dict[str, Any], text: str
 ) -> int:
-    write(
+    emit(
+        args,
         envelope(
             True,
             "task",
             text,
             project=project_ref(project),
             task=task_view(updated),
-        )
+        ),
     )
     return 0
 
@@ -297,7 +314,7 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
     try:
         project = target(ledger, args)
     except ProjectError as exc:
-        return fail("task", str(exc))
+        return fail(args, "task", str(exc))
     layout = ProjectLayout.detect(project["workspace"])
     action = str(args.action)
     if action == "add":
@@ -314,14 +331,14 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
                 ),
             )
         except ValueError as exc:
-            return fail("task", str(exc))
+            return fail(args, "task", str(exc))
         task_store.commit_task(
             layout, created["id"], f"Add task {created['id']}"
         )
-        return _finish_task(project, created, f"Queued {created['id']}.")
+        return _finish_task(args, project, created, f"Queued {created['id']}.")
     task_id = str(getattr(args, "task_id", "") or "").strip()
     if not task_id:
-        return fail("task", f"task {action} requires --task")
+        return fail(args, "task", f"task {action} requires --task")
     if action in {"retry", "cancel"}:
         try:
             updated = (
@@ -330,17 +347,17 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
                 else task_store.cancel_task(layout, task_id)
             )
         except ValueError as exc:
-            return fail("task", str(exc))
+            return fail(args, "task", str(exc))
         task_store.commit_task(
             layout,
             updated["id"],
             f"{action.capitalize()} task {updated['id']}",
         )
         verb = "Requeued" if action == "retry" else "Cancelled"
-        return _finish_task(project, updated, f"{verb} {updated['id']}.")
+        return _finish_task(args, project, updated, f"{verb} {updated['id']}.")
     stored = task_store.get_task(layout, task_id)
     if stored is None:
-        return fail("task", f"unknown task {task_id!r}")
+        return fail(args, "task", f"unknown task {task_id!r}")
     actor = str(getattr(args, "actor", "") or "owner")
     notes = str(getattr(args, "notes", "") or "")
     decide = accept_task if action == "accept" else reject_task
@@ -351,6 +368,7 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
         layout, updated["id"], f"{action.capitalize()} task {updated['id']}"
     )
     return _finish_task(
+        args,
         project,
         updated,
         f"{action.capitalize()}ed {updated['id']} ({updated['status']}).",
@@ -416,9 +434,10 @@ def status(settings: Settings, ledger: Ledger, args: Any) -> int:
     try:
         project = target(ledger, args)
     except ProjectError as exc:
-        return fail("status", str(exc))
+        return fail(args, "status", str(exc))
     view = project_view(ledger, project)
-    write(
+    emit(
+        args,
         envelope(
             True,
             "status",
@@ -426,7 +445,7 @@ def status(settings: Settings, ledger: Ledger, args: Any) -> int:
             f"(generation {view['generation']}, "
             f"checkpoint {view['checkpoint']})",
             project=view,
-        )
+        ),
     )
     return 0
 
@@ -435,7 +454,7 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
     try:
         project = target(ledger, args)
     except ProjectError as exc:
-        return fail("plan", str(exc))
+        return fail(args, "plan", str(exc))
     layout = ProjectLayout.detect(project["workspace"])
     if getattr(args, "status", False):
         summary = plan_status(layout)
@@ -446,19 +465,20 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
                 f"Plan {summary['plan_id']}: {summary['status']} "
                 f"({len(summary['tasks'])} tasks)"
             )
-        write(
+        emit(
+            args,
             envelope(
                 True,
                 "plan",
                 text,
                 project=project_ref(project),
                 plan=summary,
-            )
+            ),
         )
         return 0
     goal = str(getattr(args, "goal", "") or "").strip()
     if not goal:
-        return fail("plan", 'provide --goal "..." or --status')
+        return fail(args, "plan", 'provide --goal "..." or --status')
     try:
         result = plan_project(
             settings,
@@ -469,8 +489,9 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
             dry_run=bool(getattr(args, "dry_run", False)),
         )
     except PlanningError as exc:
-        return fail("plan", str(exc))
-    write(
+        return fail(args, "plan", str(exc))
+    emit(
+        args,
         envelope(
             True,
             "plan",
@@ -493,20 +514,20 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
                     for item in result.tasks
                 ],
             },
-        )
+        ),
     )
     return 0
 
 
 def pause(settings: Settings, ledger: Ledger, args: Any) -> int:
     set_paused(settings.home, True)
-    write(envelope(True, "control", "Daemon paused.", paused=True))
+    emit(args, envelope(True, "control", "Daemon paused.", paused=True))
     return 0
 
 
 def resume(settings: Settings, ledger: Ledger, args: Any) -> int:
     set_paused(settings.home, False)
-    write(envelope(True, "control", "Daemon resumed.", paused=False))
+    emit(args, envelope(True, "control", "Daemon resumed.", paused=False))
     return 0
 
 
@@ -519,13 +540,14 @@ def daemon(settings: Settings, ledger: Ledger, args: Any) -> int:
         max_cycles=args.max_cycles,
         log=_log,
     )
-    write(
+    emit(
+        args,
         envelope(
             True,
             "daemon",
             f"Daemon ran {cycles} cycle(s).",
             cycles=cycles,
             paused=is_paused(settings.home),
-        )
+        ),
     )
     return 0

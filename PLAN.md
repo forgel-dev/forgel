@@ -1183,6 +1183,46 @@ justification in `done.test_removals`: `removed` (the scenario is gone),
 test files and removed test functions in the diff; an unjustified deletion is
 a deterministic review failure, and the reviewer checks the justification.
 
+### 7.18 Machine-Readable Client Commands
+
+The local client is a thin shell over the engine, so every operation it shows is
+also a parameterized `forgel` subcommand that never prompts: `say`, `status`,
+`tasks`, `task accept|reject|retry`, `plan` (with `--goal` or `--status`),
+`projects`, `session`, `use`, `history`, `daemon`, `pause` and `resume`. Each
+accepts `--json`; the parser lives in `src/forgel/client.py` and the commands in
+`src/forgel/client_cli.py`.
+
+**Envelope.** The JSON object is flat and stable: `ok` (success flag), `kind`,
+`text` (the reply text a human would see) and `error` (empty on success), plus
+one operation-specific field — `task` (with `task_id`), `tasks`, `plan`,
+`project`, `projects`, `history`, `paused` or `cycles`. With `--json` stdout
+carries exactly one JSON object and nothing else; without the flag the
+human-readable text is the output, unchanged from before. A failed call exits
+with a non-zero status and still writes one JSON object with `"ok": false` and
+the reason in `error`; the same reason goes to stderr. Payloads never carry
+secrets.
+
+**Free text.** `forgel say --text "..." [--project <id>] [--session <key>]` is
+the single free-text entry point. It calls the same `CommandRouter` the console
+and Telegram use (observed by `src/forgel/outcome.py`) and returns the same
+structured outcome: an `answer`, a `change_request` with the queued task id, a
+`plan` or a control `action`, together with the reply text. The CLI layer holds
+no dispatch table of its own.
+
+**Sessions.** The active project is a durable engine-side session, so the client
+keeps no state between calls. The session key defaults to `local` (the console
+chat id 0) and is chosen with `--session`; `forgel session <project>` and
+`forgel use <project>` set it, `forgel session` reads it back, `forgel projects`
+marks the selected one, and `forgel history` returns the recent conversation of
+the session as JSON, so the client can show a short history without reading
+project files.
+
+**Compatibility.** `forgel chat`, `forgel telegram`, bare `forgel` and the
+interactive commands keep working unchanged; `status`, `task`, `plan`, `pause`,
+`resume` and `daemon` are taken over by the client only when `--json` is given.
+The written contract for the future client repository is
+`docs/program/commands.md`.
+
 ---
 
 ## 8. Gates

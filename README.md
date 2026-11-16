@@ -42,7 +42,61 @@ explicit because they are entry points or touch sensitive state.
   exits, QA report, review defects and milestone state; it names the concrete
   cause or says which evidence is missing instead of restating the status.
 - The home defaults to `FORGEL_HOME` (usually `~/.forgel`).
-- Every console command also exists as `forgel <command>` for scripts.
+- Every console command also exists as a `forgel` subcommand for scripts; add
+  `--json` for one machine-readable object per call (see
+  [Scripted Client](#scripted-client)).
+
+## Scripted Client
+
+Every operation of the local client is also a parameterized `forgel` subcommand
+that needs no interactive prompt. With `--json` a command writes exactly one
+JSON object to stdout and nothing else; without the flag the human-readable
+text is the output, unchanged from before.
+
+```text
+forgel say --project <id> --text "..." [--session <key>] [--json]
+forgel say "add a health endpoint" [--json]
+forgel status <id> [--json]
+forgel tasks <id> [--json]
+forgel task accept|reject|retry|cancel|add --project <id> [--task <id>] [--json]
+forgel plan <id> --goal "..." [--dry-run] [--json]
+forgel plan <id> --status [--json]
+forgel projects [--json]
+forgel session [<id>] [--session <key>] [--json]
+forgel use <id> [--session <key>] [--json]
+forgel history [--session <key>] [--limit N] [--json]
+forgel daemon [--once|--loop] [--interval S] [--max-cycles N] [--json]
+forgel pause [--json]
+forgel resume [--json]
+```
+
+The JSON envelope is flat and stable:
+
+| field | meaning |
+|---|---|
+| `ok` | success flag |
+| `kind` | `answer`, `change_request`, `action`, `plan`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `control` or `daemon` |
+| `text` | the reply text a human would see |
+| `error` | empty on success, a description otherwise |
+| payload | one operation-specific field: `task` (+ `task_id`), `tasks`, `plan`, `project`, `projects`, `history`, `paused` or `cycles` |
+
+A failed call exits with a non-zero status and still writes one JSON object with
+`"ok": false` and the reason in `error`; the same reason goes to stderr. The
+payload never carries secrets.
+
+`forgel say` is the single free-text entry point. It calls the same
+`CommandRouter` the console and Telegram use and reports what the message
+became — an `answer`, a `change_request` with the queued task id, a `plan` or a
+control `action` — together with the reply text. The CLI layer holds no second
+dispatch table.
+
+The active project is a durable engine-side session, so the client keeps no
+state between calls. The session key defaults to `local` (the console's chat id
+0) and is switched with `--session`: `forgel session <id>` and `forgel use <id>`
+set it, `forgel session` reads it back, `forgel projects` marks the selected one,
+and `forgel history` returns the recent conversation of the session as JSON.
+The full contract is in
+[docs/program/commands.md](docs/program/commands.md).
 
 ## Try the M0 Skeleton
 
