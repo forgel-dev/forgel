@@ -1501,6 +1501,12 @@ class CommandRouter:
                 "\n\nGitHub API is not reachable by DNS. Check VPN/network "
                 "and retry the same command."
             )
+        if "resource not accessible by integration" in lowered:
+            return (
+                "\n\nThe GitHub App cannot perform this action. Grant the "
+                "installation repository administration/creation for the "
+                "organization, or use a PAT with repo scope."
+            )
         if not any(
             marker in lowered
             for marker in (
