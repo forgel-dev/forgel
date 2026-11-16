@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -32,6 +33,27 @@ def _body(content: str = "ok") -> dict:
         "choices": [{"message": {"content": content}}],
         "usage": {"prompt_tokens": 11, "completion_tokens": 3},
     }
+
+
+class ModelDeadlineTest(unittest.TestCase):
+    def test_a_hanging_call_hits_the_total_deadline(self) -> None:
+        def opener(_request, timeout=None):
+            time.sleep(5)
+            return _Response(_body("late"))
+
+        client = OpenAICompatibleClient(
+            ModelConfig(
+                base_url="https://example.test/v1",
+                api_key="secret-key",
+                timeout=1,
+                total_timeout=0.1,
+                retries=0,
+            ),
+            opener=opener,
+        )
+        with self.assertRaises(ModelError) as ctx:
+            client.complete([ModelMessage("user", "hello")])
+        self.assertIn("deadline", str(ctx.exception))
 
 
 class ModelRetryTest(unittest.TestCase):

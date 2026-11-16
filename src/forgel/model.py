@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -43,6 +44,7 @@ class ModelConfig:
     base_url: str
     api_key: str
     timeout: float = 120.0
+    total_timeout: float = 300.0
     retries: int = 3
     retry_backoff: tuple[float, ...] = (1.0, 3.0, 9.0)
 
@@ -66,6 +68,34 @@ class OpenAICompatibleClient:
         self.last_usage: dict[str, Any] | None = None
 
     def complete(
+        self,
+        messages: Sequence[ModelMessage],
+        model: str | None = None,
+    ) -> str:
+        total = float(self.config.total_timeout or 0)
+        if total <= 0:
+            return self._complete(messages, model)
+        result: dict[str, Any] = {}
+        errors: list[BaseException] = []
+
+        def run() -> None:
+            try:
+                result["text"] = self._complete(messages, model)
+            except BaseException as exc:  # noqa: BLE001 - re-raised below
+                errors.append(exc)
+
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
+        worker.join(total)
+        if worker.is_alive():
+            raise ModelError(
+                f"model call exceeded the {total:g}s deadline"
+            )
+        if errors:
+            raise errors[0]
+        return str(result.get("text") or "")
+
+    def _complete(
         self,
         messages: Sequence[ModelMessage],
         model: str | None = None,
@@ -346,6 +376,14 @@ def build_model_client(
         retries = int(env.get("FORGEL_MODEL_RETRIES", "3"))
     except ValueError:
         retries = 3
+    try:
+        total_timeout = float(
+            env.get("FORGEL_MODEL_TOTAL_TIMEOUT", "300")
+        )
+    except ValueError:
+        total_timeout = 300.0
+    if total_timeout <= 0:
+        total_timeout = 300.0
     retries = max(0, min(retries, 10))
     backoff: list[float] = []
     for item in env.get("FORGEL_MODEL_RETRY_BACKOFF", "1,3,9").split(","):
@@ -360,6 +398,7 @@ def build_model_client(
             base_url=base_url,
             api_key=key,
             timeout=timeout,
+            total_timeout=total_timeout,
             retries=retries,
             retry_backoff=tuple(backoff) or (1.0,),
         )

@@ -444,7 +444,14 @@ class CodingAgent:
                 failure_kind,
                 test_removals,
             ) = self._converse(
-                layout, repo, repo_id, task, model, runner, environment
+                layout,
+                repo,
+                repo_id,
+                task,
+                model,
+                runner,
+                environment,
+                log,
             )
         finally:
             stack.close()
@@ -650,6 +657,7 @@ class CodingAgent:
         model: str,
         runner: CommandRunner | None,
         environment: Environment | None,
+        log: Callable[[str], None] = print,
     ) -> tuple[
         str,
         str,
@@ -774,6 +782,7 @@ class CodingAgent:
                 session_steps += 1
                 steps += 1
                 estimated_input_tokens += budget.usage(messages, model)
+                log(f"[agent] {task['id']}: step {steps}: model call")
                 try:
                     raw = self.client.complete(messages, model=model)
                 except ModelError as exc:
@@ -782,6 +791,7 @@ class CodingAgent:
                     failure_kind = "infrastructure"
                     terminal = True
                     break
+                log(f"[agent] {task['id']}: step {steps}: response")
                 model_calls += 1
                 usage = getattr(self.client, "last_usage", None)
                 if isinstance(usage, dict):
