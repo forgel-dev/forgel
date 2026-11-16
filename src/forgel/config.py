@@ -31,6 +31,19 @@ def _env_list(name: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
+def _env_price(name: str, default: float) -> float:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return default
+    try:
+        price = float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number") from exc
+    if price < 0:
+        raise ValueError(f"{name} must not be negative")
+    return price
+
+
 @dataclass(frozen=True)
 class Settings:
     """Paths used by the core.
@@ -56,6 +69,8 @@ class Settings:
     sandbox_require_digest: bool = False
     sandbox_read_only: bool = True
     context_window: int = default_profile().context_window
+    model_input_price: float = default_profile().input_price
+    model_output_price: float = default_profile().output_price
     # The runtime reads the policy from the environment (off-peak by default).
     # Direct construction defaults to "always" so library and test code does
     # not become time-dependent.
@@ -230,6 +245,14 @@ class Settings:
             ),
             sandbox_read_only=_env_bool("FORGEL_SANDBOX_READ_ONLY", True),
             context_window=int(context_raw),
+            model_input_price=_env_price(
+                "FORGEL_MODEL_INPUT_PRICE",
+                default_profile().input_price,
+            ),
+            model_output_price=_env_price(
+                "FORGEL_MODEL_OUTPUT_PRICE",
+                default_profile().output_price,
+            ),
             peak_policy=peak_policy,
             peak_hours=peak_hours,
             timezone=os.environ.get("FORGEL_TIMEZONE", "").strip(),

@@ -52,7 +52,7 @@ class SelfHostingE2ETest(unittest.TestCase):
             env={
                 key: value
                 for key, value in os.environ.items()
-                if not key.startswith("FORGEL_")
+                if not key.startswith(("FORGEL_", "GITHUB_"))
             },
             capture_output=True,
             text=True,

@@ -161,7 +161,7 @@ class BridgeModelClient:
     """File bridge for local runs driven by an external subagent.
 
     Each call writes a request file and waits for a response file. The driver
-    is outside Forgel; it can be a Claude Code subagent, another harness or a
+    is outside Forgel; it can be an external subagent, another agent or a
     human. This keeps a local run from spending provider budget.
     """
 

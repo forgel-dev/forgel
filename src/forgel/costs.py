@@ -73,7 +73,11 @@ def cost_command(argv: Sequence[str]) -> int:
     parser.add_argument("--home", default=None)
     args = parser.parse_args(list(argv))
     settings = Settings.from_env(args.home)
-    ledger = Ledger(settings.db_path)
+    try:
+        ledger = Ledger(settings.db_path, read_only=True)
+    except Exception as exc:  # noqa: BLE001 - report, do not migrate
+        print(f"error: cannot read the ledger: {exc}", file=sys.stderr)
+        return 1
     try:
         try:
             project = resolve_project(ledger, args.project_id)

@@ -88,7 +88,7 @@ The bridge protocol is files: `<id>.request.json` in
 `subagent_driver.py` implements the watching loop. `scripted_responder.py` is a
 bridge test double, not a model. A manual run can start the e2e with
 `--home <empty-dir> --mode bridge` and write `response.txt` files itself (for
-example, a Claude Code subagent can write one per request).
+example, an external subagent can write one per request).
 
 Sandbox mode: `--sandbox docker` runs the agent's commands in a per-project
 container on the Docker daemon behind `DOCKER_HOST` (a remote engine or the

@@ -25,6 +25,9 @@ class ModelProfile:
     peak_windows: str
     peak_policy: str
     notes: str = ""
+    # Approximate USD per one million tokens; a project can override it.
+    input_price: float = 0.0
+    output_price: float = 0.0
 
     def matches(self, model: str) -> bool:
         name = model.strip().lower()
@@ -50,6 +53,8 @@ DEEPSEEK = ModelProfile(
         "DeepSeek peak hours are 01:00-04:00 and 06:00-10:00 UTC on "
         "weekdays; weekends are off-peak."
     ),
+    input_price=0.28,
+    output_price=0.42,
 )
 
 GENERIC = ModelProfile(

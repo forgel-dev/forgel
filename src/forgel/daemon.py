@@ -368,6 +368,10 @@ def _run_task(
         if result.status == "done" and (
             settings.task_qa or settings.task_review
         ):
+            # The agent's own "done" is not the final state: QA and review
+            # still have to run. Keep the task running so an interrupted
+            # process is recovered instead of being accepted unchecked.
+            tasks.update_task(layout, task_id, status="running")
             try:
                 process_task_result(
                     settings, ledger, project, task, model, log

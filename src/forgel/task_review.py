@@ -530,18 +530,20 @@ def _parse_review(raw: str) -> dict[str, Any]:
     requirements = data.get("requirements", [])
     if not isinstance(requirements, list):
         requirements = []
+    parsed_requirements = [
+        {
+            "requirement": str(item.get("requirement", "")).strip(),
+            "verdict": str(item.get("verdict", "")).strip().lower(),
+            "note": str(item.get("note", "")).strip(),
+        }
+        for item in requirements
+        if isinstance(item, dict)
+        and str(item.get("requirement", "")).strip()
+    ]
     return {
         "verdict": verdict,
         "summary": str(data.get("summary", "")).strip(),
-        "requirements": [
-            {
-                "requirement": str(item.get("requirement", "")).strip(),
-                "verdict": str(item.get("verdict", "")).strip().lower(),
-                "note": str(item.get("note", "")).strip(),
-            }
-            for item in requirements
-            if isinstance(item, dict)
-        ],
+        "requirements": parsed_requirements,
         "blocking": blocking,
     }
 
@@ -664,6 +666,27 @@ def _review_window(
     if config is None:
         return settings.context_window
     return config.models.context_window
+
+
+def _expected_acceptance(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> int:
+    spec_ref = str(task.get("spec") or "").strip()
+    if spec_ref:
+        try:
+            text = layout.artifact(spec_ref).read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        if "## Acceptance" in text:
+            section = text.split("## Acceptance", 1)[1].split(
+                "\n## ", 1
+            )[0]
+            return sum(
+                1
+                for line in section.splitlines()
+                if line.strip().startswith("- ")
+            )
+    return len(task.get("acceptance") or [])
 
 
 def run_task_review(
@@ -817,6 +840,22 @@ def run_task_review(
             ),
             log,
         )
+    expected = _expected_acceptance(layout, task)
+    if expected and len(parsed["requirements"]) < expected:
+        return _record_review(
+            ledger,
+            layout,
+            project,
+            task,
+            ReviewResult(
+                status="error",
+                summary=(
+                    "the review did not cover every acceptance "
+                    f"criterion ({len(parsed['requirements'])}/{expected})"
+                ),
+            ),
+            log,
+        )
     return _record_review(
         ledger,
         layout,
@@ -960,10 +999,7 @@ def process_task_result(
         (result.get("review") or {}).get("status", review.status)
     )
     review_required = bool(qa.review_required) if qa is not None else False
-    if (
-        settings.task_accept == "auto"
-        and review_status not in {"error", "fail"}
-    ):
+    if settings.task_accept == "auto" and review_status == "pass":
         accept_task(
             settings, ledger, project, task, actor="auto", notes=""
         )
@@ -1002,7 +1038,7 @@ def accept_parked_green_tasks(
         if acceptance.get("status") != "pending":
             continue
         review = dict(result.get("review") or {})
-        if str(review.get("status") or "") in {"error", "fail"}:
+        if str(review.get("status") or "") != "pass":
             continue
         accept_task(
             settings,

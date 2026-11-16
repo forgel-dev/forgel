@@ -122,7 +122,14 @@
       "estimated_tokens": 184498,
       "state": ""
     },
-    "test_removals": [],
+    "test_removals": [
+      {
+        "test": "tests/test_docs_status.py",
+        "reason": "removed",
+        "replacement": "",
+        "note": "removed by the project policy commit ca2c84b: do not add executable tests for documentation"
+      }
+    ],
     "git": {
       "base": "9d7cd697ea40e69d54e3842a49f79a2bd9871773",
       "head": "fac1f2056542bc7812d5c7e4d04cd5536b2f6e93",

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from . import tasks
+from . import language, tasks
 from .artifacts import write_text
 from .config import Settings
 from .layout import ProjectLayout
@@ -1227,6 +1227,7 @@ class ProjectAgent:
             assumptions=[
                 str(item) for item in (answer.get("assumptions") or [])
             ],
+            language=language.detect(text),
         )
         tasks.commit_task(
             layout, str(task["id"]), f"Queue task {task['id']}"

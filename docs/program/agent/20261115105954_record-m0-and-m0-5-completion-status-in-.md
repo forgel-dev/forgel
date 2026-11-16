@@ -35,7 +35,7 @@
 
 ## Test Removals
 
-- none
+- `tests/test_docs_status.py`: removed by the project policy commit `ca2c84b` (do not add executable tests for documentation); the status lines are verified by review.
 
 ## Context
 

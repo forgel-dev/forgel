@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -242,6 +243,108 @@ class CostEntryPointTest(unittest.TestCase):
         text = buffer.getvalue()
         self.assertAlmostEqual(_total_from_report(text), recorded)
         self.assertIn("Cost per stage:", text)
+
+
+class LegacyLedgerTest(unittest.TestCase):
+    def _make_legacy(self, path: Path) -> None:
+        conn = sqlite3.connect(path)
+        conn.executescript(
+            """
+            CREATE TABLE projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                brief TEXT NOT NULL,
+                recipe_id TEXT,
+                workspace TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE events (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'completed',
+                attempt INTEGER NOT NULL DEFAULT 1,
+                idempotency_key TEXT NOT NULL UNIQUE,
+                artifact_refs TEXT NOT NULL DEFAULT '[]',
+                cost REAL NOT NULL DEFAULT 0,
+                payload TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE approvals (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                compliance_ack INTEGER NOT NULL DEFAULT 0,
+                notes TEXT NOT NULL DEFAULT '',
+                release_sha TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO projects VALUES "
+            "('p1', 'Legacy', 'brief', NULL, '/tmp', 'now')"
+        )
+        conn.execute(
+            "INSERT INTO events (project_id, stage, idempotency_key, cost, "
+            "created_at) VALUES ('p1', 'agent', 'e1', 1.5, 'now')"
+        )
+        conn.execute(
+            "INSERT INTO approvals (project_id, scope, decision, actor, "
+            "notes, created_at) VALUES "
+            "('p1', 'task:t1', 'accepted', 'owner', 'ok', 'now')"
+        )
+        conn.commit()
+        conn.close()
+
+    def test_cost_report_reads_a_legacy_ledger_without_migrating(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.sqlite3"
+            self._make_legacy(path)
+            ledger = Ledger(path, read_only=True)
+            self.assertFalse(ledger._has_column("events", "generation"))
+            self.assertEqual(
+                ledger.cost_summary("p1")["total"], 1.5
+            )
+            self.assertEqual(
+                ledger.cost_summary("p1")["by_generation"], {1: 1.5}
+            )
+            decisions = ledger.acceptances("p1")
+            self.assertEqual(len(decisions), 1)
+            self.assertEqual(decisions[0]["task_id"], "t1")
+            ledger.close()
+            check = sqlite3.connect(path)
+            columns = {
+                row[1]
+                for row in check.execute("PRAGMA table_info(events)")
+            }
+            check.close()
+            self.assertNotIn("generation", columns)
+
+    def test_cost_command_reads_a_legacy_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            home.mkdir()
+            path = home / "ledger.sqlite3"
+            self._make_legacy(path)
+            buffer = StringIO()
+            with redirect_stdout(buffer):
+                code = entry.main(["cost", "p1", "--home", str(home)])
+            self.assertEqual(code, 0)
+            self.assertAlmostEqual(_total_from_report(buffer.getvalue()), 1.5)
+
+    def test_normal_ledger_migrates_a_legacy_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "ledger.sqlite3"
+            self._make_legacy(path)
+            ledger = Ledger(path)
+            self.assertTrue(ledger._has_column("events", "generation"))
+            self.assertEqual(
+                ledger.cost_summary("p1")["total"], 1.5
+            )
+            ledger.close()
 
 
 if __name__ == "__main__":

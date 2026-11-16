@@ -718,6 +718,57 @@ class TaskReviewTest(unittest.TestCase):
         )
         self.assertEqual(result.status, "pass", result.summary)
 
+    def test_auto_acceptance_requires_a_passing_review(self) -> None:
+        self.settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+            task_qa=True,
+            task_review=False,
+            task_accept="auto",
+        )
+        task = self._task()
+        process_task_result(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            ScriptedModelClient([]),
+            log=lambda _m: None,
+        )
+        final = get_task(self.layout, task["id"])
+        assert final is not None
+        self.assertEqual(final["status"], "review")
+        self.assertEqual(
+            final["result"]["acceptance"]["status"], "pending"
+        )
+
+    def test_a_review_without_requirements_is_an_error(self) -> None:
+        task = self._task()
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "verdict": "pass",
+                            "summary": "ok",
+                            "requirements": [],
+                            "blocking": [],
+                        }
+                    )
+                ]
+            ),
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "error")
+        self.assertIn("did not cover", result.summary)
+
     def test_review_only_checks_are_accepted_after_a_green_review(
         self,
     ) -> None:

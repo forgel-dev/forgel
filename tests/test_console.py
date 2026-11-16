@@ -18,7 +18,7 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.projects import create_project
-from forgel.tasks import create_task, get_task, update_task
+from forgel.tasks import create_task, get_task, list_tasks, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -131,6 +131,53 @@ class ConsoleTest(unittest.TestCase):
         )
         self.assertIn("Recorded.", text)
         self.assertIn("Add a page", text)
+
+    def test_a_russian_free_text_request_stores_russian_language(
+        self,
+    ) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Russian console",
+            "A brief.",
+            mode="brownfield",
+        )
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project_id)["workspace"]
+        )
+        from forgel.program_manifest import set_entries
+
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        self.ledger.set_session(0, project_id)
+        response = {
+            "kind": "change_request",
+            "reply": "Записал.",
+            "title": "Добавить страницу",
+            "requirements": ["Добавить страницу"],
+            "acceptance": ["Страница существует"],
+            "repo_id": "main",
+            "assumptions": ["Страница в основном приложении"],
+        }
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient([json.dumps(response)]),
+        )
+        self._run(["Добавь страницу", "/quit"], agent=agent)
+        tasks = list_tasks(layout)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["language"], "ru")
 
     def test_task_observation_contains_the_real_cause(self) -> None:
         project_id = create_project(

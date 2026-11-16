@@ -17,6 +17,7 @@ from forgel.coding_agent import (
     AgentError,
     CodingAgent,
     MAX_INVALID_REPLIES,
+    _preserved_evidence,
     _safe_env,
 )
 from forgel.config import Settings
@@ -103,6 +104,17 @@ class CodingAgentTest(unittest.TestCase):
             "-m",
             "initial",
         )
+        origin = self.home / "source-origin.git"
+        _run(
+            self.home,
+            "init",
+            "--bare",
+            "-q",
+            "-b",
+            "main",
+            str(origin),
+        )
+        _run(source, "remote", "add", "origin", str(origin))
         adopted = adopt_repository(
             self.settings, self.ledger, str(source), brief="Test project",
             name="coding-agent",
@@ -699,6 +711,10 @@ class CodingAgentTest(unittest.TestCase):
         agent = CodingAgent(
             self.settings, self.ledger, ScriptedModelClient([])
         )
+        agent._allowed_scripts = {
+            "scripts/e2e.sh",
+            "scripts/test.sh",
+        }
         self.assertEqual(
             agent._command(["sh", "scripts/e2e.sh"]),
             ["sh", "scripts/e2e.sh"],
@@ -712,9 +728,87 @@ class CodingAgentTest(unittest.TestCase):
             ["./scripts/test.sh"],
         )
         with self.assertRaises(AgentError):
+            agent._command(["sh", "scripts/other.sh"])
+        with self.assertRaises(AgentError):
             agent._command(["sh", "-c", "echo unsafe"])
         with self.assertRaises(AgentError):
             agent._command(["sh", "/tmp/outside.sh"])
+
+    def test_env_local_is_not_readable(self) -> None:
+        (self.repo / ".env.local").write_text(
+            "FORGEL_MODEL_API_KEY=secret\n", encoding="utf-8"
+        )
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": ".env.local"},
+            set(),
+        )
+        self.assertIn("secret-like", observation)
+        (self.repo / ".env.example").write_text(
+            "FORGEL_MODEL_API_KEY=\n", encoding="utf-8"
+        )
+        example, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": ".env.example"},
+            set(),
+        )
+        self.assertIn("FORGEL_MODEL_API_KEY", example)
+
+    def test_a_symlink_into_git_is_rejected(self) -> None:
+        link = self.repo / "link"
+        link.symlink_to(self.repo / ".git" / "config")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        with self.assertRaises(AgentError):
+            agent._path(self.repo, "link")
+
+    def test_agent_event_records_cost_from_tokens(self) -> None:
+        task = self._task()
+        report = self.layout.artifact(
+            "docs/program/agent/cost-event.md"
+        )
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text("report\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        agent._record_event(
+            self.layout,
+            self.project,
+            task,
+            "done",
+            report,
+            "summary",
+            [],
+            {
+                "provider_input_tokens": 1_000_000,
+                "provider_output_tokens": 1_000_000,
+            },
+        )
+        events = [
+            event
+            for event in self.ledger.events(self.project_id)
+            if event["stage"] == "agent_run"
+        ]
+        self.assertAlmostEqual(float(events[-1]["cost"]), 0.70)
+
+    def test_existing_evidence_survives_report_regeneration(self) -> None:
+        path = self.home / "report.md"
+        path.write_text(
+            "# Agent Run\n\n## Compose Evidence\n\nproof\n\n"
+            "## Other\n\nnot evidence\n",
+            encoding="utf-8",
+        )
+        evidence = _preserved_evidence(path)
+        self.assertIn("Compose Evidence", evidence)
+        self.assertIn("proof", evidence)
+        self.assertNotIn("not evidence", evidence)
 
     def test_repeated_actions_fail_fast(self) -> None:
         task = self._task()

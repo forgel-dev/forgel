@@ -44,8 +44,16 @@ def new_project_id(name: str) -> str:
 class Ledger:
     """SQLite-backed project, event and checkpoint storage."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, read_only: bool = False) -> None:
         self.path = Path(path)
+        self.read_only = read_only
+        if read_only:
+            self._conn = sqlite3.connect(
+                f"file:{self.path}?mode=ro", uri=True, timeout=30
+            )
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA query_only=ON")
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self.path), timeout=30)
         self._conn.row_factory = sqlite3.Row
@@ -80,9 +88,6 @@ class Ledger:
                 created_at        TEXT NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS events_project_generation
-                ON events (project_id, generation, stage);
-
             CREATE TABLE IF NOT EXISTS checkpoints (
                 project_id  TEXT PRIMARY KEY REFERENCES projects(id),
                 stage       TEXT NOT NULL,
@@ -103,9 +108,6 @@ class Ledger:
                 created_at     TEXT NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS approvals_project_scope
-                ON approvals (project_id, scope, generation);
-
             CREATE TABLE IF NOT EXISTS sessions (
                 chat_id     INTEGER PRIMARY KEY,
                 project_id  TEXT NOT NULL REFERENCES projects(id),
@@ -116,6 +118,15 @@ class Ledger:
         self._ensure_column("projects", "generation", "INTEGER NOT NULL DEFAULT 1")
         self._ensure_column("events", "generation", "INTEGER NOT NULL DEFAULT 1")
         self._ensure_column("checkpoints", "generation", "INTEGER NOT NULL DEFAULT 1")
+        self._ensure_column("approvals", "generation", "INTEGER NOT NULL DEFAULT 1")
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS events_project_generation "
+            "ON events (project_id, generation, stage)"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS approvals_project_scope "
+            "ON approvals (project_id, scope, generation)"
+        )
         self._conn.commit()
 
     def _ensure_column(self, table: str, column: str, ddl: str) -> None:
@@ -304,6 +315,14 @@ class Ledger:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def _has_column(self, table: str, column: str) -> bool:
+        return any(
+            row["name"] == column
+            for row in self._conn.execute(
+                f"PRAGMA table_info({table})"
+            ).fetchall()
+        )
+
     # ------------------------------------------------------------- reporting
 
     def total_cost(self, project_id: str) -> float:
@@ -325,6 +344,14 @@ class Ledger:
         return {str(row["stage"]): float(row["total"]) for row in rows}
 
     def cost_by_generation(self, project_id: str) -> dict[int, float]:
+        if not self._has_column("events", "generation"):
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS total FROM events WHERE project_id = ?",
+                (project_id,),
+            ).fetchone()
+            if row is None or not int(row["total"]):
+                return {}
+            return {1: self.total_cost(project_id)}
         rows = self._conn.execute(
             """
             SELECT generation, COALESCE(SUM(cost), 0) AS total
@@ -363,12 +390,17 @@ class Ledger:
         one row per accepted or rejected task.
         """
 
+        has_generation = self._has_column("approvals", "generation")
+        generation_expr = "generation" if has_generation else "1 AS generation"
         query = (
-            "SELECT * FROM approvals "
+            "SELECT seq, scope, decision, actor, notes, created_at, "
+            f"{generation_expr} FROM approvals "
             "WHERE project_id = ? AND scope LIKE ?"
         )
         params: list[Any] = [project_id, f"{TASK_SCOPE_PREFIX}%"]
         if generation is not None:
+            if not has_generation:
+                return []
             query += " AND generation = ?"
             params.append(generation)
         query += " ORDER BY seq"

@@ -66,6 +66,19 @@ def _spec_for(intent: dict) -> dict:
 CRITIC = {"sufficient": True, "findings": []}
 
 
+def _add_origin(path: Path) -> None:
+    origin = path.parent / f"{path.name}-origin.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-q", "-b", "main", str(origin)],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "remote", "add", "origin", str(origin)],
+        cwd=path,
+        check=True,
+    )
+
+
 class PlannerTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -485,6 +498,7 @@ class PlannerTest(unittest.TestCase):
             cwd=source,
             check=True,
         )
+        _add_origin(source)
         adopted = adopt_repository(
             self.settings, self.ledger, str(source), name="linked"
         )
@@ -538,6 +552,7 @@ class PlannerTest(unittest.TestCase):
             cwd=source,
             check=True,
         )
+        _add_origin(source)
         adopted = adopt_repository(
             self.settings, self.ledger, str(source), name="linked"
         )

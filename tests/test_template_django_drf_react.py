@@ -150,10 +150,11 @@ class TemplateEnvironmentTest(unittest.TestCase):
     def test_the_test_command_is_declared_and_runs_from_api(self) -> None:
         environment = parse_environment(self.text, source=str(self.path))
         self.assertTrue(environment.test, "environment.yaml declares no test")
-        command = environment.test[0]
-        self.assertIn("manage.py", command + self._wrapper_text(command))
-        wrapper = (TEMPLATE / command.lstrip("./")).resolve()
-        self.assertTrue(wrapper.is_file(), command)
+        argv = command_argv(environment.test[0])
+        self.assertEqual(argv[0], "sh")
+        self.assertEqual(argv[1], "scripts/test.sh")
+        wrapper = (TEMPLATE / argv[1]).resolve()
+        self.assertTrue(wrapper.is_file(), argv[1])
         body = wrapper.read_text(encoding="utf-8")
         self.assertIn("manage.py", body)
         self.assertIn(" test", body)

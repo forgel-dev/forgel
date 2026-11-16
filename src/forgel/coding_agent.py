@@ -33,7 +33,12 @@ from .session_context import (
     budget_for,
     handoff_prompt,
 )
-from .environment import Environment, EnvironmentError, load_environment
+from .environment import (
+    Environment,
+    EnvironmentError,
+    command_argv,
+    load_environment,
+)
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import (
@@ -42,6 +47,7 @@ from .model import (
     ModelMessage,
     project_model_name,
 )
+from .pricing import token_cost
 from .proc import merge_output
 from .project_config import ConfigError, load_project_config
 from .repo_tools import READ_DEFAULT_LINES, read_text_page
@@ -87,6 +93,16 @@ SKIP_PARTS = {
 }
 SECRET_PATH_NAMES = {".env", "secrets.toml"}
 SECRET_SUFFIXES = (".pem", ".key", ".p12", ".pfx")
+
+
+def _is_secret_name(name: str) -> bool:
+    if name.endswith(".example"):
+        return False
+    return (
+        name in SECRET_PATH_NAMES
+        or name.startswith(".env.")
+        or name.endswith(SECRET_SUFFIXES)
+    )
 SAFE_ENV_KEYS = {
     "PATH",
     "LANG",
@@ -198,6 +214,40 @@ def _ref(layout: ProjectLayout, path: Path) -> str:
     return str(path.relative_to(layout.root))
 
 
+def _environment_scripts(environment: Environment | None) -> set[str]:
+    """Shell scripts the project contract declares as runnable."""
+
+    if environment is None:
+        return set()
+    allowed: set[str] = set()
+    commands = [
+        *environment.setup,
+        *environment.test,
+        *environment.e2e,
+    ]
+    for text in commands:
+        try:
+            argv = command_argv(text)
+        except Exception:  # noqa: BLE001 - an invalid command is not a grant
+            continue
+        if not argv:
+            continue
+        first = Path(argv[0]).name
+        if first in {"sh", "bash"} and len(argv) >= 2:
+            script = Path(argv[1])
+            if (
+                script.suffix == ".sh"
+                and not script.is_absolute()
+                and ".." not in script.parts
+            ):
+                allowed.add(script.as_posix())
+        elif first.endswith(".sh"):
+            script = Path(argv[0])
+            if not script.is_absolute() and ".." not in script.parts:
+                allowed.add(script.as_posix())
+    return allowed
+
+
 def _safe_env(layout: ProjectLayout) -> dict[str, str]:
     env = {
         key: value
@@ -290,6 +340,28 @@ def parse_action(raw: str) -> dict[str, Any] | None:
     return data
 
 
+def _preserved_evidence(path: Path) -> str:
+    """Keep execution evidence when a later run regenerates the report."""
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    parts: list[str] = []
+    for heading in (
+        "## Evidence",
+        "## Compose Evidence",
+        "## E2E Stand Output",
+    ):
+        start = text.find(heading)
+        if start < 0:
+            continue
+        end = text.find("\n## ", start + len(heading))
+        block = text[start:end] if end >= 0 else text[start:]
+        parts.append(block.rstrip())
+    return "\n\n".join(parts)
+
+
 class CodingAgent:
     def __init__(
         self,
@@ -301,6 +373,7 @@ class CodingAgent:
         self.settings = settings
         self.ledger = ledger
         self.client = client
+        self._allowed_scripts: set[str] = set()
         env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
         if max_steps is not None:
             steps = max(1, int(max_steps))
@@ -351,6 +424,7 @@ class CodingAgent:
             environment = load_environment(layout)
         except EnvironmentError as exc:
             raise AgentError(f"environment contract: {exc}") from exc
+        self._allowed_scripts = _environment_scripts(environment)
         model = project_model_name(layout.control)
         stack = ExitStack()
         try:
@@ -509,6 +583,7 @@ class CodingAgent:
             report,
             summary,
             files_changed,
+            context_stats,
         )
         if status == "failed":
             log(
@@ -1123,9 +1198,7 @@ Files:
                 return self._list(repo), None
             if kind == "read_file":
                 path = self._path(repo, action.get("path"))
-                if path.name in SECRET_PATH_NAMES or path.name.endswith(
-                    SECRET_SUFFIXES
-                ):
+                if _is_secret_name(path.name):
                     return "secret-like files are not readable", None
                 if not path.exists() or not path.is_file():
                     return f"file not found: {action.get('path')}", None
@@ -1204,16 +1277,19 @@ Files:
             raise AgentError("absolute paths are not allowed")
         candidate = (repo / relative).resolve()
         try:
-            candidate.relative_to(repo.resolve())
+            resolved = candidate.relative_to(repo.resolve())
         except ValueError as exc:
             raise AgentError("path escapes the repository") from exc
-        if any(part in {".git", ".forgel"} for part in relative.parts):
+        if any(
+            part in {".git", ".forgel"}
+            for part in resolved.parts
+        ):
             raise AgentError("the .git and .forgel directories are off-limits")
         return candidate
 
     def _check_write_path(self, path: Path) -> None:
         name = path.name
-        if name in SECRET_PATH_NAMES or name.endswith(SECRET_SUFFIXES):
+        if _is_secret_name(name):
             raise AgentError(f"refusing to write secret-like file {name}")
 
     @staticmethod
@@ -1282,10 +1358,22 @@ Files:
                 raise AgentError(
                     "only project shell scripts are allowed"
                 )
+            script = Path(command[1]).as_posix()
+            if script not in getattr(self, "_allowed_scripts", set()):
+                raise AgentError(
+                    "shell script is not declared in the environment "
+                    "contract"
+                )
         elif executable.endswith(".sh"):
             if not relative:
                 raise AgentError(
                     "only project shell scripts are allowed"
+                )
+            script = Path(command[0]).as_posix()
+            if script not in getattr(self, "_allowed_scripts", set()):
+                raise AgentError(
+                    "shell script is not declared in the environment "
+                    "contract"
                 )
         elif (
             executable not in ALLOWED_EXECUTABLES
@@ -1405,6 +1493,25 @@ Files:
         assumption_lines = (
             "\n".join(f"- {item}" for item in assumptions) or "- none"
         )
+        spec_ref = str(task.get("spec") or "").strip()
+        spec_text = ""
+        if spec_ref:
+            try:
+                spec_text = layout.artifact(spec_ref).read_text(
+                    encoding="utf-8"
+                )
+            except OSError:
+                spec_text = ""
+        if spec_text:
+            requirements = "- see the task specification below"
+            acceptance = "- see the task specification below"
+            constraints = "- see the task specification below"
+        spec_section = (
+            f"## Specification (`{spec_ref}`)\n\n{spec_text}\n"
+            if spec_text
+            else ""
+        )
+        evidence = _preserved_evidence(path)
         action_lines = "\n".join(f"- {item}" for item in actions) or "- none"
         command_lines = (
             "\n".join(
@@ -1414,9 +1521,7 @@ Files:
             )
             or "- none"
         )
-        write_text(
-            path,
-            f"""# Agent Run: {task['title']}
+        body = f"""# Agent Run: {task['title']}
 
 - Task: `{task['id']}`
 - Status: `{status}`
@@ -1476,8 +1581,16 @@ Files:
 ## Actions
 
 {action_lines}
-""",
-        )
+"""
+        if spec_section:
+            body = body.replace(
+                "## Summary", spec_section + "\n## Summary", 1
+            )
+        if evidence:
+            body = body.replace(
+                "## Files Changed", evidence + "\n\n## Files Changed", 1
+            )
+        write_text(path, body)
         return path
 
     def _record_event(
@@ -1489,7 +1602,22 @@ Files:
         report: Path,
         summary: str,
         files_changed: list[str],
+        context_stats: Mapping[str, Any],
     ) -> None:
+        input_tokens = int(
+            context_stats.get("provider_input_tokens")
+            or context_stats.get("estimated_input_tokens")
+            or 0
+        )
+        output_tokens = int(
+            context_stats.get("provider_output_tokens") or 0
+        )
+        cost = token_cost(
+            input_tokens,
+            output_tokens,
+            self.settings.model_input_price,
+            self.settings.model_output_price,
+        )
         generation = self.ledger.current_generation(str(project["id"]))
         self.ledger.append_event(
             str(project["id"]),
@@ -1499,11 +1627,14 @@ Files:
                 f"{project['id']}:agent_run:{task['id']}:{status}"
             ),
             artifact_refs=[_ref(layout, report)],
+            cost=cost,
             payload={
                 "task": task["id"],
                 "title": task["title"],
                 "summary": summary,
                 "files_changed": files_changed,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
             },
             generation=generation,
         )
