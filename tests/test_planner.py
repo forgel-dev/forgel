@@ -22,6 +22,7 @@ from forgel.planner import (
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.tasks import list_tasks, update_task
+from tests import pin_peak_always
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -609,6 +610,7 @@ class PlannerTest(unittest.TestCase):
         )
         project = self.ledger.get_project(adopted.project_id)
         assert project is not None
+        pin_peak_always(project["workspace"])
         client = self._client(
             PLAN,
             prefix=[
@@ -663,6 +665,7 @@ class PlannerTest(unittest.TestCase):
         )
         project = self.ledger.get_project(adopted.project_id)
         assert project is not None
+        pin_peak_always(project["workspace"])
         client = self._client(
             PLAN,
             prefix=[

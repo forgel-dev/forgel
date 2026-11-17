@@ -32,6 +32,7 @@ from forgel.tasks import (
     recover_running,
     update_task,
 )
+from tests import pin_peak_always
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -122,6 +123,7 @@ class CodingAgentTest(unittest.TestCase):
         self.project_id = adopted.project_id
         self.project = self.ledger.get_project(self.project_id)
         assert self.project is not None
+        pin_peak_always(self.project["workspace"])
         self.layout = ProjectLayout.detect(self.project["workspace"])
         self.repo = self.layout.repo_path("main")
 
