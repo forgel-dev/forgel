@@ -51,9 +51,108 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-17T05:36:40+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-17T05:36:40+00:00",
+  "finished_at": "2026-11-17T05:41:07+00:00",
+  "result": {
+    "summary": "Репозиторий `code` наполнен тонким клиентом `forgel-code`.\n\nЧто сделано:\n- `pyproject.toml` — пакет `forgel-code` с точкой входа `forgel-code = forgel_code.cli:main`, Apache-2.0, без зависимостей; установка одной командой (`pipx install git+...` или `pip install .`).\n- `forgel_code/engine.py` — единственный канал связи с движком: запуск `forgel <команда> --json` отдельным процессом (`subprocess.run`), разбор ровно одного JSON-объекта из stdout. Ненулевой код возврата движка превращается в `EngineError` с текстом движка (stderr, иначе stdout), код клиента ненулевой, ошибка не глотается. Отсутствующий исполняемый файл движка тоже репортится.\n- `forgel_code/cli.py` — команды объёма Парето: `say`, `status`, `tasks`, `task`, `accept`, `rework`, `resume`, `pause`, `plan`, `history`, `projects`, `session`, `use`. Каждая ложится на одноимённую команду движка и всегда вызывает её с `--json`. Для `accept` и `rework` команды движка нет — клиент явно сообщает об этом (код 2, текст «the engine has no command ...») и ничего не выдумывает, к движку не обращается. Флаг `--json` клиента управляет только его собственным выводом: без флага — человекочитаемый текст, с флагом — ровно один JSON-объект (`command`, `project`, `ok`, `result`; при ошибке `error` и ненулевой код). Флаги `--json`/`--engine` работают и до, и после имени команды.\n- `forgel_code/session.py` — сессия клиента с активным проектом, ключ по умолчанию `local`; `use <key>` явно выбирает и сохраняет проект, `projects` идёт в движок. Каталог сессии переопределяется `FORGEL_CODE_HOME`.\n- `forgel_code/render.py` — рендер ответа движка в текст.\n- `LICENSE` — Apache-2.0; `README.md` — установка, таблица всех команд с соответствующими командами движка, формат вывода, активный проект, чего клиент не покрывает, запуск тестов.\n- `tests/test_cli.py` — 18 тестов на `unittest`: подставной движок на PATH (`forgel`, отдающий заранее заданный JSON и записывающий свой argv), проверка argv каждой команды (всегда `--json`), текст без флага, ровно один JSON-объект с флагом, ошибка движка → ненулевой код + текст движка, явное сообщение для неподдерживаемых `accept`/`rework`, сессия и проект по умолчанию `local`, сохранение выбора `use`, а также статическая проверка через `ast`, что исходники клиента импортируют только stdlib и не упоминают пакет движка.\n\nПроверено: `python -m unittest discover -s tests` — 18 тестов, OK. `python -m forgel_code --help` перечисляет ровно команды из объёма Парето. Файлы движка не менялись: правки только в репозитории `code`.",
+    "files_changed": [
+      "LICENSE",
+      "README.md",
+      "forgel_code/__init__.py",
+      "forgel_code/__main__.py",
+      "forgel_code/cli.py",
+      "forgel_code/engine.py",
+      "forgel_code/render.py",
+      "forgel_code/session.py",
+      "pyproject.toml",
+      "tests/__init__.py",
+      "tests/test_cli.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "forgel_code",
+          "--help"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "..................\n----------------------------------------------------------------------\nRan 18 tests in 4.448s\n\nOK\n",
+    "assumptions": [
+      "Репозиторий `code` уже создан публично в организации `forgel-dev`, поэтому задача ставится сразу на его наполнение.",
+      "Установка одной командой на этом шаге — из репозитория (`pip install`/`pipx install`), публикация в PyPI отдельным шагом позже.",
+      "Собственный набор тестов клиента строится на `unittest` по конвенции движка, команда `python -m unittest discover -s tests`.",
+      "Клиент повторяет имена и контракт уже реализованных команд движка (`say`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `plan`, `pause`, `resume`) вместо введения своих.",
+      "Флаг `--json` у клиента управляет только форматом его собственного вывода; к движку клиент всегда обращается в машинно-читаемом режиме.",
+      "Работа считается выполненной в репозитории `code`; правки в репозитории движка в этот объём не входят.",
+      "Пакет назван `forgel_code` (импорт через подчёркивание), исполняемая команда — `forgel-code`.",
+      "Команды `accept` и `rework` из объёма Парето оставлены в CLI и в help, но, по FR-4, при их вызове клиент печатает явное сообщение об отсутствии команды движка и завершается с кодом 2, не обращаясь к движку; когда движок их получит, обёртка подключается одной строкой.",
+      "`say` и `plan` принимают свободную фразу несколькими аргументами и склеивают её через пробел; `plan` без аргументов вызывает `forgel plan --json`.",
+      "Активный проект — файл сессии клиента (по умолчанию `~/.config/forgel-code/session.json`, переопределяется `FORGEL_CODE_HOME`), ключ по умолчанию `local`; `use` сохраняет выбор, `session`/`projects` — это команды движка.",
+      "С `--json` при ошибке клиент печатает текст движка в stderr и один JSON-объект с `\"ok\": false` и `error` в stdout, сохраняя требования и AC-3, и AC-2.",
+      "Исполняемый файл движка ищется как `forgel` в PATH, переопределяется `--engine PATH` или `FORGEL_ENGINE`.",
+      "Публикация в PyPI не делалась — по записанному допущению установка идёт из репозитория."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 17,
+      "estimated_input_tokens": 182728,
+      "provider_input_tokens": 178518,
+      "provider_output_tokens": 53571,
+      "estimated_tokens": 20917,
+      "state": ""
+    },
+    "test_removals": [],
+    "git": {
+      "base": "726462be54609c04a7fc737780a662ece604b099",
+      "head": "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
+      "commit": "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
+      "commits": [
+        "80a838e93c483bea7a6f16d9c0dcab725d09b6c2"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261117053640_forgel-code-code.md"
+  }
 }
