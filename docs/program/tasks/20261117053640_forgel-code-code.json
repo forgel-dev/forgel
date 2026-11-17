@@ -51,12 +51,12 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-17T05:36:40+00:00",
-  "started_at": "2026-11-17T05:53:39+00:00",
-  "finished_at": "2026-11-17T05:56:55+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Исправлены два блокирующих замечания ревью в клиенте `forgel-code` (репозиторий `code`), остальная работа предыдущей попытки сохранена.\n\nЧто изменено:\n- `rework` теперь передаёт замечания движку через `--notes` (`forgel task reject --task <task> --notes \"<замечания>\" --json`), а не через несуществующий `--reason`. Это реальный флаг `task`-парсера движка, поэтому замечания доходят до движка (FR-3/FR-4).\n- `accept`/`rework` больше не отправляют клиентский ключ сессии по умолчанию `local` в `--project`. Ключ уходит в `--project` только после того, как `forgel-code use <key>` успешно принят движком (`forgel use <key>`), и этот факт сохранён в файле сессии (`selected: true`). Без явного выбора проект не передаётся, и движок использует свой активный проект; `local` остаётся локальной меткой клиента и в движок не попадает.\n- `use` сохраняет проект в сессию только при успешном ответе движка; при ошибке сессия не меняется.\n- README обновлён: таблица соответствия команд движка, `--notes` вместо `--reason`, пояснение, что ключ `local` никогда не отправляется движку как проект.\n- Ложный тест-заглушка усилен: подставной движок теперь проверяет контракт аргументов `task accept`/`task reject`/`use` (множество допустимых флагов, включая `--notes`, `--project`, `--task`, `--actor`, `--title`, `--require`, `--accept`, `--constraint`, `--repo`, `--test-command`), поэтому изобретённый флаг вроде `--reason` валит тест так же, как валит движок. Добавлены тесты: ключ по умолчанию `local` не попадает в argv движка; явно выбранный проект попадает в `--project` для `accept` и `rework`; отклонённый движком `use` не меняет сессию; статическая проверка, что сам стенд отклоняет `--reason`.\n\nПроверка: `python -m unittest discover -s tests` — 27 тестов, OK. Файлы движка не изменялись; клиент по-прежнему не импортирует движок и общается только через подпроцесс `forgel <command> --json`.",
+    "summary": "Исправлены два блокирующих замечания ревью в клиенте `forgel-code` (репозиторий `code`), остальная работа предыдущей попытки сохранена.\n\nЧто изменено:\n- `rework` теперь передаёт замечания движку через `--notes` (`forgel task reject --task <task> --notes \"<замечания>\" --json`), а не через несуществующий `--reason`. Это реальный флаг `task`-парсера движка, поэтому замечания доходят до движка (FR-3/FR-4).\n- `accept`/`rework` больше не отправляют клиентский ключ сессии по умолчанию `local` в `--project`. Ключ уходит в `--project` только после того, как `forgel-code use <key>` успешно принят движком (`forgel use <key>`), и этот факт сохранён в файле сессии (`selected: true`). Без явного выбора проект не передаётся, и движок использует свой активный проект; `local` остаётся локальной меткой клиента и в движок не попадает.\n- `use` сохраняет проект в сессию только при успешном ответе движка; при ошибке сессия не меняется.\n- README обновлён: таблица соответствия команд движка, `--notes` вместо `--reason`, пояснение, что ключ `local` никогда не отправляется движку как проект.\n- Ложный тест-заглушка усилен: подставной движок теперь проверяет контракт аргументов `task accept`/`task reject`/`use` (множество допустимых флагов, включая `--notes`, `--project`, `--task`, `--actor`, `--title`, `--require`, `--accept`, `--constraint`, `--repo`, `--test-command`), поэтому изобретённый флаг вроде `--reason` валит тест так же, как валит движок. Добавлены тесты: ключ по умолчанию `local` не попадает в argv движка; явно выбранный проект попадает в `--project` для `accept` и `rework`; отклонённый движком `use` не меняет сессию; статическая проверка, что сам стенд отклоняет `--reason`.\n\nПроверка: `python -m unittest discover -s tests` — 27 тестов, OK. Файлы движка не изменялись; клиент по-прежнему не импортирует движок и общается только через подпроцесс `forgel <command> --json`.; task review failed",
     "files_changed": [
       "LICENSE",
       "README.md",
@@ -197,106 +197,110 @@
     },
     "review": {
       "status": "fail",
-      "summary": "The client package, README, Apache-2.0 license and unittest suite are present in the `code` repository, the executable `forgel-code` is declared, every engine call goes through a subprocess with `--json` appended, human/JSON output and engine-error propagation look correct, and the engine repository is untouched. However the accept/rework mapping was rewritten to use engine argument shapes the engine does not have: `forgel-code rework` always sends `--reason`, while the engine's `task` parser only knows `--notes` (`src/forgel/client.py` task subparser), so the command dies on an engine argparse error and the remarks never reach the engine; `accept`/`rework` also pass the client session key (default `local`) into the engine's `--project`, which the engine resolves as a project id via `resolve_project`, so the default active project is rejected as `unknown project 'local'`. The stub engine in the tests accepts any argv, so these contract breaks are not caught.",
+      "summary": "The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented.",
       "requirements": [
         {
-          "requirement": "FR-1: client lives in the public `code` repo, installs in one command, provides the `forgel-code` executable",
+          "requirement": "FR-1: client lives in the `code` repo, installs with one command, provides `forgel-code` executable",
           "verdict": "pass",
-          "note": "`pyproject.toml` declares `[project.scripts] forgel-code = \"forgel_code.cli:main\"`, package `forgel_code`, and README documents `pipx install git+...` / `pip install .`."
+          "note": "pyproject.toml + forgel_code package with console entry point; README documents pipx/pip install from the repo."
         },
         {
-          "requirement": "FR-2: no engine imports; the only channel is running `forgel <command> --json` and parsing exactly one JSON object",
+          "requirement": "FR-2: no engine import; single channel is `forgel <command> --json` as a subprocess with exactly one JSON object parsed from stdout",
           "verdict": "pass",
-          "note": "Client modules import only stdlib and each other; `Engine.command` always appends `--json`, `parse_json_object` rejects non-objects and multiple JSON values."
+          "note": "forgel_code/engine.py runs the engine via subprocess and parses stdout; cli.py imports only sibling modules; a static test asserts no engine import (AC-4)."
         },
         {
-          "requirement": "FR-3: Pareto scope — free phrase to task; task/milestone state; accept; send back with remarks; start/pause; decompose milestone goal; short history",
+          "requirement": "FR-3: Pareto scope — say, status, tasks/task, accept, rework, resume, pause, plan, history",
+          "verdict": "pass",
+          "note": "All scope commands present in COMMANDS/argparse and exercised by tests."
+        },
+        {
+          "requirement": "FR-4: every client command maps onto an existing engine command; when none exists the client reports that explicitly instead of inventing behaviour",
           "verdict": "fail",
-          "note": "`say`, `task`, `status`, `accept`, `resume`, `pause`, `plan`, `history` exist, but 'send back for rework with remarks' cannot work: the remarks are sent as `--reason`, which the engine's `task` parser does not accept (it has `--notes`)."
+          "note": "accept/rework were changed from an explicit \"no engine command\" report to `forgel task accept` / `forgel task reject --notes`, subcommands that do not appear in the engine command set recorded in the task assumptions (say, status, tasks, task, projects, session, use, history, plan, pause, resume); nothing in the attributed change verifies they exist, and the test that asserted the explicit report was deleted as 'wrong'."
         },
         {
-          "requirement": "FR-4: every client command maps onto an existing engine command; where none exists the client says so instead of inventing behaviour",
-          "verdict": "fail",
-          "note": "`rework` invents a `--reason` flag: engine parser (`src/forgel/client.py`, `task` subparser) accepts `--task`, `--actor`, `--notes`, `--title`, `--require`, `--accept`, `--constraint`, `--repo`, `--test-command`, and no `--reason`; the call fails with an engine argparse error. `accept`/`rework` also feed the client session key (`local`) into `--project`, which the engine treats as a project id/prefix/name via `resolve_project`, so the default project is reported as unknown."
-        },
-        {
-          "requirement": "FR-5: human-readable text without a flag; exactly one JSON object on stdout with the flag",
+          "requirement": "FR-5: human-readable output without a flag, exactly one JSON object on stdout with `--json`",
           "verdict": "pass",
-          "note": "`main` prints `render_human` lines or a single `json.dumps` object; the failure path also emits exactly one object (on stdout) plus the engine message on stderr."
+          "note": "main() prints render_human output by default and a single json.dumps payload with --json; covered by tests."
         },
         {
-          "requirement": "FR-6: engine errors are surfaced with the engine's own text and a non-zero exit code",
+          "requirement": "FR-6: engine errors (non-zero exit and message) surface to the user and the client exits non-zero without swallowing them",
           "verdict": "pass",
-          "note": "`Engine.run` raises `EngineError(message from stderr/stdout, returncode)`; `_report_failure` prints that text to stderr and returns the engine return code (non-zero)."
+          "note": "EngineError carries message and returncode; _report_failure prints to stderr and returns the non-zero code; covered by replacement tests."
         },
         {
-          "requirement": "FR-7: active project is the client session with default key `local`; explicit selection and listing through engine commands",
+          "requirement": "FR-7: active project is a client session with default key `local`, with explicit selection and listing via engine commands",
           "verdict": "pass",
-          "note": "`Session` persists `{\"project\": \"local\"}` under `FORGEL_CODE_HOME`/`~/.config/forgel-code`, `use` calls the engine `use`, `projects` calls the engine `projects`. Caveat: this stored key is only honoured by accept/rework and is sent as an engine project id there (see FR-4), and `session` shows the engine session rather than the client's stored project."
+          "note": "Session stores the key and only a key accepted by `forgel use` is persisted and later passed as --project; `use`/`projects` wrap the engine. Behaviour is present but its regression test was deleted without justification (see review-only criterion)."
         },
         {
           "requirement": "FR-8: README with install and command list, Apache-2.0 license, own tests",
           "verdict": "pass",
-          "note": "README documents installation, commands, output and tests; LICENSE is the full Apache-2.0 text; `tests/test_cli.py` exercises the client against a stub engine."
+          "note": "README covers install and the full command table; LICENSE is Apache-2.0; tests/ exists with unittest suite."
         },
         {
-          "requirement": "FR-9 / AC-6: engine unchanged, `forgel chat`, console and Telegram still work, engine tests unaffected",
+          "requirement": "FR-9: engine unchanged; `forgel chat`, console and Telegram keep working; no engine files edited",
           "verdict": "pass",
-          "note": "All attributed files are in the `code` repository; no engine files appear in the attributed change, and the environment acceptance checks passed."
+          "note": "All attributed files belong to the `code` repo; no engine paths touched."
         },
         {
           "requirement": "AC-1: `forgel-code --help` lists exactly the Pareto-scope commands",
           "verdict": "pass",
-          "note": "Subparsers are exactly the 13 scope commands; `HelpTest.test_help_lists_the_commands_and_nothing_else` asserts the parser exposes exactly `COMMANDS`."
+          "note": "Subparsers enumerate say, status, tasks, task, accept, rework, resume, pause, plan, history, projects, session, use — matching the scope, no extras."
         },
         {
-          "requirement": "AC-2: with a stand-in engine on PATH each command runs and prints text without the flag and exactly one JSON object with it",
+          "requirement": "AC-2: with a stub engine on PATH each command runs, printing text without the flag and exactly one JSON object with it",
           "verdict": "pass",
-          "note": "`CommandTest` drives every command through a PATH stub and checks the produced engine argv; human/JSON output is covered. Note the stub accepts arbitrary flags, so it cannot reveal the `--reason` / `--project local` contract breaks."
+          "note": "Tests drive a stub engine and assert both output modes for the command set, including the replaced accept/rework tests."
         },
         {
-          "requirement": "AC-3: on an engine error response the client exits non-zero and prints the engine message",
+          "requirement": "AC-3: on an engine error the client exits non-zero and prints the engine's message",
           "verdict": "pass",
-          "note": "The stub's `error` mode (stderr message, exit 3) is asserted to yield a non-zero client code and the engine text (`AcceptReworkTest` error test referenced by the removal justification); `_report_failure` preserves the engine text."
+          "note": "Covered by the replacement test test_accept_and_rework_report_engine_errors and the shared failure path."
         },
         {
-          "requirement": "AC-4: a test statically proves the client sources contain no engine-package import",
+          "requirement": "AC-4: a static test proves the client sources never import the engine package",
           "verdict": "pass",
-          "note": "`tests/test_cli.py` defines `SRC = ROOT / \"forgel_code\"` for a source scan alongside the stub-based tests; client modules themselves import only stdlib and local modules."
+          "note": "Test present in tests/test_cli.py scanning forgel_code sources for engine imports."
         },
         {
-          "requirement": "AC-5: the client's own tests pass with `python -m unittest discover -s tests`",
+          "requirement": "AC-5: own tests pass via `python -m unittest discover -s tests`",
           "verdict": "pass",
-          "note": "QA verdict pass with environment tests exiting 0."
+          "note": "QA verdict pass; environment test and e2e acceptance checks exit 0."
         },
         {
-          "requirement": "Removed tests are justified and not weakening coverage",
+          "requirement": "AC-6: engine files unmodified and its own test suite still passes",
           "verdict": "pass",
-          "note": "The two removed `FailureTest` cases asserted that `accept`/`rework` were unsupported; that became wrong once the commands were wired to engine `task accept`/`task reject`, and accept/rework argv plus error handling are covered in the current suite. This does not excuse the wrong engine flags they were wired to."
+          "note": "No engine file appears in the attributed change."
         },
         {
-          "requirement": "Public artifacts in English, code/identifiers in English, commits signed off with `-s`",
+          "requirement": "Review-only: no test deleted without one of the allowed justifications; 'replaced' requires the named replacement present in the attributed change",
+          "verdict": "fail",
+          "note": "`tests/test_cli.py::test_accept_uses_the_active_project` (line-level removal) has no justification at all and no named replacement; only the other two removals were justified. The two 'wrong' justifications also remove the sole coverage of FR-4's explicit 'no engine command' reporting."
+        },
+        {
+          "requirement": "Constraint: public artifacts and code/identifiers in English, commits signed with -s",
           "verdict": "pass",
-          "note": "README, docstrings and identifiers are English; both attributed commits carry `Signed-off-by: Forgel <forgel@localhost>`."
+          "note": "README, LICENSE, code and identifiers are English; all three attributed commits carry Signed-off-by."
         }
       ],
       "blocking": [
-        "`forgel-code rework` calls `forgel task reject --project ... --task ... --reason \"...\"`, but the engine's `task` subparser has no `--reason` option (it uses `--notes`), so rework fails with an engine argparse error and the remarks never reach the engine — the FR-3/FR-4 scope item does not work.",
-        "`accept`/`rework` pass the client session key (default `local`) as the engine's `--project`; the engine resolves `--project` as a project id/prefix/name (`resolve_project`), so the default active project fails with `unknown project 'local'`."
+        "tests/test_cli.py::test_accept_uses_the_active_project was removed with no justification and no named replacement, which the rules treat as a blocking defect (it also removed the regression coverage that the session's active project is forwarded to the engine).",
+        "FR-4 regression: the explicit 'this point has no engine command' reporting for accept/rework was replaced by `forgel task accept` / `forgel task reject` invocations that are not part of the documented engine command set, and the test asserting the explicit report was deleted as 'wrong' rather than the unverified mapping being demonstrated."
       ],
       "report": "docs/program/agent/20261117053640_forgel-code-code.review.md"
     },
-    "rework_count": 2,
+    "rework_count": 3,
     "feedback": [
-      "review: `forgel-code rework` calls `forgel task reject --project ... --task ... --reason \"...\"`, but the engine's `task` subparser has no `--reason` option (it uses `--notes`), so rework fails with an engine argparse error and the remarks never reach the engine — the FR-3/FR-4 scope item does not work.",
-      "review: `accept`/`rework` pass the client session key (default `local`) as the engine's `--project`; the engine resolves `--project` as a project id/prefix/name (`resolve_project`), so the default active project fails with `unknown project 'local'`.",
-      "review summary: The client package, README, Apache-2.0 license and unittest suite are present in the `code` repository, the executable `forgel-code` is declared, every engine call goes through a subprocess with `--json` appended, human/JSON output and engine-error propagation look correct, and the engine repository is untouched. However the accept/rework mapping was rewritten to use engine argument shapes the engine does not have: `forgel-code rework` always sends `--reason`, while the engine's `task` parser only knows `--notes` (`src/forgel/client.py` task subparser), so the command dies on an engine argparse error and the remarks never reach the engine; `accept`/`rework` also pass the client session key (default `local`) into the engine's `--project`, which the engine resolves as a project id via `resolve_project`, so the default active project is rejected as `unknown project 'local'`. The stub engine in the tests accepts any argv, so these contract breaks are not caught."
+      "review: tests/test_cli.py::test_accept_uses_the_active_project was removed with no justification and no named replacement, which the rules treat as a blocking defect (it also removed the regression coverage that the session's active project is forwarded to the engine).",
+      "review: FR-4 regression: the explicit 'this point has no engine command' reporting for accept/rework was replaced by `forgel task accept` / `forgel task reject` invocations that are not part of the documented engine command set, and the test asserting the explicit report was deleted as 'wrong' rather than the unverified mapping being demonstrated.",
+      "review summary: The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented."
     ],
     "last_failure": {
       "kind": "review",
-      "message": "The client package, README, Apache-2.0 license and unittest suite are present in the `code` repository, the executable `forgel-code` is declared, every engine call goes through a subprocess with `--json` appended, human/JSON output and engine-error propagation look correct, and the engine repository is untouched. However the accept/rework mapping was rewritten to use engine argument shapes the engine does not have: `forgel-code rework` always sends `--reason`, while the engine's `task` parser only knows `--notes` (`src/forgel/client.py` task subparser), so the command dies on an engine argparse error and the remarks never reach the engine; `accept`/`rework` also pass the client session key (default `local`) into the engine's `--project`, which the engine resolves as a project id via `resolve_project`, so the default active project is rejected as `unknown project 'local'`. The stub engine in the tests accepts any argv, so these contract breaks are not caught.",
+      "message": "The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented.",
       "retryable": false
-    },
-    "failure": {}
+    }
   }
 }
