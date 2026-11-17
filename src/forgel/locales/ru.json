@@ -457,5 +457,6 @@
   "client_task_rejected": "{task} отклонена ({status}).",
   "client_status_line": "{project}: {state} (поколение {generation}, точка {checkpoint})",
   "client_plan_requires": "укажите --goal \"...\" или --status",
-  "client_daemon_ran": "Демон выполнил циклов: {count}."
+  "client_daemon_ran": "Демон выполнил циклов: {count}.",
+  "peak_waiting": "Пиковые часы: ждём окно вне пиков в {moment} (около {minutes} мин). Ctrl-C вернёт к приглашению."
 }

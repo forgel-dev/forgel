@@ -457,5 +457,6 @@
   "client_task_rejected": "Rejected {task} ({status}).",
   "client_status_line": "{project}: {state} (generation {generation}, checkpoint {checkpoint})",
   "client_plan_requires": "provide --goal \"...\" or --status",
-  "client_daemon_ran": "Daemon ran {count} cycle(s)."
+  "client_daemon_ran": "Daemon ran {count} cycle(s).",
+  "peak_waiting": "Peak hours: waiting for off-peak at {moment} (about {minutes} min). Ctrl-C returns to the prompt."
 }

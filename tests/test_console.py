@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
 from forgel.agent import ProjectAgent
 from forgel.config import Settings
 from forgel.console import (
+    _drain,
     _explain_outcomes,
+    _peak_wait,
     _task_observation,
     _task_snapshot,
     run_console,
@@ -275,6 +278,78 @@ class ConsoleTest(unittest.TestCase):
         self.assertIn("Продолжаем", prompt)
         self.assertIn("repeated action loop", prompt)
         self.assertIn("README.md", prompt)
+
+    def test_peak_deferral_waits_instead_of_returning(self) -> None:
+        output: list[str] = []
+        slept: list[float] = []
+        moment = datetime.now(timezone.utc) + timedelta(minutes=30)
+
+        def sleep(seconds: float) -> None:
+            slept.append(seconds)
+            raise KeyboardInterrupt
+
+        with (
+            patch("forgel.console.run_once", return_value=[]),
+            patch(
+                "forgel.console._peak_wait",
+                return_value=(1800.0, moment),
+            ),
+        ):
+            _drain(
+                self.settings,
+                self.ledger,
+                output.append,
+                sleep_fn=sleep,
+            )
+        self.assertEqual(len(slept), 1)
+        text = "\n".join(output)
+        self.assertIn("Peak hours: waiting", text)
+        self.assertIn("Ctrl-C returns to the prompt", text)
+
+    def test_peak_wait_finds_deferred_pending_work(self) -> None:
+        from forgel.program_manifest import set_entries
+
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Peak",
+            "A brief.",
+            mode="brownfield",
+        )
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project_id)["workspace"]
+        )
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        create_task(layout, "Do it", ["Do it"], ["It is done"], repo_id="main")
+        boundary = datetime.now(timezone.utc) + timedelta(minutes=20)
+        with (
+            patch(
+                "forgel.console.peak.should_defer", return_value=True
+            ),
+            patch(
+                "forgel.console.peak.next_off_peak",
+                return_value=boundary,
+            ),
+        ):
+            result = _peak_wait(self.settings, self.ledger)
+        self.assertIsNotNone(result)
+        wait, moment = result  # type: ignore[misc]
+        self.assertGreater(wait, 0)
+        self.assertEqual(moment, boundary)
+
+    def test_peak_wait_is_none_without_pending_work(self) -> None:
+        self.assertIsNone(_peak_wait(self.settings, self.ledger))
 
     def test_quit_and_eof_end_the_console(self) -> None:
         text = self._run(["/quit"])

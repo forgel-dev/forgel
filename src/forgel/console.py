@@ -18,6 +18,7 @@ import json
 import sys
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -32,7 +33,7 @@ from .config import Settings
 from .control import is_paused
 from .costs import cost_report
 from .daemon import next_retry_wait, run_once
-from . import i18n
+from . import i18n, peak
 from .i18n import t as _t
 from .language import detect as detect_language
 from .layout import ProjectLayout
@@ -40,7 +41,7 @@ from .ledger import Ledger
 from .model import build_model_client
 from .planner import plan_status
 from .projects import ProjectError, resolve_project
-from .tasks import latest_task, list_tasks, retry_moment
+from .tasks import latest_task, list_tasks, next_pending_task, retry_moment
 
 PROMPT = "forgel> "
 QUIT = {"/quit", "/exit", "quit", "exit", "bye"}
@@ -425,6 +426,31 @@ def _report_state(
     )
 
 
+def _peak_wait(
+    settings: Settings, ledger: Ledger
+) -> tuple[float, datetime] | None:
+    """Seconds until off-peak when a pending task is peak-deferred."""
+
+    now = datetime.now(timezone.utc)
+    boundaries: list[datetime] = []
+    for project in ledger.list_projects():
+        layout = ProjectLayout.detect(project["workspace"])
+        if next_pending_task(layout) is None:
+            continue
+        policy = peak.project_policy(settings, layout.control)
+        if not peak.should_defer(
+            policy, now=now, hours=settings.peak_hours
+        ):
+            continue
+        boundaries.append(
+            peak.next_off_peak(now, settings.peak_hours)
+        )
+    if not boundaries:
+        return None
+    moment = min(boundaries)
+    return max(1.0, (moment - now).total_seconds()), moment
+
+
 def _drain(
     settings: Settings,
     ledger: Ledger,
@@ -476,26 +502,41 @@ def _drain(
                 )
         if processed:
             continue
-        wait = next_retry_wait(ledger)
-        if wait is None:
+        retry_wait = next_retry_wait(ledger)
+        peak_wait = _peak_wait(settings, ledger)
+        if retry_wait is None and peak_wait is None:
             return
-        moment = None
-        for project in ledger.list_projects():
-            layout = ProjectLayout.detect(project["workspace"])
-            task = latest_task(layout)
-            if task is not None:
-                moment = retry_moment(task) or moment
-        when = (
-            moment.strftime("%H:%M UTC") if moment else ""
-        )
-        output(
-            _t(
-                lang,
-                "waiting",
-                moment=when,
-                minutes=f"{wait / 60:.0f}",
+        if peak_wait is not None and (
+            retry_wait is None or peak_wait[0] <= retry_wait
+        ):
+            wait, moment = peak_wait
+            output(
+                _t(
+                    lang,
+                    "peak_waiting",
+                    moment=moment.strftime("%H:%M UTC"),
+                    minutes=f"{wait / 60:.0f}",
+                )
             )
-        )
+        else:
+            wait = retry_wait or 1.0
+            moment = None
+            for project in ledger.list_projects():
+                layout = ProjectLayout.detect(project["workspace"])
+                task = latest_task(layout)
+                if task is not None:
+                    moment = retry_moment(task) or moment
+            when = (
+                moment.strftime("%H:%M UTC") if moment else ""
+            )
+            output(
+                _t(
+                    lang,
+                    "waiting",
+                    moment=when,
+                    minutes=f"{wait / 60:.0f}",
+                )
+            )
         try:
             sleep_fn(wait)
         except KeyboardInterrupt:
