@@ -51,12 +51,12 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-17T05:36:40+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-17T05:58:47+00:00",
+  "finished_at": "2026-11-17T06:06:06+00:00",
   "result": {
-    "summary": "Исправлены два блокирующих замечания ревью в клиенте `forgel-code` (репозиторий `code`), остальная работа предыдущей попытки сохранена.\n\nЧто изменено:\n- `rework` теперь передаёт замечания движку через `--notes` (`forgel task reject --task <task> --notes \"<замечания>\" --json`), а не через несуществующий `--reason`. Это реальный флаг `task`-парсера движка, поэтому замечания доходят до движка (FR-3/FR-4).\n- `accept`/`rework` больше не отправляют клиентский ключ сессии по умолчанию `local` в `--project`. Ключ уходит в `--project` только после того, как `forgel-code use <key>` успешно принят движком (`forgel use <key>`), и этот факт сохранён в файле сессии (`selected: true`). Без явного выбора проект не передаётся, и движок использует свой активный проект; `local` остаётся локальной меткой клиента и в движок не попадает.\n- `use` сохраняет проект в сессию только при успешном ответе движка; при ошибке сессия не меняется.\n- README обновлён: таблица соответствия команд движка, `--notes` вместо `--reason`, пояснение, что ключ `local` никогда не отправляется движку как проект.\n- Ложный тест-заглушка усилен: подставной движок теперь проверяет контракт аргументов `task accept`/`task reject`/`use` (множество допустимых флагов, включая `--notes`, `--project`, `--task`, `--actor`, `--title`, `--require`, `--accept`, `--constraint`, `--repo`, `--test-command`), поэтому изобретённый флаг вроде `--reason` валит тест так же, как валит движок. Добавлены тесты: ключ по умолчанию `local` не попадает в argv движка; явно выбранный проект попадает в `--project` для `accept` и `rework`; отклонённый движком `use` не меняет сессию; статическая проверка, что сам стенд отклоняет `--reason`.\n\nПроверка: `python -m unittest discover -s tests` — 27 тестов, OK. Файлы движка не изменялись; клиент по-прежнему не импортирует движок и общается только через подпроцесс `forgel <command> --json`.; task review failed",
+    "summary": "Исправлены оба блокирующих замечания ревью в клиенте `forgel-code` (репозиторий `code`); остальная работа предыдущей попытки сохранена.\n\nЧто сделано:\n1. Восстановлен удалённый без обоснования тест `tests/test_cli.py::AcceptReworkTest::test_accept_uses_the_active_project` — он снова проверяет, что активный проект клиентской сессии (`forgel-code use acme`) действительно уходит в движок как `--project acme` при `accept`, плюс сохраняются позиции `--task t-1`. Регрессия закрыта.\n2. Возвращено требование FR-4 в продукт и в тесты: добавлена функция `missing_engine_command()` в `forgel_code/cli.py`. Если движок отвечает ошибкой «unknown command / unrecognized / invalid choice» на `forgel task accept|reject`, клиент явно сообщает «no engine command» с указанием `forgel task accept` / `forgel task reject` и текстом движка, завершается с ненулевым кодом и не изобретает поведение. Обычные ошибки движка по-прежнему проходят без изменений.\n3. Новый класс тестов `MissingEngineCommandTest` фиксирует это поведение для `accept`, `rework` и JSON-режима, плюс проверяет, что прочие ошибки движка не подменяются отчётом о недостающей команде. Подставной движок получил режим `FORGEL_STUB_MODE=no-task-action`, моделирующий движок без действия `task`.\n4. README дополнен абзацем про явный отчёт «no engine command» и тестом `PackagingTest::test_readme_documents_the_missing_engine_command_report`.\n5. Проверено, что аргументы, уходящие в движок, остаются в рамках реального контракта: `--notes` для замечаний, `--project` только после успешного `use`, ключ `local` в движок не отправляется (тесты `test_default_session_key_never_reaches_the_engine`, `test_selected_project_is_passed_to_the_engine`, `test_rejected_use_does_not_change_the_session`).\n\nПроверка: `python -m unittest discover -s tests` — 33 теста, OK. Файлы движка не менялись (правки только в репозитории `code`).",
     "files_changed": [
       "LICENSE",
       "README.md",
@@ -71,6 +71,17 @@
       "tests/test_cli.py"
     ],
     "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
       {
         "command": [
           "python",
@@ -117,7 +128,7 @@
         "final_test": true
       }
     ],
-    "test_output": "...........................\n----------------------------------------------------------------------\nRan 27 tests in 8.647s\n\nOK\n",
+    "test_output": ".................................\n----------------------------------------------------------------------\nRan 33 tests in 10.111s\n\nOK\n",
     "assumptions": [
       "Репозиторий `code` уже создан публично в организации `forgel-dev`, поэтому задача ставится сразу на его наполнение.",
       "Установка одной командой на этом шаге — из репозитория (`pip install`/`pipx install`), публикация в PyPI отдельным шагом позже.",
@@ -125,21 +136,21 @@
       "Клиент повторяет имена и контракт уже реализованных команд движка (`say`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `plan`, `pause`, `resume`) вместо введения своих.",
       "Флаг `--json` у клиента управляет только форматом его собственного вывода; к движку клиент всегда обращается в машинно-читаемом режиме.",
       "Работа считается выполненной в репозитории `code`; правки в репозитории движка в этот объём не входят.",
-      "Ключ сессии `local` — локальная метка клиента, а не проект движка; поэтому он не передаётся в `--project`, пока пользователь не выберет проект явно через `use`.",
-      "Замечания к доработке передаются одним аргументом `--notes \"<текст>\"`, как единственный подходящий флаг `task`-парсера движка.",
-      "Проект из `use` считается выбранным только после успешного ответа движка; отметка хранится в файле сессии полем `selected`.",
-      "Тесты используют подставной движок на PATH, который воспроизводит контракт аргументов реальных подкоманд `task` и `use`."
+      "Повторяющиеся имена клиентских команд оставлены как в спецификации; `accept`/`rework` опираются на действие `task` движка (`task accept` / `task reject --notes`), а при его отсутствии клиент явно сообщает «no engine command», как требует FR-4.",
+      "Отчёт о недостающей команде распознаётся по тексту ошибки движка (unknown/unrecognized/invalid choice/no such command); это единственный доступный клиенту признак, поскольку JSON-контракт ошибки не описан.",
+      "Ключ сессии по умолчанию `local` остаётся локальной меткой клиента и не передаётся движку как `--project`; в движок уходит только проект, принятый через `forgel-code use`.",
+      "README обновлён вручную, тесты на README не ослаблены, а усилены новым тестом на документирование отчёта FR-4."
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 13,
-      "estimated_input_tokens": 309935,
-      "provider_input_tokens": 313664,
-      "provider_output_tokens": 36866,
-      "estimated_tokens": 37490,
+      "model_calls": 28,
+      "estimated_input_tokens": 813370,
+      "provider_input_tokens": 833421,
+      "provider_output_tokens": 77389,
+      "estimated_tokens": 49953,
       "state": ""
     },
     "test_removals": [
@@ -155,13 +166,14 @@
       }
     ],
     "git": {
-      "base": "d73fb585f7a59703ba03df889a09721c0a2caa50",
-      "head": "9851d4cbc141decf7b0d1d30de8bb7ca14e96422",
-      "commit": "9851d4cbc141decf7b0d1d30de8bb7ca14e96422",
+      "base": "9851d4cbc141decf7b0d1d30de8bb7ca14e96422",
+      "head": "0d20d4cc1bfa38b935955ba1c6583bf6318ef7af",
+      "commit": "0d20d4cc1bfa38b935955ba1c6583bf6318ef7af",
       "commits": [
         "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
         "d73fb585f7a59703ba03df889a09721c0a2caa50",
-        "9851d4cbc141decf7b0d1d30de8bb7ca14e96422"
+        "9851d4cbc141decf7b0d1d30de8bb7ca14e96422",
+        "0d20d4cc1bfa38b935955ba1c6583bf6318ef7af"
       ]
     },
     "report": "docs/program/agent/20261117053640_forgel-code-code.md",
@@ -301,6 +313,7 @@
       "kind": "review",
       "message": "The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented.",
       "retryable": false
-    }
+    },
+    "failure": {}
   }
 }
