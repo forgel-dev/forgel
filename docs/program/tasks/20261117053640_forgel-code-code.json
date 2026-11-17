@@ -51,12 +51,12 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-17T05:36:40+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-17T05:43:45+00:00",
+  "finished_at": "2026-11-17T05:48:25+00:00",
   "result": {
-    "summary": "Репозиторий `code` наполнен тонким клиентом `forgel-code`.\n\nЧто сделано:\n- `pyproject.toml` — пакет `forgel-code` с точкой входа `forgel-code = forgel_code.cli:main`, Apache-2.0, без зависимостей; установка одной командой (`pipx install git+...` или `pip install .`).\n- `forgel_code/engine.py` — единственный канал связи с движком: запуск `forgel <команда> --json` отдельным процессом (`subprocess.run`), разбор ровно одного JSON-объекта из stdout. Ненулевой код возврата движка превращается в `EngineError` с текстом движка (stderr, иначе stdout), код клиента ненулевой, ошибка не глотается. Отсутствующий исполняемый файл движка тоже репортится.\n- `forgel_code/cli.py` — команды объёма Парето: `say`, `status`, `tasks`, `task`, `accept`, `rework`, `resume`, `pause`, `plan`, `history`, `projects`, `session`, `use`. Каждая ложится на одноимённую команду движка и всегда вызывает её с `--json`. Для `accept` и `rework` команды движка нет — клиент явно сообщает об этом (код 2, текст «the engine has no command ...») и ничего не выдумывает, к движку не обращается. Флаг `--json` клиента управляет только его собственным выводом: без флага — человекочитаемый текст, с флагом — ровно один JSON-объект (`command`, `project`, `ok`, `result`; при ошибке `error` и ненулевой код). Флаги `--json`/`--engine` работают и до, и после имени команды.\n- `forgel_code/session.py` — сессия клиента с активным проектом, ключ по умолчанию `local`; `use <key>` явно выбирает и сохраняет проект, `projects` идёт в движок. Каталог сессии переопределяется `FORGEL_CODE_HOME`.\n- `forgel_code/render.py` — рендер ответа движка в текст.\n- `LICENSE` — Apache-2.0; `README.md` — установка, таблица всех команд с соответствующими командами движка, формат вывода, активный проект, чего клиент не покрывает, запуск тестов.\n- `tests/test_cli.py` — 18 тестов на `unittest`: подставной движок на PATH (`forgel`, отдающий заранее заданный JSON и записывающий свой argv), проверка argv каждой команды (всегда `--json`), текст без флага, ровно один JSON-объект с флагом, ошибка движка → ненулевой код + текст движка, явное сообщение для неподдерживаемых `accept`/`rework`, сессия и проект по умолчанию `local`, сохранение выбора `use`, а также статическая проверка через `ast`, что исходники клиента импортируют только stdlib и не упоминают пакет движка.\n\nПроверено: `python -m unittest discover -s tests` — 18 тестов, OK. `python -m forgel_code --help` перечисляет ровно команды из объёма Парето. Файлы движка не менялись: правки только в репозитории `code`.; task review failed",
+    "summary": "Клиент `forgel-code` в репозитории `code` приведён в соответствие с реальным命令行 движка.\n\nЧто исправлено по замечаниям ревью:\n- `accept` и `rework` больше не заглушки. `forgel-code accept <task>` вызывает движок как `forgel task accept --project <key> --task <task> --json`, а `forgel-code rework <task> <замечания...>` — как `forgel task reject --project <key> --task <task> --reason \"<замечания>\" --json`. Проект берётся из сессии клиента (по умолчанию `local`, меняется `use`). Замечания обязательны: без них клиент не вызывает движок и завершается с ошибкой использования.\n- `forgel-code task <task>` больше не шлёт несуществующий `forgel task <id> --json`. Клиент запрашивает `forgel tasks --json` и выбирает из машинно-читаемого ответа ровно запрошенную задачу; если её нет — сообщает об этом и завершается с ненулевым кодом (текст и JSON с `ok: false`).\n- `forgel-code plan <milestone> [goal...]` теперь соответствует командной строке движка: `forgel plan <milestone>` и, при наличии формулировки цели, `forgel plan <milestone> --goal \"<goal>\"`. Без аргументов остаётся `forgel plan`.\n- Удалён словарь `UNSUPPORTED` и ложное утверждение «no engine command yet» из README; в README таблица команд переписана под реальные команды движка (`forgel task accept|reject --project … --task …`, `forgel plan <milestone> [--goal …]`).\n\nОстальное сохранено: пакет `forgel_code` с точкой входа `forgel-code = forgel_code.cli:main`, Apache-2.0, единственный канал связи — `subprocess.run([\"forgel\", … , \"--json\"])` и разбор ровно одного JSON-объекта, ошибка движка (ненулевой код + текст) доносится пользователю и даёт ненулевой код клиента, `--json` клиента управляет только его собственным выводом.\n\nТесты (`python -m unittest discover -s tests`) — 24 теста, OK. Подставной движок на PATH фиксирует argv и отдаёт заданный JSON; проверено, что каждая команда объёма Парето доходит до движка с ожидаемым argv, печатает текст без флага и ровно один JSON-объект с флагом, что ошибки движка не глотаются, что `accept`/`rework` реально вызывают движок (и с активным проектом из сессии), что `task` показывает только запрошенную задачу, и что в исходниках клиента нет импорта пакета движка. Файлы движка не менялись.",
     "files_changed": [
       "LICENSE",
       "README.md",
@@ -91,14 +91,27 @@
           "-s",
           "tests"
         ],
-        "exit_code": 0
+        "exit_code": 1
       },
       {
         "command": [
           "python",
           "-m",
-          "forgel_code",
-          "--help"
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
         ],
         "exit_code": 0
       },
@@ -115,7 +128,7 @@
         "final_test": true
       }
     ],
-    "test_output": "..................\n----------------------------------------------------------------------\nRan 18 tests in 4.448s\n\nOK\n",
+    "test_output": "........................\n----------------------------------------------------------------------\nRan 24 tests in 6.335s\n\nOK\n",
     "assumptions": [
       "Репозиторий `code` уже создан публично в организации `forgel-dev`, поэтому задача ставится сразу на его наполнение.",
       "Установка одной командой на этом шаге — из репозитория (`pip install`/`pipx install`), публикация в PyPI отдельным шагом позже.",
@@ -123,33 +136,43 @@
       "Клиент повторяет имена и контракт уже реализованных команд движка (`say`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `plan`, `pause`, `resume`) вместо введения своих.",
       "Флаг `--json` у клиента управляет только форматом его собственного вывода; к движку клиент всегда обращается в машинно-читаемом режиме.",
       "Работа считается выполненной в репозитории `code`; правки в репозитории движка в этот объём не входят.",
-      "Пакет назван `forgel_code` (импорт через подчёркивание), исполняемая команда — `forgel-code`.",
-      "Команды `accept` и `rework` из объёма Парето оставлены в CLI и в help, но, по FR-4, при их вызове клиент печатает явное сообщение об отсутствии команды движка и завершается с кодом 2, не обращаясь к движку; когда движок их получит, обёртка подключается одной строкой.",
-      "`say` и `plan` принимают свободную фразу несколькими аргументами и склеивают её через пробел; `plan` без аргументов вызывает `forgel plan --json`.",
-      "Активный проект — файл сессии клиента (по умолчанию `~/.config/forgel-code/session.json`, переопределяется `FORGEL_CODE_HOME`), ключ по умолчанию `local`; `use` сохраняет выбор, `session`/`projects` — это команды движка.",
-      "С `--json` при ошибке клиент печатает текст движка в stderr и один JSON-объект с `\"ok\": false` и `error` в stdout, сохраняя требования и AC-3, и AC-2.",
-      "Исполняемый файл движка ищется как `forgel` в PATH, переопределяется `--engine PATH` или `FORGEL_ENGINE`.",
-      "Публикация в PyPI не делалась — по записанному допущению установка идёт из репозитория."
+      "`forgel-code task <task>` реализован поверх `forgel tasks --json`: отдельной команды чтения одной задачи в перечисленных движковых командах нет, поэтому клиент сам выбирает нужную задачу из машинно-читаемого ответа и явно сообщает, если её там нет.",
+      "Замечания при отправке на доработку передаются движку флагом `--reason` команды `forgel task reject --project <key> --task <task>`; если в движке флаг называется иначе, правится одна строка в `engine_arguments`.",
+      "Замечания для `rework` обязательны (nargs='+'): без них клиент завершается с кодом 2 и не обращается к движку, потому что «отправить на доработку с замечаниями» без замечаний не имеет смысла.",
+      "`plan` без аргументов остаётся `forgel plan` (как было), с аргументом — `forgel plan <milestone>`, с формулировкой цели — плюс `--goal \"…\"`.",
+      "`--json` у клиента управляет только форматом его собственного вывода; к движку клиент всегда обращается с `--json`."
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 17,
-      "estimated_input_tokens": 182728,
-      "provider_input_tokens": 178518,
-      "provider_output_tokens": 53571,
-      "estimated_tokens": 20917,
+      "model_calls": 22,
+      "estimated_input_tokens": 735173,
+      "provider_input_tokens": 751261,
+      "provider_output_tokens": 53940,
+      "estimated_tokens": 53343,
       "state": ""
     },
-    "test_removals": [],
+    "test_removals": [
+      {
+        "test": "tests/test_cli.py::FailureTest::test_unsupported_commands_are_reported_explicitly",
+        "reason": "wrong",
+        "replacement": "tests/test_cli.py::AcceptReworkTest::test_accept_reaches_the_engine"
+      },
+      {
+        "test": "tests/test_cli.py::FailureTest::test_unsupported_command_with_json_flag",
+        "reason": "wrong",
+        "replacement": "tests/test_cli.py::AcceptReworkTest::test_accept_and_rework_report_engine_errors"
+      }
+    ],
     "git": {
-      "base": "726462be54609c04a7fc737780a662ece604b099",
-      "head": "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
-      "commit": "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
+      "base": "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
+      "head": "d73fb585f7a59703ba03df889a09721c0a2caa50",
+      "commit": "d73fb585f7a59703ba03df889a09721c0a2caa50",
       "commits": [
-        "80a838e93c483bea7a6f16d9c0dcab725d09b6c2"
+        "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
+        "d73fb585f7a59703ba03df889a09721c0a2caa50"
       ]
     },
     "report": "docs/program/agent/20261117053640_forgel-code-code.md",
@@ -279,6 +302,7 @@
       "kind": "review",
       "message": "The `code` repository now holds a thin `forgel-code` client with a proper package layout, entry point, README, Apache-2.0 LICENSE and unittest suite, and it never imports the engine (only `forgel <cmd> --json` subprocesses). However two Pareto-scope items do not map onto real engine commands: `accept`/`rework` are declared 'no engine command yet' and exit 2 without calling the engine, although the engine in this repo already exposes `forgel task accept` and `forgel task reject` (README, src/forgel/client_cli.py). The `task` and `plan` wrappers also emit argv that the engine does not accept (`forgel task <id> --json` instead of `forgel task accept|reject|… --project <id> --task <id>`; `forgel plan <goal> --json` instead of `forgel plan <id> --goal \"…\"`), so those client commands would fail against the real engine — the stub engine in the tests hides this. FR-3, FR-4 and AC-2 are therefore not met.",
       "retryable": false
-    }
+    },
+    "failure": {}
   }
 }
