@@ -51,12 +51,12 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-17T05:36:40+00:00",
-  "started_at": "2026-11-17T05:58:47+00:00",
-  "finished_at": "2026-11-17T06:06:06+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Исправлены оба блокирующих замечания ревью в клиенте `forgel-code` (репозиторий `code`); остальная работа предыдущей попытки сохранена.\n\nЧто сделано:\n1. Восстановлен удалённый без обоснования тест `tests/test_cli.py::AcceptReworkTest::test_accept_uses_the_active_project` — он снова проверяет, что активный проект клиентской сессии (`forgel-code use acme`) действительно уходит в движок как `--project acme` при `accept`, плюс сохраняются позиции `--task t-1`. Регрессия закрыта.\n2. Возвращено требование FR-4 в продукт и в тесты: добавлена функция `missing_engine_command()` в `forgel_code/cli.py`. Если движок отвечает ошибкой «unknown command / unrecognized / invalid choice» на `forgel task accept|reject`, клиент явно сообщает «no engine command» с указанием `forgel task accept` / `forgel task reject` и текстом движка, завершается с ненулевым кодом и не изобретает поведение. Обычные ошибки движка по-прежнему проходят без изменений.\n3. Новый класс тестов `MissingEngineCommandTest` фиксирует это поведение для `accept`, `rework` и JSON-режима, плюс проверяет, что прочие ошибки движка не подменяются отчётом о недостающей команде. Подставной движок получил режим `FORGEL_STUB_MODE=no-task-action`, моделирующий движок без действия `task`.\n4. README дополнен абзацем про явный отчёт «no engine command» и тестом `PackagingTest::test_readme_documents_the_missing_engine_command_report`.\n5. Проверено, что аргументы, уходящие в движок, остаются в рамках реального контракта: `--notes` для замечаний, `--project` только после успешного `use`, ключ `local` в движок не отправляется (тесты `test_default_session_key_never_reaches_the_engine`, `test_selected_project_is_passed_to_the_engine`, `test_rejected_use_does_not_change_the_session`).\n\nПроверка: `python -m unittest discover -s tests` — 33 теста, OK. Файлы движка не менялись (правки только в репозитории `code`).",
+    "summary": "Исправлены оба блокирующих замечания ревью в клиенте `forgel-code` (репозиторий `code`); остальная работа предыдущей попытки сохранена.\n\nЧто сделано:\n1. Восстановлен удалённый без обоснования тест `tests/test_cli.py::AcceptReworkTest::test_accept_uses_the_active_project` — он снова проверяет, что активный проект клиентской сессии (`forgel-code use acme`) действительно уходит в движок как `--project acme` при `accept`, плюс сохраняются позиции `--task t-1`. Регрессия закрыта.\n2. Возвращено требование FR-4 в продукт и в тесты: добавлена функция `missing_engine_command()` в `forgel_code/cli.py`. Если движок отвечает ошибкой «unknown command / unrecognized / invalid choice» на `forgel task accept|reject`, клиент явно сообщает «no engine command» с указанием `forgel task accept` / `forgel task reject` и текстом движка, завершается с ненулевым кодом и не изобретает поведение. Обычные ошибки движка по-прежнему проходят без изменений.\n3. Новый класс тестов `MissingEngineCommandTest` фиксирует это поведение для `accept`, `rework` и JSON-режима, плюс проверяет, что прочие ошибки движка не подменяются отчётом о недостающей команде. Подставной движок получил режим `FORGEL_STUB_MODE=no-task-action`, моделирующий движок без действия `task`.\n4. README дополнен абзацем про явный отчёт «no engine command» и тестом `PackagingTest::test_readme_documents_the_missing_engine_command_report`.\n5. Проверено, что аргументы, уходящие в движок, остаются в рамках реального контракта: `--notes` для замечаний, `--project` только после успешного `use`, ключ `local` в движок не отправляется (тесты `test_default_session_key_never_reaches_the_engine`, `test_selected_project_is_passed_to_the_engine`, `test_rejected_use_does_not_change_the_session`).\n\nПроверка: `python -m unittest discover -s tests` — 33 теста, OK. Файлы движка не менялись (правки только в репозитории `code`).; task QA failed (exit 1)",
     "files_changed": [
       "LICENSE",
       "README.md",
@@ -178,13 +178,13 @@
     },
     "report": "docs/program/agent/20261117053640_forgel-code-code.md",
     "qa": {
-      "status": "pass",
+      "status": "fail",
       "runtime": "local + environment.yaml",
       "report": "docs/program/agent/20261117053640_forgel-code-code.qa.md",
       "commands": [
         {
           "command": "python -m unittest discover -s tests",
-          "exit_code": 0
+          "exit_code": 1
         },
         {
           "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
@@ -195,8 +195,8 @@
         {
           "criterion": "environment test",
           "command": "python -m unittest discover -s tests",
-          "exit_code": 0,
-          "verdict": "pass"
+          "exit_code": 1,
+          "verdict": "fail"
         },
         {
           "criterion": "environment e2e",
@@ -303,17 +303,17 @@
       ],
       "report": "docs/program/agent/20261117053640_forgel-code-code.review.md"
     },
-    "rework_count": 3,
+    "rework_count": 4,
     "feedback": [
       "review: tests/test_cli.py::test_accept_uses_the_active_project was removed with no justification and no named replacement, which the rules treat as a blocking defect (it also removed the regression coverage that the session's active project is forwarded to the engine).",
       "review: FR-4 regression: the explicit 'this point has no engine command' reporting for accept/rework was replaced by `forgel task accept` / `forgel task reject` invocations that are not part of the documented engine command set, and the test asserting the explicit report was deleted as 'wrong' rather than the unverified mapping being demonstrated.",
-      "review summary: The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented."
+      "review summary: The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented.",
+      "QA check failed: environment test (exit 1)"
     ],
     "last_failure": {
-      "kind": "review",
-      "message": "The client is a well-formed thin wrapper: it lives in its own repo, exposes `forgel-code` with all Pareto-scope commands, shells out to the engine instead of importing it, keeps a client-side session with the default `local` key, ships README/`LICENSE` (Apache-2.0)/own unittest suite, and propagates engine failures with a non-zero exit code and the engine's message. However, the attributed commits delete three tests, and only two carry an allowed justification; `tests/test_cli.py::test_accept_uses_the_active_project` is removed with no justification and no named replacement, which is a blocking defect under the review rules. The same series also drops the only test that asserted explicit \"no engine command\" reporting for `accept`/`rework` (justified as \"wrong\") and replaces it with invocations of `forgel task accept` / `forgel task reject` that are not among the engine commands enumerated in the task's assumptions, so FR-4's \"report explicitly rather than invent behaviour\" contract is now unverified and possibly invented.",
+      "kind": "qa",
+      "message": "task QA failed (exit 1)",
       "retryable": false
-    },
-    "failure": {}
+    }
   }
 }
