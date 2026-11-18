@@ -26,7 +26,7 @@ from .model import (
 from .program_manifest import entries as manifest_entries
 from .repo_tools import RESEARCH_ACTIONS, RepoActionError, execute_repo_action
 
-MAX_SPEC_STEPS = 8
+MAX_SPEC_STEPS = 50
 MAX_SPEC_CHARS = 12_000
 SPEC_DIR = "docs/program/specs"
 

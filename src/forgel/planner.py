@@ -51,7 +51,7 @@ from .repo_tools import (
 
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
-MAX_RESEARCH_STEPS = 16
+MAX_RESEARCH_STEPS = 50
 
 
 class PlanningError(RuntimeError):
