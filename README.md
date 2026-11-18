@@ -489,7 +489,7 @@ reviewer; only an errored review needs a human.
 
 Failures are handled by kind: infrastructure failures are retried
 (`FORGEL_TASK_RETRIES=5`, backoff 1/5/15/30/60 min), QA/review rejections go back for rework with the
-feedback (`FORGEL_TASK_REWORKS=5`), external causes stop and ask a human, and an
+feedback (`FORGEL_TASK_REWORKS=8`), external causes stop and ask a human, and an
 exhausted budget quarantines the task and blocks its dependents. When a review
 rejection repeats, an external arbiter decides whether the change or the
 acceptance criteria are wrong; `criteria` fails the task with a proposed

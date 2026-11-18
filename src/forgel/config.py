@@ -189,7 +189,7 @@ class Settings:
                 "FORGEL_TASK_RETRIES must be an integer from 0 to 10"
             )
         reworks_raw = (
-            os.environ.get("FORGEL_TASK_REWORKS", "5").strip() or "5"
+            os.environ.get("FORGEL_TASK_REWORKS", "8").strip() or "8"
         )
         if not reworks_raw.isdigit() or int(reworks_raw) > 10:
             raise ValueError(

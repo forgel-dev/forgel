@@ -258,7 +258,7 @@ and point the project at them, or wait for a dedicated services sandbox.
   task in `review` until `/task accept <id>`. Review-only criteria are part of
   the reviewer's verdict; only an errored review needs a human.
 - Infrastructure failures are retried with backoff (`FORGEL_TASK_RETRIES=5`, 1/5/15/30/60 min); QA and review
-  rejections go back for rework with the feedback (`FORGEL_TASK_REWORKS=5`) and
+  rejections go back for rework with the feedback (`FORGEL_TASK_REWORKS=8`) and
   an external arbiter (`FORGEL_TASK_ARBITER`) resolves a repeated conflict.
   An exhausted budget quarantines the task and blocks its dependents;
   `FORGEL_PLAN_ON_FAILURE=stop` stops the milestone instead. `/task retry`

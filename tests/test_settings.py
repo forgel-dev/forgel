@@ -126,7 +126,7 @@ class SettingsTest(unittest.TestCase):
             ):
                 settings = Settings.from_env(tmp)
         self.assertEqual(settings.task_retries, 5)
-        self.assertEqual(settings.task_reworks, 5)
+        self.assertEqual(settings.task_reworks, 8)
         self.assertEqual(settings.plan_on_failure, "quarantine")
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
@@ -149,7 +149,7 @@ class SettingsTest(unittest.TestCase):
                 clear=False,
             ):
                 settings = Settings.from_env(tmp)
-        self.assertEqual(settings.task_reworks, 5)
+        self.assertEqual(settings.task_reworks, 8)
         self.assertTrue(settings.task_arbiter)
         direct = Settings(
             home=Path(tmp),
