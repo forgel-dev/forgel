@@ -177,6 +177,69 @@ class AgentTest(unittest.TestCase):
         self.assertIn("GitHub", text)
         self.assertIn("VPN", text)
 
+    def test_structured_reply_aliases_are_read(self) -> None:
+        for key in ("message", "text", "content", "explanation", "answer"):
+            answer = parse_answer(json.dumps({key: "A visible answer."}))
+            self.assertEqual(answer["reply"], "A visible answer.", key)
+
+    def test_explain_uses_a_structured_explanation(self) -> None:
+        project = self._project("Explain", "An explain brief.")
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(
+                [json.dumps({"explanation": "The test command failed."})]
+            ),
+        )
+        text = agent.explain(
+            project, "what happened?", "observation", fallback="FALLBACK"
+        )
+        self.assertEqual(text, "The test command failed.")
+
+    def test_explain_never_returns_the_unformatted_fallback(self) -> None:
+        project = self._project("Explain2", "An explain brief.")
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(['{"kind": "answer"}']),
+        )
+        text = agent.explain(
+            project, "what happened?", "observation", fallback="FALLBACK"
+        )
+        self.assertEqual(text, "FALLBACK")
+        self.assertNotEqual(text, UNFORMATTED_REPLY)
+
+    def test_narrate_never_returns_the_unformatted_fallback(self) -> None:
+        project = self._project("Narrate", "A narrate brief.")
+        agent = ProjectAgent(
+            self.settings,
+            self.ledger,
+            ScriptedModelClient(['{"kind": "answer"}']),
+        )
+        text = agent.narrate(project, "what happened?", "observation")
+        self.assertNotIn(UNFORMATTED_REPLY, text)
+        self.assertTrue(text.strip())
+
+    def test_persistent_change_request_without_reply_is_not_an_error(self) -> None:
+        project = self._project("Gamma", "A gamma brief.")
+        response = json.dumps(
+            {
+                "kind": "change_request",
+                "title": "Add a health check",
+                "summary": "Expose a health endpoint.",
+                "requirements": ["Expose /health"],
+                "acceptance": ["GET /health returns 200"],
+            }
+        )
+        client = ScriptedModelClient([response] * 4)
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        result = agent.handle(project, "Add a health check", "@tester")
+
+        self.assertEqual(result.kind, "change_request")
+        self.assertNotIn(UNFORMATTED_REPLY, result.text)
+        self.assertIsNotNone(result.request)
+
     def test_change_request_is_recorded_as_an_artifact(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         response = {

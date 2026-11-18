@@ -697,6 +697,13 @@ def parse_answer(raw: str) -> dict[str, Any]:
         kind = "answer"
     reply = data.get("reply")
     if not isinstance(reply, str) or not reply.strip():
+        reply = ""
+        for key in ("message", "text", "content", "explanation", "answer"):
+            value = data.get(key)
+            if isinstance(value, str) and value.strip():
+                reply = value
+                break
+    if not isinstance(reply, str) or not reply.strip():
         if kind in {"action", "actions"}:
             reply = ""
         else:
@@ -817,7 +824,11 @@ class ProjectAgent:
             )
         answer = parse_answer(raw)
         reply = str(answer.get("reply", "")).strip()
-        if not reply or _looks_structured(reply):
+        if (
+            not reply
+            or reply == UNFORMATTED_REPLY
+            or _looks_structured(reply)
+        ):
             return (
                 "I couldn't summarize the project state just now. "
                 "Please retry."
@@ -859,7 +870,11 @@ class ProjectAgent:
             )
         answer = parse_answer(raw)
         reply = str(answer.get("reply", "")).strip()
-        if not reply or _looks_structured(reply):
+        if (
+            not reply
+            or reply == UNFORMATTED_REPLY
+            or _looks_structured(reply)
+        ):
             return fallback or (
                 "I couldn't explain the result just now. Please retry."
             )
@@ -1145,6 +1160,11 @@ class ProjectAgent:
         if answer is None:
             answer = parse_answer(raw)
         result_text = answer["reply"]
+        if (
+            answer["kind"] == "change_request"
+            and result_text == UNFORMATTED_REPLY
+        ):
+            result_text = ""
         request = None
         task_id = None
         if answer["kind"] == "change_request":
