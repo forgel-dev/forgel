@@ -72,6 +72,18 @@ def is_https(url: str) -> bool:
     return url.startswith(("https://", "http://"))
 
 
+def ssh_url(url: str) -> str:
+    """The SSH form of an HTTPS remote, when the host supports it."""
+
+    if not is_https(url):
+        return ""
+    rest = url.split("://", 1)[1]
+    host, _, path = rest.partition("/")
+    if not host or not path:
+        return ""
+    return f"git@{host}:{path}"
+
+
 def current_branch(repo: Path) -> str:
     result = _ok(repo, "rev-parse", "--abbrev-ref", "HEAD")
     branch = result.stdout.strip()
@@ -158,7 +170,8 @@ def ensure_remote(repo: Path, url: str) -> None:
 
 
 def fetch(repo: Path, token: str | None = None) -> None:
-    if token and is_https(origin_url(repo)):
+    origin = origin_url(repo)
+    if token and is_https(origin):
         result = _run(
             repo, "fetch", "--prune", "origin", env=auth_env(token)
         )
@@ -169,8 +182,15 @@ def fetch(repo: Path, token: str | None = None) -> None:
         result = _run(repo, "fetch", "--prune", "origin")
         if result.returncode == 0:
             return
-        detail = (result.stderr or result.stdout).strip()
-        raise GitOperationError(f"git fetch failed: {detail}")
+    elif is_https(origin):
+        result = _run(repo, "fetch", "--prune", "origin")
+        if result.returncode == 0:
+            return
+    alternate = ssh_url(origin)
+    if alternate:
+        result = _run(repo, "fetch", "--prune", alternate)
+        if result.returncode == 0:
+            return
     _ok(repo, "fetch", "--prune", "origin")
 
 
@@ -318,23 +338,30 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> str:
 
 
 def push(repo: Path, branch: str, token: str | None = None) -> None:
-    if token and is_https(origin_url(repo)):
-        result = _run(
-            repo,
-            "push",
-            "--set-upstream",
-            "origin",
-            branch,
-            env=auth_env(token),
-        )
-        if result.returncode == 0:
-            return
-        # Fall back to the host's own HTTPS session or SSH key.
+    origin = origin_url(repo)
+    if is_https(origin):
+        if token:
+            result = _run(
+                repo,
+                "push",
+                "--set-upstream",
+                "origin",
+                branch,
+                env=auth_env(token),
+            )
+            if result.returncode == 0:
+                return
+        # Fall back to the host's own HTTPS session, then to SSH.
         result = _run(
             repo, "push", "--set-upstream", "origin", branch
         )
         if result.returncode == 0:
             return
+        alternate = ssh_url(origin)
+        if alternate:
+            result = _run(repo, "push", alternate, branch)
+            if result.returncode == 0:
+                return
         detail = (result.stderr or result.stdout).strip()
         raise GitOperationError(
             f"push failed (no force-push is attempted): {detail}"

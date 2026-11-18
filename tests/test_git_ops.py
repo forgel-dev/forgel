@@ -144,6 +144,44 @@ class GitOpsTest(unittest.TestCase):
         self.assertIsNotNone(calls[0])
         self.assertIsNone(calls[1])
 
+    def test_a_failed_https_push_falls_back_to_ssh(self) -> None:
+        _run(
+            self.repo,
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/o/r.git",
+        )
+        calls: list[tuple[str, ...]] = []
+
+        def fake(repo, *args, env=None, timeout=180.0):
+            if tuple(args[:2]) == ("remote", "get-url"):
+                return subprocess.CompletedProcess(
+                    ["git", *args],
+                    0,
+                    "https://github.com/o/r.git\n",
+                    "",
+                )
+            calls.append(tuple(args))
+            code = 0 if args and str(args[1]).startswith("git@") else 1
+            return subprocess.CompletedProcess(
+                ["git", *args], code, "", "denied" if code else ""
+            )
+
+        with patch("forgel.git_ops._run", side_effect=fake):
+            git_ops.push(self.repo, "main")
+        self.assertTrue(
+            any(
+                args[1] == "git@github.com:o/r.git"
+                for args in calls
+                if len(args) > 1
+            )
+        )
+        self.assertEqual(
+            git_ops.ssh_url("https://github.com/o/r.git"),
+            "git@github.com:o/r.git",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
