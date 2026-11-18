@@ -749,6 +749,7 @@ def run_task_review(
     raw = ""
     parsed: dict[str, Any] | None = None
     answer_retries = 0
+    coverage_retries = 0
     model = project_model_name(layout.control)
     budget = budget_for(_review_window(settings, layout))
     while True:
@@ -822,7 +823,6 @@ def run_task_review(
         if finals:
             try:
                 parsed = _parse_review(json.dumps(finals[-1]))
-                break
             except (ValueError, json.JSONDecodeError) as exc:
                 if answer_retries < 2:
                     if not observations:
@@ -855,6 +855,26 @@ def run_task_review(
                     ),
                     log,
                 )
+            expected = _expected_acceptance(layout, task)
+            if (
+                expected
+                and len(parsed["requirements"]) < expected
+                and coverage_retries < 2
+            ):
+                coverage_retries += 1
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "The verdict must cover every acceptance criterion: "
+                        f"{expected} criteria, "
+                        f"{len(parsed['requirements'])} covered. Return one "
+                        "requirement entry per criterion, using the criterion "
+                        "text as the requirement, and keep the verdict.",
+                    )
+                )
+                continue
+            break
         if not actions:
             if answer_retries < 2:
                 messages.append(ModelMessage("assistant", raw.strip()))
@@ -903,8 +923,10 @@ def run_task_review(
                 status="error",
                 summary=(
                     "the review did not cover every acceptance "
-                    f"criterion ({len(parsed['requirements'])}/{expected})"
+                    f"criterion ({len(parsed['requirements'])}/{expected}); "
+                    f"reviewer verdict: {parsed['verdict']}"
                 ),
+                output=_cap(raw, MAX_QA_CHARS),
             ),
             log,
         )

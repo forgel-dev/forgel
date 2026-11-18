@@ -49,6 +49,14 @@ FAIL = json.dumps(
         "blocking": ["The change does nothing"],
     }
 )
+PASS_PARTIAL = json.dumps(
+    {
+        "verdict": "pass",
+        "summary": "Looks fine.",
+        "requirements": [],
+        "blocking": [],
+    }
+)
 
 
 class TaskReviewTest(unittest.TestCase):
@@ -422,6 +430,24 @@ class TaskReviewTest(unittest.TestCase):
             for event in events
         ]
         self.assertEqual(reworks, [0, 1])
+
+    def test_a_verdict_must_cover_every_criterion(self) -> None:
+        task = self._task()
+        client = ScriptedModelClient([PASS_PARTIAL, PASS])
+        result = run_task_review(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "pass", result.summary)
+        self.assertEqual(len(client.requests), 2)
+        self.assertIn(
+            "cover every acceptance criterion",
+            client.requests[1][-1].content,
+        )
 
     def test_unusable_review_is_an_error_not_a_pass(self) -> None:
         task = self._task()
@@ -808,14 +834,9 @@ class TaskReviewTest(unittest.TestCase):
             task,
             ScriptedModelClient(
                 [
-                    json.dumps(
-                        {
-                            "verdict": "pass",
-                            "summary": "ok",
-                            "requirements": [],
-                            "blocking": [],
-                        }
-                    )
+                    PASS_PARTIAL,
+                    PASS_PARTIAL,
+                    PASS_PARTIAL,
                 ]
             ),
             log=lambda _m: None,
