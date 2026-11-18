@@ -230,12 +230,12 @@
     }
   ],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-18T20:34:05+00:00",
-  "started_at": "2026-11-18T21:29:17+00:00",
-  "finished_at": "2026-11-18T21:58:42+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Оба падавших QA-проверки были вызваны нестабильностью самих тестов при параллельном/повторном прогоне, а не дефектами клиента. Исправлены только тестовые файлы.\n\n`tests/test_cli.py`:\n- Поддельный движок теперь запускается через launcher `#!/bin/sh` + `exec <python> <script> \"$@\"` (пути экранируются `shlex.quote`), сам текст стаба сохраняется в отдельный `forgel_stub.py`. Раньше `#!<sys.executable>` в одной строке ломался, если путь к интерпретатору содержит пробелы или не-ASCII символы, и проверка проброса проекта падала целиком.\n- Набор `COMMAND_CASES` не менялся: тест `ProjectPropagationTest` по-прежнему проверяет, что после `use acme` каждый из status, tasks, task, say, plan, resume, pause, history, projects, session (и accept/rework) получает `--project acme`, а без `use` — ни одного `--project`/`local`.\n\n`tests/test_packaging.py`:\n- `version_output()` больше не запускает `python -m forgel_code --version` в подпроцессе: он вызывает `main([\"--version\"])` в текущем интерпретаторе и с очищенным окружением (`_clean_env`). Версия берётся из единственного источника `forgel_code/__init__.py:__version__`, а равенство с метаданными сборки проверяется напрямую.\n- Добавлен `test_sdist_and_wheel_contents`, который одной проверкой покрывает критерий приёмки AC-8: sdist `forgel_code-<version>.tar.gz` с `forgel_code-<version>/PKG-INFO` и wheel, содержащий подпакет (`forgel_code/extra/mod.py`), данные пакета (`forgel_code/data.txt`, `forgel_code/extra/schema.json`).\n- Существующие проверки `test_sdist_is_pep625_shaped` и `test_wheel_carries_subpackages_and_package_data` сохранены; сборка выполняется в копии checkout во временном каталоге, поэтому повторные и параллельные прогоны не мешают друг другу.\n\nПроверка:\n- `python -m unittest discover -s tests` — 81 тест, OK.\n- `python -m unittest tests.test_cli` — 67 тестов, OK; `python -m unittest tests.test_packaging` — 13 тестов, OK.\n- Отдельно прогнаны 4 целевых теста из двух упавших QA-проверок — OK.\n- `python -m forgel_code --version` печатает `forgel-code 0.1.0`.\n- `python -m pip wheel . --no-deps --no-build-isolation` успешно собирает `forgel_code-0.1.0-py3-none-any.whl` встроенным backend'ом.\n- Дополнительно проверялась устойчивость: прогоны с пустым окружением, без `PATH`, с `-W error`, с `TMPDIR` и путём копии репозитория, содержащими пробелы и кириллицу, — все зелёные.\n\nПродуктовый код (`forgel_code/*`, `_build_backend.py`, `pyproject.toml`, `README.md`) в этом проходе не менялся: все требования FR-1…FR-15 уже были реализованы и покрыты тестами.",
+    "summary": "Оба падавших QA-проверки были вызваны нестабильностью самих тестов при параллельном/повторном прогоне, а не дефектами клиента. Исправлены только тестовые файлы.\n\n`tests/test_cli.py`:\n- Поддельный движок теперь запускается через launcher `#!/bin/sh` + `exec <python> <script> \"$@\"` (пути экранируются `shlex.quote`), сам текст стаба сохраняется в отдельный `forgel_stub.py`. Раньше `#!<sys.executable>` в одной строке ломался, если путь к интерпретатору содержит пробелы или не-ASCII символы, и проверка проброса проекта падала целиком.\n- Набор `COMMAND_CASES` не менялся: тест `ProjectPropagationTest` по-прежнему проверяет, что после `use acme` каждый из status, tasks, task, say, plan, resume, pause, history, projects, session (и accept/rework) получает `--project acme`, а без `use` — ни одного `--project`/`local`.\n\n`tests/test_packaging.py`:\n- `version_output()` больше не запускает `python -m forgel_code --version` в подпроцессе: он вызывает `main([\"--version\"])` в текущем интерпретаторе и с очищенным окружением (`_clean_env`). Версия берётся из единственного источника `forgel_code/__init__.py:__version__`, а равенство с метаданными сборки проверяется напрямую.\n- Добавлен `test_sdist_and_wheel_contents`, который одной проверкой покрывает критерий приёмки AC-8: sdist `forgel_code-<version>.tar.gz` с `forgel_code-<version>/PKG-INFO` и wheel, содержащий подпакет (`forgel_code/extra/mod.py`), данные пакета (`forgel_code/data.txt`, `forgel_code/extra/schema.json`).\n- Существующие проверки `test_sdist_is_pep625_shaped` и `test_wheel_carries_subpackages_and_package_data` сохранены; сборка выполняется в копии checkout во временном каталоге, поэтому повторные и параллельные прогоны не мешают друг другу.\n\nПроверка:\n- `python -m unittest discover -s tests` — 81 тест, OK.\n- `python -m unittest tests.test_cli` — 67 тестов, OK; `python -m unittest tests.test_packaging` — 13 тестов, OK.\n- Отдельно прогнаны 4 целевых теста из двух упавших QA-проверок — OK.\n- `python -m forgel_code --version` печатает `forgel-code 0.1.0`.\n- `python -m pip wheel . --no-deps --no-build-isolation` успешно собирает `forgel_code-0.1.0-py3-none-any.whl` встроенным backend'ом.\n- Дополнительно проверялась устойчивость: прогоны с пустым окружением, без `PATH`, с `-W error`, с `TMPDIR` и путём копии репозитория, содержащими пробелы и кириллицу, — все зелёные.\n\nПродуктовый код (`forgel_code/*`, `_build_backend.py`, `pyproject.toml`, `README.md`) в этом проходе не менялся: все требования FR-1…FR-15 уже были реализованы и покрыты тестами.; task QA failed (exit 1)",
     "files_changed": [
       "README.md",
       "_build_backend.py",
@@ -552,12 +552,11 @@
       ],
       "review_required": true
     },
-    "rework_count": 2,
+    "rework_count": 3,
     "feedback": [
       "QA check failed: A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`. (exit 1)",
       "QA check failed: Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both. (exit 1)"
-    ],
-    "failure": {}
+    ]
   },
   "request": "docs/program/requests/20261118203405113659_forgel-code.md"
 }
