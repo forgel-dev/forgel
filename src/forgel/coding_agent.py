@@ -145,7 +145,7 @@ JSON actions below.
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
-{"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}]}
+{"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}], "spec_issues": [{"requirement": "the requirement or contract point", "problem": "why it cannot be implemented as written", "proposal": "what the specification should say instead"}]}
 {"action": "fail", "reason": "why the task cannot be completed"}
 
 Context:
@@ -184,6 +184,12 @@ Rules:
 - No external APIs, no network calls, no deployment changes, no Telegram.
 - Write tests for the requirements and run them. Call done only after the
   tests pass and the requirements are implemented.
+- The accepted specification is the contract. Follow it. A deviation is an
+  exception, not a normal choice: report it in done.spec_issues only for a
+  concrete, verifiable defect that makes a requirement impossible,
+  contradictory, unsafe or unsound — never for a preference, a simpler path
+  or a style choice. The specification was written and independently
+  reviewed; assume it is valid by default.
 - Treat every external interface the task depends on — a tool, a service, a
   file format, a protocol — as a contract with an authoritative source.
   Derive the contract from that source before using it; never invent fields,
@@ -441,6 +447,7 @@ class CodingAgent:
                 context_stats,
                 failure_kind,
                 test_removals,
+                spec_issues,
             ) = self._converse(
                 layout,
                 repo,
@@ -481,7 +488,7 @@ class CodingAgent:
                 status = "failed"
                 failure_kind = "infrastructure"
                 summary += f"; commit failed: {exc}"
-        if status == "done" and not changed:
+        if status == "done" and not changed and not spec_issues:
             attempt = tasks.attempt_number(task)
             if attempt > 0:
                 status = "failed"
@@ -550,6 +557,7 @@ class CodingAgent:
                 "assumptions": assumptions,
                 "context": context_stats,
                 "test_removals": list(merged_removals.values()),
+                "spec_issues": spec_issues,
                 "git": {
                     "base": base_sha,
                     "head": git_ops.head_sha(repo),
@@ -716,6 +724,7 @@ class CodingAgent:
             if str(item).strip()
         ]
         test_removals: list[dict[str, str]] = []
+        spec_issues: list[dict[str, str]] = []
         status = "failed"
         summary = "agent did not finish within the session limit"
         failure_kind = "agent"
@@ -892,6 +901,25 @@ class CodingAgent:
                                         "replacement": replacement,
                                     }
                                 )
+                        for item in action.get("spec_issues", []):
+                            if not isinstance(item, dict):
+                                continue
+                            problem = str(
+                                item.get("problem", "")
+                            ).strip()
+                            if not problem:
+                                continue
+                            spec_issues.append(
+                                {
+                                    "requirement": str(
+                                        item.get("requirement", "")
+                                    ).strip(),
+                                    "problem": problem,
+                                    "proposal": str(
+                                        item.get("proposal", "")
+                                    ).strip(),
+                                }
+                            )
                         terminal = True
                         break
                     if kind == "fail":
@@ -1025,6 +1053,7 @@ class CodingAgent:
             context_stats,
             failure_kind,
             test_removals,
+            spec_issues,
         )
 
     # ------------------------------------------------------------- setup

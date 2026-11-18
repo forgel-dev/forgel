@@ -897,6 +897,24 @@ class TaskReviewTest(unittest.TestCase):
             FAIL,
             json.dumps(
                 {
+                    "decisions": [
+                        {
+                            "index": 0,
+                            "valid": True,
+                            "scope": "code",
+                            "reason": "the change does nothing",
+                        },
+                        {
+                            "index": 1,
+                            "valid": True,
+                            "scope": "code",
+                            "reason": "the requirement is missing",
+                        },
+                    ]
+                }
+            ),
+            json.dumps(
+                {
                     "action": "write_file",
                     "path": "note.md",
                     "content": "# Note\n\nFixed.\n",

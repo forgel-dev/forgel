@@ -138,6 +138,196 @@ def _feedback_from(data: dict[str, Any]) -> list[str]:
     return feedback
 
 
+def _review_findings(data: dict[str, Any]) -> list[str]:
+    """The review's concrete findings, without the prose summary."""
+
+    review = data.get("review") if isinstance(data.get("review"), dict) else {}
+    findings: list[str] = []
+    for item in review.get("blocking") or []:
+        text = str(item).strip()
+        if text:
+            findings.append(text)
+    for item in review.get("requirements") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("verdict") or "") in {"pass", ""}:
+            continue
+        requirement = str(item.get("requirement") or "").strip()
+        note = str(item.get("note") or "").strip()
+        if requirement:
+            findings.append(
+                f"{requirement}: {note}" if note else requirement
+            )
+    seen: set[str] = set()
+    unique: list[str] = []
+    for finding in findings:
+        if finding not in seen:
+            seen.add(finding)
+            unique.append(finding)
+    return unique
+
+
+def _handle_spec_issues(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task: dict[str, Any],
+    issues: list[dict[str, Any]],
+    client: ModelClient,
+    log: Callable[[str], None],
+) -> None:
+    """Route a coder's specification deviation through the planner gate."""
+
+    from . import protocol
+
+    task_id = str(task["id"])
+    try:
+        decisions = protocol.assess_spec_issues(
+            ledger, project, layout, task, issues, client, log
+        )
+    except Exception as exc:  # noqa: BLE001 - the gate must not crash the daemon
+        data = dict(task.get("result") or {})
+        data["failure"] = _failure(
+            "infrastructure",
+            f"the planner could not assess the specification issue: {exc}",
+        )
+        tasks.update_task(
+            layout,
+            task_id,
+            status="failed",
+            finished_at=_now(),
+            result=data,
+        )
+        log(
+            f"[planner] {project['id']}: task {task_id}: "
+            f"specification gate failed: {exc}"
+        )
+        return
+    accepted = [item for item in decisions if item.rewrite]
+    rejected = [item for item in decisions if not item.rewrite]
+    reasons = "; ".join(item.reason for item in rejected)
+    if accepted:
+        issue_text = "\n".join(
+            f"- {issues[item.index].get('problem') or 'specification issue'}: "
+            f"{item.reason}"
+            + (
+                f" (proposal: {issues[item.index].get('proposal')})"
+                if issues[item.index].get("proposal")
+                else ""
+            )
+            for item in accepted
+        )
+        try:
+            protocol.rewrite_task_spec(
+                settings,
+                ledger,
+                project,
+                layout,
+                task,
+                client,
+                issue_text,
+                log,
+            )
+        except Exception as exc:  # noqa: BLE001
+            data = dict(task.get("result") or {})
+            data["failure"] = _failure(
+                "infrastructure",
+                "the planner accepted a specification issue but the "
+                f"rewrite failed: {exc}",
+            )
+            tasks.update_task(
+                layout,
+                task_id,
+                status="failed",
+                finished_at=_now(),
+                result=data,
+            )
+            log(
+                f"[planner] {project['id']}: task {task_id}: "
+                f"specification rewrite failed: {exc}"
+            )
+            return
+        message = (
+            "the planner accepted the specification issue and rewrote the "
+            "specification; implement the new version"
+        )
+        if reasons:
+            message += f". Rejected deviations: {reasons}"
+    else:
+        message = (
+            "the planner rejected the deviation; follow the accepted "
+            "specification"
+            + (f": {reasons}" if reasons else "")
+        )
+    data = dict(task.get("result") or {})
+    data["failure"] = _failure("spec", message, retryable=False)
+    data["spec_feedback"] = [message]
+    data.pop("spec_issues", None)
+    tasks.update_task(
+        layout,
+        task_id,
+        status="failed",
+        finished_at=_now(),
+        result=data,
+    )
+    log(f"[planner] {project['id']}: task {task_id}: {message}")
+
+
+def _dismiss_review(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task_id: str,
+    data: dict[str, Any],
+    log: Callable[[str], None],
+) -> None:
+    """The planner rejected every finding; the review counts as passed."""
+
+    from .task_review import accept_task, await_acceptance
+
+    data["review_filter"]["dismissed"] = True
+    task = tasks.update_task(layout, task_id, result=data)
+    attempt = tasks.attempt_number(task)
+    ledger.append_event(
+        str(project["id"]),
+        "review_dismissed",
+        status="completed",
+        idempotency_key=(
+            f"{project['id']}:review_dismissed:{task_id}:r{attempt}"
+        ),
+        artifact_refs=[],
+        payload={
+            "dismissed": [
+                item["finding"]
+                for item in data["review_filter"]["decisions"]
+                if not item["valid"]
+            ]
+        },
+        generation=ledger.current_generation(str(project["id"])),
+    )
+    if settings.task_accept == "auto":
+        accept_task(
+            settings,
+            ledger,
+            project,
+            task,
+            actor="planner",
+            notes="the planner rejected every review finding",
+        )
+    else:
+        await_acceptance(
+            layout,
+            task,
+            "the planner rejected every review finding; acceptance required",
+        )
+    log(
+        f"[planner] {project['id']}: task {task_id}: "
+        "all review findings rejected; the review passes"
+    )
+
+
 def _quarantine(
     settings: Settings,
     ledger: Ledger,
@@ -225,11 +415,95 @@ def handle_failure(
             f"in {delay}m (at {retry_at})"
         )
         return
-    if kind in {"qa", "review"}:
+    filtered_feedback: list[str] | None = None
+    if kind == "review" and client is not None:
+        findings = _review_findings(data)
+        if findings:
+            from . import protocol
+
+            try:
+                decisions = protocol.filter_review_findings(
+                    ledger, project, layout, task, findings, client, log
+                )
+            except Exception as exc:  # noqa: BLE001
+                log(
+                    f"[planner] {project['id']}: task {task_id}: "
+                    f"review filter failed: {exc}"
+                )
+                decisions = None
+            if decisions is not None:
+                valid = [item for item in decisions if item.valid]
+                data["review_filter"] = {
+                    "decisions": [
+                        {
+                            "finding": item.finding,
+                            "valid": item.valid,
+                            "scope": item.scope,
+                            "reason": item.reason,
+                        }
+                        for item in decisions
+                    ],
+                }
+                if not valid:
+                    _dismiss_review(
+                        settings,
+                        ledger,
+                        project,
+                        layout,
+                        task_id,
+                        data,
+                        log,
+                    )
+                    return
+                spec_findings = [
+                    item for item in valid if item.scope == "spec"
+                ]
+                if spec_findings:
+                    issue = "\n".join(
+                        f"- {item.finding}: {item.reason}"
+                        for item in spec_findings
+                    )
+                    try:
+                        protocol.rewrite_task_spec(
+                            settings,
+                            ledger,
+                            project,
+                            layout,
+                            tasks.get_task(layout, task_id) or task,
+                            client,
+                            issue,
+                            log,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log(
+                            f"[planner] {project['id']}: task {task_id}: "
+                            f"specification rewrite failed: {exc}"
+                        )
+                        data.pop("review_filter", None)
+                    else:
+                        filtered_feedback = [
+                            f"{item.finding} — {item.reason}"
+                            for item in valid
+                        ] + [
+                            "The planner rewrote the specification; "
+                            "implement the new version."
+                        ]
+                if filtered_feedback is None:
+                    filtered_feedback = [
+                        f"{item.finding} — {item.reason}"
+                        for item in valid
+                    ]
+    if kind in {"qa", "review", "spec"}:
         reworks = int(data.get("rework_count", 0))
         if reworks < settings.task_reworks:
             data["rework_count"] = reworks + 1
-            data["feedback"] = _feedback_from(data)
+            if kind == "spec":
+                data["feedback"] = list(
+                    data.get("spec_feedback") or []
+                ) or _feedback_from(data)
+                data.pop("spec_feedback", None)
+            else:
+                data["feedback"] = filtered_feedback or _feedback_from(data)
             data["last_failure"] = failure
             data.pop("failure", None)
             tasks.update_task(
@@ -368,8 +642,32 @@ def _run_task(
         result = CodingAgent(settings, ledger, model).run(
             project, task, log
         )
-        if result.status == "done" and (
-            settings.task_qa or settings.task_review
+        spec_blocked = False
+        if result.status == "done":
+            stored = tasks.get_task(layout, task_id) or task
+            issues = [
+                item
+                for item in (
+                    (stored.get("result") or {}).get("spec_issues") or []
+                )
+                if isinstance(item, dict)
+            ]
+            if issues:
+                spec_blocked = True
+                _handle_spec_issues(
+                    settings,
+                    ledger,
+                    project,
+                    layout,
+                    stored,
+                    issues,
+                    model,
+                    log,
+                )
+        if (
+            result.status == "done"
+            and not spec_blocked
+            and (settings.task_qa or settings.task_review)
         ):
             # The agent's own "done" is not the final state: QA and review
             # still have to run. Keep the task running so an interrupted

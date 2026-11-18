@@ -190,6 +190,7 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 | **D-091** | The product answers in the language of the user's request, and a finished task is explained by the model from the full evidence — what actually broke and why — not by a fixed status template | The owner needs the cause and the next decision, not an internal state dump; a template cannot account for the specific failure and breaks the language rule | The console and chat detect the script of the last user message (English/Russian fixed strings); the planner stores the request language on each task and the coding agent writes its summary in it; the outcome explainer receives requirements, acceptance checks, agent actions, command exits, QA report, review defects, plan state and recent conversation, and must name the concrete cause or say which evidence is missing |
 | **D-092** | The planner decomposes the goal into task intents; a separate requirements writer turns each intent into a formal specification under `docs/program/specs/`, and a plan review judges the whole plan against the original problem before anything is queued | Decomposition and specification need independent authorship; terse task fields are not a requirements document, and the planner cannot validate its own wording. The plan review must judge the result, not formal consistency | The planner returns title, summary, repository and dependencies; the requirements writer returns problem, outcome, scope, non-goals, requirements, acceptance, checks, constraints, assumptions and risks; the spec is committed and linked from the task record; an insufficient plan review is not queued, with one revision cycle; the coding agent, QA and the independent reviewer work from the spec |
 | **D-093** | Coder, QA and reviewer have fixed, non-overlapping zones of responsibility: the specification fixes the implementation contract; QA runs deterministic checks, including contract checks; the reviewer judges the attributed diff for requirement compliance and code quality (logic, architecture, security, test integrity), and follows the fixed process instead of defining it | When the reviewer re-litigates an external interface the specification already fixed, two clean-context roles can contradict each other and the loop never converges; implementation choices must be settled by the specification and executable checks, not by a reviewer's model of that interface. The diff itself is the reviewer's proper subject | The coder derives an external interface's contract from its authoritative source and adds a contract test; the spec writer records the contract and a command check; QA runs the checks; the reviewer does not choose or re-interpret external interfaces or libraries, does not add product requirements, does not define stages, gates, rework policy or acceptance rules, and does not report pure stylistic preferences; it reports unmet requirements, unrequested features, logical and architectural defects, security issues and unjustified test deletions |
+| **D-094** | The planner is the single acceptance gate for specifications and the filter for every coder deviation and reviewer finding. An accepted specification is binding; a deviation or finding is allowed only with a concrete justification, and the planner decides whether the specification is rewritten or the request is rejected. Rejected findings never reach the coder; when no valid finding remains, the review counts as passed. Deviation and rewrite are exceptions: the specification is valid by default because it was written and independently reviewed | Two clean-context agents can otherwise negotiate the contract forever, and a reviewer can smuggle new requirements into the coder's feedback; one gate with a recorded decision keeps the contract and the process fixed. Routine deviation would make the specification pointless | `protocol.py` records `review_filter`, `review_dismissed`, `spec_issue` and `spec_rewrite`; the planner decides valid/invalid and code/spec scope for each finding; valid code findings rework the coder, spec findings rewrite the specification first; an all-invalid review is accepted (auto, or human when the policy requires it); a coder `done` carries `spec_issues` and is gated before QA and review; a rewrite needs a concrete defect, not a preference; no agent chooses the stages |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -1140,6 +1141,22 @@ check with its own model of the interface, and does not define the process:
 the stages, gates, rework policy and acceptance rules are fixed by the
 runtime. A contract mismatch is a specification or check failure, not a
 reviewer opinion.
+
+**Planner gates (D-094).** The planner is the only role that accepts a
+specification. The spec writer and the plan review propose; an accepted
+specification is binding. A deviation and a rewrite are exceptions, not a
+routine choice: the specification is valid by default because it was written
+by one agent and independently reviewed, and a change needs a concrete,
+verifiable defect rather than a preference. When the coder reports a
+deviation in `done.spec_issues`, the runtime stops before QA and asks the
+planner: accept the deviation and rewrite the specification, or reject it and
+require compliance. When a review fails, each finding goes through the same
+filter before it reaches the coder: an invalid finding is dropped; a valid
+code finding becomes rework feedback; a valid finding that exposes a
+specification defect rewrites the specification first. If every finding is
+rejected, the review counts as passed and the task is accepted under the
+normal acceptance policy. Every decision is recorded in the ledger
+(`review_filter`, `review_dismissed`, `spec_issue`, `spec_rewrite`).
 
 ### 7.16 Peak-Hour Policy
 

@@ -472,6 +472,10 @@ Scope of responsibility:
   logical errors, architectural problems, security issues, and weakened or
   deleted tests without an allowed justification. Report a requirement that
   is not met and a feature that was not requested.
+- A finding that asks for a different implementation, a simpler path or a
+  style change is not a requirement. A change to the specification needs a
+  concrete, verifiable defect; the specification is valid by default because
+  it was written and independently accepted.
 - You do not define the process: the stages, gates, rework policy and
   acceptance rules are fixed by the runtime; follow them.
 - Do not add product requirements and do not report pure stylistic

@@ -42,6 +42,18 @@ FIX = json.dumps(
         "proposed_criteria": [],
     }
 )
+PLANNER_KEEP = json.dumps(
+    {
+        "decisions": [
+            {
+                "index": 0,
+                "valid": True,
+                "scope": "code",
+                "reason": "the endpoint is missing",
+            }
+        ]
+    }
+)
 
 
 class ArbiterTest(unittest.TestCase):
@@ -204,7 +216,7 @@ class ArbiterTest(unittest.TestCase):
             project,
             layout,
             task["id"],
-            ScriptedModelClient([ACCEPT]),
+            ScriptedModelClient([PLANNER_KEEP, ACCEPT]),
             log=lambda _m: None,
         )
         stored = get_task(layout, task["id"])
@@ -229,7 +241,7 @@ class ArbiterTest(unittest.TestCase):
             project,
             layout,
             task["id"],
-            ScriptedModelClient([reply]),
+            ScriptedModelClient([PLANNER_KEEP, reply]),
             log=lambda _m: None,
         )
         stored = get_task(layout, task["id"])
@@ -256,7 +268,7 @@ class ArbiterTest(unittest.TestCase):
             project,
             layout,
             task["id"],
-            ScriptedModelClient([CRITERIA]),
+            ScriptedModelClient([PLANNER_KEEP, CRITERIA]),
             log=lambda _m: None,
         )
         stored = get_task(layout, task["id"])
@@ -282,7 +294,7 @@ class ArbiterTest(unittest.TestCase):
             project,
             layout,
             task["id"],
-            ScriptedModelClient([FIX]),
+            ScriptedModelClient([PLANNER_KEEP, FIX]),
             log=lambda _m: None,
         )
         stored = get_task(layout, task["id"])

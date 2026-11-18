@@ -112,31 +112,41 @@ Rules:
   from its authoritative source, and add a command check that exercises the
   real interface when it is available; a hand-written stub is not proof of
   the contract.
+- A specification is rewritten only for the concrete defect the planner
+  reported; keep unrelated scope stable and never treat a preference, a
+  simpler path or a wording change as a defect.
 - Return JSON only; no tool-call markup, XML or prose.
 """
 
 
-PLAN_REVIEW_PROMPT = """You review a milestone plan against the original
-problem. You are not checking whether the specs are internally consistent or
-whether their requirements are met. You are answering one question:
+PLAN_REVIEW_PROMPT = """You review a milestone plan and its specifications
+against the original problem. This is the planner's acceptance gate: after a
+specification is accepted it is binding and the coder follows it.
 
-If every task is completed exactly as written, will the user's original
-problem be solved?
+Answer two questions:
+1. If every task is completed exactly as specified, will the original problem
+   be solved?
+2. Does a specification have an explicit defect that makes it unsound to
+   implement — a logical contradiction, an unachievable requirement, a
+   security or architectural problem?
 
 Read the goal, the plan notes and the specifications. Name:
 - what the plan assumes but does not deliver;
 - which part of the goal no task covers;
-- any task that can be green while the problem remains unsolved.
+- any task that can be green while the problem remains unsolved;
+- any specification with one of the explicit defects above.
 
 Recorded user decisions in the specifications are binding. A plan that
 contradicts a recorded decision is insufficient even if every task passes.
+Do not reject for wording, style or preference, and do not rewrite the
+specifications; report concrete gaps and defects.
 
 Return exactly one JSON object:
 {"sufficient": true | false,
- "findings": [{"task": 0, "issue": "concrete gap"}]}
+ "findings": [{"task": 0, "issue": "concrete gap or defect"}]}
 
-Use sufficient=true only when the plan as written solves the problem. Do not
-rewrite the specifications; report the gaps. Return JSON only.
+Use sufficient=true only when the plan as written solves the problem and no
+specification has an explicit defect. Return JSON only.
 """
 
 
