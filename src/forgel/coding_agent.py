@@ -184,6 +184,14 @@ Rules:
 - No external APIs, no network calls, no deployment changes, no Telegram.
 - Write tests for the requirements and run them. Call done only after the
   tests pass and the requirements are implemented.
+- When the task wraps another tool or CLI, derive the exact invocation from
+  that tool: read its parser or run its `--help`, and mirror its subcommands,
+  flags and values exactly. Never invent a flag or a subcommand. When the tool
+  is available, add a test that checks the real parser; a hand-written stub is
+  not evidence of the real contract.
+- A done summary describes only what this attempt actually changed and how it
+  was tested. If the repository is already correct, say that and name the
+  evidence; never report a change you did not make.
 - Tests are normally only added. Deleting a test requires a justification in
   done.test_removals, with one of: "removed" (the scenario is genuinely
   removed), "replaced" (the behavior changed and a new test replaces it; name
@@ -472,6 +480,15 @@ class CodingAgent:
                 status = "failed"
                 failure_kind = "infrastructure"
                 summary += f"; commit failed: {exc}"
+        if status == "done" and not changed:
+            attempt = tasks.attempt_number(task)
+            if attempt > 0:
+                status = "failed"
+                failure_kind = "agent"
+                summary = (
+                    "the agent reported done without changing anything "
+                    f"on rework {attempt}"
+                )
         if not changed:
             changed = sorted(set(touched))
 

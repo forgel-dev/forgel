@@ -107,6 +107,12 @@ Rules:
   recorded decision, say so in risks and open_questions.
 - If the intent is ambiguous or cannot achieve the milestone problem, record
   the gap in risks and keep the scope honest; do not invent a solution.
+- If the task wraps an existing tool or CLI, record the exact command contract
+  in the specification: the subcommand, every option and whether it takes a
+  value, taken from that tool's parser or `--help`. Read the parser before
+  writing the requirement; do not leave the implementer to guess. When
+  compatibility with the real tool is part of the acceptance, add a command
+  check that exercises the real parser or `--help`, not a hand-written stub.
 - Return JSON only; no tool-call markup, XML or prose.
 """
 

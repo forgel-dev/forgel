@@ -222,6 +222,37 @@ class CodingAgentTest(unittest.TestCase):
         ]
         self.assertEqual(events[-1]["status"], "done")
 
+    def test_done_without_changes_on_a_rework_fails(self) -> None:
+        task = create_task(
+            self.layout,
+            "Rework without changes",
+            ["Do it"],
+            ["It is done"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout,
+            task["id"],
+            status="done",
+            result={"summary": "implemented", "rework_count": 1},
+        )
+        current = get_task(self.layout, task["id"])
+        assert current is not None
+        client = ScriptedModelClient(
+            [json.dumps({"action": "done", "summary": "fixed it"})]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, current, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("without changing anything", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "agent"
+        )
+
     def test_each_rework_records_its_own_run_and_cost(self) -> None:
         class UsageClient(ScriptedModelClient):
             last_usage = {

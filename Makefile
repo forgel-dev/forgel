@@ -28,10 +28,12 @@ clean:
 # The self-hosting CLI runs from its own non-editable copy: the coding agent
 # edits src/forgel while the daemon works, so a live import would load
 # half-edited modules and break the running console. Build from the committed
-# tree, never install with -e.
+# tree, never install with -e. Replacing the files under a running process
+# mixes old and new modules, so restart the console or daemon afterwards.
 install-cli:
 	@tmp=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	git archive HEAD | tar -x -C "$$tmp"; \
 	$(CLI_PIP) uninstall -y forgel >/dev/null 2>&1 || true; \
-	$(CLI_PIP) install --no-build-isolation "$$tmp[github,tokens]"
+	$(CLI_PIP) install --no-build-isolation "$$tmp[github,tokens]"; \
+	echo "Installed. Restart any running Forgel console or daemon to load it."
