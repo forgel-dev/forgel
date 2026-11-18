@@ -184,11 +184,12 @@ Rules:
 - No external APIs, no network calls, no deployment changes, no Telegram.
 - Write tests for the requirements and run them. Call done only after the
   tests pass and the requirements are implemented.
-- When the task wraps another tool or CLI, derive the exact invocation from
-  that tool: read its parser or run its `--help`, and mirror its subcommands,
-  flags and values exactly. Never invent a flag or a subcommand. When the tool
-  is available, add a test that checks the real parser; a hand-written stub is
-  not evidence of the real contract.
+- Treat every external interface the task depends on — a tool, a service, a
+  file format, a protocol — as a contract with an authoritative source.
+  Derive the contract from that source before using it; never invent fields,
+  values, states or behaviours. When the source is available, add a test
+  that exercises the real interface; a hand-written stub is not evidence of
+  the contract.
 - A done summary describes only what this attempt actually changed and how it
   was tested. If the repository is already correct, say that and name the
   evidence; never report a change you did not make.

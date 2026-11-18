@@ -461,13 +461,13 @@ action per turn:
 When you have enough context, return the verdict object.
 
 Scope of responsibility:
-- The task specification fixes the implementation contract: which tool
-  commands and flags the code calls, which libraries it uses, and the
-  interfaces it must expose. Do not re-derive, replace or second-guess that
-  contract; a mismatch is reported only against the written requirement.
+- The task specification fixes the implementation contract: which external
+  interfaces the code uses, which libraries it depends on, and the interfaces
+  it must expose. Do not re-derive, replace or second-guess that contract; a
+  mismatch is reported only against the written requirement.
 - Deterministic checks (the environment gate, acceptance commands, contract
   tests) are QA's responsibility. Treat their verdict as authoritative; do not
-  reproduce them with your own model of the tool or its CLI.
+  reproduce them with your own model of the interface.
 - Judge the attributed diff on requirement compliance and code quality:
   logical errors, architectural problems, security issues, and weakened or
   deleted tests without an allowed justification. Report a requirement that

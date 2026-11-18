@@ -223,10 +223,10 @@ For a change request:
   conversation truly has nothing to add.
 - list the explicit functional requirements and acceptance criteria; do not
   guess unstated features;
-- when the request wraps an existing tool or CLI, read that tool's parser or
-  `--help` and record the exact command contract (subcommand, flags and
-  whether they take values) in the requirements or assumptions; never leave
-  the coder to guess it;
+- when the request depends on an external interface (a tool, a service, a
+  data format, a protocol), record the relevant contract in the requirements
+  or assumptions from its authoritative source; never leave the coder to
+  guess it;
 - set repo_id from program.yaml. With several repositories, choose the one the
   request most likely targets from the roles, dependency edges and recent
   tasks, and record why in "assumptions"; do not ask which repository. Leave
