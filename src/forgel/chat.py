@@ -912,7 +912,9 @@ class CommandRouter:
                 "chat_github_result_pr",
                 number=result.pr_number,
                 url=result.pr_url,
-            ),
+            )
+            if result.pr_number
+            else self._text(chat_id, "chat_github_result_pushed"),
             self._text(
                 chat_id,
                 "chat_github_result_checks",

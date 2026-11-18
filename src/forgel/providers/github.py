@@ -12,10 +12,10 @@ PAT/deploy-key path is the M0.5 bootstrap.
 
 from __future__ import annotations
 
-import base64
 import re
 from pathlib import Path
 
+from .. import git_ops
 from ..secrets import get_secret
 from .base import (
     AuthReport,
@@ -59,36 +59,34 @@ class GithubProvider:
         )
 
     def auth(self, home: Path) -> AuthReport:
-        token = get_secret(home, "github.token")
-        if token:
-            return AuthReport(
-                configured=True,
-                detail="GitHub token from the environment or secret store",
-            )
-        return AuthReport(
-            configured=False,
-            detail=(
-                "no GitHub token; public HTTPS clone works, SSH uses the "
-                "host key, private repositories and push need a token"
-            ),
+        from .github_auth import GithubAuth, GithubAuthError
+
+        auth = GithubAuth(home)
+        modes: list[str] = []
+        try:
+            if auth.app_ready():
+                modes.append("GitHub App configured")
+        except GithubAuthError as exc:
+            modes.append(f"GitHub App misconfigured: {exc}")
+        if auth.pat():
+            modes.append("PAT configured")
+        if auth.session_token():
+            modes.append("GitHub CLI session available")
+        detail = (
+            ", ".join(modes)
+            or "no API token (App, PAT or GitHub CLI session)"
         )
+        detail += (
+            "; git transport uses the host SSH key or HTTPS credential "
+            "helper when no token is needed"
+        )
+        return AuthReport(configured=bool(modes), detail=detail)
 
     def clone(self, remote: Remote, destination: Path, home: Path) -> None:
         token = get_secret(home, "github.token")
-        if not token or not remote.url.startswith(("https://", "http://")):
-            clone_repository(remote.url, destination)
-            return
-        encoded = base64.b64encode(
-            f"x-access-token:{token}".encode("utf-8")
-        ).decode("ascii")
-        # Environment-scoped git config keeps the token out of the URL, argv
-        # and .git/config.
-        clone_repository(
-            remote.url,
-            destination,
-            env={
-                "GIT_CONFIG_COUNT": "1",
-                "GIT_CONFIG_KEY_0": "http.extraheader",
-                "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {encoded}",
-            },
-        )
+        env = None
+        if token and remote.url.startswith(("https://", "http://")):
+            # Environment-scoped git config keeps the token out of the URL,
+            # argv and .git/config.
+            env = git_ops.auth_env(token)
+        clone_repository(remote.url, destination, env=env)

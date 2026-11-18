@@ -1124,6 +1124,8 @@ def cmd_github(args: argparse.Namespace) -> int:
                 number=result.pr_number,
                 url=result.pr_url,
             )
+            if result.pr_number
+            else _say("cli_github_pushed")
         )
         print(_say("cli_github_checks", checks=result.checks))
         print(

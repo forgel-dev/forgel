@@ -127,8 +127,20 @@ def ensure_remote(repo: Path, url: str) -> None:
 
 
 def fetch(repo: Path, token: str | None = None) -> None:
-    env = auth_env(token) if is_https(origin_url(repo)) else None
-    _ok(repo, "fetch", "--prune", "origin", env=env)
+    if token and is_https(origin_url(repo)):
+        result = _run(
+            repo, "fetch", "--prune", "origin", env=auth_env(token)
+        )
+        if result.returncode == 0:
+            return
+        # The token may be expired or lack access while the host's own
+        # session or SSH key still works; fall back before failing.
+        result = _run(repo, "fetch", "--prune", "origin")
+        if result.returncode == 0:
+            return
+        detail = (result.stderr or result.stdout).strip()
+        raise GitOperationError(f"git fetch failed: {detail}")
+    _ok(repo, "fetch", "--prune", "origin")
 
 
 def branch_exists(repo: Path, name: str) -> bool:
@@ -275,10 +287,28 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> str:
 
 
 def push(repo: Path, branch: str, token: str | None = None) -> None:
-    env = auth_env(token) if is_https(origin_url(repo)) else None
-    result = _run(
-        repo, "push", "--set-upstream", "origin", branch, env=env
-    )
+    if token and is_https(origin_url(repo)):
+        result = _run(
+            repo,
+            "push",
+            "--set-upstream",
+            "origin",
+            branch,
+            env=auth_env(token),
+        )
+        if result.returncode == 0:
+            return
+        # Fall back to the host's own HTTPS session or SSH key.
+        result = _run(
+            repo, "push", "--set-upstream", "origin", branch
+        )
+        if result.returncode == 0:
+            return
+        detail = (result.stderr or result.stdout).strip()
+        raise GitOperationError(
+            f"push failed (no force-push is attempted): {detail}"
+        )
+    result = _run(repo, "push", "--set-upstream", "origin", branch)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise GitOperationError(

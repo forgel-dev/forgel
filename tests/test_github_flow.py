@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.artifacts import write_text
 from forgel.config import Settings
@@ -18,8 +20,8 @@ from forgel.ledger import Ledger
 from forgel.program_manifest import set_entries, write_program
 from forgel.project_config import render_project_config
 from forgel.projects import create_project
-from forgel.providers.github_api import CheckReport
-from forgel.providers.github_auth import AuthToken
+from forgel.providers.github_api import CheckReport, GithubAPIError
+from forgel.providers.github_auth import AuthToken, GithubAuth
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -83,6 +85,25 @@ class FakeAPI:
             "draft": False,
             "merged": False,
         }
+
+
+class DownAPI(FakeAPI):
+    def find_open_pull(self, full_name: str, head: str, base: str) -> None:
+        raise GithubAPIError(0, "nodename nor servname provided")
+
+
+def _no_api_credentials():
+    return (
+        patch.dict(
+            os.environ,
+            {
+                "FORGEL_GITHUB_TOKEN": "",
+                "GITHUB_TOKEN": "",
+                "GH_TOKEN": "",
+            },
+        ),
+        patch.object(GithubAuth, "session_token", return_value=""),
+    )
 
 
 class GithubFlowTest(unittest.TestCase):
@@ -217,6 +238,48 @@ class GithubFlowTest(unittest.TestCase):
         ]
         self.assertEqual(len(github_events), 1)
         self.assertEqual(github_events[0]["status"], "merged")
+
+    def test_publish_without_api_credentials_pushes_only(self) -> None:
+        project, _repo, _api = self._setup()
+        env_patch, session_patch = _no_api_credentials()
+        with env_patch, session_patch:
+            result = publish(
+                self.settings,
+                self.ledger,
+                project,
+                full_name_override="owner/repo",
+            )
+        self.assertEqual(result.status, "pushed")
+        self.assertEqual(result.pr_number, 0)
+        self.assertFalse(result.merged)
+        branches = _run(
+            self.remote, "branch", "--list", result.branch
+        ).stdout
+        self.assertIn(result.branch, branches)
+
+    def test_an_unreachable_api_still_pushes_the_branch(self) -> None:
+        project, _repo, _api = self._setup()
+        result = self._publish(project, DownAPI())
+        self.assertEqual(result.status, "pushed")
+        self.assertEqual(result.pr_number, 0)
+        branches = _run(
+            self.remote, "branch", "--list", result.branch
+        ).stdout
+        self.assertIn(result.branch, branches)
+
+    def test_merge_without_api_credentials_is_explained(self) -> None:
+        project, _repo, _api = self._setup()
+        env_patch, session_patch = _no_api_credentials()
+        with env_patch, session_patch:
+            with self.assertRaises(GithubFlowError) as ctx:
+                merge_pr(
+                    self.settings,
+                    self.ledger,
+                    project,
+                    number=7,
+                    full_name_override="owner/repo",
+                )
+        self.assertIn("needs an API token", str(ctx.exception))
 
     def test_human_merge_leaves_the_pr_open(self) -> None:
         project, _repo, api = self._setup()

@@ -379,22 +379,34 @@ repository deploys a specific backend. Independent repositories can be added
 to one project; nothing breaks, but Forgel maintains them separately and the
 grouping adds no coupling.
 
-**GitHub authentication.** Three sources, resolved in this order:
+**GitHub authentication.** The modes are interchangeable, and a failed
+source falls back to the next available one:
 
-1. **GitHub App** (preferred): short-lived installation tokens. Create an App
-   with Contents read/write, Pull requests read/write, Checks read and
-   Metadata read, plus Administration write when Forgel should create
-   repositories, then install it. Set `FORGEL_GITHUB_APP_ID`,
+1. **GitHub App** (preferred on a server): short-lived installation tokens.
+   Create an App with Contents read/write, Pull requests read/write, Checks
+   read and Metadata read, plus Administration write when Forgel should
+   create repositories, then install it. Set `FORGEL_GITHUB_APP_ID`,
    `FORGEL_GITHUB_INSTALLATION_ID` (optional when there is one installation)
    and the private key as a mounted `0600` file
    (`FORGEL_GITHUB_APP_PRIVATE_KEY_PATH`) or an inline PEM. App auth needs
    `pip install 'forgel[github]'`; the Docker image includes it.
-2. **PAT** (M0.5 bootstrap): fine-grained Contents read/write (plus
-   Administration write for repository creation) or classic `repo`, via
-   `FORGEL_GITHUB_TOKEN`, `/secret set github.token`, or
-   `forgel secret set github.token`.
-3. **SSH/deploy key**: clone, fetch and push only; no API token, so pull
-   requests need one of the first two.
+2. **PAT or an active session**: a fine-grained token with Contents
+   read/write (plus Administration write for repository creation) or a
+   classic `repo` token, via `FORGEL_GITHUB_TOKEN`, `GITHUB_TOKEN`,
+   `GH_TOKEN`, `/secret set github.token` or
+   `forgel secret set github.token`. When no token is set, an active
+   `gh auth login` session is used (`gh auth token`).
+3. **Git transport without a token**: an SSH key/agent or the host's cached
+   HTTPS credential helper handles clone, fetch and push. `deploy_key`
+   selects this transport; it cannot open pull requests.
+
+The GitHub API (pull requests, checks, merging, repository creation) needs an
+API token from modes 1–2. Without one, `github publish` still pushes the
+branch and reports `pushed` with no pull request; `github merge` explains
+that an API token is required. A failed App call (for example a DNS failure)
+falls back to a PAT or session, and an unreachable API after a push falls
+back to the push-only result. URL parsing and the API live in the provider;
+git transport lives in the core.
 
 Public HTTPS clones need no credentials, and credential-bearing URLs are
 rejected. Hosting sits behind a provider contract, so GitLab, Gitea or a

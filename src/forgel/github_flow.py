@@ -30,7 +30,12 @@ from .providers.github_api import (
     GithubAPIError,
     wait_for_checks,
 )
-from .providers.github_auth import DEFAULT_API_BASE, AuthToken, GithubAuth
+from .providers.github_auth import (
+    DEFAULT_API_BASE,
+    AuthToken,
+    GithubAuth,
+    GithubAuthError,
+)
 
 
 class GithubFlowError(RuntimeError):
@@ -50,6 +55,25 @@ class PublishResult:
     merged: bool
     merge_sha: str
     status: str
+
+
+def _is_network_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "nodename nor servname",
+            "name or service not known",
+            "not reachable by dns",
+            "temporary failure in name resolution",
+            "errno 8",
+            "connection refused",
+            "connection reset",
+            "network is unreachable",
+            "timed out",
+            "timeout",
+        )
+    )
 
 
 def _now() -> str:
@@ -192,12 +216,17 @@ Pull requests published by Forgel. The ledger is the runtime source.
     text = report.read_text(encoding="utf-8") if report.exists() else header
     if not text.endswith("\n"):
         text += "\n"
+    pull = (
+        f"#{result.pr_number} {result.pr_url}"
+        if result.pr_number
+        else "none (branch pushed; open it yourself)"
+    )
     block = f"""## {_now()}
 
 - Project: `{project_id}`
 - Repository: `{entry['id']}` ({result.full_name})
 - Branch: `{result.branch}` → `{result.base}`
-- Pull request: #{result.pr_number} {result.pr_url}
+- Pull request: {pull}
 - Checks: `{result.checks}`
 - Merged: `{str(result.merged).lower()}` ({result.merge_sha or '—'})
 - Status: `{result.status}`
@@ -342,10 +371,21 @@ def publish(
         raise GithubFlowError("the repository has no remote URL")
     git_ops.ensure_remote(local, remote_url)
 
-    client, auth_token, _api_base, git_token = _client(
-        settings, git_config, auth, api
-    )
-    git_token = git_token if git_ops.is_https(remote_url) else None
+    client = None
+    git_token = None
+    try:
+        client, _auth_token, _api_base, resolved_token = _client(
+            settings, git_config, auth, api
+        )
+    except GithubAuthError as exc:
+        log(
+            f"[github] {project['id']}: no API credentials ({exc}); "
+            "pushing the branch without a pull request"
+        )
+    else:
+        git_token = (
+            resolved_token if git_ops.is_https(remote_url) else None
+        )
     base = base_branch or git_config.base_branch
     working, _committed = _prepare_branch(
         local,
@@ -359,15 +399,33 @@ def publish(
     git_ops.push(local, working, git_token)
     sha = git_ops.head_sha(local)
 
-    pr = client.find_open_pull(
-        full_name, head=f"{owner}:{working}", base=base
-    )
-    if pr is None:
-        title = title or git_ops.last_commit_subject(local) or (
-            f"Forgel: {working}"
+    if client is None:
+        outcome = PublishResult(
+            project_id=str(project["id"]),
+            repo_id=str(entry["id"]),
+            full_name=full_name,
+            branch=working,
+            base=base,
+            pr_number=0,
+            pr_url="",
+            checks="not run",
+            merged=False,
+            merge_sha="",
+            status="pushed",
         )
-        body = body or "Published by Forgel."
-        try:
+        _record(layout, ledger, str(project["id"]), entry, outcome)
+        return outcome
+
+    pr: dict[str, Any] | None = None
+    try:
+        pr = client.find_open_pull(
+            full_name, head=f"{owner}:{working}", base=base
+        )
+        if pr is None:
+            title = title or git_ops.last_commit_subject(local) or (
+                f"Forgel: {working}"
+            )
+            body = body or "Published by Forgel."
             pr = client.create_pull(
                 full_name,
                 head=f"{owner}:{working}",
@@ -376,22 +434,41 @@ def publish(
                 body=body,
                 draft=git_config.draft_pr,
             )
-        except GithubAPIError as exc:
-            raise GithubFlowError(str(exc)) from exc
-    number = int(pr.get("number", 0))
-    pr_url = str(pr.get("html_url", ""))
-
-    checks = (
-        wait_for_checks(
-            client,
-            full_name,
-            sha,
-            timeout=check_timeout,
-            log=log,
+        number = int(pr.get("number", 0))
+        pr_url = str(pr.get("html_url", ""))
+        checks = (
+            wait_for_checks(
+                client,
+                full_name,
+                sha,
+                timeout=check_timeout,
+                log=log,
+            )
+            if wait
+            else client.check_state(full_name, sha)
         )
-        if wait
-        else client.check_state(full_name, sha)
-    )
+    except GithubAPIError as exc:
+        if not _is_network_error(str(exc)):
+            raise GithubFlowError(str(exc)) from exc
+        log(
+            "[github] GitHub API is unreachable; the branch is pushed "
+            "without pull-request checks"
+        )
+        outcome = PublishResult(
+            project_id=str(project["id"]),
+            repo_id=str(entry["id"]),
+            full_name=full_name,
+            branch=working,
+            base=base,
+            pr_number=int(pr.get("number", 0)) if pr else 0,
+            pr_url=str(pr.get("html_url", "")) if pr else "",
+            checks="not checked" if pr else "not run",
+            merged=False,
+            merge_sha="",
+            status="pr_open" if pr else "pushed",
+        )
+        _record(layout, ledger, str(project["id"]), entry, outcome)
+        return outcome
     merge_mode = merge or git_config.merge
     if merge_mode not in {"auto", "human"}:
         raise GithubFlowError(f"unknown merge mode {merge_mode!r}")
@@ -456,9 +533,16 @@ def merge_pr(
     entry = _select_entry(layout, repo_id, full_name_override)
     full_name = _full_name(entry, full_name_override)
     local = layout.repo_path(entry["id"])
-    client, _auth_token, _api_base, _git_token = _client(
-        settings, git_config, auth, api
-    )
+    try:
+        client, _auth_token, _api_base, _git_token = _client(
+            settings, git_config, auth, api
+        )
+    except GithubAuthError as exc:
+        raise GithubFlowError(
+            "merging a pull request needs an API token (GitHub App, PAT "
+            "or GitHub CLI session); a push-only publish leaves the "
+            "branch without a pull request"
+        ) from exc
     base = base_branch or git_config.base_branch
     if number is None:
         working = branch or git_ops.current_branch(local)

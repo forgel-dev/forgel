@@ -22,7 +22,7 @@ from typing import Mapping
 SECRET_KEYS: dict[str, tuple[str, ...]] = {
     "telegram.bot_token": ("TELEGRAM_BOT_TOKEN",),
     "model.api_key": ("FORGEL_MODEL_API_KEY",),
-    "github.token": ("FORGEL_GITHUB_TOKEN", "GITHUB_TOKEN"),
+    "github.token": ("FORGEL_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"),
     "github.app_id": ("FORGEL_GITHUB_APP_ID", "GITHUB_APP_ID"),
     "github.app_private_key": ("FORGEL_GITHUB_APP_PRIVATE_KEY",),
     "github.app_private_key_path": (

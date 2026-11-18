@@ -229,7 +229,7 @@
   "chat_production_prompt": "Production approval for {name} ({project}), generation {generation}.\n\nForgel is a software development tool, not a law firm. Jurisdiction packs are advisory and do not establish legal compliance. By accepting, you confirm that you are responsible for the product's regulatory compliance in its target markets. See docs/program/jurisdiction/disclaimer.md.\n\nApprove production?",
   "chat_github_dns": "GitHub API is not reachable by DNS. Check VPN/network and retry the same command.",
   "chat_github_app_permission": "The GitHub App cannot perform this action. Grant the installation repository administration/creation for the organization, or use a PAT with repo scope.",
-  "chat_github_auth": "GitHub authentication failed. Set FORGEL_GITHUB_TOKEN on the host or /secret set github.token <token>; a fine-grained token needs Contents read/write.",
+  "chat_github_auth": "GitHub authentication failed. Set FORGEL_GITHUB_TOKEN on the host, use /secret set github.token <token>, or log in with `gh auth login`; SSH remotes use the host key. A fine-grained token needs Contents read/write.",
   "chat_no_project_selected": "No project selected. Use /projects, then /use <id>.",
   "chat_project_gone": "The selected project no longer exists. Use /projects.",
   "peak_defer": "Model work is paused during {model} peak hours ({windows}, weekdays). The window closes at {moment} (in {wait}); work resumes automatically. Override: /peak always or [models] peak_policy = \"always\".",
@@ -435,7 +435,7 @@
   "github_auth_app_error": "GitHub App misconfigured: {error}",
   "github_auth_app": "GitHub App configured",
   "github_auth_pat": "PAT configured",
-  "github_auth_none": "no GitHub credentials",
+  "github_auth_none": "no API token (GitHub App, PAT or GitHub CLI session); git uses SSH or the host HTTPS session",
   "client_no_project": "no project selected; pass a project id or run `forgel session <project>`",
   "client_say_requires": "say needs text: --text \"...\" or a trailing argument",
   "client_no_projects": "no projects",
@@ -466,5 +466,8 @@
   "client_review_no_model": "no model configured for the reviewer",
   "cli_task_review_requires": "error: task review requires --task",
   "cli_review_no_model": "error: no model configured for the reviewer",
-  "cli_task_reviewed": "Re-ran QA and review for {task} ({status})."
+  "cli_task_reviewed": "Re-ran QA and review for {task} ({status}).",
+  "github_auth_session": "GitHub CLI session available",
+  "chat_github_result_pushed": "pull request: none (branch pushed; open it yourself)",
+  "cli_github_pushed": "pull:       none (branch pushed; open it yourself)"
 }

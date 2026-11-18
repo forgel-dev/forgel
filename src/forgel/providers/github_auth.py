@@ -15,7 +15,8 @@ from __future__ import annotations
 import base64
 import json
 import os
-import time
+import shutil
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -49,7 +50,7 @@ class GithubAuthError(RuntimeError):
 @dataclass(frozen=True)
 class AuthToken:
     token: str
-    kind: str  # app | pat
+    kind: str  # app | pat | session
     expires_at: int | None = None
 
 
@@ -103,6 +104,27 @@ class GithubAuth:
     def app_ready(self) -> bool:
         return bool(self.app_id() and self.private_key())
 
+    def session_token(self) -> str:
+        """A token from an active GitHub CLI session, when one exists."""
+
+        gh = shutil.which("gh", path=self.env.get("PATH", ""))
+        if not gh:
+            return ""
+        try:
+            result = subprocess.run(
+                [gh, "auth", "token"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={**self.env, "GH_PROMPT_DISABLED": "1"},
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        if result.returncode != 0:
+            return ""
+        return result.stdout.strip()
+
     def status(self, lang: str = "en") -> str:
         parts: list[str] = []
         try:
@@ -116,6 +138,8 @@ class GithubAuth:
             parts.append(_t(lang, "github_auth_app"))
         if self.pat():
             parts.append(_t(lang, "github_auth_pat"))
+        if self.session_token():
+            parts.append(_t(lang, "github_auth_session"))
         return ", ".join(parts) or _t(lang, "github_auth_none")
 
     # --------------------------------------------------------------- tokens
@@ -123,22 +147,40 @@ class GithubAuth:
     def resolve(self, prefer: str = "auto") -> AuthToken:
         if prefer == "deploy_key":
             raise GithubAuthError(
-                "deploy keys have no API token; use auth=pat or github_app "
-                "for pull requests"
+                "deploy keys have no API token; push over SSH and open the "
+                "pull request yourself, or use a PAT, a GitHub App or a "
+                "GitHub CLI session"
             )
-        if prefer == "pat" or (prefer == "auto" and not self.app_ready()):
-            token = self.pat()
-            if not token:
-                raise GithubAuthError(
-                    "no GitHub token; set FORGEL_GITHUB_TOKEN or use "
-                    "/secret set github.token"
-                )
-            return AuthToken(token=token, kind="pat")
-        if not self.app_ready():
-            raise GithubAuthError(
-                "github_app auth needs github.app_id and a private key"
-            )
-        return self._app_token()
+        if prefer == "github_app":
+            sources = ("app", "pat", "session")
+        elif prefer == "pat":
+            sources = ("pat", "session", "app")
+        else:
+            sources = ("app", "pat", "session")
+        errors: list[str] = []
+        for source in sources:
+            try:
+                if source == "app":
+                    if not self.app_ready():
+                        errors.append("GitHub App is not configured")
+                        continue
+                    return self._app_token()
+                if source == "pat":
+                    token = self.pat()
+                    if not token:
+                        errors.append("no PAT")
+                        continue
+                    return AuthToken(token=token, kind="pat")
+                token = self.session_token()
+                if not token:
+                    errors.append("no GitHub CLI session")
+                    continue
+                return AuthToken(token=token, kind="session")
+            except GithubAuthError as exc:
+                errors.append(str(exc))
+        raise GithubAuthError(
+            "no usable GitHub credentials; " + "; ".join(errors)
+        )
 
     # ------------------------------------------------------------------ app
 

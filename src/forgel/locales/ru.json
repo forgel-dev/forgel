@@ -229,7 +229,7 @@
   "chat_production_prompt": "Согласование производства для {name} ({project}), поколение {generation}.\n\nForgel — инструмент разработки ПО, а не юридическая фирма. Пакеты юрисдикций носят рекомендательный характер и не подтверждают соответствие требованиям. Принимая, вы подтверждаете, что отвечаете за соответствие продукта регулированию на целевых рынках. См. docs/program/jurisdiction/disclaimer.md.\n\nСогласовать производство?",
   "chat_github_dns": "GitHub API недоступен по DNS. Проверьте VPN/сеть и повторите команду.",
   "chat_github_app_permission": "GitHub App не может выполнить это действие. Выдайте установке права администрирования/создания репозиториев для организации или используйте PAT с областью repo.",
-  "chat_github_auth": "Не удалось аутентифицироваться в GitHub. Задайте FORGEL_GITHUB_TOKEN на хосте или /secret set github.token <token>; fine-grained токену нужны права Contents read/write.",
+  "chat_github_auth": "Не удалось аутентифицироваться в GitHub. Задайте FORGEL_GITHUB_TOKEN на хосте, используйте /secret set github.token <token> или войдите через `gh auth login`; для SSH-remote используется ключ хоста. Fine-grained токену нужны права Contents read/write.",
   "chat_no_project_selected": "Проект не выбран. Используйте /projects, затем /use <id>.",
   "chat_project_gone": "Выбранный проект больше не существует. Используйте /projects.",
   "peak_defer": "Работа модели приостановлена в пиковые часы {model} ({windows}, будни). Окно закроется в {moment} (через {wait}); работа возобновится автоматически. Переопределение: /peak always или [models] peak_policy = \"always\".",
@@ -435,7 +435,7 @@
   "github_auth_app_error": "GitHub App настроен неверно: {error}",
   "github_auth_app": "GitHub App настроен",
   "github_auth_pat": "PAT настроен",
-  "github_auth_none": "нет учётных данных GitHub",
+  "github_auth_none": "нет API-токена (GitHub App, PAT или сессия GitHub CLI); git использует SSH или HTTPS-сессию хоста",
   "client_no_project": "проект не выбран; укажите id или выполните `forgel session <project>`",
   "client_say_requires": "для say нужен текст: --text \"...\" или аргумент в конце",
   "client_no_projects": "проектов нет",
@@ -466,5 +466,8 @@
   "client_review_no_model": "модель для ревьюера не настроена",
   "cli_task_review_requires": "ошибка: для review задачи нужен --task",
   "cli_review_no_model": "ошибка: модель для ревьюера не настроена",
-  "cli_task_reviewed": "QA и ревью для {task} перезапущены ({status})."
+  "cli_task_reviewed": "QA и ревью для {task} перезапущены ({status}).",
+  "github_auth_session": "Сессия GitHub CLI доступна",
+  "chat_github_result_pushed": "pull request: нет (ветка запушена; откройте сами)",
+  "cli_github_pushed": "pull:       нет (ветка запушена; откройте сами)"
 }

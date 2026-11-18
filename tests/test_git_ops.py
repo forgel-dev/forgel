@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel import git_ops
 from forgel.git_ops import GitOperationError
@@ -110,6 +111,38 @@ class GitOpsTest(unittest.TestCase):
         self.assertNotIn(
             "super-secret-token", env["GIT_CONFIG_VALUE_0"]
         )
+
+    def test_a_failed_token_falls_back_to_host_credentials(self) -> None:
+        _run(
+            self.repo,
+            "remote",
+            "set-url",
+            "origin",
+            "https://github.com/o/r.git",
+        )
+        calls: list[dict[str, str] | None] = []
+
+        def fake(repo, *args, env=None, timeout=180.0):
+            if tuple(args[:2]) == ("remote", "get-url"):
+                return subprocess.CompletedProcess(
+                    ["git", *args],
+                    0,
+                    "https://github.com/o/r.git\n",
+                    "",
+                )
+            calls.append(env)
+            return subprocess.CompletedProcess(
+                ["git", *args],
+                1 if env else 0,
+                "",
+                "denied" if env else "",
+            )
+
+        with patch("forgel.git_ops._run", side_effect=fake):
+            git_ops.push(self.repo, "main", "ghp_token")
+        self.assertEqual(len(calls), 2)
+        self.assertIsNotNone(calls[0])
+        self.assertIsNone(calls[1])
 
 
 if __name__ == "__main__":
