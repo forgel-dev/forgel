@@ -364,6 +364,12 @@ class PlannerGateTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("The thing works", text)
+        self.assertEqual(len(stored["checks"]), len(SPEC["checks"]))
+        self.assertEqual(
+            stored["checks"][0]["criterion"],
+            SPEC["checks"][0]["criterion"],
+        )
+        self.assertEqual(stored["test_command"], SPEC["test_command"])
 
     def test_a_malformed_filter_never_passes_the_review(self) -> None:
         task = self._failed_review(

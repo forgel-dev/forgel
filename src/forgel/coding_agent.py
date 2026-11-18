@@ -196,6 +196,10 @@ Rules:
   values, states or behaviours. When the source is available, add a test
   that exercises the real interface; a hand-written stub is not evidence of
   the contract.
+- Follow the external-dependency modes in the specification: use a `direct`
+  dependency through its named local or test interface; implement a `stub`
+  exactly as recorded, keep it clearly separated from product code, and never
+  change the stub's contract or invent the interface.
 - A done summary describes only what this attempt actually changed and how it
   was tested. If the repository is already correct, say that and name the
   evidence; never report a change you did not make.

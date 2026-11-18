@@ -391,6 +391,20 @@ def rewrite_task_spec(
         ),
     )
     tasks.update_task(layout, task_id, spec=ref)
+    updates: dict[str, Any] = {}
+    if spec.get("checks"):
+        updates["checks"] = list(spec["checks"])
+    updates["test_command"] = list(spec.get("test_command") or [])
+    if not task.get("requirements"):
+        updates["requirements"] = list(spec.get("requirements") or [])
+    if not task.get("acceptance"):
+        updates["acceptance"] = list(spec.get("acceptance") or [])
+    if spec.get("external_dependencies"):
+        updates["external_dependencies"] = list(
+            spec["external_dependencies"]
+        )
+    if updates:
+        tasks.update_task(layout, task_id, **updates)
     tasks.commit_task(layout, task_id, f"Rewrite spec {task_id}")
     _record(
         ledger,

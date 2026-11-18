@@ -329,6 +329,88 @@ class PlannerTest(unittest.TestCase):
         )
         self.assertEqual(written["requirements"], spec["requirements"])
 
+    def test_planner_records_external_dependencies(self) -> None:
+        first = _spec_for(PLAN["tasks"][0])
+        first["external_dependencies"] = [
+            {
+                "name": "weather",
+                "interface": "HTTP forecast",
+                "docs": "docs/weather.md",
+            }
+        ]
+        scout = {
+            "dependencies": [
+                {
+                    "name": "weather",
+                    "mode": "direct",
+                    "interface": "local fixture",
+                    "docs": "docs/weather.md",
+                    "evidence": "environment.yaml declares the fixture",
+                    "stub": "",
+                }
+            ]
+        }
+        client = ScriptedModelClient(
+            [
+                json.dumps(PLAN),
+                json.dumps(first),
+                json.dumps(scout),
+                json.dumps(_spec_for(PLAN["tasks"][1])),
+                json.dumps(CRITIC),
+            ]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        self.assertEqual(
+            result.tasks[0]["external_dependencies"][0]["mode"],
+            "direct",
+        )
+        stored = list_tasks(self.layout)
+        self.assertEqual(
+            stored[0]["external_dependencies"][0]["mode"], "direct"
+        )
+
+    def test_an_unavailable_dependency_stops_the_plan(self) -> None:
+        first = _spec_for(PLAN["tasks"][0])
+        first["external_dependencies"] = [
+            {
+                "name": "weather",
+                "interface": "HTTP forecast",
+                "docs": "",
+            }
+        ]
+        scout = {
+            "dependencies": [
+                {
+                    "name": "weather",
+                    "mode": "unavailable",
+                    "interface": "HTTP forecast",
+                    "docs": "",
+                    "evidence": "",
+                    "stub": "",
+                }
+            ]
+        }
+        client = ScriptedModelClient(
+            [json.dumps(PLAN), json.dumps(first), json.dumps(scout)]
+        )
+        with self.assertRaises(PlanningError) as ctx:
+            plan_project(
+                self.settings,
+                self.ledger,
+                self.project,
+                "Bring the project to M1",
+                client=client,
+                log=lambda _m: None,
+            )
+        self.assertIn("weather", str(ctx.exception))
+
     def test_spec_writer_budget_forces_the_spec(self) -> None:
         intent = {
             "title": "Add a health endpoint",

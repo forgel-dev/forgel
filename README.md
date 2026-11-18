@@ -172,6 +172,16 @@ the goal before queueing. `--dry-run` previews the specifications, and the
 daemon runs a task only after its dependencies are done. The plan is committed
 as `docs/program/plans/<id>.md`. See `PLAN.md` §7.15.
 
+**External dependencies.** While writing a specification, the requirements
+writer lists every external service, tool, binary, API or format the task
+touches. A separate dependency scout resolves each one before the task is
+queued: `direct` when a local or test interface is available (with evidence
+naming it), `stub` with documentation/source evidence and the stub code, or
+`unavailable` when no reliable source exists — which stops planning instead
+of guessing. The task record keeps the mode, the rendered specification
+carries the stub, the coder follows it, and the reviewer checks the stub code
+against the recorded evidence.
+
 **Models and cost.** `deepseek-flash` is the default for every role; a more
 expensive model is an explicit configuration choice. Autonomous work defaults
 to DeepSeek's off-peak hours, when the rate is half the peak rate. During a

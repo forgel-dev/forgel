@@ -477,6 +477,10 @@ Scope of responsibility:
   style change is not a requirement. A change to the specification needs a
   concrete, verifiable defect; the specification is valid by default because
   it was written and independently accepted.
+- For every external dependency recorded in the specification, check the
+  diff: a `direct` dependency must use the real local or test interface; a
+  `stub` must match the recorded evidence and documentation. A stub that
+  contradicts the evidence is blocking.
 - You do not define the process: the stages, gates, rework policy and
   acceptance rules are fixed by the runtime; follow them.
 - Do not add product requirements and do not report pure stylistic
@@ -1020,26 +1024,26 @@ def _push_accepted(
     project: Mapping[str, Any],
     task: Mapping[str, Any],
 ) -> None:
-    """Push the accepted task's branch; an accepted change is not left local."""
+    """Push the accepted task's branch and the control repository."""
 
     layout = ProjectLayout.detect(str(project["workspace"]))
     task_id = str(task["id"])
     repo_id, repo = _repo(layout, task)
-    if not (repo / ".git").exists():
-        return
-    remote = git_ops.origin_url(repo)
-    if not remote:
-        return
-    status = "pushed"
-    detail = ""
-    branch = ""
-    token: str | None = None
-    try:
-        branch = git_ops.current_branch(repo)
-    except git_ops.GitOperationError as exc:
-        status = "failed"
-        detail = f"cannot determine the branch: {exc}"
-    if status == "pushed":
+
+    def push_one(path: Path) -> dict[str, str]:
+        if not (path / ".git").exists():
+            return {"status": "skipped", "detail": "no git history"}
+        remote = git_ops.origin_url(path)
+        if not remote:
+            return {"status": "skipped", "detail": "no remote"}
+        try:
+            branch = git_ops.current_branch(path)
+        except git_ops.GitOperationError as exc:
+            return {
+                "status": "failed",
+                "detail": f"cannot determine the branch: {exc}",
+            }
+        token: str | None = None
         if git_ops.is_https(remote):
             try:
                 from .providers.github_auth import (
@@ -1051,22 +1055,33 @@ def _push_accepted(
             except GithubAuthError:
                 token = None
         try:
-            git_ops.push(repo, branch, token)
+            git_ops.push(path, branch, token)
         except git_ops.GitOperationError as exc:
-            status = "failed"
-            detail = str(exc)
+            return {"status": "failed", "detail": str(exc)}
+        return {"status": "pushed", "detail": "", "branch": branch}
+
+    pushed = push_one(repo)
+    control = layout.root if layout.is_linked else layout.control
+    control_result: dict[str, str] | None = None
+    if control.resolve() != repo.resolve():
+        try:
+            tasks.commit_control(layout, f"Accept task {task_id}")
+        except Exception:  # noqa: BLE001 - a commit must not undo acceptance
+            pass
+        control_result = push_one(control)
     data = dict(task.get("result") or {})
     data["push"] = {
-        "status": status,
+        "status": pushed.get("status", "failed"),
         "repo": repo_id,
-        "branch": branch,
-        "detail": detail,
+        "branch": pushed.get("branch", ""),
+        "detail": pushed.get("detail", ""),
+        "control": control_result,
     }
     update_task(layout, task_id, result=data)
     ledger.append_event(
         str(project["id"]),
         "task_push",
-        status=status,
+        status=pushed.get("status", "failed"),
         idempotency_key=(
             f"{project['id']}:task_push:{task_id}:"
             f"r{attempt_number(task)}"
@@ -1075,8 +1090,9 @@ def _push_accepted(
         payload={
             "task": task_id,
             "repo": repo_id,
-            "branch": branch,
-            "detail": detail,
+            "branch": pushed.get("branch", ""),
+            "detail": pushed.get("detail", ""),
+            "control": control_result,
         },
         generation=ledger.current_generation(str(project["id"])),
     )

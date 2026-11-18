@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import language, peak, specs, tasks
+from . import dependencies, language, peak, specs, tasks
 from .adopt import AdoptError, add_repository, create_repository
 from .agent import build_context
 from .artifacts import write_text
@@ -476,6 +476,24 @@ def _spec_call(func, *args, **kwargs):
         raise PlanningError(str(exc)) from exc
 
 
+def _dependency_call(
+    layout: ProjectLayout,
+    intent: Mapping[str, Any],
+    spec: dict[str, Any],
+    client: ModelClient,
+    log: Callable[[str], None],
+) -> dict[str, Any]:
+    if not spec.get("external_dependencies"):
+        return spec
+    try:
+        spec["external_dependencies"] = dependencies.investigate(
+            layout, intent, spec, client, log
+        )
+    except dependencies.DependencyError as exc:
+        raise PlanningError(str(exc)) from exc
+    return spec
+
+
 def plan_project(
     settings: Settings,
     ledger: Ledger,
@@ -644,8 +662,11 @@ def plan_project(
     if dry_run:
         preview: list[dict[str, Any]] = []
         for index, item in enumerate(items):
-            spec = _spec_call(specs.write_task_spec, 
+            spec = _spec_call(specs.write_task_spec,
                 settings, layout, goal, notes, item, model_client, log
+            )
+            spec = _dependency_call(
+                layout, item, spec, model_client, log
             )
             preview.append(dict(spec))
         review = _spec_call(specs.review_plan, 
@@ -665,9 +686,12 @@ def plan_project(
     task_specs: list[dict[str, Any]] = []
     for index, item in enumerate(items):
         log(f"[spec] task {index + 1}/{len(items)}: writing")
+        spec = _spec_call(specs.write_task_spec,
+            settings, layout, goal, notes, item, model_client, log
+        )
         task_specs.append(
-            _spec_call(specs.write_task_spec, 
-                settings, layout, goal, notes, item, model_client, log
+            _dependency_call(
+                layout, item, spec, model_client, log
             )
         )
     review = _spec_call(specs.review_plan, 
@@ -678,7 +702,7 @@ def plan_project(
         for finding in review.findings:
             position = int(finding.get("task", -1))
             if 0 <= position < len(items):
-                task_specs[position] = _spec_call(specs.write_task_spec, 
+                revised = _spec_call(specs.write_task_spec,
                     settings,
                     layout,
                     goal,
@@ -687,6 +711,13 @@ def plan_project(
                     model_client,
                     log,
                     review_issue=str(finding.get("issue") or ""),
+                )
+                task_specs[position] = _dependency_call(
+                    layout,
+                    items[position],
+                    revised,
+                    model_client,
+                    log,
                 )
         review = _spec_call(specs.review_plan, 
             layout, goal, notes, task_specs, model_client, log
@@ -719,6 +750,9 @@ def plan_project(
             checks=list(spec["checks"]),
             language=task_language,
             spec=spec_ref,
+            external_dependencies=list(
+                spec.get("external_dependencies") or []
+            ),
             task_id=ids[index],
         )
         write_text(

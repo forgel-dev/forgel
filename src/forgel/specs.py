@@ -75,6 +75,11 @@ Return exactly one JSON object:
   "acceptance": ["observable acceptance criterion"],
   "constraints": ["constraint"],
   "assumptions": ["what you assumed where the intent was silent"],
+  "external_dependencies": [
+    {"name": "service, tool or format",
+     "interface": "how the task uses it",
+     "docs": "path, URL or excerpt source, or empty"}
+  ],
   "risks": ["what could make this task fail or miss the goal"],
   "goals": ["outcome this task must achieve"],
   "user_decisions": [
@@ -115,6 +120,10 @@ Rules:
 - A specification is rewritten only for the concrete defect the planner
   reported; keep unrelated scope stable and never treat a preference, a
   simpler path or a wording change as a defect.
+- List every external dependency the task touches — a service, tool, binary,
+  API, schema or data format that is not the repository itself or the standard
+  library. Give the documentation source; leave it empty when none is known.
+  Do not invent the interface; the dependency scout investigates it.
 - Return JSON only; no tool-call markup, XML or prose.
 """
 
@@ -212,6 +221,19 @@ def _normalize_spec(
         "acceptance": acceptance,
         "constraints": _strings(data.get("constraints")),
         "assumptions": _strings(data.get("assumptions")),
+        "external_dependencies": [
+            {
+                "name": str(item.get("name") or "").strip(),
+                "interface": str(item.get("interface") or "").strip(),
+                "docs": str(item.get("docs") or "").strip(),
+                "mode": str(item.get("mode") or "").strip(),
+                "evidence": str(item.get("evidence") or "").strip(),
+                "stub": str(item.get("stub") or "").strip(),
+            }
+            for item in (data.get("external_dependencies") or [])
+            if isinstance(item, dict)
+            and str(item.get("name") or "").strip()
+        ],
         "risks": _strings(data.get("risks")),
         "goals": _strings(data.get("goals"))
         or ([str(data.get("outcome") or "").strip()]
@@ -403,17 +425,27 @@ def review_plan(
 ) -> PlanReview:
     """Judge the specs against the original problem."""
 
+    def render_one(index: int, spec: Mapping[str, Any]) -> str:
+        dependencies = "; ".join(
+            f"{item.get('name')} ({item.get('mode') or 'unknown'})"
+            for item in (spec.get("external_dependencies") or [])
+            if isinstance(item, dict)
+        ) or "none"
+        return (
+            f"--- Task {index}: {spec.get('title')} ---\n"
+            f"Problem: {spec.get('problem')}\n"
+            f"Outcome: {spec.get('outcome')}\n"
+            f"Scope: {'; '.join(spec.get('scope') or [])}\n"
+            f"Non-goals: {'; '.join(spec.get('non_goals') or [])}\n"
+            f"Requirements: {'; '.join(spec.get('requirements') or [])}\n"
+            f"Acceptance: {'; '.join(spec.get('acceptance') or [])}\n"
+            f"External dependencies: {dependencies}\n"
+            f"Assumptions: {'; '.join(spec.get('assumptions') or [])}\n"
+            f"Risks: {'; '.join(spec.get('risks') or [])}\n"
+        )
+
     rendered = "\n\n".join(
-        f"--- Task {index}: {spec.get('title')} ---\n"
-        f"Problem: {spec.get('problem')}\n"
-        f"Outcome: {spec.get('outcome')}\n"
-        f"Scope: {'; '.join(spec.get('scope') or [])}\n"
-        f"Non-goals: {'; '.join(spec.get('non_goals') or [])}\n"
-        f"Requirements: {'; '.join(spec.get('requirements') or [])}\n"
-        f"Acceptance: {'; '.join(spec.get('acceptance') or [])}\n"
-        f"Assumptions: {'; '.join(spec.get('assumptions') or [])}\n"
-        f"Risks: {'; '.join(spec.get('risks') or [])}\n"
-        for index, spec in enumerate(specs)
+        render_one(index, spec) for index, spec in enumerate(specs)
     )
     messages = [
         ModelMessage("system", PLAN_REVIEW_PROMPT),
@@ -526,7 +558,32 @@ def render_spec(
             or ["1.0.0 — Initial specification."]
         ),
     }
-    return requirements_doc.render(values)
+    return requirements_doc.render(values) + _external_section(spec)
+
+
+def _external_section(spec: Mapping[str, Any]) -> str:
+    dependencies = [
+        item
+        for item in (spec.get("external_dependencies") or [])
+        if isinstance(item, dict)
+    ]
+    if not dependencies:
+        return ""
+    lines = ["", "## External Dependencies", ""]
+    for item in dependencies:
+        lines.append(
+            f"- **{item.get('name') or '—'}** — mode `"
+            f"{item.get('mode') or 'unknown'}`; interface: "
+            f"{item.get('interface') or '—'}; docs: "
+            f"{item.get('docs') or '—'}; evidence: "
+            f"{item.get('evidence') or '—'}"
+        )
+        stub = str(item.get("stub") or "").strip()
+        if stub:
+            lines.append("  ```")
+            lines.extend("  " + line for line in stub.splitlines())
+            lines.append("  ```")
+    return "\n".join(lines) + "\n"
 
 
 def spec_path(task_id: str) -> str:
