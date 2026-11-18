@@ -170,7 +170,9 @@ requirements writer expands each intent into a formal specification under
 `docs/program/specs/<task>.md`, and a plan review checks the whole set against
 the goal before queueing. `--dry-run` previews the specifications, and the
 daemon runs a task only after its dependencies are done. The plan is committed
-as `docs/program/plans/<id>.md`. See `PLAN.md` §7.15.
+as `docs/program/plans/<id>.md`. A free-text task that has no formal
+specification gets one, plus the external-dependency report, before the coder
+starts (`FORGEL_FREE_TEXT_SPEC=0` disables this). See `PLAN.md` §7.15.
 
 **External dependencies.** While writing a specification, the requirements
 writer lists every external service, tool, binary, API or format the task

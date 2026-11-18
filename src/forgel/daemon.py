@@ -13,7 +13,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import peak, tasks
+from . import dependencies, peak, specs, tasks
+from .artifacts import write_text
 from .approvals import awaits_approval, latest_approval
 from .coding_agent import CodingAgent
 from .task_review import accept_parked_green_tasks, process_task_result
@@ -591,6 +592,99 @@ def handle_failure(
     )
 
 
+def _ensure_formal_spec(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task: dict[str, Any],
+    client: ModelClient,
+    log: Callable[[str], None],
+) -> dict[str, Any]:
+    """Give a free-text task a formal specification and dependency report."""
+
+    current = str(task.get("spec") or "")
+    if current.startswith("docs/program/specs/"):
+        return task
+    task_id = str(task["id"])
+    requirements = [str(item) for item in task.get("requirements") or []]
+    acceptance = [str(item) for item in task.get("acceptance") or []]
+    intent = {
+        "title": task.get("title") or task_id,
+        "summary": (
+            "; ".join(requirements + acceptance)
+            or task.get("title")
+            or task_id
+        ),
+        "repo_id": task.get("repo_id") or "",
+        "depends_on": [
+            str(item) for item in (task.get("depends_on") or [])
+        ],
+        "requirements": requirements,
+        "acceptance": acceptance,
+    }
+    goal = str(task.get("plan_goal") or task.get("title") or task_id)
+    spec = specs.write_task_spec(
+        settings, layout, goal, "", intent, client, log=log
+    )
+    if spec.get("external_dependencies"):
+        spec["external_dependencies"] = dependencies.investigate(
+            layout, intent, spec, client, log
+        )
+    ref = specs.spec_path(task_id)
+    write_text(
+        layout.artifact(ref),
+        specs.render_spec(
+            spec,
+            task_id,
+            str(task.get("plan_id") or ""),
+            intent["repo_id"],
+            intent["depends_on"],
+        ),
+    )
+    updated = tasks.update_task(
+        layout,
+        task_id,
+        spec=ref,
+        request=current,
+        checks=list(spec.get("checks") or []),
+        test_command=list(spec.get("test_command") or []),
+        requirements=list(spec.get("requirements") or []),
+        acceptance=list(spec.get("acceptance") or []),
+        external_dependencies=list(
+            spec.get("external_dependencies") or []
+        ),
+    )
+    tasks.commit_control(layout, f"Spec {task_id}")
+    ledger.append_event(
+        str(project["id"]),
+        "spec",
+        status="completed",
+        idempotency_key=(
+            f"{project['id']}:spec:{task_id}:"
+            f"r{tasks.attempt_number(task)}"
+        ),
+        artifact_refs=[ref],
+        payload={
+            "request": current,
+            "requirements": list(spec.get("requirements") or []),
+            "dependencies": [
+                {
+                    "name": item.get("name"),
+                    "mode": item.get("mode"),
+                }
+                for item in (spec.get("external_dependencies") or [])
+            ],
+        },
+        generation=ledger.current_generation(str(project["id"])),
+    )
+    log(
+        f"[spec] {project['id']}: task {task_id}: formal specification "
+        f"written ({ref})"
+    )
+    return updated
+
+
 def _run_task(
     settings: Settings,
     ledger: Ledger,
@@ -637,6 +731,41 @@ def _run_task(
         handle_failure(
             settings, ledger, project, layout, task_id, None, log
         )
+        return True
+    try:
+        if settings.free_text_spec:
+            task = _ensure_formal_spec(
+                settings,
+                ledger,
+                project,
+                layout,
+                task,
+                model,
+                log,
+            )
+    except (specs.SpecError, dependencies.DependencyError) as exc:
+        data = dict(task.get("result") or {})
+        data["summary"] = f"specification blocked: {exc}"
+        data["failure"] = _failure(
+            "external", str(exc), retryable=False
+        )
+        tasks.update_task(
+            layout,
+            task_id,
+            status="failed",
+            finished_at=_now(),
+            result=data,
+        )
+        log(
+            f"[spec] {project['id']}: task {task_id} blocked: {exc}"
+        )
+        handle_failure(
+            settings, ledger, project, layout, task_id, model, log
+        )
+        try:
+            tasks.commit_control(layout, f"Task {task_id}: result")
+        except Exception:  # noqa: BLE001 - a commit must not stop the daemon
+            pass
         return True
     try:
         result = CodingAgent(settings, ledger, model).run(

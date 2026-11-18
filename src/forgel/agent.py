@@ -168,6 +168,10 @@ required argument, a material fork or a human gate blocks execution. If the
 request does not name the step, choose the next step from the project
 documents. Never reply with what you intend to do later.
 
+A request that spans several repositories or describes a milestone-sized
+change is a plan, not one task: return kind="action", action="plan" with the
+goal instead of a change_request, so the planner decomposes it.
+
 A user request may contain several executable steps. Return every step that
 can be executed now as kind="actions", in order. Do not defer an executable
 step to a later user message. Stop only when a required argument is missing,

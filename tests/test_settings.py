@@ -160,6 +160,23 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(direct.task_reworks, 0)
         self.assertFalse(direct.task_arbiter)
 
+    def test_free_text_spec_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(
+                os.environ,
+                {"FORGEL_FREE_TEXT_SPEC": ""},
+                clear=False,
+            ):
+                settings = Settings.from_env(tmp)
+        self.assertTrue(settings.free_text_spec)
+        direct = Settings(
+            home=Path(tmp),
+            registry_path=Path("/x"),
+            templates_path=Path("/x"),
+            jurisdiction_path=Path("/x"),
+        )
+        self.assertFalse(direct.free_text_spec)
+
     def test_invalid_rework_limit_is_rejected(self) -> None:
         for value in ("11", "x"):
             with self.subTest(value=value):

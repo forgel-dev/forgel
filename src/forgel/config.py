@@ -81,6 +81,7 @@ class Settings:
     # library and test code does not spawn extra model/test calls by accident.
     task_qa: bool = False
     task_review: bool = False
+    free_text_spec: bool = False
     task_accept: str = "auto"  # auto | human
     task_retries: int = 0
     task_reworks: int = 0
@@ -258,6 +259,7 @@ class Settings:
             timezone=os.environ.get("FORGEL_TIMEZONE", "").strip(),
             task_qa=_env_bool("FORGEL_TASK_QA", True),
             task_review=_env_bool("FORGEL_TASK_REVIEW", True),
+            free_text_spec=_env_bool("FORGEL_FREE_TEXT_SPEC", True),
             task_accept=task_accept,
             task_retries=int(retries_raw),
             task_reworks=int(reworks_raw),
