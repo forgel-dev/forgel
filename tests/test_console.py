@@ -64,6 +64,10 @@ class ConsoleTest(unittest.TestCase):
         )
         return "\n".join(output)
 
+    def test_banner_stays_out_of_captured_output(self) -> None:
+        text = self._run(["/quit"])
+        self.assertNotIn("████", text)
+
     def test_new_project_and_selection_work_without_telegram(self) -> None:
         text = self._run(["/new Demo | A demo brief.", "/projects", "/quit"])
         self.assertIn("Forgel console", text)

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-label="Forgel — Brief in. Product out. Your cloud.">
+  <title>Forgel — Brief in. Product out. Your cloud.</title>
+  <defs>
+    <radialGradient id="heat" cx="0.88" cy="1.05" r="0.8">
+      <stop offset="0" stop-color="#FF6A2A" stop-opacity="0.3"/>
+      <stop offset="0.55" stop-color="#FF6A2A" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FF6A2A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="640" fill="#14171C"/>
+  <rect width="1280" height="640" fill="url(#heat)"/>
+  <g transform="translate(96 192) scale(0.5)">
+    <rect width="512" height="512" rx="104" fill="#1B1F26"/>
+    <path fill="#F2EFE9" d="M150 140 L372 140 L346 166 L346 192 L150 192 Z"/>
+    <path fill="#F2EFE9" d="M150 240 L330 240 L304 266 L304 292 L150 292 Z"/>
+    <path fill="#F2EFE9" d="M150 140 L202 140 L202 368 L150 368 Z"/>
+    <path fill="#FF6A2A" d="M372 140 L346 166 L346 192 Z"/>
+    <path fill="#FF6A2A" d="M330 240 L304 266 L304 292 Z"/>
+  </g>
+  <text x="416" y="316" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="124" font-weight="700" letter-spacing="-3" fill="#F2EFE9">forgel</text>
+  <text x="420" y="378" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="600" fill="#FF6A2A">Brief in. Product out. Your cloud.</text>
+  <text x="420" y="432" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="400" fill="#A7A199">Open-source autonomous software studio  ·  forgel.io</text>
+</svg>

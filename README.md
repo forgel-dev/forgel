@@ -1,6 +1,16 @@
-# Forgel
+<p align="center">
+  <img src="brand/forgel-mark.svg" width="96" height="96" alt="Forgel">
+</p>
 
-Open-source autonomous software studio. Describe a product; get a working web app with specs, independent QA, and a deploy — on your infrastructure, with your model key.
+<h1 align="center">Forgel</h1>
+
+<p align="center"><strong>Brief in. Product out. Your cloud.</strong></p>
+
+<p align="center">
+  An open-source autonomous software studio. Describe a product; get a working
+  web app with specs, independent QA, and a deploy — on your infrastructure,
+  with your model key.
+</p>
 
 **Status:** pre-alpha. M0 — Skeleton: done. M0.5 — Self-Hosting: partial — what remains is the self-hosting exit criterion (a Forgel change specified, implemented, reviewed, QA'd and accepted through Forgel itself) and post-merge smoke with auto-revert. Evidence and remaining items: [PLAN.md §10](PLAN.md#10-roadmap).
 
@@ -696,6 +706,11 @@ guidance, may be incomplete or out of date, and are not legal advice. Forgel doe
 warrant that a generated product complies with the laws of any jurisdiction. The user
 is responsible for regulatory compliance; approving a production deploy confirms that
 responsibility. See [PLAN.md](PLAN.md) and [jurisdiction/README.md](jurisdiction/README.md).
+
+## Brand
+
+The mark, palette, ASCII wordmark and the GitHub field texts live in
+[brand/README.md](brand/README.md).
 
 ## License
 

@@ -54,6 +54,7 @@ shim and is not part of the public repository.
 | `environment/` | Dockerfile for Forgel's own sandbox environment |
 | `registry/` | Recipe registry data |
 | `jurisdiction/` | Jurisdiction pack data |
+| `brand/` | Brand assets: mark, palette, ASCII wordmark, GitHub fields |
 | `tests/` | `unittest` suite |
 | `PLAN.md` | Product and architecture plan |
 | `FORGEL.md` | Native Forgel instructions |

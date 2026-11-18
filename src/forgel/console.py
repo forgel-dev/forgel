@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - platform without readline
     readline = None  # type: ignore[assignment]
 
 from .agent import ProjectAgent, append_history, load_history
+from .banner import BANNER
 from .chat import CommandRouter
 from .config import Settings
 from .control import is_paused
@@ -708,6 +709,15 @@ def run_console(
 
     chat_id = 0
     lang = "en"
+    interactive = (
+        input_fn is input
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+    )
+    if interactive:
+        output("")
+        output(BANNER)
+        output("")
     if project_id:
         try:
             project = resolve_project(ledger, project_id)
@@ -757,11 +767,6 @@ def run_console(
                 else "console_mode_commands",
             ),
         )
-    )
-    interactive = (
-        input_fn is input
-        and sys.stdin.isatty()
-        and sys.stdout.isatty()
     )
     if interactive:
         _setup_readline(settings, ledger)

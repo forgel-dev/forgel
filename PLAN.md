@@ -62,6 +62,8 @@ The immediate goal is self-hosting: Forgel develops itself through its own daemo
 
 **What we are not:** not a code generator, not no-code, not an agency. We hand over repositories and a running staging environment.
 
+Brand assets, the palette and the GitHub field texts live in `brand/`.
+
 ---
 
 ## 2. MVP Scope
