@@ -71,6 +71,7 @@ AGENT_ACTIONS = {
     "accept",
     "reject",
     "retry",
+    "review",
     "run",
     "repo_add",
     "repo_create",
@@ -182,6 +183,8 @@ the action cannot run without it):
   latest when omitted).
 - reject {task_id?, notes?}: reject it and send the work back.
 - retry {task_id?}: requeue a failed or blocked task.
+- review {task_id?}: re-run QA and review for a task awaiting a decision,
+  for example after the reviewer could not produce a verdict.
 - run {}: let the daemon work now.
 - repo_add {url, id?, depends_on?}: add an existing repository.
 - repo_create {id, org?, public?, depends_on?, description?}.

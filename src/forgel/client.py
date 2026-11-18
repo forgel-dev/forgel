@@ -69,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     task = common("task", "Decide or queue a task")
     task.add_argument(
-        "action", choices=["accept", "reject", "retry", "cancel", "add"]
+        "action", choices=["accept", "reject", "retry", "cancel", "add", "review"]
     )
     task.add_argument("--task", dest="task_id", default="")
     task.add_argument("--actor", default="owner")

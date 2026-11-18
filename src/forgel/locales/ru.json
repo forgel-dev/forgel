@@ -107,7 +107,7 @@
   "chat_repo_separate": "Зависимостей нет: этот репозиторий ведётся в проекте отдельно.",
   "chat_tasks_none": "Задач нет. Запрос на изменение, отправленный обычным сообщением, поставит задачу в очередь.",
   "chat_tasks_header": "Задачи: {count}",
-  "chat_task_usage": "Использование: /task cancel|retry <task-id>, /task accept <task-id> [заметка] или /task reject <task-id> [заметка]",
+  "chat_task_usage": "Использование: /task cancel|retry|review <task-id>, /task accept <task-id> [заметка] или /task reject <task-id> [заметка]",
   "chat_task_cancelled": "Задача {task} отменена.",
   "chat_task_requeued": "Задача {task} возвращена в очередь.",
   "chat_unknown_task": "ошибка: неизвестная задача {task}",
@@ -458,5 +458,13 @@
   "client_status_line": "{project}: {state} (поколение {generation}, точка {checkpoint})",
   "client_plan_requires": "укажите --goal \"...\" или --status",
   "client_daemon_ran": "Демон выполнил циклов: {count}.",
-  "peak_waiting": "Пиковые часы: ждём окно вне пиков в {moment} (около {minutes} мин). Ctrl-C вернёт к приглашению."
+  "peak_waiting": "Пиковые часы: ждём окно вне пиков в {moment} (около {minutes} мин). Ctrl-C вернёт к приглашению.",
+  "chat_task_reviewed": "QA и ревью для задачи {task} перезапущены ({status}).",
+  "chat_review_no_model": "Модель для ревьюера не настроена.",
+  "chat_action_no_review_task": "Нет задачи, ждущей решения по ревью.",
+  "client_task_reviewed": "Ревью для {task} перезапущено ({status}).",
+  "client_review_no_model": "модель для ревьюера не настроена",
+  "cli_task_review_requires": "ошибка: для review задачи нужен --task",
+  "cli_review_no_model": "ошибка: модель для ревьюера не настроена",
+  "cli_task_reviewed": "QA и ревью для {task} перезапущены ({status})."
 }

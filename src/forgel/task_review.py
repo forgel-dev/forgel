@@ -1091,6 +1091,50 @@ def process_task_result(
     await_acceptance(layout, task, reason)
 
 
+def rerun_review(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    task_id: str,
+    client: ModelClient | None,
+    log: Callable[[str], None] = print,
+) -> dict[str, Any]:
+    """Re-run QA and review for a task awaiting a decision."""
+
+    layout = ProjectLayout.detect(str(project["workspace"]))
+    task = get_task(layout, str(task_id))
+    if task is None:
+        raise ValueError(f"unknown task {task_id!r}")
+    if task.get("status") != "review":
+        raise ValueError(
+            "only tasks awaiting a review decision can be re-reviewed "
+            f"(status: {task.get('status')})"
+        )
+    if client is None:
+        raise ValueError("no model configured for the reviewer")
+    log(
+        f"[review] {project['id']}: task {task_id}: re-running QA and review"
+    )
+    process_task_result(
+        settings, ledger, project, task, client, log
+    )
+    stored = get_task(layout, str(task_id)) or task
+    if stored.get("status") == "failed":
+        from .daemon import handle_failure
+
+        handle_failure(
+            settings,
+            ledger,
+            dict(project),
+            layout,
+            str(task_id),
+            client,
+            log,
+        )
+        stored = get_task(layout, str(task_id)) or stored
+    return stored
+
+
 def accept_parked_green_tasks(
     settings: Settings,
     ledger: Ledger,

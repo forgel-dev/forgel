@@ -430,6 +430,37 @@ def task(settings: Settings, ledger: Ledger, args: Any) -> int:
             "task",
             _say(args, "client_task_requires", action=action),
         )
+    if action == "review":
+        from .model import build_model_client
+        from .task_review import rerun_review
+
+        client = build_model_client(settings.home, log=_log)
+        if client is None:
+            return fail(
+                args, "task", _say(args, "client_review_no_model")
+            )
+        try:
+            updated = rerun_review(
+                settings, ledger, project, task_id, client, _log
+            )
+        except ValueError as exc:
+            return fail(args, "task", str(exc))
+        task_store.commit_task(
+            layout,
+            updated["id"],
+            f"Review task {updated['id']}",
+        )
+        return _finish_task(
+            args,
+            project,
+            updated,
+            _say(
+                args,
+                "client_task_reviewed",
+                task=updated["id"],
+                status=_status_name(args, updated["status"]),
+            ),
+        )
     if action in {"retry", "cancel"}:
         try:
             updated = (

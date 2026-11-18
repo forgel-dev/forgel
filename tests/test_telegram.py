@@ -355,6 +355,31 @@ class SelectionAndAgentTest(unittest.TestCase):
         english = router.handle(8, "/tasks", "@tester")
         self.assertIn("No tasks", english.text)
 
+    def test_plain_language_review_action_reruns_the_review(self) -> None:
+        response = {
+            "kind": "action",
+            "reply": "Re-running the review.",
+            "action": "review",
+            "action_args": {},
+        }
+        router = self._router([json.dumps(response)])
+        project = self._project("Review", "A brief.")
+        self.ledger.set_session(7, project)
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project)["workspace"]
+        )
+        task = create_task(
+            layout, "Review me", ["A"], ["B"], repo_id="api"
+        )
+        update_task(layout, task["id"], status="review", result={})
+        with patch(
+            "forgel.chat.rerun_review",
+            return_value={"id": task["id"], "status": "done"},
+        ) as rerun:
+            reply = router.handle(7, "перезапусти ревью", "@tester")
+        self.assertIn("перезапущены", reply.text)
+        rerun.assert_called_once()
+
     def test_status_question_is_answered_in_natural_language(self) -> None:
         router = self._router(
             [

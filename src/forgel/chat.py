@@ -47,7 +47,7 @@ from .ledger import Ledger
 from .artifacts import write_text
 from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
-from .task_review import accept_task, reject_task
+from .task_review import accept_task, reject_task, rerun_review
 from .program_manifest import entries as manifest_entries
 from .program_manifest import repo_location
 from .projects import ProjectError, create_project, derive_name, resolve_project
@@ -143,6 +143,13 @@ class CommandRouter:
             self._text(chat_id, key, **values),
             failed=True,
         )
+
+    def _review_client(self) -> Any:
+        if self.agent is not None:
+            return self.agent.client
+        from .model import build_model_client
+
+        return build_model_client(self.settings.home)
 
     def _status_name(self, chat_id: int, status: object) -> str:
         key = str(status or "")
@@ -697,7 +704,7 @@ class CommandRouter:
         usage = self._text(chat_id, "chat_task_usage")
         tokens = rest.split(maxsplit=2)
         action = tokens[0].lower() if tokens else ""
-        if action not in {"cancel", "retry", "accept", "reject"}:
+        if action not in {"cancel", "retry", "accept", "reject", "review"}:
             return Reply(usage, failed=True)
         if len(tokens) < 2:
             return Reply(usage, failed=True)
@@ -707,6 +714,35 @@ class CommandRouter:
         layout = ProjectLayout.detect(project["workspace"])
         task_id = tokens[1]
         notes = tokens[2].strip() if len(tokens) > 2 else ""
+        if action == "review":
+            client = self._review_client()
+            if client is None:
+                return self._error(chat_id, "chat_review_no_model")
+            try:
+                updated = rerun_review(
+                    self.settings,
+                    self.ledger,
+                    project,
+                    task_id,
+                    client,
+                )
+            except ValueError as exc:
+                return self._error(chat_id, "chat_error", error=exc)
+            commit_task(
+                layout,
+                updated["id"],
+                f"Review task {updated['id']}",
+            )
+            return Reply(
+                self._text(
+                    chat_id,
+                    "chat_task_reviewed",
+                    task=updated["id"],
+                    status=self._status_name(
+                        chat_id, updated["status"]
+                    ),
+                )
+            )
         if action in {"cancel", "retry"}:
             try:
                 task = (
@@ -1704,6 +1740,29 @@ class CommandRouter:
             notes = str(args.get("notes") or "").strip()
             rest = f"{action} {task_id} {notes}".strip()
             return combine(self._task(chat_id, rest, actor))
+        if action == "review":
+            project = self._selected(chat_id)
+            if isinstance(project, Reply):
+                return project
+            layout = ProjectLayout.detect(project["workspace"])
+            task_id = str(args.get("task_id") or "").strip()
+            if not task_id:
+                task = next(
+                    (
+                        item
+                        for item in reversed(list_tasks(layout))
+                        if item.get("status") == "review"
+                    ),
+                    None,
+                )
+                if task is None:
+                    return self._error(
+                        chat_id, "chat_action_no_review_task"
+                    )
+                task_id = str(task["id"])
+            return combine(
+                self._task(chat_id, f"review {task_id}", actor)
+            )
         if action == "adopt":
             url = str(args.get("url") or "").strip()
             brief = str(args.get("brief") or "").strip()

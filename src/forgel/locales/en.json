@@ -107,7 +107,7 @@
   "chat_repo_separate": "No dependency edges recorded: this repository is maintained separately inside the project.",
   "chat_tasks_none": "No tasks. A change request sent as a plain message queues one.",
   "chat_tasks_header": "Tasks: {count}",
-  "chat_task_usage": "Usage: /task cancel|retry <task-id>, /task accept <task-id> [note] or /task reject <task-id> [note]",
+  "chat_task_usage": "Usage: /task cancel|retry|review <task-id>, /task accept <task-id> [note] or /task reject <task-id> [note]",
   "chat_task_cancelled": "Cancelled task {task}.",
   "chat_task_requeued": "Requeued task {task}.",
   "chat_unknown_task": "error: unknown task {task}",
@@ -458,5 +458,13 @@
   "client_status_line": "{project}: {state} (generation {generation}, checkpoint {checkpoint})",
   "client_plan_requires": "provide --goal \"...\" or --status",
   "client_daemon_ran": "Daemon ran {count} cycle(s).",
-  "peak_waiting": "Peak hours: waiting for off-peak at {moment} (about {minutes} min). Ctrl-C returns to the prompt."
+  "peak_waiting": "Peak hours: waiting for off-peak at {moment} (about {minutes} min). Ctrl-C returns to the prompt.",
+  "chat_task_reviewed": "Re-ran QA and review for task {task} ({status}).",
+  "chat_review_no_model": "No model is configured for the reviewer.",
+  "chat_action_no_review_task": "There is no task awaiting a review decision.",
+  "client_task_reviewed": "Re-reviewed {task} ({status}).",
+  "client_review_no_model": "no model configured for the reviewer",
+  "cli_task_review_requires": "error: task review requires --task",
+  "cli_review_no_model": "error: no model configured for the reviewer",
+  "cli_task_reviewed": "Re-ran QA and review for {task} ({status})."
 }

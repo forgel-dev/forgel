@@ -22,6 +22,7 @@ from forgel.task_review import (
     detected_test_removals,
     process_task_result,
     reject_task,
+    rerun_review,
     run_task_review,
     task_diff,
 )
@@ -430,6 +431,64 @@ class TaskReviewTest(unittest.TestCase):
             for event in events
         ]
         self.assertEqual(reworks, [0, 1])
+
+    def test_an_errored_review_can_be_rerun(self) -> None:
+        settings = Settings(
+            home=self.home,
+            registry_path=REPO_ROOT / "registry" / "recipes.json",
+            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
+            jurisdiction_path=REPO_ROOT / "jurisdiction",
+            qa_runtime="local",
+            task_qa=False,
+            task_review=True,
+            task_accept="auto",
+        )
+        task = self._task()
+        data = dict(task.get("result") or {})
+        data["review"] = {
+            "status": "error",
+            "summary": "the review did not cover every acceptance criterion",
+            "requirements": [],
+            "blocking": [],
+            "report": "",
+        }
+        update_task(
+            self.layout,
+            task["id"],
+            status="review",
+            result=data,
+        )
+        updated = rerun_review(
+            settings,
+            self.ledger,
+            self.project,
+            task["id"],
+            ScriptedModelClient([PASS]),
+            log=lambda _m: None,
+        )
+        self.assertEqual(updated["status"], "done")
+        self.assertEqual(
+            updated["result"]["review"]["status"], "pass"
+        )
+
+    def test_only_a_review_task_can_be_rereviewed(self) -> None:
+        task = create_task(
+            self.layout,
+            "Waiting",
+            ["Do it"],
+            ["It is done"],
+            repo_id="main",
+            test_command=[],
+        )
+        with self.assertRaises(ValueError):
+            rerun_review(
+                self.settings,
+                self.ledger,
+                self.project,
+                task["id"],
+                ScriptedModelClient([PASS]),
+                log=lambda _m: None,
+            )
 
     def test_a_verdict_must_cover_every_criterion(self) -> None:
         task = self._task()

@@ -873,6 +873,47 @@ def cmd_task(args: argparse.Namespace) -> int:
             print(_say("cli_error", error=exc), file=sys.stderr)
             return 1
         layout = ProjectLayout.detect(project["workspace"])
+        if args.action == "review":
+            if not args.task_id:
+                print(
+                    _say("cli_task_review_requires"),
+                    file=sys.stderr,
+                )
+                return 2
+            from .model import build_model_client
+            from .task_review import rerun_review
+
+            model = build_model_client(
+                settings.home,
+                log=lambda message: print(message, file=sys.stderr),
+            )
+            if model is None:
+                print(_say("cli_review_no_model"), file=sys.stderr)
+                return 1
+            try:
+                updated = rerun_review(
+                    settings,
+                    ledger,
+                    project,
+                    args.task_id,
+                    model,
+                )
+            except ValueError as exc:
+                print(_say("cli_error", error=exc), file=sys.stderr)
+                return 1
+            tasks.commit_task(
+                layout,
+                updated["id"],
+                f"Review task {updated['id']}",
+            )
+            print(
+                _say(
+                    "cli_task_reviewed",
+                    task=updated["id"],
+                    status=_status_name(updated["status"]),
+                )
+            )
+            return 0
         if args.action == "retry":
             if not args.task_id:
                 print(
@@ -2008,7 +2049,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     task.add_argument(
         "action",
-        choices=["add", "list", "cancel", "retry", "accept", "reject"],
+        choices=[
+            "add",
+            "list",
+            "cancel",
+            "retry",
+            "accept",
+            "reject",
+            "review",
+        ],
     )
     task.add_argument("project_id")
     task.add_argument("--task", dest="task_id", default="")
