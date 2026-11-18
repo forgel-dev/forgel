@@ -1035,6 +1035,53 @@ class TaskReviewTest(unittest.TestCase):
             )
         )
 
+    def test_acceptance_pushes_the_commit_to_the_remote(self) -> None:
+        bare = self.home / "remote.git"
+        subprocess.run(
+            ["git", "init", "--bare", "-q", str(bare)], check=True
+        )
+        subprocess.run(
+            ["git", "remote", "add", "origin", str(bare)],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self._git("push", "-u", "origin", "main")
+        write_text(self.repo / "app.py", "value = 2\n")
+        self._git("add", "-A")
+        self._git(
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "accepted change",
+        )
+        task = self._task()
+        updated = accept_task(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            actor="tester",
+        )
+        self.assertEqual(updated["status"], "done")
+        log = subprocess.run(
+            ["git", "--git-dir", str(bare), "log", "--format=%s", "main"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertIn("accepted change", log)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["push"]["status"], "pushed"
+        )
+
     def test_rejecting_a_review_fails_the_task(self) -> None:
         task = self._task()
         process_task_result(

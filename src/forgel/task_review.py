@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from .artifacts import write_text
+from . import git_ops
 from .config import Settings
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -1006,8 +1007,78 @@ def accept_task(
     actor: str = "owner",
     notes: str = "",
 ) -> dict[str, Any]:
-    return _set_acceptance(
+    updated = _set_acceptance(
         settings, ledger, project, task, "accepted", actor, notes
+    )
+    _push_accepted(settings, ledger, project, updated)
+    return updated
+
+
+def _push_accepted(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    task: Mapping[str, Any],
+) -> None:
+    """Push the accepted task's branch; an accepted change is not left local."""
+
+    layout = ProjectLayout.detect(str(project["workspace"]))
+    task_id = str(task["id"])
+    repo_id, repo = _repo(layout, task)
+    if not (repo / ".git").exists():
+        return
+    remote = git_ops.origin_url(repo)
+    if not remote:
+        return
+    status = "pushed"
+    detail = ""
+    branch = ""
+    token: str | None = None
+    try:
+        branch = git_ops.current_branch(repo)
+    except git_ops.GitOperationError as exc:
+        status = "failed"
+        detail = f"cannot determine the branch: {exc}"
+    if status == "pushed":
+        if git_ops.is_https(remote):
+            try:
+                from .providers.github_auth import (
+                    GithubAuth,
+                    GithubAuthError,
+                )
+
+                token = GithubAuth(settings.home).resolve("auto").token
+            except GithubAuthError:
+                token = None
+        try:
+            git_ops.push(repo, branch, token)
+        except git_ops.GitOperationError as exc:
+            status = "failed"
+            detail = str(exc)
+    data = dict(task.get("result") or {})
+    data["push"] = {
+        "status": status,
+        "repo": repo_id,
+        "branch": branch,
+        "detail": detail,
+    }
+    update_task(layout, task_id, result=data)
+    ledger.append_event(
+        str(project["id"]),
+        "task_push",
+        status=status,
+        idempotency_key=(
+            f"{project['id']}:task_push:{task_id}:"
+            f"r{attempt_number(task)}"
+        ),
+        artifact_refs=[],
+        payload={
+            "task": task_id,
+            "repo": repo_id,
+            "branch": branch,
+            "detail": detail,
+        },
+        generation=ledger.current_generation(str(project["id"])),
     )
 
 
