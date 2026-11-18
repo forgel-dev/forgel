@@ -30,13 +30,23 @@ class DependencyError(RuntimeError):
     """An external dependency cannot be used deterministically."""
 
 
+class DependencyBlocked(DependencyError):
+    """A dependency has no reliable documentation/source; planning stops."""
+
+
 DEPENDENCY_PROMPT = """You are Forgel's dependency scout. The specification
 lists external dependencies; decide how each one can be used deterministically
 by the code and its tests.
 
 Inspect the repository first (environment contract, docs, vendored source,
 tests) and cite what you find. Do not run commands and do not invent an
-interface.
+interface. You may inspect any repository of this project by passing its
+``repo_id`` in an action.
+
+A dependency that is another repository in this same project, a locally
+installed executable, or a local/test service declared by the project's
+environment contract is "direct": cite the repository/source/contract in
+evidence. Check those before calling a dependency unavailable.
 
 For every dependency choose one mode:
 - "direct": it is available through a local or test interface in this
@@ -63,8 +73,14 @@ object:
 def _listing(
     dependencies: Sequence[Mapping[str, Any]],
     repo_id: str,
+    repos: Sequence[Mapping[str, Any]],
 ) -> str:
-    lines = [f"Repository: {repo_id or '(sole)'}", "", "Dependencies:"]
+    lines = [f"Repository: {repo_id or '(sole)'}", "", "Project repositories:"]
+    lines.extend(
+        f"- {item.get('id')}: {item.get('role') or 'application'}"
+        for item in repos
+    )
+    lines.extend(["", "Dependencies:"])
     for item in dependencies:
         lines.append(
             f"- {item.get('name')}: interface: "
@@ -78,23 +94,29 @@ def _parse(
     raw: str,
     dependencies: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, str]]:
-    data = next(
-        (
+    objects = json_objects(raw)
+    items: list[dict[str, Any]] = []
+    for obj in objects:
+        if isinstance(obj.get("dependencies"), list):
+            items = [
+                item for item in obj["dependencies"] if isinstance(item, dict)
+            ]
+            break
+    if not items:
+        # Some models return the dependency objects without the wrapper.
+        items = [
             item
-            for item in json_objects(raw)
-            if isinstance(item.get("dependencies"), list)
-        ),
-        None,
-    )
-    if data is None:
+            for item in objects
+            if str(item.get("name") or "").strip()
+            and str(item.get("mode") or "").strip()
+        ]
+    if not items:
         raise DependencyError(
-            "the dependency scout did not return a dependency list"
+            "the dependency scout did not return a dependency list; "
+            f"output: {raw[:600]}"
         )
     reported = {
-        str(item.get("name") or "").strip(): item
-        for item in data["dependencies"]
-        if isinstance(item, dict)
-        and str(item.get("name") or "").strip()
+        str(item.get("name") or "").strip(): item for item in items
     }
     result: list[dict[str, str]] = []
     unavailable: list[str] = []
@@ -141,7 +163,7 @@ def _parse(
             }
         )
     if unavailable:
-        raise DependencyError(
+        raise DependencyBlocked(
             "external dependencies have no reliable documentation or "
             "source and cannot be stubbed: " + ", ".join(unavailable)
         )
@@ -167,6 +189,7 @@ def investigate(
         return []
     repo_id = str(spec.get("repo_id") or intent.get("repo_id") or "")
     repos = manifest_entries(layout)
+    scout_retries = 0
     messages = [
         ModelMessage("system", DEPENDENCY_PROMPT),
         ModelMessage(
@@ -174,7 +197,7 @@ def investigate(
             "Task: "
             f"{intent.get('title') or spec.get('title') or '—'}\n\n"
             f"Summary: {intent.get('summary') or '—'}\n\n"
-            + _listing(dependencies, repo_id)
+            + _listing(dependencies, repo_id, repos)
             + "\n\nInspect the repository, then return the dependency JSON.",
         ),
     ]
@@ -226,11 +249,30 @@ def investigate(
             )
             continue
         if finals:
+            try:
+                result = _parse(raw, dependencies)
+            except DependencyBlocked:
+                raise
+            except DependencyError as exc:
+                if scout_retries < 2:
+                    messages.append(ModelMessage("assistant", raw.strip()))
+                    messages.append(
+                        ModelMessage(
+                            "user",
+                            "Return exactly one JSON object with every "
+                            "dependency: {\"dependencies\": [{\"name\", "
+                            "\"mode\", \"interface\", \"docs\", \"evidence\", "
+                            "\"stub\"}]}. " + str(exc),
+                        )
+                    )
+                    scout_retries += 1
+                    continue
+                raise
             log(
                 f"[deps] {repo_id or 'main'}: "
                 f"{len(dependencies)} dependency(ies) checked"
             )
-            return _parse(raw, dependencies)
+            return result
         messages.append(ModelMessage("assistant", raw.strip()))
         messages.append(
             ModelMessage(

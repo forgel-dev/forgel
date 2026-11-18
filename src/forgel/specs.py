@@ -121,9 +121,11 @@ Rules:
   reported; keep unrelated scope stable and never treat a preference, a
   simpler path or a wording change as a defect.
 - List every external dependency the task touches — a service, tool, binary,
-  API, schema or data format that is not the repository itself or the standard
-  library. Give the documentation source; leave it empty when none is known.
-  Do not invent the interface; the dependency scout investigates it.
+  API, schema or data format from outside this project and its repositories.
+  A sibling project repository, the standard library or a package already
+  provided by the project environment is not external; use it directly. Give
+  the documentation source; leave it empty when none is known. Do not invent
+  the interface; the dependency scout investigates it.
 - Return JSON only; no tool-call markup, XML or prose.
 """
 
@@ -272,6 +274,44 @@ def _context(
     return tree[:MAX_SPEC_CHARS]
 
 
+def _looks_like_tool_markup(text: str) -> bool:
+    lowered = text.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "<｜｜dsml｜｜",
+            "<|",
+            "<tool_call",
+            "<function_call",
+            "<system_warning",
+        )
+    )
+
+
+def _diagnostics(
+    intent: Mapping[str, Any],
+    attempts: int,
+    research_paths: Sequence[str],
+    retries: int,
+    markup_retries: int,
+    raw: str,
+    last_observation: str,
+    reason: str,
+) -> str:
+    title = str(intent.get("title") or "the task")
+    research = ", ".join(research_paths[-8:]) or "none"
+    observation = " ".join(
+        (last_observation or "").strip().split()
+    )[:400]
+    return (
+        f"{reason}; task: {title}; model calls: {attempts}; "
+        f"research: {research}; answer retries: {retries}; "
+        f"markup retries: {markup_retries}; "
+        f"last observation: {observation or '—'}; "
+        f"last model output: {raw[:1200] or '(empty)'}"
+    )
+
+
 def write_task_spec(
     settings: Any,
     layout: ProjectLayout,
@@ -290,6 +330,10 @@ def write_task_spec(
         decisions_text = decisions_path.read_text(encoding="utf-8")
     except OSError:
         decisions_text = "(no user-decision log yet)"
+    repo_lines = "\n".join(
+        f"- {item['id']}: {item.get('role') or 'application'}"
+        for item in manifest_entries(layout)
+    ) or "- (sole)"
     messages = [
         ModelMessage("system", SPEC_SYSTEM_PROMPT),
         ModelMessage(
@@ -298,6 +342,7 @@ def write_task_spec(
             f"{goal}\n\nPlan notes:\n{notes or '—'}\n\n"
             f"Task intent:\n{json.dumps(dict(intent), ensure_ascii=False)}\n\n"
             f"User decision log:\n{decisions_text}\n\n"
+            f"Project repositories:\n{repo_lines}\n\n"
             f"Repository file tree:\n{_context(layout, repo_id)}\n\n"
             + (
                 "The plan review rejected the previous version for this "
@@ -313,11 +358,20 @@ def write_task_spec(
     retries = 0
     research_steps = 0
     budget_notice = False
+    attempts = 0
+    markup_retries = 0
+    research_paths: list[str] = []
+    last_observation = ""
     for _ in range(MAX_SPEC_STEPS + 4):
+        attempts += 1
         try:
             raw = client.complete(messages, model=model)
         except ModelError as exc:
-            raise SpecError(f"the requirements writer failed: {exc}") from exc
+            raise SpecError(
+                f"the requirements writer failed on model call {attempts}: "
+                f"{exc}; research: "
+                f"{', '.join(research_paths[-8:]) or 'none'}"
+            ) from exc
         objects = json_objects(raw)
         actions = [
             item
@@ -347,7 +401,11 @@ def write_task_spec(
                 observation = f"error: {exc}"
             observations.append(observation)
             research_steps += 1
+            research_paths.append(
+                f"{data['action']}:{args.get('path') or ''}"
+            )
         if observations:
+            last_observation = observations[-1]
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
@@ -367,7 +425,16 @@ def write_task_spec(
                 if retries >= 1:
                     keys = sorted(finals[-1].keys())
                     raise SpecError(
-                        f"{exc}; model keys: {keys}; output: {raw[:600]}"
+                        _diagnostics(
+                            intent,
+                            attempts,
+                            research_paths,
+                            retries,
+                            markup_retries,
+                            raw,
+                            last_observation,
+                            f"{exc}; model keys: {keys}",
+                        )
                     ) from exc
                 if not observations:
                     messages.append(ModelMessage("assistant", raw.strip()))
@@ -380,10 +447,32 @@ def write_task_spec(
                 )
                 retries += 1
                 continue
+        if _looks_like_tool_markup(raw) and markup_retries < 2:
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Return exactly one JSON specification object, not "
+                    "tool-call markup or XML. Do not emit "
+                    "<｜｜DSML｜｜>, <tool_call> or provider-specific calls.",
+                )
+            )
+            markup_retries += 1
+            continue
         if not actions:
             if retries >= 1:
                 raise SpecError(
-                    "the requirements writer did not return a specification"
+                    _diagnostics(
+                        intent,
+                        attempts,
+                        research_paths,
+                        retries,
+                        markup_retries,
+                        raw,
+                        last_observation,
+                        "the requirements writer did not return a "
+                        "specification",
+                    )
                 )
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
@@ -398,7 +487,17 @@ def write_task_spec(
         if research_steps >= MAX_SPEC_STEPS and not observations:
             if budget_notice:
                 raise SpecError(
-                    "the requirements writer exceeded the research step limit"
+                    _diagnostics(
+                        intent,
+                        attempts,
+                        research_paths,
+                        retries,
+                        markup_retries,
+                        raw,
+                        last_observation,
+                        "the requirements writer exceeded the research "
+                        "step limit",
+                    )
                 )
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
@@ -411,7 +510,18 @@ def write_task_spec(
             budget_notice = True
             continue
     if parsed is None:
-        raise SpecError("the requirements writer did not return a spec")
+        raise SpecError(
+            _diagnostics(
+                intent,
+                attempts,
+                research_paths,
+                retries,
+                markup_retries,
+                raw,
+                last_observation,
+                "the requirements writer did not return a spec",
+            )
+        )
     return parsed
 
 

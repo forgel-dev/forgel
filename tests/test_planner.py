@@ -411,6 +411,50 @@ class PlannerTest(unittest.TestCase):
             )
         self.assertIn("weather", str(ctx.exception))
 
+    def test_spec_writer_recovers_from_tool_call_markup(self) -> None:
+        markup = "<｜｜DSML｜｜ calls>"
+        specs = [_spec_for(item) for item in PLAN["tasks"]]
+        client = ScriptedModelClient(
+            [
+                json.dumps(PLAN),
+                markup,
+                json.dumps(specs[0]),
+                json.dumps(specs[1]),
+                json.dumps(CRITIC),
+            ]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            dry_run=True,
+            log=lambda _m: None,
+        )
+        self.assertEqual(len(result.tasks), 2)
+
+    def test_a_spec_failure_reports_the_writer_log(self) -> None:
+        markup = "<｜｜DSML｜｜ calls>"
+        client = ScriptedModelClient(
+            [json.dumps(PLAN)] + [markup] * 5
+        )
+        with self.assertRaises(PlanningError) as ctx:
+            plan_project(
+                self.settings,
+                self.ledger,
+                self.project,
+                "Bring the project to M1",
+                client=client,
+                dry_run=True,
+                log=lambda _m: None,
+            )
+        text = str(ctx.exception)
+        self.assertIn(PLAN["tasks"][0]["title"], text)
+        self.assertIn("model calls:", text)
+        self.assertIn("last model output:", text)
+        self.assertIn("DSML", text)
+
     def test_spec_writer_budget_forces_the_spec(self) -> None:
         intent = {
             "title": "Add a health endpoint",

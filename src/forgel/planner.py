@@ -476,6 +476,16 @@ def _spec_call(func, *args, **kwargs):
         raise PlanningError(str(exc)) from exc
 
 
+def _task_error(
+    item: Mapping[str, Any], index: int, exc: PlanningError
+) -> PlanningError:
+    detail = str(exc)
+    title = str(item.get("title") or index)
+    if f"task: {title}" not in detail and f"task {title}" not in detail:
+        detail = f"task {title}: {detail}"
+    return PlanningError(detail)
+
+
 def _dependency_call(
     layout: ProjectLayout,
     intent: Mapping[str, Any],
@@ -662,9 +672,12 @@ def plan_project(
     if dry_run:
         preview: list[dict[str, Any]] = []
         for index, item in enumerate(items):
-            spec = _spec_call(specs.write_task_spec,
-                settings, layout, goal, notes, item, model_client, log
-            )
+            try:
+                spec = _spec_call(specs.write_task_spec,
+                    settings, layout, goal, notes, item, model_client, log
+                )
+            except PlanningError as exc:
+                raise _task_error(item, index + 1, exc) from exc
             spec = _dependency_call(
                 layout, item, spec, model_client, log
             )
@@ -686,9 +699,14 @@ def plan_project(
     task_specs: list[dict[str, Any]] = []
     for index, item in enumerate(items):
         log(f"[spec] task {index + 1}/{len(items)}: writing")
-        spec = _spec_call(specs.write_task_spec,
-            settings, layout, goal, notes, item, model_client, log
-        )
+        try:
+            spec = _spec_call(specs.write_task_spec,
+                settings, layout, goal, notes, item, model_client, log
+            )
+        except PlanningError as exc:
+            raise PlanningError(
+                f"task {item.get('title') or index + 1}: {exc}"
+            ) from exc
         task_specs.append(
             _dependency_call(
                 layout, item, spec, model_client, log
@@ -702,16 +720,21 @@ def plan_project(
         for finding in review.findings:
             position = int(finding.get("task", -1))
             if 0 <= position < len(items):
-                revised = _spec_call(specs.write_task_spec,
-                    settings,
-                    layout,
-                    goal,
-                    notes,
-                    items[position],
-                    model_client,
-                    log,
-                    review_issue=str(finding.get("issue") or ""),
-                )
+                try:
+                    revised = _spec_call(specs.write_task_spec,
+                        settings,
+                        layout,
+                        goal,
+                        notes,
+                        items[position],
+                        model_client,
+                        log,
+                        review_issue=str(finding.get("issue") or ""),
+                    )
+                except PlanningError as exc:
+                    raise _task_error(
+                        items[position], position + 1, exc
+                    ) from exc
                 task_specs[position] = _dependency_call(
                     layout,
                     items[position],
