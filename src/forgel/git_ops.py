@@ -105,6 +105,37 @@ def tag_baseline(repo: Path) -> None:
     _ok(repo, "tag", "-f", "forgel-baseline")
 
 
+def tag_sha(repo: Path, tag: str) -> str:
+    result = _run(repo, "rev-list", "-n", "1", f"refs/tags/{tag}")
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def create_tag(repo: Path, tag: str, message: str) -> None:
+    existing = tag_sha(repo, tag)
+    if existing:
+        raise GitOperationError(
+            f"tag {tag!r} already exists at {existing}"
+        )
+    _ok(repo, "tag", "-a", tag, "-m", message)
+
+
+def push_tag(repo: Path, tag: str, token: str | None = None) -> None:
+    ref = f"refs/tags/{tag}"
+    if token and is_https(origin_url(repo)):
+        result = _run(repo, "push", "origin", ref, env=auth_env(token))
+        if result.returncode == 0:
+            return
+        result = _run(repo, "push", "origin", ref)
+        if result.returncode == 0:
+            return
+        detail = (result.stderr or result.stdout).strip()
+        raise GitOperationError(f"tag push failed: {detail}")
+    result = _run(repo, "push", "origin", ref)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise GitOperationError(f"tag push failed: {detail}")
+
+
 def origin_url(repo: Path) -> str:
     result = _run(repo, "remote", "get-url", "origin")
     return result.stdout.strip() if result.returncode == 0 else ""

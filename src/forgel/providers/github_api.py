@@ -224,6 +224,49 @@ class GithubAPI:
             {"merge_method": method},
         )
 
+    # ------------------------------------------------------------ releases
+
+    def release_for_tag(
+        self, full_name: str, tag: str
+    ) -> dict[str, Any] | None:
+        path = (
+            f"/repos/{full_name}/releases/tags/"
+            + urllib.parse.quote(tag, safe="")
+        )
+        try:
+            return self.request("GET", path)
+        except GithubAPIError as exc:
+            if exc.status == 404:
+                return None
+            raise
+
+    def create_release(
+        self,
+        full_name: str,
+        tag: str,
+        target: str,
+        name: str = "",
+        body: str = "",
+        draft: bool = False,
+        prerelease: bool = False,
+        generate_notes: bool = False,
+    ) -> dict[str, Any]:
+        """Create a GitHub release on an existing tag."""
+
+        payload: dict[str, Any] = {
+            "tag_name": tag,
+            "target_commitish": target,
+            "name": name or tag,
+            "body": body,
+            "draft": draft,
+            "prerelease": prerelease,
+        }
+        if generate_notes:
+            payload["generate_release_notes"] = True
+        return self.request(
+            "POST", f"/repos/{full_name}/releases", payload
+        )
+
     # ---------------------------------------------------------------- checks
 
     def check_state(self, full_name: str, ref: str) -> CheckReport:

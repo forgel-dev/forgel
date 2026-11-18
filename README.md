@@ -450,6 +450,32 @@ and records it in `docs/program/git/report.md` and the ledger. With
 the pull request open. Post-merge smoke and auto-revert are not implemented
 yet; the config field is reserved.
 
+## Releases
+
+A release tags every code repository at a committed SHA and, when an API
+token is available (GitHub App, PAT or `gh` session), creates the provider
+release object — a GitHub release with notes. Without a token the tag is
+still created and pushed; the result says `tagged` and names the fallback.
+
+```bash
+forgel release <project> --version 1.2.0 [--notes "..."] [--repo api] [--draft] [--generate-notes]
+```
+
+```text
+/release [--version X] [--notes ...] [--repo ID] [--draft] [--generate-notes]
+```
+
+The tag is `v<version>` for a plain SemVer (or the version as given); without
+`--version` it is `g<generation>`. Repositories must have no uncommitted
+changes; a tag that already exists at a different SHA is refused, while the
+same SHA is pushed idempotently. The manifest
+`docs/program/releases/<tag>.json` records every repository SHA, the release
+digest, release URLs and the staging/production approvals.
+`--generate-notes` asks GitHub to build the notes from commits; the default
+body lists the released repositories. This is the release step after the
+human-approved staging candidate; a per-repository release train remains a
+later extension.
+
 ## Coding Agent
 
 Queue a task for a project:

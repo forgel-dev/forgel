@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from .. import git_ops
 from ..secrets import get_secret
@@ -90,3 +91,39 @@ class GithubProvider:
             # argv and .git/config.
             env = git_ops.auth_env(token)
         clone_repository(remote.url, destination, env=env)
+
+    def release(
+        self,
+        home: Path,
+        full_name: str,
+        tag: str,
+        target: str,
+        name: str = "",
+        body: str = "",
+        draft: bool = False,
+        prerelease: bool = False,
+        generate_notes: bool = False,
+        api: Any | None = None,
+        token: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a GitHub release on a tag, reusing an existing one."""
+
+        from .github_api import GithubAPI
+        from .github_auth import GithubAuth
+
+        if api is None:
+            value = token or GithubAuth(home).resolve("auto").token
+            api = GithubAPI(value)
+        existing = api.release_for_tag(full_name, tag)
+        if existing is not None:
+            return existing
+        return api.create_release(
+            full_name,
+            tag,
+            target,
+            name=name,
+            body=body,
+            draft=draft,
+            prerelease=prerelease,
+            generate_notes=generate_notes,
+        )

@@ -54,6 +54,7 @@ from .ledger import Ledger
 from .local_env import LocalEnvError, init_local_env, load_local_env
 from .model import build_model_client
 from .planner import PlanningError, plan_project, plan_status
+from .release import ReleaseError, release_project
 from .project_config import (
     ConfigError,
     SimplicityConfig,
@@ -1053,6 +1054,54 @@ def cmd_task(args: argparse.Namespace) -> int:
             pass
         print(task["id"])
         return 0
+    finally:
+        ledger.close()
+
+
+def cmd_release(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(_say("cli_error", error=exc), file=sys.stderr)
+            return 1
+        try:
+            result = release_project(
+                settings,
+                ledger,
+                project,
+                version=args.version,
+                notes=args.notes,
+                repo_id=args.repo,
+                draft=args.draft,
+                prerelease=args.prerelease,
+                generate_notes=args.generate_notes,
+                log=lambda message: print(message, file=sys.stderr),
+            )
+        except ReleaseError as exc:
+            print(_say("cli_error", error=exc), file=sys.stderr)
+            return 1
+        print(
+            _say(
+                "cli_release_header",
+                version=result.tag,
+                status=result.status,
+                manifest=result.manifest,
+            )
+        )
+        for item in result.repos:
+            print(
+                _say(
+                    "cli_release_repo",
+                    repo=item.repo_id,
+                    tag=item.tag,
+                    sha=item.sha,
+                    detail=item.release_url or item.detail,
+                )
+            )
+        return 0 if result.status != "failed" else 1
     finally:
         ledger.close()
 
@@ -2078,6 +2127,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     task.add_argument("--home", default=None)
     task.set_defaults(func=cmd_task)
+
+    release = subparsers.add_parser(
+        "release", help="Tag and publish a project release"
+    )
+    release.add_argument("project_id")
+    release.add_argument("--version", default="")
+    release.add_argument("--notes", default="")
+    release.add_argument("--repo", default="")
+    release.add_argument("--draft", action="store_true")
+    release.add_argument("--prerelease", action="store_true")
+    release.add_argument(
+        "--generate-notes",
+        dest="generate_notes",
+        action="store_true",
+        help="Ask GitHub to generate release notes from commits",
+    )
+    release.add_argument("--home", default=None)
+    release.set_defaults(func=cmd_release)
 
     github = subparsers.add_parser(
         "github", help="Publish a branch and manage pull requests"

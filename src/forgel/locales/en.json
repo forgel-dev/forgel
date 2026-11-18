@@ -56,7 +56,7 @@
   "console_stopped_back": "Stopped; back to the prompt.",
   "console_bye": "Bye.",
   "console_error": "error: {error}",
-  "help": "Forgel\n\nTalk in plain language. I decide what to do: answer, queue a code change,\nplan a milestone, show the state, accept or send work back, retry, pause, or\nadopt a repository. You do not need to remember commands.\n\nExamples\n  adopt this repository\n  plan the milestone: bring the project to M1\n  what is happening?\n  accept the latest task\n  send it back: the header is wrong\n  retry the failed task\n  work in peak hours / only off-peak\n  pause / resume\n\nEntry points and sensitive operations stay explicit\n/adopt <url> [| brief]   adopt a repository and select it\n/new <name> | <brief>    create a template project\n/secret ...              secret names, set, delete\n/config [set ...]        effective settings\n/help\n/quit                    exit the console\n\nProject ids can be shortened to any unique prefix. Secrets sent to a bot pass\nthrough Telegram, which has no end-to-end encryption for bots; prefer\nenvironment variables or `forgel secret set` over SSH in production.",
+  "help": "Forgel\n\nTalk in plain language. I decide what to do: answer, queue a code change,\nplan a milestone, show the state, accept or send work back, retry, pause, or\nadopt a repository. You do not need to remember commands.\n\nExamples\n  adopt this repository\n  plan the milestone: bring the project to M1\n  what is happening?\n  accept the latest task\n  send it back: the header is wrong\n  retry the failed task\n  work in peak hours / only off-peak\n  pause / resume\n\nEntry points and sensitive operations stay explicit\n/adopt <url> [| brief]   adopt a repository and select it\n/new <name> | <brief>    create a template project\n/secret ...              secret names, set, delete\n/config [set ...]        effective settings\n/release [--version X] [--notes ...]  tag and publish a release\n/help\n/quit                    exit the console\n\nProject ids can be shortened to any unique prefix. Secrets sent to a bot pass\nthrough Telegram, which has no end-to-end encryption for bots; prefer\nenvironment variables or `forgel secret set` over SSH in production.",
   "chat_error": "error: {error}",
   "chat_error_word": "error",
   "chat_error_prefix": "error: {text}",
@@ -469,5 +469,10 @@
   "cli_task_reviewed": "Re-ran QA and review for {task} ({status}).",
   "github_auth_session": "GitHub CLI session available",
   "chat_github_result_pushed": "pull request: none (branch pushed; open it yourself)",
-  "cli_github_pushed": "pull:       none (branch pushed; open it yourself)"
+  "cli_github_pushed": "pull:       none (branch pushed; open it yourself)",
+  "chat_release_usage": "Usage: /release [--version X] [--notes ...] [--repo ID] [--draft] [--generate-notes]",
+  "chat_release_header": "Release {version}: {status}. Manifest: {manifest}",
+  "chat_release_repo": "{repo}: {tag} at {sha} — {detail}",
+  "cli_release_header": "Release {version}: {status}. Manifest: {manifest}",
+  "cli_release_repo": "{repo}: {tag} at {sha} — {detail}"
 }

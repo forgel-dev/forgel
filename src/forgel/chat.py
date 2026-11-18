@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import shlex
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,6 +48,7 @@ from .ledger import Ledger
 from .artifacts import write_text
 from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
+from .release import ReleaseError, release_project
 from .task_review import accept_task, reject_task, rerun_review
 from .program_manifest import entries as manifest_entries
 from .program_manifest import repo_location
@@ -217,6 +219,7 @@ class CommandRouter:
             "/repo": self._repo,
             "/control": self._control,
             "/github": self._github,
+            "/release": self._release,
             "/plan": self._plan,
             "/tasks": self._tasks,
             "/task": self._task,
@@ -932,6 +935,77 @@ class CommandRouter:
                 status=result.status,
             ),
         ]
+        return Reply("\n".join(lines))
+
+    def _release(self, chat_id: int, rest: str, _actor: str) -> Reply:
+        project = self._selected(chat_id)
+        if isinstance(project, Reply):
+            return project
+        try:
+            tokens = shlex.split(rest)
+        except ValueError as exc:
+            return self._error(chat_id, "chat_error", error=exc)
+        version = ""
+        notes = ""
+        repo_id = ""
+        draft = False
+        generate_notes = False
+        index = 0
+        while index < len(tokens):
+            token = tokens[index]
+            if token in {"--version", "--notes", "--repo"}:
+                if index + 1 >= len(tokens):
+                    return self._error(chat_id, "chat_release_usage")
+                value = tokens[index + 1]
+                if token == "--version":
+                    version = value
+                elif token == "--notes":
+                    notes = value
+                else:
+                    repo_id = value
+                index += 2
+                continue
+            if token == "--draft":
+                draft = True
+            elif token == "--generate-notes":
+                generate_notes = True
+            else:
+                return self._error(chat_id, "chat_release_usage")
+            index += 1
+        try:
+            result = release_project(
+                self.settings,
+                self.ledger,
+                project,
+                version=version,
+                notes=notes,
+                repo_id=repo_id,
+                draft=draft,
+                generate_notes=generate_notes,
+                log=lambda _message: None,
+            )
+        except ReleaseError as exc:
+            return self._error(chat_id, "chat_error", error=exc)
+        lines = [
+            self._text(
+                chat_id,
+                "chat_release_header",
+                version=result.tag,
+                status=result.status,
+                manifest=result.manifest,
+            )
+        ]
+        for item in result.repos:
+            lines.append(
+                self._text(
+                    chat_id,
+                    "chat_release_repo",
+                    repo=item.repo_id,
+                    tag=item.tag,
+                    sha=item.sha,
+                    detail=item.release_url or item.detail,
+                )
+            )
         return Reply("\n".join(lines))
 
     def _projects(self, chat_id: int, _rest: str, _actor: str) -> Reply:
