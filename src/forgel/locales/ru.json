@@ -228,7 +228,7 @@
   "chat_approval_next_cycle": "\nДемон продолжит на следующем цикле.",
   "chat_production_prompt": "Согласование производства для {name} ({project}), поколение {generation}.\n\nForgel — инструмент разработки ПО, а не юридическая фирма. Пакеты юрисдикций носят рекомендательный характер и не подтверждают соответствие требованиям. Принимая, вы подтверждаете, что отвечаете за соответствие продукта регулированию на целевых рынках. См. docs/program/jurisdiction/disclaimer.md.\n\nСогласовать производство?",
   "chat_github_dns": "GitHub API недоступен по DNS. Проверьте VPN/сеть и повторите команду.",
-  "chat_github_app_permission": "GitHub App не может выполнить это действие. Выдайте установке права администрирования/создания репозиториев для организации или используйте PAT с областью repo.",
+  "chat_github_app_permission": "GitHub App не может выполнить это действие. Выдайте установке нужное право (Contents read/write для push и релизов; Administration write для создания репозиториев) или используйте PAT с областью repo.",
   "chat_github_auth": "Не удалось аутентифицироваться в GitHub. Задайте FORGEL_GITHUB_TOKEN на хосте, используйте /secret set github.token <token> или войдите через `gh auth login`; для SSH-remote используется ключ хоста. Fine-grained токену нужны права Contents read/write.",
   "chat_no_project_selected": "Проект не выбран. Используйте /projects, затем /use <id>.",
   "chat_project_gone": "Выбранный проект больше не существует. Используйте /projects.",

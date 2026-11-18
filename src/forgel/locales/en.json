@@ -228,7 +228,7 @@
   "chat_approval_next_cycle": "\nThe daemon will continue on its next cycle.",
   "chat_production_prompt": "Production approval for {name} ({project}), generation {generation}.\n\nForgel is a software development tool, not a law firm. Jurisdiction packs are advisory and do not establish legal compliance. By accepting, you confirm that you are responsible for the product's regulatory compliance in its target markets. See docs/program/jurisdiction/disclaimer.md.\n\nApprove production?",
   "chat_github_dns": "GitHub API is not reachable by DNS. Check VPN/network and retry the same command.",
-  "chat_github_app_permission": "The GitHub App cannot perform this action. Grant the installation repository administration/creation for the organization, or use a PAT with repo scope.",
+  "chat_github_app_permission": "The GitHub App cannot perform this action. Grant the installation the permission the operation needs (Contents read/write for push and releases; Administration write for repository creation), or use a PAT with repo scope.",
   "chat_github_auth": "GitHub authentication failed. Set FORGEL_GITHUB_TOKEN on the host, use /secret set github.token <token>, or log in with `gh auth login`; SSH remotes use the host key. A fine-grained token needs Contents read/write.",
   "chat_no_project_selected": "No project selected. Use /projects, then /use <id>.",
   "chat_project_gone": "The selected project no longer exists. Use /projects.",

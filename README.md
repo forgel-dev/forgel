@@ -472,9 +472,13 @@ same SHA is pushed idempotently. The manifest
 `docs/program/releases/<tag>.json` records every repository SHA, the release
 digest, release URLs and the staging/production approvals.
 `--generate-notes` asks GitHub to build the notes from commits; the default
-body lists the released repositories. This is the release step after the
-human-approved staging candidate; a per-repository release train remains a
-later extension.
+body lists the released repositories. GitHub Releases use the Contents
+read/write permission already required for pushing — the App needs no extra
+scope, a fine-grained PAT needs Contents read/write and a classic PAT needs
+`repo`. The installation must include the repository; without the permission
+the API returns a 403 and the release falls back to a tagged result. This is
+the release step after the human-approved staging candidate; a per-repository
+release train remains a later extension.
 
 ## Coding Agent
 
