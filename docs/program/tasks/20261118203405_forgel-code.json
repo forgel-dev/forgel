@@ -230,12 +230,12 @@
     }
   ],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-18T20:34:05+00:00",
-  "started_at": "2026-11-18T20:47:31+00:00",
-  "finished_at": "2026-11-18T21:03:45+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Клиент `forgel-code` переработан по всем пунктам спецификации; ранее начатая работа сохранена и дополнена.\n\nЧто сделано в этом проходе:\n\n- `forgel_code/engine.py` переписан: вызов движка ограничен таймаутом (по умолчанию 600 с, `--timeout`, `$FORGEL_CODE_TIMEOUT`), stdout/stderr декодируются как UTF-8 (`errors=\"replace\"`), stdin ребёнка — `subprocess.DEVNULL`; на истечении таймаута — `EngineError` с кодом 124 и сообщением, называющим лимит. Ответ `{\"ok\": false}` с кодом выхода 0 теперь ошибка, а структурные поля ошибки (`code`/`kind`/`message`) переносятся в `EngineError.payload` и в текст сообщения вместо сырого вывода. Извлечение JSON больше не опирается на первую `{`: перебираются все позиции `{`, берётся первый декодируемый объект, при неудаче в сообщение попадает ограниченная однострочная выдержка.\n- `forgel_code/cli.py`: `--json`, `--engine` и `--timeout` объявлены ровно один раз в общем родительском парсере и наследуются подкомандами (`default=argparse.SUPPRESS`, чтобы подпарсер не затирал значение); самодельный сканер argv удалён. Ошибки argparse перехватываются подклассом `ArgumentParser` и при `--json` печатают ровно один JSON-объект с `\"ok\": false` и непустым `error` (без usage в stdout). Ключ проекта теперь добавляется (`--project <key>`) ко всем проектным командам — say, status, tasks, task, accept, rework, resume, pause, plan, history, projects, session — и не добавляется, пока `use` не выбран. Поле `project` в конверте — реально переданный ключ или `null`. Поиск задачи идёт только по записям верхнего уровня (`tasks`/`items`/`result`), по `id`/`task_id`, с ошибками «не найдено» и «неоднозначно». Определение отсутствующей команды движка опирается на код возврата (2) и структурные поля, без английских подстрок. `plan` теперь `plan \"<goal>\" [--milestone KEY]`. Добавлен `--version`.\n- `forgel_code/__init__.py:__version__` стал единственным источником версии: `pyproject.toml` использует `dynamic = [\"version\"]`, `_build_backend.py` читает версию из пакета через `ast` (без импорта) и берёт её для имён дистрибутива/sdist/wheel/METADATA.\n- `_build_backend.py`: sdist — PEP 625 (`forgel_code-<version>.tar.gz`, корень `forgel_code-<version>/`, `PKG-INFO` в корне); wheel собирает все файлы пакета рекурсивно (подпакеты и data-файлы), а не только `*.py` верхнего уровня; детерминированные tar-записи.\n- `README.md`: установка с пином (тег/коммит/`==version`), раздел Update с `--force`/`--upgrade`, явное «editable installs are not supported», ни одной команды с default branch и ни одного `pip install .`; описаны `--timeout`, UTF-8, отсутствие stdin, `project: null`, `plan` с `--milestone`, `--version`.\n- Тесты: `tests/test_cli.py` расширен (проброс проекта на все команды, ошибки разбора с `--json`, фраза с `--json`, таймаут по опции и по переменной, UTF-8 под `LC_ALL=C`, отсутствие stdin, структурные ошибки с кодом 0, шумный вывод с `{`, выдержка при неразборчивом выводе, детерминированный/неоднозначный поиск задачи, отсутствие английских маркеров, форма `plan`, README, единственность объявлений опций). `tests/test_packaging.py` расширен (PEP 625 sdist с `PKG-INFO`, wheel с подпакетом и data-файлами, совпадение `--version` с метаданными, отсутствие дубля версии в pyproject).\n\nПроверка: `python -m unittest discover -s tests` — 79 тестов, OK. Дополнительно вручную проверено, что фраза, начинающаяся с `-` (`-json flag`, `-a -b`), доходит до движка без изменений, а `--engine PATH` не съедает значение другой опции.",
+    "summary": "Клиент `forgel-code` переработан по всем пунктам спецификации; ранее начатая работа сохранена и дополнена.\n\nЧто сделано в этом проходе:\n\n- `forgel_code/engine.py` переписан: вызов движка ограничен таймаутом (по умолчанию 600 с, `--timeout`, `$FORGEL_CODE_TIMEOUT`), stdout/stderr декодируются как UTF-8 (`errors=\"replace\"`), stdin ребёнка — `subprocess.DEVNULL`; на истечении таймаута — `EngineError` с кодом 124 и сообщением, называющим лимит. Ответ `{\"ok\": false}` с кодом выхода 0 теперь ошибка, а структурные поля ошибки (`code`/`kind`/`message`) переносятся в `EngineError.payload` и в текст сообщения вместо сырого вывода. Извлечение JSON больше не опирается на первую `{`: перебираются все позиции `{`, берётся первый декодируемый объект, при неудаче в сообщение попадает ограниченная однострочная выдержка.\n- `forgel_code/cli.py`: `--json`, `--engine` и `--timeout` объявлены ровно один раз в общем родительском парсере и наследуются подкомандами (`default=argparse.SUPPRESS`, чтобы подпарсер не затирал значение); самодельный сканер argv удалён. Ошибки argparse перехватываются подклассом `ArgumentParser` и при `--json` печатают ровно один JSON-объект с `\"ok\": false` и непустым `error` (без usage в stdout). Ключ проекта теперь добавляется (`--project <key>`) ко всем проектным командам — say, status, tasks, task, accept, rework, resume, pause, plan, history, projects, session — и не добавляется, пока `use` не выбран. Поле `project` в конверте — реально переданный ключ или `null`. Поиск задачи идёт только по записям верхнего уровня (`tasks`/`items`/`result`), по `id`/`task_id`, с ошибками «не найдено» и «неоднозначно». Определение отсутствующей команды движка опирается на код возврата (2) и структурные поля, без английских подстрок. `plan` теперь `plan \"<goal>\" [--milestone KEY]`. Добавлен `--version`.\n- `forgel_code/__init__.py:__version__` стал единственным источником версии: `pyproject.toml` использует `dynamic = [\"version\"]`, `_build_backend.py` читает версию из пакета через `ast` (без импорта) и берёт её для имён дистрибутива/sdist/wheel/METADATA.\n- `_build_backend.py`: sdist — PEP 625 (`forgel_code-<version>.tar.gz`, корень `forgel_code-<version>/`, `PKG-INFO` в корне); wheel собирает все файлы пакета рекурсивно (подпакеты и data-файлы), а не только `*.py` верхнего уровня; детерминированные tar-записи.\n- `README.md`: установка с пином (тег/коммит/`==version`), раздел Update с `--force`/`--upgrade`, явное «editable installs are not supported», ни одной команды с default branch и ни одного `pip install .`; описаны `--timeout`, UTF-8, отсутствие stdin, `project: null`, `plan` с `--milestone`, `--version`.\n- Тесты: `tests/test_cli.py` расширен (проброс проекта на все команды, ошибки разбора с `--json`, фраза с `--json`, таймаут по опции и по переменной, UTF-8 под `LC_ALL=C`, отсутствие stdin, структурные ошибки с кодом 0, шумный вывод с `{`, выдержка при неразборчивом выводе, детерминированный/неоднозначный поиск задачи, отсутствие английских маркеров, форма `plan`, README, единственность объявлений опций). `tests/test_packaging.py` расширен (PEP 625 sdist с `PKG-INFO`, wheel с подпакетом и data-файлами, совпадение `--version` с метаданными, отсутствие дубля версии в pyproject).\n\nПроверка: `python -m unittest discover -s tests` — 79 тестов, OK. Дополнительно вручную проверено, что фраза, начинающаяся с `-` (`-json flag`, `-a -b`), доходит до движка без изменений, а `--engine PATH` не съедает значение другой опции.; task QA failed (exit 1)",
     "files_changed": [
       "README.md",
       "_build_backend.py",
@@ -422,10 +422,88 @@
     "attempts": 1,
     "retry_after": "2026-11-18T20:47:31+00:00",
     "last_failure": {
-      "kind": "infrastructure",
-      "message": "model call failed: model call exceeded the 300s deadline"
+      "kind": "qa",
+      "message": "task QA failed (exit 1)",
+      "retryable": false
     },
-    "failure": {}
+    "qa": {
+      "status": "fail",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261118203405_forgel-code.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0
+        },
+        {
+          "command": "python -m unittest tests.test_cli",
+          "exit_code": 1
+        },
+        {
+          "command": "python -m unittest tests.test_packaging",
+          "exit_code": 1
+        },
+        {
+          "command": "python -m forgel_code --version",
+          "exit_code": 1
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass"
+        },
+        {
+          "criterion": "A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`.",
+          "command": "python -m unittest tests.test_cli",
+          "exit_code": 1,
+          "verdict": "fail"
+        },
+        {
+          "criterion": "Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both.",
+          "command": "python -m unittest tests.test_packaging",
+          "exit_code": 1,
+          "verdict": "fail"
+        },
+        {
+          "criterion": "`forgel-code --version` prints the version from the single source and it equals the metadata of the built package.",
+          "command": "python -m forgel_code --version",
+          "exit_code": 1,
+          "verdict": "fail"
+        },
+        {
+          "criterion": "The README offers no default-branch and no editable install and contains an install command with a pinned version plus an update instruction.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review"
+        },
+        {
+          "criterion": "The added tests fail on the original code (not verifiable by a single run of the new code).",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review"
+        }
+      ],
+      "review_required": true
+    },
+    "rework_count": 1,
+    "feedback": [
+      "QA check failed: A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`. (exit 1)",
+      "QA check failed: Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both. (exit 1)",
+      "QA check failed: `forgel-code --version` prints the version from the single source and it equals the metadata of the built package. (exit 1)"
+    ]
   },
   "request": "docs/program/requests/20261118203405113659_forgel-code.md"
 }
