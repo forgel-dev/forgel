@@ -230,10 +230,10 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-18T20:34:05+00:00",
-  "started_at": "2026-11-18T20:34:05+00:00",
-  "finished_at": "2026-11-18T20:46:31+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "model call failed: model call exceeded the 300s deadline",
     "files_changed": [],
@@ -267,11 +267,13 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261118203405_forgel-code.md",
+    "attempts": 1,
+    "retry_after": "2026-11-18T20:47:31+00:00",
+    "last_failure": {
       "kind": "infrastructure",
       "message": "model call failed: model call exceeded the 300s deadline"
-    },
-    "report": "docs/program/agent/20261118203405_forgel-code.md"
+    }
   },
   "request": "docs/program/requests/20261118203405113659_forgel-code.md"
 }
