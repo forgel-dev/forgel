@@ -1,36 +1,37 @@
 {
   "id": "20261118203405_forgel-code",
   "title": "Устранить дефекты клиента Forgel Code",
-  "spec": "docs/program/requests/20261118203405113659_forgel-code.md",
+  "spec": "docs/program/specs/20261118203405_forgel-code.md",
   "requirements": [
-    "Когда проект выбран (команда use), ключ проекта передаётся движку для всех команд, работающих в контексте проекта: status, tasks, task, say, plan, resume, pause, history, projects, session, accept, rework. Когда проект не выбран, ключ не передаётся и клиент работает с активным проектом движка.",
-    "При --json любая ошибка разбора аргументов (неизвестная команда, лишний или недостающий аргумент, неверный флаг) печатает в stdout ровно один JSON-объект с \"ok\": false, полем с текстом ошибки и завершается ненулевым кодом. Текст справки argparse в stdout не попадает.",
-    "--json и --engine разбираются как обычные аргументы командной строки, а не вырезаются из argv вслепую: значения других аргументов и текст реплики не искажаются, реплика, начинающаяся с дефиса, доходит до движка целиком.",
-    "Вызов движка ограничен по времени: есть значение по умолчанию и способ его изменить (флаг клиента и/или переменная окружения), по истечении срока клиент завершается ненулевым кодом с понятным сообщением, при --json — одним JSON-объектом. Вывод движка декодируется как UTF-8 независимо от локали, дочерний процесс не наследует stdin.",
-    "Если движок вернул структурированную ошибку (\"ok\": false), клиент сохраняет её поля в своём сообщении об ошибке, а не подменяет сырым текстом вывода. Ответ с \"ok\": false считается неуспехом и при нулевом коде возврата движка.",
-    "Разбор JSON-ответа движка не привязан к первому символу '{': клиент выбирает разбираемый объект из вывода, а при неудаче выдаёт ошибку с фрагментом полученного вывода для диагностики.",
-    "Поиск задачи по идентификатору детерминирован: клиент либо использует команду движка для одной задачи, либо сопоставляет записи верхнего уровня списка задач, а при неоднозначности сообщает об ошибке вместо угадывания.",
-    "Отсутствие команды в движке определяется по коду возврата и структурированным полям ошибки, а не по подстрокам человекочитаемого текста; поведение не зависит от локали.",
-    "Поле project в JSON-ответе отражает проект, с которым реально работал движок: при отсутствии выбранного проекта не подставляется ложный ярлык.",
-    "Объявления --json и --engine существуют в одном месте (без недостижимых дублей), версия клиента задана в одном источнике и используется сборкой и пакетом.",
-    "Команда plan однозначна: `forgel-code plan \"текст\"` отправляет текст как цель, а имя вехи задаётся явно отдельным параметром.",
-    "Сборка: sdist соответствует PEP 625 (нормализованное имя forgel_code-<version> и PKG-INFO в корне архива); wheel включает подпакеты и файлы данных пакета, а не только *.py верхнего уровня.",
-    "README описывает стабильную установку из зафиксированного тега или коммита и способ обновления, и явно указывает, что установка в editable-режиме не поддерживается.",
-    "Каждое исправление сопровождается тестом в существующем наборе тестов клиента, включая тесты с подставным движком (fake engine), проверяющие переданные аргументы, кодировку, таймаут и формат вывода.",
-    "Существующее поведение, не затронутое дефектами (список команд, разбор успешных ответов, рендер), сохраняется; публичные тексты остаются на английском (D-025)."
+    "R1 The project key selected with `forgel-code use <key>` is appended to the engine argv (`--project <key>`) for status, tasks, task, say, plan, resume, pause, history, projects, session, accept and rework; when no project has been selected, no `--project` argument is passed for any of them.",
+    "R2 With `--json`, any argument-parse error (unknown command, missing or extra positional, unknown or malformed flag) prints exactly one JSON object to stdout with `\"ok\": false` and a non-empty textual error field, exits non-zero, and stdout contains no argparse usage/help text.",
+    "R3 `--json` and `--engine` are declared in the argparse parser (once each) and parsed like any other option; no pre-parse scanning of argv removes tokens, so the value of another option is never consumed as an engine path and a reply whose text begins with `-` reaches the engine intact.",
+    "R4 The engine call is bounded: there is a default timeout, a `--timeout SECONDS` option and a `FORGEL_CODE_TIMEOUT` environment override (precedence: option, then environment, then default). On expiry the client exits non-zero with a message naming the timeout, and with `--json` emits exactly one JSON object with `\"ok\": false`.",
+    "R5 The engine's stdout is decoded as UTF-8 regardless of the process locale, and the child process does not receive the client's stdin.",
+    "R6 When the engine's JSON answer has `\"ok\": false`, the client treats the call as a failure even if the engine exit code is 0, and reports the engine's structured error fields (code/kind/message as provided) in its own error message and, with `--json`, in the JSON object, instead of substituting raw stdout/stderr text.",
+    "R7 JSON extraction does not depend on the first `{` being the start of the object: the client locates a decodable JSON object in the engine output; when none can be decoded it raises an error whose message includes a bounded excerpt of the received output.",
+    "R8 Task lookup by id is deterministic: the client either calls a dedicated engine single-task command or matches only the top-level entries of the engine's task listing on their id/task_id field; if no entry or more than one entry matches, the client reports an error rather than returning an arbitrary node.",
+    "R9 The absence of an engine command/action is determined from the engine's return code and structured error fields; the client contains no match on human-readable substrings, and the behaviour is the same under any locale.",
+    "R10 The `project` field of the client's JSON answer is the project key actually passed to the engine, or `null` when nothing was passed; a local session label is never reported as a project.",
+    "R11 `--json` and `--engine` each appear in exactly one place in the parser and there is no unreachable duplicate declaration; the client version has a single source (`forgel_code/__init__.py:__version__`) that `pyproject.toml`, the build backend and a new `forgel-code --version` all use/print.",
+    "R12 `forgel-code plan \"<text>\"` sends `<text>` as the milestone goal; the milestone name is supplied by a separate explicit `--milestone <key>` option. The previous ambiguous `plan <milestone> [goal...]` positional shape is removed.",
+    "R13 The sdist is `forgel_code-<version>.tar.gz` (PEP 625 normalized name) and contains `forgel_code-<version>/PKG-INFO` at its root; the wheel packages every module of `forgel_code` (including subpackages) and the package data files, not only top-level `*.py`.",
+    "R14 The README documents installation from a pinned tag, commit or version, documents how to update to a newer pinned version, and states explicitly that editable installs are not supported; it contains no install command pointing at the default branch and no `pip install .` as the recommended path.",
+    "R15 Every fix above is covered by a test in `tests/` using the existing stdlib `unittest` suite and the fake engine, asserting the engine argv received, UTF-8 decoding under a non-UTF-8 locale, the timeout, and the JSON output shape; behaviour not touched by these defects (command list, successful-answer parsing, human rendering) keeps its current tests and behaviour.",
+    "R16 Added tests fail against the pre-fix code: each new behavioural test exercises a path that the original implementation gets wrong."
   ],
   "acceptance": [
-    "Тест с подставным движком подтверждает: после `use <key>` каждая из команд status, tasks, task, say, plan, resume, pause, history, projects, session получает ключ проекта в аргументах, а без `use` — не получает.",
-    "`forgel-code unknown-cmd --json` и `forgel-code status лишний-аргумент --json` печатают ровно один JSON-объект с \"ok\": false и завершаются ненулевым кодом; stdout не содержит usage-текста argparse.",
-    "`forgel-code say \"добавь флаг --json\" --json` доносит до движка текст реплики целиком; тест с подставным движком фиксирует полученные аргументы.",
-    "Тест подставного движка, который спит дольше лимита, завершает клиент по таймауту с ненулевым кодом и сообщением об истечении времени; тест с не-ASCII выводом подтверждает корректное UTF-8 декодирование при локали, отличной от UTF-8; подставной движок не получает доступа к stdin.",
-    "Ответ подставного движка {\"ok\": false, \"error\": {...}} с кодом 0 приводит к неуспеху клиента, а поля ошибки видны в выводе.",
-    "Вывод движка, содержащий строку лога с '{' перед настоящим JSON, разбирается успешно; полностью неразбираемый вывод даёт ошибку с фрагментом вывода.",
-    "Задача находится по идентификатору при вложенных объектах с полем id; неоднозначный случай даёт ошибку, а не произвольную запись.",
-    "Сборка sdist даёт файл с нормализованным именем forgel_code-<version> и PKG-INFO в корне; wheel содержит все модули пакета и файлы данных, проверено тестом упаковки.",
-    "`forgel-code --version` печатает версию из единственного источника, совпадающую с метаданными собранного пакета.",
-    "README не предлагает установку из default branch или в editable-режиме и содержит команду установки с зафиксированной версией.",
-    "Весь набор тестов клиента проходит, добавленные тесты падают на исходном коде."
+    "A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`.",
+    "`forgel-code unknown-cmd --json` and `forgel-code status extra-argument --json` each print exactly one JSON object with `\"ok\": false` and a non-empty error text, exit non-zero, and print no argparse usage text to stdout.",
+    "`forgel-code say \"add the --json flag\" --json` delivers the whole phrase to the engine; a fake-engine test records the received argv and shows the reply text is unchanged.",
+    "A fake engine that sleeps past the limit makes the client exit non-zero with a timeout message; a fake engine writing non-ASCII output under a non-UTF-8 locale is decoded correctly; a fake engine that reads stdin observes that it receives no client input.",
+    "A fake engine answering `{\"ok\": false, \"error\": {...}}` with exit code 0 makes the client fail, and the error fields are visible in the client's message and in its `--json` object.",
+    "Engine output that contains a log line with `{` before the real JSON object is parsed successfully; fully undecodable output produces an error message containing an excerpt of that output.",
+    "Task lookup finds a task nested under a task list when entries carry an `id` field, and an ambiguous match produces an error instead of an arbitrary record.",
+    "Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both.",
+    "`forgel-code --version` prints the version from the single source and it equals the metadata of the built package.",
+    "The README offers no default-branch and no editable install and contains an install command with a pinned version plus an update instruction.",
+    "The whole client test suite passes and the added tests fail on the original code."
   ],
   "constraints": [
     "Работа идёт только в репозитории клиента (code); движок не меняется — если нужной команды или поля в движке нет, клиент деградирует явной ошибкой, а не догадкой.",
@@ -42,7 +43,14 @@
     "Не ослаблять существующие тесты ради прохождения."
   ],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
   "assumptions": [
     "Лимит времени на вызов движка по умолчанию — 600 секунд, переопределяется флагом клиента и переменной окружения; значение выбрано как компромисс между долгими операциями движка и защитой от зависания.",
     "Единственный источник версии — pyproject.toml, откуда её берут и сборочный backend, и сам пакет для --version.",
@@ -55,12 +63,177 @@
   "plan_goal": "",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "`forgel-code unknown-cmd --json` and `forgel-code status extra-argument --json` each print exactly one JSON object with `\"ok\": false` and a non-empty error text, exit non-zero, and print no argparse usage text to stdout.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "`forgel-code say \"add the --json flag\" --json` delivers the whole phrase to the engine; a fake-engine test records the received argv and shows the reply text is unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "A fake engine that sleeps past the limit makes the client exit non-zero with a timeout message; a fake engine writing non-ASCII output under a non-UTF-8 locale is decoded correctly; a fake engine that reads stdin observes that it receives no client input.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "A fake engine answering `{\"ok\": false, \"error\": {...}}` with exit code 0 makes the client fail, and the error fields are visible in the client's message and in its `--json` object.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "Engine output that contains a log line with `{` before the real JSON object is parsed successfully; fully undecodable output produces an error message containing an excerpt of that output.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "Task lookup finds a task nested under a task list when entries carry an `id` field, and an ambiguous match produces an error instead of an arbitrary record.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_packaging"
+      ]
+    },
+    {
+      "criterion": "`forgel-code --version` prints the version from the single source and it equals the metadata of the built package.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "forgel_code",
+        "--version"
+      ]
+    },
+    {
+      "criterion": "`forgel-code --version` prints the version from the single source and it equals the metadata of the built package (equality with built metadata).",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_packaging"
+      ]
+    },
+    {
+      "criterion": "The README offers no default-branch and no editable install and contains an install command with a pinned version plus an update instruction.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The whole client test suite passes and the added tests fail on the original code.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "The added tests fail on the original code (not verifiable by a single run of the new code).",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "Forgel engine CLI (`forgel` executable)",
+      "interface": "Run as a child process: `forgel <command> [--project <key>] ... --json`. Commands include `say`, `status`, `tasks`, `task <action>`, `plan`, `resume`, `pause`, `history`, `projects`, `session`, and `use`. Parse stdout as a JSON envelope with `ok`, `kind`, `text`, `error`, and payload fields; non-zero exit or `ok: false` means failure.",
+      "docs": "main repository: src/forgel/cli.py, src/forgel/client_cli.py, src/forgel/chat.py; code repository tests: tests/test_cli.py (STUB_ENGINE)",
+      "mode": "direct",
+      "evidence": "The `main` repository is another repository in this project and defines the real CLI surface in src/forgel/cli.py, the JSON envelope/payloads in src/forgel/client_cli.py, and command routing in src/forgel/chat.py. The `code` repository's tests/test_cli.py contains STUB_ENGINE, a deterministic child-process double that records argv and returns the same JSON envelope.",
+      "stub": ""
+    },
+    {
+      "name": "PEP 517 build backend hook interface",
+      "interface": "Use the local build backend hooks `build_wheel`, `build_sdist`, `prepare_metadata_for_build_wheel`, `get_requires_for_build_wheel`, and `get_requires_for_build_sdist` implemented by `_build_backend.py`; `pyproject.toml` selects that backend through `[build-system]`.",
+      "docs": "https://peps.python.org/pep-0517/; code/pyproject.toml; code/_build_backend.py",
+      "mode": "direct",
+      "evidence": "`code/pyproject.toml` declares the project build backend, and `code/_build_backend.py` implements the PEP 517 hook functions used by the packaging tests.",
+      "stub": ""
+    },
+    {
+      "name": "PEP 625 sdist name and layout",
+      "interface": "`build_sdist` must produce a normalized sdist filename `forgel_code-<version>.tar.gz` whose archive root is `forgel_code-<version>/` and contains `PKG-INFO` at that root.",
+      "docs": "https://peps.python.org/pep-0625/; code/_build_backend.py",
+      "mode": "direct",
+      "evidence": "`code/_build_backend.py` implements `build_sdist` for the `forgel_code` distribution; the repository's packaging tests exercise the produced sdist filename and archive layout.",
+      "stub": ""
+    },
+    {
+      "name": "PEP 427 / binary distribution format (wheel)",
+      "interface": "`build_wheel` produces a ZIP wheel containing all package modules and package data under `forgel_code/` plus `forgel_code-<version>.dist-info/{METADATA,WHEEL,RECORD,entry_points.txt}`, with `Root-Is-Purelib: true` in `WHEEL`.",
+      "docs": "https://peps.python.org/pep-0427/; https://packaging.python.org/en/latest/specifications/binary-distribution-format/; code/_build_backend.py",
+      "mode": "direct",
+      "evidence": "`code/_build_backend.py` implements `build_wheel` for the local package, and the repository's packaging tests inspect the wheel members for package files, subpackages, data files, and dist-info metadata.",
+      "stub": ""
+    },
+    {
+      "name": "Core metadata (PKG-INFO / METADATA)",
+      "interface": "The backend writes `PKG-INFO` and `.dist-info/METADATA` with `Name`, `Version`, `Summary`, `License`, and `Requires-Python`; the package version and `forgel-code --version` must agree with the built metadata.",
+      "docs": "https://packaging.python.org/en/latest/specifications/core-metadata/; code/_build_backend.py; code/pyproject.toml",
+      "mode": "direct",
+      "evidence": "`code/_build_backend.py` generates `PKG-INFO`/`METADATA` from the project's metadata, while `code/pyproject.toml` declares the `forgel_code` distribution metadata and version source used by the backend and package.",
+      "stub": ""
+    }
+  ],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-18T20:34:05+00:00",
-  "started_at": "",
+  "started_at": "2026-11-18T20:34:05+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": "docs/program/requests/20261118203405113659_forgel-code.md"
 }
