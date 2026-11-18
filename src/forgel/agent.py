@@ -50,6 +50,8 @@ MAX_CONTEXT_CHARS = 24_000
 OVERVIEW_DOC_CHARS = 4_000
 OVERVIEW_TOTAL_CHARS = 14_000
 MAX_RESEARCH_STEPS = 6
+MAX_MARKUP_RETRIES = 3
+MAX_ANSWER_RETRIES = 3
 GENERIC_SKIP_DIRS = {
     ".git",
     ".forgel",
@@ -1018,7 +1020,13 @@ class ProjectAgent:
         answer: dict[str, Any] | None = None
         markup_retries = 0
         answer_retries = 0
-        for step in range(MAX_RESEARCH_STEPS + 1):
+        research_steps = 0
+        for step in range(
+            MAX_RESEARCH_STEPS
+            + 1
+            + MAX_MARKUP_RETRIES
+            + MAX_ANSWER_RETRIES
+        ):
             try:
                 raw = self.client.complete(messages, model=model)
             except ModelError as exc:
@@ -1037,7 +1045,7 @@ class ProjectAgent:
                 for item in objects
                 if str(item.get("action", "")) not in RESEARCH_ACTIONS
             ]
-            if actions and step == MAX_RESEARCH_STEPS:
+            if actions and research_steps >= MAX_RESEARCH_STEPS:
                 if not finals:
                     return AgentResult(
                         text=(
@@ -1050,6 +1058,8 @@ class ProjectAgent:
             if actions:
                 observations: list[str] = []
                 for data in actions:
+                    if research_steps >= MAX_RESEARCH_STEPS:
+                        break
                     args = dict(data.get("action_args") or {})
                     for key in ("path", "repo_id"):
                         if key in data and key not in args:
@@ -1063,6 +1073,7 @@ class ProjectAgent:
                     except RepoActionError as exc:
                         observation = f"error: {exc}"
                     observations.append(observation)
+                    research_steps += 1
                     append_history(
                         layout,
                         "tool",
@@ -1086,7 +1097,7 @@ class ProjectAgent:
                 )
                 if not finals:
                     continue
-            if _looks_like_tool_markup(raw) and markup_retries < 2:
+            if _looks_like_tool_markup(raw) and markup_retries < MAX_MARKUP_RETRIES:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
@@ -1103,20 +1114,24 @@ class ProjectAgent:
             candidate = parse_answer(
                 json.dumps(finals[-1]) if finals else raw
             )
-            unreadable = candidate["kind"] == "answer" and (
+            unreadable = candidate["kind"] in {
+                "answer",
+                "change_request",
+            } and (
                 not str(candidate["reply"]).strip()
                 or candidate["reply"] == UNFORMATTED_REPLY
             )
-            if unreadable and answer_retries < 2:
+            if unreadable and answer_retries < MAX_ANSWER_RETRIES:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
                         "user",
-                        "That reply cannot be shown to the user. Return "
-                        "exactly one JSON object with kind=answer and a "
-                        "non-empty plain-text reply. Do not return a plan, "
-                        "a task list, tool-call markup or an empty reply. "
-                        "Use a read_file action if you still need a file.",
+                        "That reply cannot be shown to the user. Answer the "
+                        f"user's question ({_cap(text, 600)}) with exactly "
+                        "one JSON object and a non-empty plain-text reply. "
+                        "Do not return a plan, a task list, tool-call "
+                        "markup or an empty reply. Use a read_file action "
+                        "if you still need a file.",
                     )
                 )
                 answer_retries += 1

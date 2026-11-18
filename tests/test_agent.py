@@ -382,6 +382,56 @@ class AgentTest(unittest.TestCase):
             "tool-call markup", client.requests[1][-1].content
         )
 
+    def test_answer_retries_do_not_exhaust_the_research_loop(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
+        repo = layout.repo_path(repo_id)
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "README.md").write_text("marker\n", encoding="utf-8")
+        reading = json.dumps(
+            {
+                "kind": "action",
+                "action": "list_files",
+                "action_args": {"path": ".", "repo_id": repo_id},
+            }
+        )
+        client = ScriptedModelClient(
+            [reading] * 6
+            + [
+                "<｜｜DSML｜｜ calls>",
+                json.dumps(
+                    {"kind": "answer", "reply": "After research."}
+                ),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+        result = agent.handle(project, "Что здесь?", "@tester")
+        self.assertEqual(result.text, "After research.")
+
+    def test_a_change_request_without_a_reply_is_retried(self) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "kind": "change_request",
+                        "reply": "",
+                        "title": "Something",
+                        "requirements": ["Do it"],
+                        "acceptance": ["It works"],
+                    }
+                ),
+                json.dumps(
+                    {"kind": "answer", "reply": "Just an answer."}
+                ),
+            ]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+        result = agent.handle(project, "Вопрос", "@tester")
+        self.assertEqual(result.kind, "answer")
+        self.assertEqual(result.text, "Just an answer.")
+
     def test_a_plan_object_is_retried_as_an_answer(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         client = ScriptedModelClient(
