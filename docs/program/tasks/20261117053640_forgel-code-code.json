@@ -51,12 +51,12 @@
   "depends_on": [],
   "checks": [],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-17T05:36:40+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-18T13:00:29+00:00",
+  "finished_at": "2026-11-18T13:03:27+00:00",
   "result": {
-    "summary": "Исправлена блокирующая проблема ревью: `accept` и `rework` теперь ложатся на реальный интерфейс движка — `forgel task accept --task <task> --json` и `forgel task reject --task <task> --notes \"<замечания>\" --json` (позиционное действие у `task`, `--accept` больше не используется как флаг). Подставной движок в tests/test_cli.py переписан так, чтобы действительно повторять парсер движка: `task` требует позиционное действие (`accept`, `reject`, ...), набор известных опций фиксирован, опции с обязательным значением проверяются (в т.ч. `--accept` со значением), неизвестные опции и лишние позиционные аргументы отвергаются, `invalid choice` для неизвестного действия. Добавлен класс StubContractTest: он доказывает, что подставной движок отвергает старую (сломанную) форму вызова (`task --task X`, `task accept --accept --task X`, `--reason`) и принимает реально используемые клиентом вызовы. Сообщение «no engine command» теперь ссылается на `forgel task accept` / `forgel task reject` и по-прежнему применяется только к unknown/unrecognized/invalid choice, не подменяя обычные ошибки движка. README обновлён под новые вызовы. Запуск: `python -m unittest discover -s tests` — 38 тестов, OK. Файлы движка не менялись (в репозитории только клиент).; task review failed",
+    "summary": "Исправлен блокирующий дефект ревью — привязка команд `accept` и `rework` к реальному интерфейсу движка. В `forgel_code/cli.py` введена карта `TASK_ACTIONS = {\"accept\": \"accept\", \"rework\": \"reject\"}`: `forgel-code accept <task>` теперь вызывает `forgel task accept --task <task> --json`, а `forgel-code rework <task> <remarks>` — `forgel task reject --task <task> --notes \"<remarks>\" --json` (позиционное действие `task`, `--accept` больше не используется как флаг). Если выбран проект, добавляется `--project <key>`. Сообщение «no engine command» ссылается на `forgel task accept` / `forgel task reject` и по-прежнему срабатывает только на маркеры unknown/unrecognized/invalid choice, не подменяя обычные ошибки движка. README обновлён под реальные вызовы движка. Подставной движок в `tests/test_cli.py` переписан так, чтобы действительно повторять парсер движка: у `task` обязательное позиционное действие (`accept`/`reject`/`retry`/`cancel`/`add`), фиксированный набор опций, опции с обязательным значением (включая `--accept`), отказ на неизвестные опции и `invalid choice` на неизвестное действие; добавлен класс `StubContractTest`, который доказывает, что подставной движок отвергает старую сломанную форму вызовов (`task --accept --task X`, `task --task X --notes ...`) и принимает реально используемые клиентом вызовы. Тесты проверены командой `python -m unittest discover -s tests`: 41 тест, OK. Файлы движка не правились — работа велась только в репозитории `code`.",
     "files_changed": [
       ".gitignore",
       ".wheelcheck/forgel_code-0.1.0-py3-none-any.whl",
@@ -85,6 +85,28 @@
           "-s",
           "tests"
         ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
         "exit_code": 0
       },
       {
@@ -100,7 +122,7 @@
         "final_test": true
       }
     ],
-    "test_output": "......................................\n----------------------------------------------------------------------\nRan 38 tests in 9.585s\n\nOK\n",
+    "test_output": ".........................................\n----------------------------------------------------------------------\nRan 41 tests in 11.908s\n\nOK\n",
     "assumptions": [
       "Репозиторий `code` уже создан публично в организации `forgel-dev`, поэтому задача ставится сразу на его наполнение.",
       "Установка одной командой на этом шаге — из репозитория (`pip install`/`pipx install`), публикация в PyPI отдельным шагом позже.",
@@ -108,22 +130,20 @@
       "Клиент повторяет имена и контракт уже реализованных команд движка (`say`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `plan`, `pause`, `resume`) вместо введения своих.",
       "Флаг `--json` у клиента управляет только форматом его собственного вывода; к движку клиент всегда обращается в машинно-читаемом режиме.",
       "Работа считается выполненной в репозитории `code`; правки в репозитории движка в этот объём не входят.",
-      "`rework` (отправка на доработку с замечаниями) отображается на действие движка `task reject` с замечаниями в `--notes`, так как отдельного действия `rework` у движка нет.",
-      "`--json` управляет только форматом вывода клиента; к движку клиент всегда обращается с `--json`.",
-      "Активный проект — сессия клиента с ключом по умолчанию `local`; этот ключ не передаётся движку, пока пользователь явно не выбрал проект через `use`.",
-      "Установка одной командой на этом шаге — из репозитория (`pipx install git+...`/`pip install .`) через встроенный PEP 517 backend без внешних зависимостей.",
-      "Тесты клиента на `unittest`, команда `python -m unittest discover -s tests`."
+      "`forgel task` принимает `--project <key>` наряду с прочими опциями (так же, как остальные команды движка); при выбранном в сессии проекте клиент добавляет этот флаг.",
+      "Отправка задачи на доработку — это действие движка `reject` с замечаниями в `--notes`; отдельного действия `rework` в движке нет.",
+      "Сообщение «no engine command» остаётся только для ответов движка с маркерами unknown/unrecognized/invalid choice, чтобы не подменять обычные ошибки."
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 15,
-      "estimated_input_tokens": 271945,
-      "provider_input_tokens": 271501,
-      "provider_output_tokens": 15850,
-      "estimated_tokens": 28011,
+      "model_calls": 16,
+      "estimated_input_tokens": 439462,
+      "provider_input_tokens": 450106,
+      "provider_output_tokens": 29019,
+      "estimated_tokens": 40716,
       "state": ""
     },
     "test_removals": [
@@ -141,18 +161,29 @@
         "test": "tests/test_cli.py::MissingEngineCommandTest::test_accept_reports_a_missing_task_action",
         "reason": "replaced",
         "replacement": "tests/test_cli.py::MissingEngineCommandTest::test_accept_reports_a_missing_accept_option"
+      },
+      {
+        "test": "tests/test_cli.py::FailureTest::test_stub_rejects_the_flags_the_client_must_not_send",
+        "reason": "replaced",
+        "replacement": "tests/test_cli.py::StubContractTest::test_stub_rejects_the_unknown_options_the_client_must_not_send"
+      },
+      {
+        "test": "tests/test_cli.py::MissingEngineCommandTest::test_accept_reports_a_missing_accept_option",
+        "reason": "replaced",
+        "replacement": "tests/test_cli.py::MissingEngineCommandTest::test_accept_reports_a_missing_accept_action"
       }
     ],
     "git": {
       "base": "8900f61d5984edd32373824484e647cb46d293dd",
-      "head": "8900f61d5984edd32373824484e647cb46d293dd",
-      "commit": "",
+      "head": "5c0f6b0954d8eaf1048db139f46d679d7cf82841",
+      "commit": "5c0f6b0954d8eaf1048db139f46d679d7cf82841",
       "commits": [
         "80a838e93c483bea7a6f16d9c0dcab725d09b6c2",
         "d73fb585f7a59703ba03df889a09721c0a2caa50",
         "9851d4cbc141decf7b0d1d30de8bb7ca14e96422",
         "0d20d4cc1bfa38b935955ba1c6583bf6318ef7af",
-        "8900f61d5984edd32373824484e647cb46d293dd"
+        "8900f61d5984edd32373824484e647cb46d293dd",
+        "5c0f6b0954d8eaf1048db139f46d679d7cf82841"
       ]
     },
     "report": "docs/program/agent/20261117053640_forgel-code-code.md",
@@ -293,6 +324,8 @@
       "retryable": false
     },
     "attempts": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "spec_issues": [],
+    "failure": {}
   }
 }
