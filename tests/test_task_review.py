@@ -393,6 +393,36 @@ class TaskReviewTest(unittest.TestCase):
         self.assertEqual(stored["status"], "failed")
         self.assertIn("task review failed", stored["result"]["summary"])
 
+    def test_each_rework_records_its_own_review_event(self) -> None:
+        task = self._task()
+        for attempt in (0, 1):
+            stored = get_task(self.layout, task["id"])
+            assert stored is not None
+            data = dict(stored.get("result") or {})
+            data["rework_count"] = attempt
+            update_task(self.layout, task["id"], result=data)
+            current = get_task(self.layout, task["id"])
+            assert current is not None
+            run_task_review(
+                self.settings,
+                self.ledger,
+                self.project,
+                current,
+                ScriptedModelClient([FAIL]),
+                log=lambda _m: None,
+            )
+        events = [
+            event
+            for event in self.ledger.events(self.project_id)
+            if event["stage"] == "task_review"
+        ]
+        self.assertEqual(len(events), 2)
+        reworks = [
+            json.loads(event["payload"])["rework"]
+            for event in events
+        ]
+        self.assertEqual(reworks, [0, 1])
+
     def test_unusable_review_is_an_error_not_a_pass(self) -> None:
         task = self._task()
         result = run_task_review(

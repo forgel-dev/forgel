@@ -38,6 +38,15 @@ class TasksTest(unittest.TestCase):
         assert self.project is not None
         self.layout = ProjectLayout.detect(self.project["workspace"])
 
+    def test_attempt_number_reads_the_rework_count(self) -> None:
+        self.assertEqual(tasks.attempt_number({}), 0)
+        self.assertEqual(
+            tasks.attempt_number({"result": {"rework_count": 2}}), 2
+        )
+        self.assertEqual(
+            tasks.attempt_number({"result": {"rework_count": "bad"}}), 0
+        )
+
     def test_create_list_and_update(self) -> None:
         task = tasks.create_task(
             self.layout,

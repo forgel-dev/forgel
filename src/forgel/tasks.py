@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from . import git_ops
 from .artifacts import read_json, write_json
@@ -405,6 +405,16 @@ def retry_times(layout: ProjectLayout) -> list[datetime]:
         for moment in [retry_moment(task)]
         if moment is not None
     ]
+
+
+def attempt_number(task: Mapping[str, Any]) -> int:
+    """The rework attempt of a task: 0 for the first run."""
+
+    result = task.get("result") or {}
+    try:
+        return max(0, int(result.get("rework_count") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _retry_ready(

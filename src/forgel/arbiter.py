@@ -32,7 +32,7 @@ from .model import (
     project_model_name,
 )
 from .task_review import MAX_DIFF_CHARS, task_diff
-from .tasks import get_task, update_task
+from .tasks import attempt_number, get_task, update_task
 
 MAX_TEXT = 4_000
 
@@ -218,6 +218,7 @@ def _record(
         "report": report_ref,
     }
     update_task(layout, task_id, result=data)
+    attempt = attempt_number(task)
     ledger.append_event(
         str(project["id"]),
         "task_arbiter",
@@ -228,13 +229,15 @@ def _record(
             "error": "error",
         }[result.verdict],
         idempotency_key=(
-            f"{project['id']}:task_arbiter:{task_id}:{result.verdict}"
+            f"{project['id']}:task_arbiter:{task_id}:"
+            f"{result.verdict}:r{attempt}"
         ),
         artifact_refs=[report_ref],
         payload={
             "task": task_id,
             "verdict": result.verdict,
             "proposed_criteria": result.proposed_criteria,
+            "rework": attempt,
         },
         generation=ledger.current_generation(str(project["id"])),
     )

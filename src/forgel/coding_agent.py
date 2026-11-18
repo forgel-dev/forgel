@@ -1625,12 +1625,14 @@ Files:
             self.settings.model_output_price,
         )
         generation = self.ledger.current_generation(str(project["id"]))
+        attempt = tasks.attempt_number(task)
         self.ledger.append_event(
             str(project["id"]),
             "agent_run",
             status=status,
             idempotency_key=(
-                f"{project['id']}:agent_run:{task['id']}:{status}"
+                f"{project['id']}:agent_run:{task['id']}:{status}:"
+                f"r{attempt}"
             ),
             artifact_refs=[_ref(layout, report)],
             cost=cost,
@@ -1641,6 +1643,7 @@ Files:
                 "files_changed": files_changed,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
+                "rework": attempt,
             },
             generation=generation,
         )

@@ -32,7 +32,7 @@ from .layout import ProjectLayout
 from .ledger import Ledger
 from .proc import merge_output
 from .sandbox import DockerSandbox, SandboxError, docker_runner
-from .tasks import get_task, update_task
+from .tasks import attempt_number, get_task, update_task
 
 MAX_OUTPUT = 20_000
 
@@ -306,6 +306,7 @@ def _record(
             "retryable": False,
         }
     update_task(layout, task_id, status=status, result=data)
+    attempt = attempt_number(task)
     ledger.append_event(
         str(project["id"]),
         "task_qa",
@@ -316,7 +317,8 @@ def _record(
             "skipped": "skipped",
         }[result.status],
         idempotency_key=(
-            f"{project['id']}:task_qa:{task_id}:{result.status}"
+            f"{project['id']}:task_qa:{task_id}:{result.status}:"
+            f"r{attempt}"
         ),
         artifact_refs=[report_ref],
         payload={
@@ -324,6 +326,7 @@ def _record(
             "status": result.status,
             "runtime": result.runtime,
             "review_required": result.review_required,
+            "rework": attempt,
         },
         generation=ledger.current_generation(str(project["id"])),
     )

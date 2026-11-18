@@ -152,19 +152,22 @@ def _quarantine(
         tasks.block_dependents(layout, task_id, stop=True)
     elif settings.plan_on_failure == "quarantine":
         tasks.block_dependents(layout, task_id, stop=False)
+    stored = tasks.get_task(layout, task_id) or {}
+    attempt = tasks.attempt_number(stored)
     ledger.append_event(
         str(project["id"]),
         "task_failure",
         status="failed",
         idempotency_key=(
             f"{project['id']}:task_failure:{task_id}:"
-            f"{failure.get('kind')}:{attempts}"
+            f"{failure.get('kind')}:{attempts}:r{attempt}"
         ),
         artifact_refs=[],
         payload={
             "task": task_id,
             "kind": failure.get("kind"),
             "attempts": attempts,
+            "rework": attempt,
             "policy": settings.plan_on_failure,
         },
         generation=ledger.current_generation(str(project["id"])),

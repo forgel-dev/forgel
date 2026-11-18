@@ -222,6 +222,70 @@ class CodingAgentTest(unittest.TestCase):
         ]
         self.assertEqual(events[-1]["status"], "done")
 
+    def test_each_rework_records_its_own_run_and_cost(self) -> None:
+        class UsageClient(ScriptedModelClient):
+            last_usage = {
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+            }
+
+        task = self._task()
+        first = CodingAgent(
+            self.settings,
+            self.ledger,
+            UsageClient(self._responses()),
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(first.status, "done", first.summary)
+
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        data = dict(stored.get("result") or {})
+        data["rework_count"] = 1
+        update_task(self.layout, task["id"], result=data)
+        current = get_task(self.layout, task["id"])
+        assert current is not None
+        second = CodingAgent(
+            self.settings,
+            self.ledger,
+            UsageClient(
+                [
+                    json.dumps(
+                        {
+                            "action": "write_file",
+                            "path": "calc.py",
+                            "content": (
+                                "def add(a, b):\n    return b + a\n"
+                            ),
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "action": "done",
+                            "summary": "rewrote add",
+                        }
+                    ),
+                ]
+            ),
+        ).run(self.project, current, log=lambda _m: None)
+        self.assertEqual(second.status, "done", second.summary)
+
+        events = [
+            event
+            for event in self.ledger.events(self.project_id)
+            if event["stage"] == "agent_run"
+        ]
+        self.assertEqual(len(events), 2)
+        self.assertEqual(
+            [
+                json.loads(event["payload"])["rework"]
+                for event in events
+            ],
+            [0, 1],
+        )
+        self.assertTrue(
+            all(float(event["cost"]) > 0 for event in events)
+        )
+
     def test_agent_executes_a_batch_of_actions(self) -> None:
         task = self._task()
         actions = [json.loads(item) for item in self._responses()]

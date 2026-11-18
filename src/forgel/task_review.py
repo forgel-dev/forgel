@@ -40,7 +40,7 @@ from .repo_tools import (
 )
 from .session_context import budget_for
 from .task_qa import TaskQAResult, run_task_qa
-from .tasks import get_task, list_tasks, update_task
+from .tasks import attempt_number, get_task, list_tasks, update_task
 
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
@@ -609,6 +609,7 @@ def _record_review(
             "retryable": False,
         }
     update_task(layout, task_id, status=status, result=data)
+    attempt = attempt_number(task)
     ledger.append_event(
         str(project["id"]),
         "task_review",
@@ -619,12 +620,14 @@ def _record_review(
             "error": "error",
         }[result.status],
         idempotency_key=(
-            f"{project['id']}:task_review:{task_id}:{result.status}"
+            f"{project['id']}:task_review:{task_id}:"
+            f"{result.status}:r{attempt}"
         ),
         artifact_refs=[report_ref],
         payload={
             "task": task_id,
             "status": result.status,
+            "rework": attempt,
         },
         generation=ledger.current_generation(str(project["id"])),
     )
@@ -928,12 +931,14 @@ def _set_acceptance(
         status="done" if status == "accepted" else "failed",
         result=data,
     )
+    attempt = attempt_number(task)
     ledger.append_event(
         str(project["id"]),
         "task_accept" if status == "accepted" else "task_reject",
         status="completed",
         idempotency_key=(
-            f"{project['id']}:accept:{task['id']}:{status}:{actor}"
+            f"{project['id']}:accept:{task['id']}:{status}:{actor}:"
+            f"r{attempt}"
         ),
         artifact_refs=[],
         payload={
@@ -941,6 +946,7 @@ def _set_acceptance(
             "status": status,
             "actor": actor,
             "notes": notes.strip(),
+            "rework": attempt,
         },
         generation=ledger.current_generation(str(project["id"])),
     )
