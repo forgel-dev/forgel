@@ -115,6 +115,22 @@ def _classify_crash(exc: Exception) -> dict[str, Any]:
     lowered = message.lower()
     if "sandbox" in lowered or "docker" in lowered:
         return _failure("infrastructure", message)
+    if any(
+        marker in lowered
+        for marker in (
+            "incompleteread",
+            "remote disconnected",
+            "connection reset",
+            "connection aborted",
+            "connection refused",
+            "timed out",
+            "timeout",
+            "temporarily unavailable",
+            "model call failed",
+            "model request failed",
+        )
+    ):
+        return _failure("infrastructure", message)
     return _failure("external", message, retryable=False)
 
 

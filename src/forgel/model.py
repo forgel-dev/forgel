@@ -8,6 +8,7 @@ how a subagent with the same prompt can stand in for a model call.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import threading
@@ -139,6 +140,19 @@ class OpenAICompatibleClient:
                         f"HTTP {exc.code}"
                     )
                 ) from exc
+            except http.client.HTTPException as exc:
+                # A dropped chunked response (IncompleteRead), a reset stream
+                # or a bad status line is a transport failure: retry a fresh
+                # request instead of crashing the task as an external defect.
+                if attempt < attempts:
+                    self._retry_sleep(attempt)
+                    continue
+                raise ModelError(
+                    self._redact(
+                        "model request failed after "
+                        f"{attempts} attempts: {exc}"
+                    )
+                ) from exc
             except (urllib.error.URLError, OSError) as exc:
                 if attempt < attempts:
                     self._retry_sleep(attempt)
@@ -150,8 +164,18 @@ class OpenAICompatibleClient:
                     )
                 ) from exc
             except json.JSONDecodeError as exc:
+                if attempt < attempts:
+                    self._retry_sleep(attempt)
+                    continue
                 raise ModelError(
                     "model endpoint returned invalid JSON"
+                ) from exc
+            except UnicodeDecodeError as exc:
+                if attempt < attempts:
+                    self._retry_sleep(attempt)
+                    continue
+                raise ModelError(
+                    "model endpoint returned an unreadable body"
                 ) from exc
         if body is None:
             raise ModelError("model request failed")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import time
 import unittest
@@ -26,6 +27,22 @@ class _Response:
 
     def read(self) -> bytes:
         return self._data
+
+
+class _BrokenResponse(_Response):
+    def __init__(self) -> None:
+        pass
+
+    def read(self) -> bytes:
+        raise http.client.IncompleteRead(b"")
+
+
+class _GarbageResponse(_Response):
+    def __init__(self) -> None:
+        pass
+
+    def read(self) -> bytes:
+        return b"not json"
 
 
 def _body(content: str = "ok") -> dict:
@@ -113,6 +130,52 @@ class ModelRetryTest(unittest.TestCase):
             with self.assertRaises(ModelError):
                 client.complete([ModelMessage("user", "hi")])
         self.assertEqual(len(calls), 1)
+
+    def test_an_incomplete_read_is_retried(self) -> None:
+        calls: list[int] = []
+
+        def opener(_request, timeout=None):
+            calls.append(1)
+            if len(calls) == 1:
+                return _BrokenResponse()
+            return _Response(_body())
+
+        client = self._client(opener)
+        with patch("forgel.model.time.sleep"):
+            answer = client.complete([ModelMessage("user", "hi")])
+        self.assertEqual(answer, "ok")
+        self.assertEqual(len(calls), 2)
+
+    def test_repeated_incomplete_reads_become_infrastructure_error(
+        self,
+    ) -> None:
+        calls: list[int] = []
+
+        def opener(_request, timeout=None):
+            calls.append(1)
+            return _BrokenResponse()
+
+        client = self._client(opener, retries=2)
+        with patch("forgel.model.time.sleep"):
+            with self.assertRaises(ModelError) as raised:
+                client.complete([ModelMessage("user", "hi")])
+        self.assertIn("after 3 attempts", str(raised.exception))
+        self.assertEqual(len(calls), 3)
+
+    def test_invalid_json_is_retried(self) -> None:
+        calls: list[int] = []
+
+        def opener(_request, timeout=None):
+            calls.append(1)
+            if len(calls) == 1:
+                return _GarbageResponse()
+            return _Response(_body())
+
+        client = self._client(opener)
+        with patch("forgel.model.time.sleep"):
+            answer = client.complete([ModelMessage("user", "hi")])
+        self.assertEqual(answer, "ok")
+        self.assertEqual(len(calls), 2)
 
 
 if __name__ == "__main__":

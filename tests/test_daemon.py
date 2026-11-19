@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ from forgel import tasks
 from forgel.approvals import awaits_approval, record_approval
 from forgel.config import Settings
 from forgel.daemon import (
+    _classify_crash,
     _feedback_from,
     handle_failure,
     project_is_done,
@@ -176,6 +178,10 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(
                 stored["result"]["failure"]["kind"], "infrastructure"
             )
+
+    def test_an_incomplete_read_is_an_infrastructure_failure(self) -> None:
+        failure = _classify_crash(http.client.IncompleteRead(b""))
+        self.assertEqual(failure["kind"], "infrastructure")
 
     def test_qa_feedback_carries_the_command_workdir_and_output(
         self,
