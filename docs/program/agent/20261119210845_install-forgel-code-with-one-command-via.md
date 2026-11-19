@@ -3,8 +3,8 @@
 - Task: `20261119210845_install-forgel-code-with-one-command-via`
 - Status: `failed`
 - Repository: `code`
-- Steps: 11
-- Finished: 2026-11-19T21:42:06+00:00
+- Steps: 37
+- Finished: 2026-11-19T21:55:15+00:00
 
 ## Requirements
 
@@ -28,11 +28,9 @@
 - Offline tests invoke the installer with the local source tree (a source override or `sh install.sh` run from the checkout) and a temporary HOME, so no network is used.
 - The README example keeps the `v0.1.0` tag, matching the current released version.
 - Windows fallback remains `pip install --user` as a single line outside the main path.
-- Тесты написаны на стандартном unittest и поэтому совместимы и с pytest, и с `python -m unittest discover -s tests`; полноценный прогон выполнен через unittest, так как в окружении проекта нет модуля pytest, а установка пакетов запрещена.
-- Офлайн-режим реализован переменной `FORGEL_CODE_SOURCE`, указывающей на локальный checkout; по умолчанию берётся каталог, содержащий сам скрипт (совместимо с `curl … | sh`).
-- Профиль выбирается по `$SHELL` (zsh → `~/.zshrc`, bash → `~/.bashrc`/`~/.bash_profile`), иначе `$HOME/.profile`; переменная `FORGEL_CODE_PROFILE` позволяет переопределить путь (используется тестами).
-- Opt-out переменная — `FORGEL_CODE_NO_MODIFY_PATH`; старое имя `FORGEL_CODE_NO_PROFILE_EDIT` поддерживается как алиас для обратной совместимости.
-- Все тесты установки подменяют `HOME`, `FORGEL_CODE_HOME`, `FORGEL_CODE_BIN`, `FORGEL_CODE_PROFILE` временными путями, поэтому реальные дотфайлы и `~/.local` не затрагиваются.
+- Для тестов установщика выбирается первый интерпретатор (sys.executable, затем python3/python3.1x на PATH), который запускается и имеет Python 3.9+ вместе с модулем pip; это соответствует требованию установщика и не зависит от того, каким Python запущен сам набор тестов.
+- Предписанная спекой команда `python -m pytest -q` в этом окружении неисполнима: у интерпретатора проекта нет модуля pytest, а установка пакетов запрещена; системный `/usr/local/bin/pytest` падает при автозагрузке плагина faker (нет `six`). Поэтому тот же набор прогнан двумя способами: `python -m unittest discover -s tests -q` и `/usr/local/bin/pytest -q` с `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` — оба зелёные.
+- Тесты A1–A6 запускались через pytest с отключённой автозагрузкой плагинов; фильтры `-k` из спеки применялись дословно.
 
 ## Test Removals
 
@@ -43,10 +41,10 @@
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 11
-- Estimated input tokens (all calls): 122325
-- Provider input/output tokens: 122657 / 20439
-- Estimated prompt at the end: 19662 tokens
+- Model calls: 37
+- Estimated input tokens (all calls): 688024
+- Provider input/output tokens: 700114 / 90629
+- Estimated prompt at the end: 37476 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261119210845_install-forgel-code-with-one-command-via.md`)
@@ -242,7 +240,7 @@ Forgel Code can currently only be obtained by cloning the repository and creatin
 
 ## Summary
 
-В этой сессии новых правок не потребовалось: состояние, оставленное предыдущими попытками, уже реализует требования задачи, поэтому я его перепроверил, а не переписывал заново. Проверено в этой сессии: (1) `install.sh` в корне — POSIX sh, ставит клиент в `${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}`, кладёт исполняемый лаунчер `forgel-code` в `${FORGEL_CODE_BIN:-$HOME/.local/bin}`, добавляет PATH ровно одним блоком `# >>> forgel-code >>>` / `# <<< forgel-code <<<`, поддерживает opt-out (`FORGEL_CODE_NO_MODIFY_PATH` и прежнее имя `FORGEL_CODE_NO_PROFILE_EDIT`) с печатью точной строки `export PATH="…:$PATH"`, идемпотентен, удаляется через `--uninstall`, печатает установленную версию, не читает stdin (работает как `curl … | sh`), офлайн-режим через `FORGEL_CODE_SOURCE`; `sh -n install.sh` проходит (покрыто тестом `test_script_is_executable_and_parses_with_sh`). (2) `README.md`: первой и единственной основной командой идёт `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`, далее предпосылки (Python 3, `forgel` в PATH и способ указать свой движок), одна строка обновления, одна строка удаления, ровно одна Windows-строка `pip install --user` как не основной путь. (3) `tests/test_install.py` гоняет настоящий `install.sh` офлайн во временном HOME: установка, лаунчер + `forgel-code --version`, повторный запуск, ровно один PATH-блок, запуск через stdin, отсутствие интерпретатора, opt-out (ни один профиль не создан, запись только в целевые каталоги), `--uninstall` с сохранением остального профиля. (4) `tests/test_readme_install.py` — структурный guard README (порядок, запрет pip/pipx/venv/--user на основном пути, предпосылки, одна строка обновления/удаления, одна Windows-строка) с фикстурой, доказывающей падение guard'а на регрессиях. Тесты написаны на unittest и запускаются как `python -m unittest discover -s tests`: в этой сессии прогнано `python -m unittest discover -s tests -q` → `Ran 134 tests … OK` (включая все сценарии A1–A6). Файлы под `forgel_code/` не изменялись. Предписанная спекой команда `python -m pytest -q` в этом окружении не запускается: у интерпретатора проекта `/Users/okalistratov/.forgel-cli/bin/python3.13` нет модуля pytest (`No module named pytest`), а установка пакетов запрещена; системный `/usr/local/bin/pytest` (Python 3.8) падает при автозагрузке плагина faker из-за отсутствия `six`. Это ограничение окружения, а не дефект кода задачи.; final test command exited 1
+Исправил единственную оставшуюся проблему: тесты установщика молча выбирали интерпретатор, запускающий набор, и падали, если это Python < 3.9 (в этом окружении pytest принадлежит Python 3.8, поэтому `pytest`-прогон давал 15 падений с сообщением «…/python3.8 is older than Python 3.9 or cannot run»). В `tests/test_install.py` добавлен `_install_python()`: он берёт первый интерпретатор из `sys.executable`, затем `python3`/`python3.1x` на PATH, который запускается и удовлетворяет требованию установщика (Python 3.9+ и модуль `pip`), и подставляет его в `FORGEL_CODE_PYTHON` и в `PlainPipInstallTest`. Логика тестов, установщика и README не менялась. После правки прошли: `python -m unittest discover -s tests -q` → Ran 134 tests, OK; `pytest -q` (системный pytest с отключённой автозагрузкой плагинов, у проекта своего pytest нет) → 134 passed; все приёмочные команды спеки (A1–A6) — `tests/test_readme_install.py` 17 passed, `-k install` 17 passed, `-k version` 4 passed, `-k rerun or twice or idempotent` 1 passed, `-k opt_out or profile` 5 passed, `-k uninstall` 2 passed. Файлы под `forgel_code/` в этой сессии не изменялись.; final test command exited 1
 
 ## Files Changed
 
@@ -254,10 +252,23 @@ Forgel Code can currently only be obtained by cloning the repository and creatin
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q"]` → exit 1
+- `["python", "-m", "pytest", "--version"]` → exit 1
 - `["python", "-m", "unittest", "discover", "-s", "tests", "-q"]` → exit 0
-- `["python3", "-m", "pytest", "-q"]` → exit 1
-- `["pytest", "-q"]` → exit 1
+- `["python", "-m", "pip", "--version"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "--version"]` → exit 1
+- `["python", "-c", "import sys,glob,os;print(sys.version);print(sys.path);print([p for d in sys.path if os.path.isdir(d) for p in glob.glob(os.path.join(d,'*pytest*'))])"]` → exit 0
+- `["python", "-c", "import shutil,subprocess\ncands=['python3.8','python3.9','python3.10','python3.11','python3.12','python3.13','pytest','py.test']\nfor c in cands:\n    p=shutil.which(c)\n    if not p: continue\n    cmd=[p,'-m','pytest','--version'] if 'python' in c else [p,'--version']\n    try:\n        r=subprocess.run(cmd,capture_output=True,text=True,timeout=90)\n        out=(r.stdout+r.stderr).strip().splitlines()[:2]\n    except Exception as e:\n        out=['ERR '+str(e)]\n    print(c,'->',p,'|',out)"]` → exit 0
+- `["pytest", "--version"]` → exit 1
+- `["python", "-m", "pip", "list", "--format=freeze"]` → exit 0
+- `["python", "-m", "pip", "cache", "list", "pytest"]` → exit 0
+- `["python", "-c", "import os,glob\nroots=['/usr/local/lib','/usr/local/opt','/opt/homebrew/lib','/Users/okalistratov/.local/lib','/Users/okalistratov/Library/Python','/Users/okalistratov/Documents/sites']\nhits=[]\nfor r in roots:\n    for p in glob.glob(os.path.join(r,'**','_pytest'),recursive=True)[:0]:\n        pass\n    hits+=glob.glob(os.path.join(r,'*','site-packages','_pytest'))\n    hits+=glob.glob(os.path.join(r,'*','*','site-packages','_pytest'))\nprint(len(hits))\nfor h in hits[:40]: print(h)\n"]` → exit 0
+- `["python", "-m", "pip", "install", "--no-index", "--dry-run", "pytest"]` → exit 1
+- `["python", "-m", "unittest", "-v", "tests.test_readme_install", "tests.test_install", "tests.test_install.InstallScriptTests"]` → exit 1
+- `["python", "-c", "import os,subprocess\nenv=dict(os.environ)\nenv['PYTEST_DISABLE_PLUGIN_AUTOLOAD']='1'\nenv.pop('PYTHONPATH',None)\nfor args in (['tests/test_readme_install.py','-q'],['tests/test_install.py','-q','-k','install'],['tests/test_install.py','-q','-k','version'],['tests/test_install.py','-q','-k','rerun or twice or idempotent'],['tests/test_install.py','-q','-k','opt_out or profile'],['tests/test_install.py','-q','-k','uninstall'],['-q']):\n    r=subprocess.run(['/usr/local/bin/pytest']+args,capture_output=True,text=True,env=env,timeout=1200)\n    print('ARGS',args,'->',r.returncode)\n    print((r.stdout+r.stderr).strip().splitlines()[-6:])\n"]` → exit 0
+- `["python", "-c", "import os,glob\npats=['/Users/okalistratov/**/pytest-*.whl','/Users/okalistratov/.*/pytest*','/usr/local/**/pytest-*.whl','/opt/homebrew/**/pytest-*.whl']\nfor p in pats:\n    hits=glob.glob(p,recursive=True)[:10]\n    print(p,len(hits))\n    for h in hits: print('  ',h)\n"]` → exit 124
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-q"]` → exit 0
+- `["python", "-c", "import os,subprocess\nenv=dict(os.environ)\nenv['PYTEST_DISABLE_PLUGIN_AUTOLOAD']='1'\nr=subprocess.run(['/usr/local/bin/pytest','-q'],capture_output=True,text=True,env=env,timeout=1800)\nprint('exit',r.returncode)\nprint((r.stdout+r.stderr).strip().splitlines()[-6:])"]` → exit 0
+- `["python", "-c", "import os,subprocess\nenv=dict(os.environ)\nenv['PYTEST_DISABLE_PLUGIN_AUTOLOAD']='1'\nfor args in (['tests/test_readme_install.py','-q'],['tests/test_install.py','-q','-k','install'],['tests/test_install.py','-q','-k','version'],['tests/test_install.py','-q','-k','rerun or twice or idempotent'],['tests/test_install.py','-q','-k','opt_out or profile'],['tests/test_install.py','-q','-k','uninstall']):\n    r=subprocess.run(['/usr/local/bin/pytest']+args,capture_output=True,text=True,env=env,timeout=1800)\n    print('ARGS',args,'-> exit',r.returncode)\n    print((r.stdout+r.stderr).strip().splitlines()[-2:])\n"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 1
 
 ## Final Test Output
@@ -269,11 +280,34 @@ Forgel Code can currently only be obtained by cloning the repository and creatin
 
 ## Actions
 
-- run: ['python', '-m', 'pytest', '-q']
+- run: ['python', '-m', 'pytest', '--version']
+- run: ['sh', '-c', "command -v python3 python pytest pytest-3; python3 -c 'import pytest,sys; print(pytest.__version__, sys.version)'"]
 - run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-q']
-- run: ['python3', '-m', 'pytest', '-q']
 - read_file: pyproject.toml
-- run: ['sh', '-c', "command -v pytest; command -v pytest-3; command -v py.test; python -c 'import sys;print(sys.executable)'; ls -a"]
+- read_file: AGENTS.md
+- read_file: FORGEL.md
+- run: ['python', '-m', 'pip', '--version']
+- run: ['python3', '-m', 'pytest', '-q', '--version']
+- run: ['python', '-c', "import sys,glob,os;print(sys.version);print(sys.path);print([p for d in sys.path if os.path.isdir(d) for p in glob.glob(os.path.join(d,'*pytest*'))])"]
+- run: ['python', '-c', "import shutil,subprocess\ncands=['python3.8','python3.9','python3.10','python3.11','python3.12','python3.13','pytest','py.test']\nfor c in cands:\n    p=shutil.which(c)\n    if not p: continue\n    cmd=[p,'-m','pytest','--version'] if 'python' in c else [p,'--version']\n    try:\n        r=subprocess.run(cmd,capture_output=True,text=True,timeout=90)\n        out=(r.stdout+r.stderr).strip().splitlines()[:2]\n    except Exception as e:\n        out=['ERR '+str(e)]\n    print(c,'->',p,'|',out)"]
 - read_file: tests/test_install.py
 - read_file: _build_backend.py
-- run: ['pytest', '-q']
+- read_file: README.md
+- list_files
+- run: ['pytest', '--version']
+- run: ['python', '-m', 'pip', 'list', '--format=freeze']
+- run: ['sh', '-n', 'install.sh']
+- run: ['python', '-m', 'pip', 'cache', 'list', 'pytest']
+- run: ['python', '-c', "import os,glob\nroots=['/usr/local/lib','/usr/local/opt','/opt/homebrew/lib','/Users/okalistratov/.local/lib','/Users/okalistratov/Library/Python','/Users/okalistratov/Documents/sites']\nhits=[]\nfor r in roots:\n    for p in glob.glob(os.path.join(r,'**','_pytest'),recursive=True)[:0]:\n        pass\n    hits+=glob.glob(os.path.join(r,'*','site-packages','_pytest'))\n    hits+=glob.glob(os.path.join(r,'*','*','site-packages','_pytest'))\nprint(len(hits))\nfor h in hits[:40]: print(h)\n"]
+- run: ['python', '-m', 'pip', 'install', '--no-index', '--dry-run', 'pytest']
+- read_file: install.sh
+- run: ['python', '-m', 'unittest', '-v', 'tests.test_readme_install', 'tests.test_install', 'tests.test_install.InstallScriptTests']
+- run: ['python', '-c', "import os,subprocess\nenv=dict(os.environ)\nenv['PYTEST_DISABLE_PLUGIN_AUTOLOAD']='1'\nenv.pop('PYTHONPATH',None)\nfor args in (['tests/test_readme_install.py','-q'],['tests/test_install.py','-q','-k','install'],['tests/test_install.py','-q','-k','version'],['tests/test_install.py','-q','-k','rerun or twice or idempotent'],['tests/test_install.py','-q','-k','opt_out or profile'],['tests/test_install.py','-q','-k','uninstall'],['-q']):\n    r=subprocess.run(['/usr/local/bin/pytest']+args,capture_output=True,text=True,env=env,timeout=1200)\n    print('ARGS',args,'->',r.returncode)\n    print((r.stdout+r.stderr).strip().splitlines()[-6:])\n"]
+- read_file: tests/test_install.py
+- run: ['python', '-c', "import os,glob\npats=['/Users/okalistratov/**/pytest-*.whl','/Users/okalistratov/.*/pytest*','/usr/local/**/pytest-*.whl','/opt/homebrew/**/pytest-*.whl']\nfor p in pats:\n    hits=glob.glob(p,recursive=True)[:10]\n    print(p,len(hits))\n    for h in hits: print('  ',h)\n"]
+- read_file: tests/test_packaging.py
+- read_file: tests/test_install.py
+- write_file: tests/test_install.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-q']
+- run: ['python', '-c', "import os,subprocess\nenv=dict(os.environ)\nenv['PYTEST_DISABLE_PLUGIN_AUTOLOAD']='1'\nr=subprocess.run(['/usr/local/bin/pytest','-q'],capture_output=True,text=True,env=env,timeout=1800)\nprint('exit',r.returncode)\nprint((r.stdout+r.stderr).strip().splitlines()[-6:])"]
+- run: ['python', '-c', "import os,subprocess\nenv=dict(os.environ)\nenv['PYTEST_DISABLE_PLUGIN_AUTOLOAD']='1'\nfor args in (['tests/test_readme_install.py','-q'],['tests/test_install.py','-q','-k','install'],['tests/test_install.py','-q','-k','version'],['tests/test_install.py','-q','-k','rerun or twice or idempotent'],['tests/test_install.py','-q','-k','opt_out or profile'],['tests/test_install.py','-q','-k','uninstall']):\n    r=subprocess.run(['/usr/local/bin/pytest']+args,capture_output=True,text=True,env=env,timeout=1800)\n    print('ARGS',args,'-> exit',r.returncode)\n    print((r.stdout+r.stderr).strip().splitlines()[-2:])\n"]
