@@ -785,6 +785,26 @@ class CodingAgentTest(unittest.TestCase):
         with self.assertRaises(AgentError):
             agent._command(["docker", "ps"])
 
+    def test_dependency_manager_commands_are_allowed(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        for argv in (
+            ["python", "-m", "pip", "install", "pytest"],
+            ["pip", "install", "pytest"],
+            ["pip3", "install", "pytest"],
+            ["npm", "install"],
+            ["npm", "ci"],
+            ["npm", "add", "vite"],
+            ["yarn", "install"],
+            ["pnpm", "install"],
+            ["uv", "pip", "install", "pytest"],
+            ["poetry", "add", "pytest"],
+            ["bundle", "install"],
+            ["composer", "install"],
+        ):
+            self.assertEqual(agent._command(argv), argv)
+
     def test_reading_different_ranges_is_not_a_repeated_action(
         self,
     ) -> None:

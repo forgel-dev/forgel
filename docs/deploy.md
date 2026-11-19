@@ -226,8 +226,10 @@ Optional policy knobs (both modes):
 | `FORGEL_SANDBOX_REQUIRE_DIGEST` | `0` | require `@sha256:` on pulled images |
 | `FORGEL_SANDBOX_READ_ONLY` | `1` | read-only root filesystem |
 
-With `network=none`, `setup` cannot install from the network: bake dependencies
-into the environment image, or enable `bridge` for trusted projects.
+With `network=none`, `setup` and the coding agent cannot install from the
+network: bake dependencies into the environment image, or enable `bridge` for
+trusted projects. Local QA runs on the host and uses its network. The coding
+agent must install a missing package rather than fake a module or a shim.
 `forgel doctor` reports the daemon, the image policy and the limits.
 
 Project environments that need containers (Postgres, Redis, a compose stack)

@@ -76,12 +76,39 @@ ALLOWED_EXECUTABLES = {
     "pytest",
     "node",
     "npm",
+    "npx",
+    "yarn",
+    "pnpm",
+    "pip",
+    "pip3",
+    "uv",
+    "poetry",
+    "pipenv",
+    "bundle",
+    "gem",
+    "cargo",
+    "go",
+    "composer",
+    "dotnet",
+    "mvn",
+    "gradle",
     "make",
     "git",
     "docker",
 }
 GIT_READ_ONLY = {"status", "diff", "log", "show", "rev-parse"}
-NPM_ALLOWED = {"test", "run", "--version", "-v"}
+NPM_ALLOWED = {
+    "test",
+    "run",
+    "install",
+    "ci",
+    "add",
+    "remove",
+    "uninstall",
+    "update",
+    "--version",
+    "-v",
+}
 SKIP_PARTS = {
     ".git",
     ".forgel",
@@ -169,19 +196,28 @@ Autonomy (D-075):
 
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
-- Use read_file for file contents. run is only for tests and build commands;
-  never use python, grep, cat or similar to print a file. read_file returns a
-  numbered line range with a continuation hint; read the next range with
-  offset instead of writing helper scripts.
+- Use read_file for file contents. run is only for tests, build and
+  dependency-install commands; never use python, grep, cat or similar to print
+  a file. read_file returns a numbered line range with a continuation hint;
+  read the next range with offset instead of writing helper scripts.
 - A file you have read is in the conversation. Do not read it again before
   editing; when you know the exact change, call write_file immediately.
 - Do not repeat an action. If you see the same observation twice, change the
   approach or make the edit.
 - If the task changes documentation only, edit the document and call done; do
   not add tests.
-- Prefer the Python standard library unless the task says otherwise. Do not
-  install packages.
-- No external APIs, no network calls, no deployment changes, no Telegram.
+- Prefer the project's existing stack and the standard library when they meet
+  the requirement. Install the dependencies and test tools the task needs with
+  the project's package manager (for example `python -m pip`, `npm install`,
+  `uv`, `poetry`); keep dependency changes in the manifest or lockfile. The
+  task or specification may restrict dependencies; follow that restriction.
+  Never create a fake module, shim or hand-written substitute for a missing
+  package: install it or report the missing environment.
+- Network access is allowed for installing packages and fetching project
+  dependencies. Do not call external APIs for product behavior, deploy, change
+  production, or use Telegram. In the sandbox, dependency installation needs
+  egress; if it is disabled, say so and let the environment contract's image
+  or setup install the dependency instead of faking it.
 - Write tests for the requirements and run them. Call done only after the
   tests pass and the requirements are implemented.
 - The accepted specification is the contract. Follow it. A deviation is an
