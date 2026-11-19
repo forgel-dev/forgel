@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping, Sequence
 
+from .instructions import instruction_context
 from .layout import ProjectLayout
 from .model import ModelClient, ModelError, ModelMessage, project_model_name
 from .model_output import json_objects
@@ -189,6 +190,9 @@ def investigate(
         return []
     repo_id = str(spec.get("repo_id") or intent.get("repo_id") or "")
     repos = manifest_entries(layout)
+    instructions = instruction_context(
+        layout, [repo_id] if repo_id else None
+    )
     scout_retries = 0
     messages = [
         ModelMessage("system", DEPENDENCY_PROMPT),
@@ -197,6 +201,11 @@ def investigate(
             "Task: "
             f"{intent.get('title') or spec.get('title') or '—'}\n\n"
             f"Summary: {intent.get('summary') or '—'}\n\n"
+            + (
+                f"Project and repository instructions:\n{instructions}\n\n"
+                if instructions
+                else ""
+            )
             + _listing(dependencies, repo_id, repos)
             + "\n\nInspect the repository, then return the dependency JSON.",
         ),

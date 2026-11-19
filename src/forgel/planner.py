@@ -243,6 +243,9 @@ Rules:
   or an external tool without a standard test harness belongs in the
   specification's real-interface check. The plan gate rejects a missing
   program e2e for the hard cases; never plan around it or invent a substitute.
+- Follow the project and repository instructions in the context. Repository
+  rules are more specific and take precedence on conflict. Write task titles,
+  summaries and notes in the artifact language they require.
 - Work autonomously: do not ask questions; put assumptions in "notes".
 """
 

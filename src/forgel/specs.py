@@ -16,6 +16,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import requirements as requirements_doc
 from .check_commands import check_problems
+from .instructions import instruction_context
 from .layout import ProjectLayout
 from .model_output import json_objects
 from .model import (
@@ -133,6 +134,9 @@ Rules:
   provided by the project environment is not external; use it directly. Give
   the documentation source; leave it empty when none is known. Do not invent
   the interface; the dependency scout investigates it.
+- Follow the project and repository instructions in the prompt. Repository
+  rules are more specific and take precedence on conflict. Write the
+  specification in the artifact language they require.
 - Return JSON only; no tool-call markup, XML or prose.
 """
 
@@ -140,6 +144,10 @@ Rules:
 PLAN_REVIEW_PROMPT = """You review a milestone plan and its specifications
 against the original problem. This is the planner's acceptance gate: after a
 specification is accepted it is binding and the coder follows it.
+
+Follow the project and repository instructions in the prompt. Repository rules
+are more specific and take precedence on conflict. Write findings in the
+artifact language they require.
 
 Answer two questions:
 1. If every task is completed exactly as specified, will the original problem
@@ -350,6 +358,9 @@ def write_task_spec(
         f"- {item['id']}: {item.get('role') or 'application'}"
         for item in manifest_entries(layout)
     ) or "- (sole)"
+    instructions = instruction_context(
+        layout, [repo_id] if repo_id else None
+    )
     messages = [
         ModelMessage("system", SPEC_SYSTEM_PROMPT),
         ModelMessage(
@@ -359,7 +370,12 @@ def write_task_spec(
             f"Task intent:\n{json.dumps(dict(intent), ensure_ascii=False)}\n\n"
             f"User decision log:\n{decisions_text}\n\n"
             f"Project repositories:\n{repo_lines}\n\n"
-            f"Repository file tree:\n{_context(layout, repo_id)}\n\n"
+            + (
+                f"Project and repository instructions:\n{instructions}\n\n"
+                if instructions
+                else ""
+            )
+            + f"Repository file tree:\n{_context(layout, repo_id)}\n\n"
             + (
                 "The previous version was rejected for this concrete "
                 f"defect:\n{review_issue}\n\n"
@@ -584,11 +600,14 @@ def review_plan(
     rendered = "\n\n".join(
         render_one(index, spec) for index, spec in enumerate(specs)
     )
+    instructions = instruction_context(layout)
     messages = [
         ModelMessage("system", PLAN_REVIEW_PROMPT),
         ModelMessage(
             "user",
-            f"Milestone goal:\n{goal}\n\nPlan notes:\n{notes or '—'}\n\n"
+            "Project and repository instructions:\n"
+            + (instructions or "- none")
+            + f"\n\nMilestone goal:\n{goal}\n\nPlan notes:\n{notes or '—'}\n\n"
             f"Specifications:\n{rendered[:MAX_SPEC_CHARS * 2]}",
         ),
     ]

@@ -104,6 +104,45 @@ class AgentTest(unittest.TestCase):
         self.assertNotIn("Recent ledger events", context)
         self.assertNotIn("adopted", context.lower())
 
+    def test_context_includes_project_and_repository_instructions(
+        self,
+    ) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Rules",
+            "A rules brief.",
+            mode="brownfield",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        layout.control.mkdir(parents=True, exist_ok=True)
+        (layout.control / "FORGEL.md").write_text(
+            "PROJECT-CONTEXT-MARKER\n", encoding="utf-8"
+        )
+        repo = layout.repo_path("main")
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "AGENTS.md").write_text(
+            "REPO-CONTEXT-MARKER\n", encoding="utf-8"
+        )
+        context = build_context(layout, project, self.ledger)
+        self.assertIn("PROJECT-CONTEXT-MARKER", context)
+        self.assertIn("REPO-CONTEXT-MARKER", context)
+        self.assertIn("take precedence", context)
+
     def test_context_reads_only_tracked_documents(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
         layout = ProjectLayout.detect(project["workspace"])

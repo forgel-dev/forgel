@@ -23,6 +23,7 @@ from typing import Any, Callable, Mapping
 from .artifacts import write_text
 from . import git_ops
 from .config import Settings
+from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model_output import json_objects
@@ -376,6 +377,9 @@ def _review_prompt(
         f"`{item}`" for item in attributed_commits
     ) or "none"
     _repo_id, repo = _repo(layout, task)
+    instructions = instruction_context(
+        layout, [_repo_id] if _repo_id else None
+    )
     worktree = (
         _git_output(repo, ["status", "--porcelain"]).strip()
         or "clean"
@@ -401,7 +405,10 @@ def _review_prompt(
         + (f" -> {item['replacement']}" if item["replacement"] else "")
         for item in test_removals(task)
     ) or "- none"
-    return f"""TASK: {task.get('title', task.get('id'))}
+    return f"""Project and repository instructions:
+{instructions or "- none"}
+
+TASK: {task.get('title', task.get('id'))}
 {spec_section}
 Requirements:
 {requirements}
@@ -462,6 +469,9 @@ action per turn:
 When you have enough context, return the verdict object.
 
 Scope of responsibility:
+- Follow the project and repository instructions in the prompt. Repository
+  rules are more specific and take precedence on conflict. Write the review
+  summary and requirement notes in the artifact language they require.
 - The task specification fixes the implementation contract: which external
   interfaces the code uses, which libraries it depends on, and the interfaces
   it must expose. Do not re-derive, replace or second-guess that contract; a

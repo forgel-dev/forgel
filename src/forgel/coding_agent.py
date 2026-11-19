@@ -28,6 +28,7 @@ from typing import Any, Callable, Mapping, Sequence
 from . import git_ops, language, tasks
 from .artifacts import write_text
 from .config import Settings
+from .instructions import instruction_context
 from .session_context import (
     ContextBudget,
     SessionState,
@@ -226,6 +227,11 @@ Rules:
   contradictory, unsafe or unsound — never for a preference, a simpler path
   or a style choice. The specification was written and independently
   reviewed; assume it is valid by default.
+- Follow the project and repository instructions in the task. Repository
+  rules are more specific and take precedence on conflict. They define
+  conventions such as the artifact language; apply them to done.summary,
+  done.assumptions, fail.reason and the report even when the user's chat
+  language differs.
 - done.files lists every file this task changed or created, including files
   from earlier sessions and attempts. Do not list unrelated or parallel work;
   the runtime commits the files it observed plus the ones you list.
@@ -1388,6 +1394,7 @@ class CodingAgent:
         assumptions = "\n".join(
             f"- {item}" for item in task.get("assumptions", [])
         ) or "- none"
+        instructions = instruction_context(layout, [repo_id])
         feedback = "\n".join(
             f"- {item}"
             for item in (
@@ -1407,7 +1414,10 @@ class CodingAgent:
         previous_section = (
             f"\n{previous}\n" if previous else ""
         )
-        return f"""TASK: {task['title']}
+        return f"""Project and repository instructions:
+{instructions or "- none"}
+
+TASK: {task['title']}
 {spec_section}
 Requirements:
 {requirements}
@@ -1424,8 +1434,10 @@ Assumptions already recorded at intake (do not re-ask):
 Final test command: {json.dumps(test_command)}
 Repository: {repo_id} at {repo} (branch {branch})
 
-Write done.summary, done.assumptions and fail.reason in {answer_language}.
-The user asked for this task in that language; keep the report readable to them.
+The user's chat language is {answer_language}. The project and repository
+instructions above may require artifacts in another language; follow them for
+done.summary, done.assumptions, fail.reason and the report. Chat replies are
+not part of this task.
 
 Files:
 {tree}

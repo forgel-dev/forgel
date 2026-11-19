@@ -805,6 +805,27 @@ class CodingAgentTest(unittest.TestCase):
         ):
             self.assertEqual(agent._command(argv), argv)
 
+    def test_the_task_prompt_carries_project_and_repository_rules(
+        self,
+    ) -> None:
+        write_text(
+            self.layout.control / "FORGEL.md",
+            "PROJECT-RULE-MARKER\n",
+        )
+        (self.repo / "AGENTS.md").write_text(
+            "REPO-RULE-MARKER\n", encoding="utf-8"
+        )
+        task = self._task()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        prompt = agent._task_prompt(
+            self.layout, task, "main", self.repo
+        )
+        self.assertIn("PROJECT-RULE-MARKER", prompt)
+        self.assertIn("REPO-RULE-MARKER", prompt)
+        self.assertIn("take precedence", prompt)
+
     def test_reading_different_ranges_is_not_a_repeated_action(
         self,
     ) -> None:

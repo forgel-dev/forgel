@@ -106,6 +106,12 @@ class AdoptTest(unittest.TestCase):
         self.assertTrue((layout.control / ".git").exists())
         self.assertTrue((layout.control / "forgel.toml").exists())
         self.assertTrue((layout.control / "FORGEL.md").exists())
+        forgel_text = (layout.control / "FORGEL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Repository Summary", forgel_text)
+        self.assertIn("hello", forgel_text)
+        self.assertIn("README.md", forgel_text)
         self.assertTrue(
             layout.artifact("docs/program/adoption.md").exists()
         )

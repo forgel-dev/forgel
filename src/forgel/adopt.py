@@ -25,6 +25,7 @@ from typing import Any
 from . import git_ops
 from .artifacts import ensure_dir, write_json, write_text
 from .config import Settings
+from .environment import load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger, new_project_id
 from .program_manifest import (
@@ -66,6 +67,10 @@ repository; external changes are reconciled and recorded.
 - Mode: brownfield
 - Repositories: {repos}
 
+## Repository Summary
+
+{summary}
+
 ## Rules
 
 - Read `forgel.toml` for QA, jurisdiction, model and budget settings.
@@ -87,6 +92,8 @@ Canonical instructions for agents working on {name}.
 ## Rules
 
 - The code already exists; do not regenerate or overwrite it.
+- The canonical repository summary is in `FORGEL.md` under
+  "Repository Summary"; read it before exploring the repository.
 - External edits are first-class; run `forgel sync` before continuing.
 - Add a QA scenario for every automatically checkable change.
 - Do not add tool attribution lines to commits or pull requests.
@@ -300,6 +307,90 @@ def _recipe(project: dict[str, Any], layout: ProjectLayout) -> str:
     return config.recipe if config is not None and config.recipe else ""
 
 
+def _readme_excerpt(root: Path, limit: int = 400) -> str:
+    for name in ("README.md", "README.rst", "README.txt"):
+        path = root / name
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        paragraph: list[str] = []
+        for line in text.splitlines():
+            value = line.strip()
+            if not value:
+                if paragraph:
+                    break
+                continue
+            if value.startswith("#") and not paragraph:
+                continue
+            paragraph.append(value)
+            if len(" ".join(paragraph)) >= limit:
+                break
+        excerpt = " ".join(paragraph).strip()
+        if excerpt:
+            return excerpt[:limit]
+    return ""
+
+
+def _top_level(root: Path, limit: int = 24) -> str:
+    skip = {
+        ".git",
+        ".forgel",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+    }
+    try:
+        names = sorted(
+            item.name
+            + ("/" if item.is_dir() else "")
+            for item in root.iterdir()
+            if item.name not in skip
+        )
+    except OSError:
+        return ""
+    return ", ".join(names[:limit])
+
+
+def _repository_summary(
+    layout: ProjectLayout, repos: list[dict[str, Any]]
+) -> str:
+    """A short, public summary that saves the agent a repository walk."""
+
+    lines: list[str] = []
+    for entry in repos:
+        repo_id = str(entry["id"])
+        root = layout.repo_path(repo_id)
+        location = str(entry.get("url") or "").strip()
+        line = f"- {repo_id} ({entry.get('role') or 'application'})"
+        if location:
+            line += f" — {location}"
+        lines.append(line)
+        excerpt = _readme_excerpt(root)
+        if excerpt:
+            lines.append(f"  {excerpt}")
+        tree = _top_level(root)
+        if tree:
+            lines.append(f"  top level: {tree}")
+    try:
+        environment = load_environment(layout)
+    except Exception:  # noqa: BLE001 - the summary is best effort
+        environment = None
+    if environment is not None:
+        if environment.test:
+            lines.append(
+                "  environment test: " + " ; ".join(environment.test)
+            )
+        if environment.e2e:
+            lines.append(
+                "  environment e2e: " + " ; ".join(environment.e2e)
+            )
+    return "\n".join(lines)[:3000] or "- not available"
+
+
 def _write_brownfield_files(
     layout: ProjectLayout,
     name: str,
@@ -316,6 +407,7 @@ def _write_brownfield_files(
         )
     write_program(layout, name, _recipe({"recipe_id": ""}, layout))
     repo_ids = ", ".join(entry["id"] for entry in repos)
+    summary = _repository_summary(layout, repos)
     for filename, template in (
         ("FORGEL.md", ADOPTED_CONTEXT),
         ("AGENTS.md", ADOPTED_AGENTS),
@@ -326,7 +418,15 @@ def _write_brownfield_files(
                 (entry["url"] for entry in repos if entry.get("url")),
                 "a local folder",
             )
-            write_text(path, template.format(name=name, url=url, repos=repo_ids))
+            write_text(
+                path,
+                template.format(
+                    name=name,
+                    url=url,
+                    repos=repo_ids,
+                    summary=summary,
+                ),
+            )
     if not (layout.control / ".gitignore").exists():
         write_text(layout.control / ".gitignore", GITIGNORE)
 
@@ -1017,6 +1117,13 @@ NEW_REPO_FORGEL = """# FORGEL.md
 Native project instructions for {name}. Forgel reads this file first, then
 `AGENTS.md`.
 
+## Repository
+
+{description}
+
+This is a new repository; the first tasks scaffold the stack. Keep this
+summary current when the structure changes.
+
 ## Rules
 
 - This repository belongs to a Forgel project; changes go through the project
@@ -1090,7 +1197,13 @@ def _init_local_repository(
             name=repo_id, description=description or "Created by Forgel."
         ),
     )
-    write_text(local / "FORGEL.md", NEW_REPO_FORGEL.format(name=repo_id))
+    write_text(
+        local / "FORGEL.md",
+        NEW_REPO_FORGEL.format(
+            name=repo_id,
+            description=description or "Created by Forgel.",
+        ),
+    )
     write_text(local / "AGENTS.md", NEW_REPO_AGENTS.format(name=repo_id))
     write_text(local / ".gitignore", GITIGNORE)
     result = subprocess.run(

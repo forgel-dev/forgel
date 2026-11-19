@@ -23,6 +23,7 @@ from typing import Any, Mapping
 from . import i18n, language, requirements as requirements_doc, tasks
 from .artifacts import write_text
 from .config import Settings
+from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .program_manifest import entries as manifest_entries
@@ -147,7 +148,13 @@ work in ordinary product language: what is done, what is pending, what needs
 a decision, and the concrete next step from the project's roadmap. Earlier
 turns may contain these terms; keep their facts but restate them plainly.
 
-Reply in the language of the user's message. Return exactly one JSON object:
+Reply in the language of the user's message.
+
+Follow the project and repository instructions in the context. Repository
+rules are more specific and take precedence on conflict. Use them for task
+titles, summaries, change-request documents, plans, specifications, reports
+and commit messages; chat replies follow the user's language unless the
+instructions say otherwise. Return exactly one JSON object:
 {
   "kind": "answer" | "change_request" | "action" | "actions",
   "reply": "text for the user",
@@ -242,7 +249,8 @@ For a change request:
   Put every decision in "user_decisions"; never omit one and never ask the
   user to confirm a decision already made. A later decision overrides an
   earlier one.
-- Write the change-request document in English even when the chat reply is in
+- Write the change-request document in the artifact language required by the
+  project and repository instructions even when the chat reply is in the
   the user's language. State the request as requirements and decisions; do
   not paste the user's raw message into the document.
 - Fill goals, non-goals, user stories, tests, risks, open questions and
@@ -541,6 +549,8 @@ def _repository_overview(
             and not relative.startswith("docs/program/")
         ):
             continue
+        if relative in {"FORGEL.md", "AGENTS.md"}:
+            continue
         path = root / relative
         if path.is_file():
             documents.append(path)
@@ -581,6 +591,9 @@ def build_context(
     ]
     repos = manifest_entries(layout)
     parts.append("Repositories:\n" + _repo_map(repos))
+    instructions = instruction_context(layout)
+    if instructions:
+        parts.append(instructions)
 
     task_items = tasks.list_tasks(layout)
     if task_items:

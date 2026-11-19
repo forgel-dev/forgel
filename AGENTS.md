@@ -13,7 +13,13 @@ shim and is not part of the public repository.
 
 ## Project Rules
 
-- Public artifacts are in English (D-025). Code identifiers are English.
+- All committed project artifacts are in English (D-025): task titles, task
+  descriptions, specifications, plans, reports, documentation and commit
+  messages. Chat replies follow the user's language. Code identifiers are
+  English.
+- Conventions live in plain-text `FORGEL.md` and `AGENTS.md`. Project-level
+  files apply to every repository; a repository may add its own files, which
+  are more specific and take precedence on conflict.
 - The core, SDK, official plugins, templates and schemas are Apache-2.0.
   Generated project code belongs to the user.
 - The orchestrator is deterministic; the LLM works only inside a step.

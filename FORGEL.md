@@ -8,6 +8,20 @@ then `CLAUDE.md` if it is present.
 Forgel is an open-source autonomous software studio. The product plan and
 decisions live in `PLAN.md`.
 
+## Instruction Files
+
+The project-level `FORGEL.md` and `AGENTS.md` apply to every repository. A
+repository may add its own `FORGEL.md` and `AGENTS.md`; those rules are more
+specific and take precedence on conflict. Forgel reads both layers.
+
+## Language
+
+All project documents and artifacts are English, regardless of the chat
+language: task titles, task descriptions, specifications, plans, QA and
+review reports, documentation and commit messages. Chat replies and
+clarifying questions follow the user's language. Repository instruction files
+may add conventions, but the artifact language stays English.
+
 ## Native Rules
 
 - The source of truth for agent instructions is `AGENTS.md`. This file adds
@@ -17,7 +31,8 @@ decisions live in `PLAN.md`.
 - Jurisdiction packs are advisory. Never claim legal compliance; the user is
   responsible. Production requires the compliance acknowledgement.
 - Generated project code belongs to the user.
-- Public artifacts are English; internal working documents may be Russian.
+- All committed project artifacts are English; local working notes outside
+  the repository may be Russian.
 
 ## Read Order
 

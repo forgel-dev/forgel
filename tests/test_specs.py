@@ -99,6 +99,25 @@ class SpecCheckValidationTest(unittest.TestCase):
             "depends_on": [],
         }
 
+    def test_the_spec_prompt_carries_project_instructions(self) -> None:
+        self.layout.control.mkdir(parents=True, exist_ok=True)
+        (self.layout.control / "FORGEL.md").write_text(
+            "SPEC-RULE-MARKER\n", encoding="utf-8"
+        )
+        client = ScriptedModelClient([json.dumps(VALID)])
+        write_task_spec(
+            self.settings,
+            self.layout,
+            "Goal",
+            "",
+            self._intent(),
+            client,
+            log=lambda _m: None,
+        )
+        self.assertIn(
+            "SPEC-RULE-MARKER", client.requests[0][1].content
+        )
+
     def test_a_sibling_repository_check_is_retried_in_the_spec(self) -> None:
         invalid = dict(VALID)
         invalid["checks"] = [
