@@ -1,41 +1,42 @@
 {
   "id": "20261119053418_forgel-code",
   "title": "Устранить дефекты клиента Forgel Code и привести проверку в исполнимый вид",
-  "spec": "docs/program/requests/20261119053418955569_forgel-code.md",
+  "spec": "docs/program/specs/20261119053418_forgel-code.md",
   "requirements": [
-    "R1. Ключ выбранного проекта передаётся движку во всех командах, работающих с проектом: status, tasks, task, say, plan, resume, pause, history, projects, session, accept, rework. После выбора проекта ни одна из этих команд не обращается к проекту, активному в движке по умолчанию.",
-    "R2. При машинном выводе любая ошибка разбора аргументов (неизвестная команда, лишний или отсутствующий аргумент) выдаёт ровно один JSON-объект с \"ok\": false и ненулевой код возврата; текст справки разборщика в stdout не попадает.",
-    "R3. Вызов движка ограничен по времени; по истечении ограничения клиент завершается ненулевым кодом и структурированной ошибкой, а не зависает.",
-    "R4. Вывод движка читается как UTF-8 независимо от локали системы.",
-    "R5. Дочерний процесс движка не наследует стандартный ввод клиента.",
-    "R6. При ненулевом коде возврата движка структурированная ошибка (объект с \"ok\": false и описанием) разбирается и передаётся пользователю в том же формате, что и остальные ответы, а не подменяется сырым текстом потоков.",
-    "R7. Ответ движка с \"ok\": false при нулевом коде возврата трактуется как неуспех на уровне вызова движка и приводит к ненулевому коду возврата клиента.",
-    "R8. Глобальные флаги (машинный вывод, путь к движку) распознаются без потери содержимого аргументов: текст, содержащий похожие слова, и замечания, начинающиеся с дефиса, доходят до движка без искажений.",
-    "R9. Поиск задачи по идентификатору однозначен и не принимает за задачу первый вложенный объект с полем идентификатора; при неоднозначности или отсутствии задачи выдаётся ошибка.",
-    "R10. Отсутствие команды в движке определяется по устойчивому признаку ответа, а не по подстрокам текста сообщения об ошибке.",
-    "R11. Поле проекта в машинном ответе отражает фактически использованный проект; при отсутствии выбранного проекта не подставляется ярлык по умолчанию.",
-    "R12. Клиент поддерживает вывод версии и при ошибке сообщает, какой движок отвечал.",
-    "R13. Команда plan однозначно различает текст цели и имя вехи; текст цели не уходит движку как имя вехи.",
-    "R14. Архив исходников соответствует PEP 625: имя forgel_code-<версия>, метаданные пакета в корне архива.",
-    "R15. Колесо пакета включает подпакеты, файл типов и файлы данных, а не только модули верхнего уровня.",
-    "R16. Версия пакета задаётся в одном месте и используется и метаданными, и сборочным backend.",
-    "R17. Инструкция по установке ставит зафиксированную копию (конкретный коммит, тег или собранный пакет), не ветку по умолчанию и не режим разработки; описано обновление поверх установленной копии.",
-    "R18. На каждый исправленный пункт добавлен тест; тесты падают на исходном коде и проходят после правки.",
-    "R19. Проверка запускается одной командой из корня репозитория клиента и завершается успешно."
+    "R1. After `forgel-code use <key>`, each of status, tasks, task, say, plan, resume, pause, history, projects, session, accept, rework passes the selected project key to the engine, and none of them relies on the engine's default project.",
+    "R1a. A test with a fake engine that records argv asserts, for every command in R1, that the recorded arguments contain the selected key and no default-project key.",
+    "R2. With machine output enabled (`--json`), any argument-parsing failure (unknown command, extra positional, missing required argument) writes exactly one JSON object with `\"ok\": false` and a description to stdout, writes no parser help text to stdout, and exits non-zero.",
+    "R3. Every engine invocation is bounded by a timeout; when it elapses the client kills the engine, exits non-zero and emits a structured error, and returns within the timeout plus a small fixed margin.",
+    "R4. Engine stdout and stderr are decoded as UTF-8 regardless of the host locale.",
+    "R5. The engine child process is started without inheriting the client's standard input.",
+    "R6. When the engine exits non-zero and emits a structured error object, the client parses it and surfaces its fields through the same structured (machine) or rendered (human) channel used for other responses, rather than replacing it with raw stdout/stderr text.",
+    "R7. An engine response with `\"ok\": false` and exit code 0 is treated as a failed engine call and makes the client exit non-zero.",
+    "R8. Global flags (machine output, engine path) are parsed as positional-free options so argument text is preserved: arguments that merely contain similar words and remarks beginning with a hyphen reach the engine byte-for-byte unchanged.",
+    "R9. Task lookup by identifier resolves exactly one task; a nested object that merely carries an id field is never accepted as the task; ambiguity or absence produces an error.",
+    "R10. Detection of a missing engine command uses a stable property of the engine response, not substrings of the human-readable error message.",
+    "R11. The project field in machine output reports the project actually used for the call; when no project is selected no default label is substituted.",
+    "R12. `forgel-code --version` prints the client version and exits 0; when a call fails, the error message identifies which engine responded (engine identity/version or path).",
+    "R13. `plan` distinguishes goal text from a milestone name; goal text is sent to the engine as goal text and is never sent as a milestone name.",
+    "R14. The built source distribution is named `forgel_code-<version>` and contains the package metadata at the archive root.",
+    "R15. The built wheel contains the package subpackages, the type file and the data files, not only top-level modules.",
+    "R16. The package version is declared in exactly one place and consumed by both the package metadata and the build backend.",
+    "R17. The README install instructions install a pinned copy (a specific commit, tag or built package), not the default branch and not a development/editable install, and describe upgrading over an installed copy.",
+    "R18. Each fixed item R1-R17 has a test that fails on the pre-fix code and passes after the fix.",
+    "R19. The whole suite runs with one command from the client repository root (`python -m unittest discover -s tests`) and exits 0 without import errors."
   ],
   "acceptance": [
-    "Команда `python -m unittest discover -s tests` из корня репозитория клиента завершается с кодом 0 и без ошибок импорта.",
-    "`forgel-code --help` и `forgel-code --version` завершаются с кодом 0.",
-    "После `forgel-code use <key>` команды status, tasks, task, say, plan, resume, pause, history, projects, session передают движку выбранный проект (проверяется тестом с подставным движком, фиксирующим аргументы).",
-    "Вызов с `--json` и заведомо неверными аргументами (неизвестная команда, лишний позиционный аргумент) печатает ровно один JSON-объект с \"ok\": false и завершается ненулевым кодом; справка разборщика в stdout отсутствует.",
-    "Подставной движок, зависающий дольше заданного ограничения, приводит к ненулевому коду возврата и структурированной ошибке в пределах ограничения плюс запас.",
-    "Ответ движка с ненулевым кодом и объектом ошибки доносит до пользователя поля этой ошибки.",
-    "Ответ движка с \"ok\": false и нулевым кодом приводит к ненулевому коду возврата клиента.",
-    "`forgel-code say \"добавь флаг --json\"` передаёт движку полный текст без потери слов (проверяется тестом).",
-    "Команда plan с текстом цели передаёт движку текст цели, а не имя вехи.",
-    "Сборка архива исходников даёт имя forgel_code-<версия> и содержит метаданные пакета в корне; сборка колеса включает подпакеты и файл типов — проверяется тестом упаковки.",
-    "README не содержит установки с ветки по умолчанию и не предлагает режим разработки; установка фиксируется на коммите, теге или собранном пакете.",
-    "Набор тестов остаётся зелёным целиком, ни один существующий тест не ослаблен."
+    "`python -m unittest discover -s tests` run from the client repository root exits with code 0 and reports no import errors.",
+    "`forgel-code --help` and `forgel-code --version` both exit with code 0.",
+    "A test with a fake engine that records argv shows that, after `forgel-code use <key>`, each of status, tasks, task, say, plan, resume, pause, history, projects, session, accept and rework forwards the selected key to the engine.",
+    "With `--json` and deliberately invalid arguments (unknown command, extra positional argument), the client prints exactly one JSON object with `\"ok\": false`, exits non-zero, and prints no parser help text to stdout.",
+    "A fake engine that hangs longer than the configured limit causes a non-zero exit and a structured error within the limit plus a margin.",
+    "An engine response with a non-zero exit code and an error object delivers that error object's fields to the user.",
+    "An engine response with `\"ok\": false` and exit code 0 makes the client exit non-zero.",
+    "A test shows that `forgel-code say \"добавь флаг --json\"` sends the complete text to the engine with no words lost or altered.",
+    "A test shows that `plan` with goal text sends the goal text to the engine, not a milestone name.",
+    "The source archive is named `forgel_code-<version>` and holds the package metadata at its root; the wheel contains the subpackages and the type file; both are asserted by a packaging test.",
+    "The README contains no default-branch install and no development/editable install, and pins installation to a commit, tag or built package, with an upgrade procedure.",
+    "The full test suite is green and no pre-existing test has been deleted or weakened."
   ],
   "constraints": [
     "Клиент остаётся тонким: он не обращается к модели, не читает файлы проекта и не выполняет проверки сам.",
@@ -65,12 +66,168 @@
   "plan_goal": "",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "`python -m unittest discover -s tests` from the client repository root exits 0 with no import errors.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "`forgel-code --help` and `forgel-code --version` exit 0.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli.CliSmokeTests",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "After `use <key>`, every project-scoped command forwards the selected key to the engine (fake engine records argv).",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "`--json` with invalid arguments prints exactly one `ok: false` JSON object, exits non-zero, and no parser help reaches stdout.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "A fake engine hanging past the limit yields a non-zero exit and a structured error within the limit plus margin.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "A non-zero engine exit with an error object delivers that object's fields to the user.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "An engine response with `ok: false` and exit code 0 makes the client exit non-zero.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "`forgel-code say \"добавь флаг --json\"` sends the complete, unaltered text to the engine.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "`plan` with goal text sends goal text to the engine, not a milestone name.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "sdist is named `forgel_code-<version>` with metadata at root; wheel includes subpackages and the type file.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_packaging",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "README has no default-branch or development/editable install and pins a commit, tag or built package with an upgrade procedure.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The full suite is green and no pre-existing test was deleted or weakened.",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "forgel engine CLI",
+      "interface": "The client spawns `forgel <command> ...` via `subprocess.run` with a timeout, `stdin=subprocess.DEVNULL`, UTF-8 decoding, parses one JSON object from stdout, and uses the exit code. Tests use the deterministic executable below, selected through the engine-path flag or `FORGEL_BIN`; `FORGEL_STUB_LOG` records exact argv/project propagation, while `FORGEL_STUB_SLEEP`, `FORGEL_STUB_STDOUT`, and `FORGEL_STUB_EXIT` exercise timeout and structured-error paths.",
+      "docs": "Project decision log D-007 and the task dependency contract for the `forgel` CLI JSON/exit-code protocol.",
+      "mode": "stub",
+      "evidence": "D-007 records the engine protocol: one JSON object on stdout, `forgel say` as the only free-text entry point, active project as an engine session with default key `local`, and structured `ok:false` errors. Acceptance criteria R1, R6, R7, R10, and R12 require preserving project keys, parsing engine error objects, treating `ok:false` as failure, detecting unsupported commands by a stable response signal, and reporting engine identity. No repository in the project list provides the engine itself (only `main` and `code`, both application repos), so a documented stub is used.",
+      "stub": "#!/usr/bin/env python3\nimport json, os, sys, time\n\nCOMMANDS = {'status','tasks','task','say','plan','resume','pause','history','projects','session','accept','rework'}\nENGINE = {'name': 'forgel-stub', 'version': '0.0.0'}\n\ndef emit(obj, code=0):\n    print(json.dumps(obj, ensure_ascii=False, sort_keys=True), flush=True)\n    raise SystemExit(code)\n\ndef project_of(args):\n    for i, a in enumerate(args):\n        if a == '--project' and i + 1 < len(args):\n            return args[i+1]\n        if a.startswith('--project='):\n            return a.split('=', 1)[1]\n    return None\n\ndef main(argv):\n    log = os.environ.get('FORGEL_STUB_LOG')\n    if log:\n        with open(log, 'a', encoding='utf-8') as f:\n            print(json.dumps(argv, ensure_ascii=False), file=f)\n    sleep = os.environ.get('FORGEL_STUB_SLEEP')\n    if sleep:\n        time.sleep(float(sleep))\n    canned = os.environ.get('FORGEL_STUB_STDOUT')\n    if canned is not None:\n        sys.stdout.write(canned)\n        sys.stdout.flush()\n        raise SystemExit(int(os.environ.get('FORGEL_STUB_EXIT', '0')))\n    if not argv or argv == ['--help']:\n        emit({'ok': True, 'engine': ENGINE, 'commands': sorted(COMMANDS)})\n    if argv[0] in ('--version', 'version'):\n        emit({'ok': True, 'engine': ENGINE})\n    cmd = argv[0]\n    if cmd not in COMMANDS:\n        msg = 'unsupported command: ' + cmd\n        emit({'ok': False, 'engine': ENGINE, 'code': 'unsupported_command', 'unsupported_command': True, 'error': {'code': 'unsupported_command', 'description': msg}, 'description': msg}, 2)\n    emit({'ok': True, 'engine': ENGINE, 'command': cmd, 'args': argv[1:], 'project': project_of(argv[1:])})\n\nif __name__ == '__main__':\n    main(sys.argv[1:])"
+    },
+    {
+      "name": "Python standard library",
+      "interface": "Use `subprocess.run(..., timeout=..., stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')`; `json` for the engine envelope; `unittest` for tests; a parser for global flags before subcommands.",
+      "docs": "https://docs.python.org/3/library/subprocess.html",
+      "mode": "direct",
+      "evidence": "Python 3 standard library is the repository runtime, and the dependency contract explicitly names `subprocess`, `json`, `unittest`, and a parser. The `subprocess` documentation defines `timeout`, explicit `stdin`, and explicit text `encoding`, which map to requirements R3, R4, and R5.",
+      "stub": ""
+    },
+    {
+      "name": "PEP 625 source distribution naming",
+      "interface": "`_build_backend.py` emits the sdist as `forgel_code-<version>.tar.gz` and writes `PKG-INFO`/package metadata at the archive root; the packaging test inspects the result with `tarfile`.",
+      "docs": "https://peps.python.org/pep-0625/",
+      "mode": "direct",
+      "evidence": "PEP 625 specifies the canonical sdist filename and requires package metadata (`PKG-INFO`) at the archive root. The project requirement R14 requires the archive name `forgel_code-<version>` with package metadata at the root, and R16 requires one shared version source.",
+      "stub": ""
+    },
+    {
+      "name": "PyPA `build` / packaging backend",
+      "interface": "Call the project's local `_build_backend.py` directly for `build_sdist` and `build_wheel` from the packaging test; optionally invoke `python -m build --no-isolation` only if the external `build` module is installed.",
+      "docs": "https://pypa-build.readthedocs.io/",
+      "mode": "direct",
+      "evidence": "The dependency contract names the project's `_build_backend.py` as the build backend, and `pyproject.toml` declares that backend. The packaging test can import and call it directly, so PyPA `build` is optional and no network or build isolation is required. Requirements R14-R16 verify sdist name, wheel contents, and single-source version.",
+      "stub": ""
+    }
+  ],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-19T05:34:18+00:00",
-  "started_at": "",
+  "started_at": "2026-11-19T05:34:19+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": "docs/program/requests/20261119053418955569_forgel-code.md"
 }
