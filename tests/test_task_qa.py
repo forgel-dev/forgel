@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -333,6 +334,56 @@ class TaskQATest(unittest.TestCase):
         self.assertEqual(
             stored["result"]["failure"]["kind"], "environment"
         )
+
+    def _git_repo(self) -> Path:
+        repo = self.layout.repo_path("main")
+        repo.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "init", "-q"], cwd=repo, check=True
+        )
+        (repo / "README.md").write_text("repo\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "-A"], cwd=repo, check=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@example.com",
+                "commit",
+                "-q",
+                "-m",
+                "initial",
+            ],
+            cwd=repo,
+            check=True,
+        )
+        return repo
+
+    def test_the_task_own_uncommitted_files_fail_qa_as_code(self) -> None:
+        repo = self._git_repo()
+        (repo / "work.py").write_text("value = 1\n", encoding="utf-8")
+        task = self._task([])
+        update_task(
+            self.layout,
+            task["id"],
+            result={"files_changed": ["work.py"]},
+        )
+        result = run_task_qa(
+            self.settings,
+            self.ledger,
+            self.project,
+            task,
+            log=lambda _m: None,
+        )
+        self.assertEqual(result.status, "fail")
+        self.assertEqual(result.failure_kind, "code")
+        self.assertIn("work.py", result.output)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["result"]["failure"]["kind"], "qa")
 
     def test_a_deferred_mobile_e2e_is_skipped_not_failing(self) -> None:
         set_entries(

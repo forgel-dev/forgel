@@ -145,7 +145,7 @@ JSON actions below.
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
-{"action": "done", "summary": "what was implemented and how it was tested", "assumptions": ["what you decided where the task was silent"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}], "spec_issues": [{"requirement": "the requirement or contract point", "problem": "why it cannot be implemented as written", "proposal": "what the specification should say instead"}]}
+{"action": "done", "summary": "what was implemented and how it was tested", "files": ["relative/path changed or created by this task"], "assumptions": ["what you decided where the task was silent"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}], "spec_issues": [{"requirement": "the requirement or contract point", "problem": "why it cannot be implemented as written", "proposal": "what the specification should say instead"}]}
 {"action": "fail", "reason": "why the task cannot be completed"}
 
 Context:
@@ -190,6 +190,9 @@ Rules:
   contradictory, unsafe or unsound — never for a preference, a simpler path
   or a style choice. The specification was written and independently
   reviewed; assume it is valid by default.
+- done.files lists every file this task changed or created, including files
+  from earlier sessions and attempts. Do not list unrelated or parallel work;
+  the runtime commits the files it observed plus the ones you list.
 - Treat every external interface the task depends on — a tool, a service, a
   file format, a protocol — as a contract with an authoritative source.
   Derive the contract from that source before using it; never invent fields,
@@ -348,6 +351,33 @@ def parse_actions(raw: str) -> list[dict[str, Any]]:
     ]
 
 
+CONTROL_PREFIXES = ("docs/program/", ".forgel/")
+CONTROL_FILES = {"program.yaml", "forgel.toml"}
+
+
+def _task_path(value: str) -> str:
+    """A normalized product path, or ``""`` for control state/unsafe input."""
+
+    path = str(value or "").strip()
+    if not path or path.startswith(("/", "~")) or "\\" in path:
+        return ""
+    normalized = str(Path(path))
+    if normalized == "." or ".." in Path(normalized).parts:
+        return ""
+    if normalized in CONTROL_FILES or normalized.startswith(CONTROL_PREFIXES):
+        return ""
+    return normalized
+
+
+def _covered(path: str, files: Sequence[str]) -> bool:
+    for item in files:
+        if path == item:
+            return True
+        if item.endswith("/") and path.startswith(item):
+            return True
+    return False
+
+
 def _preserved_evidence(path: Path) -> str:
     """Keep execution evidence when a later run regenerates the report."""
 
@@ -450,6 +480,7 @@ class CodingAgent:
                 assumptions,
                 context_stats,
                 failure_kind,
+                reported_files,
                 test_removals,
                 spec_issues,
             ) = self._converse(
@@ -478,20 +509,55 @@ class CodingAgent:
                 }
             elif item in dirty:
                 carried.add(item)
+        reported: list[str] = []
+        for item in reported_files:
+            path = _task_path(item)
+            if path and path not in reported:
+                reported.append(path)
         changed = sorted(
-            (dirty - preexisting) | set(touched) | carried
+            {
+                path
+                for path in (
+                    (dirty - preexisting)
+                    | set(touched)
+                    | carried
+                    | set(reported)
+                )
+                if _task_path(path)
+            }
         )
         commit_sha = ""
         if status == "done":
-            try:
-                if changed:
+            dirty_product = sorted(
+                path for path in dirty if _task_path(path)
+            )
+            unexplained = [
+                path
+                for path in dirty_product
+                if not _covered(path, changed)
+            ]
+            if unexplained:
+                selected = self._completion_files(
+                    task, layout, repo, changed, unexplained, log
+                )
+                if selected is None:
+                    status = "failed"
+                    failure_kind = "agent"
+                    summary += (
+                        "; the completion step could not decide which "
+                        "uncommitted files belong to the task"
+                    )
+                else:
+                    changed = sorted(set(changed) | set(selected))
+            if status == "done" and changed:
+                try:
                     commit_sha = git_ops.commit_paths(
                         repo, changed, f"Agent: {task['title']}"
                     )
-            except git_ops.GitOperationError as exc:
-                status = "failed"
-                failure_kind = "infrastructure"
-                summary += f"; commit failed: {exc}"
+                except git_ops.GitOperationError as exc:
+                    status = "failed"
+                    failure_kind = "infrastructure"
+                    summary += f"; commit failed: {exc}"
         if status == "done" and not changed and not spec_issues:
             attempt = tasks.attempt_number(task)
             if attempt > 0:
@@ -501,9 +567,6 @@ class CodingAgent:
                     "the agent reported done without changing anything "
                     f"on rework {attempt}"
                 )
-        if not changed:
-            changed = sorted(set(touched))
-
         files_changed = changed
         attributed_files = sorted(
             set(previous_files) | set(files_changed)
@@ -667,6 +730,91 @@ class CodingAgent:
         except SandboxError as exc:
             raise AgentError(f"sandbox: {exc}") from exc
 
+    def _completion_files(
+        self,
+        task: Mapping[str, Any],
+        layout: ProjectLayout,
+        repo: Path,
+        changed: Sequence[str],
+        unexplained: Sequence[str],
+        log: Callable[[str], None],
+    ) -> list[str] | None:
+        """Let the model decide which uncommitted files belong to the task.
+
+        A task can span sessions and failed attempts; some of its files are
+        already in the working tree when the final session starts. The model
+        sees the task, the attributed files and a bounded preview of the
+        unexplained ones. It returns only paths from the unexplained set.
+        """
+
+        previews: list[str] = []
+        used = 0
+        for path in list(unexplained)[:20]:
+            target = repo / path
+            try:
+                text = target.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                previews.append(f"--- {path} (unreadable or directory) ---")
+                continue
+            previews.append(f"--- {path} ---\n{text[:2000]}")
+            used += len(text[:2000])
+            if used >= 12_000:
+                break
+        requirements = "\n".join(
+            f"- {item}" for item in (task.get("requirements") or [])
+        ) or "- none"
+        acceptance = "\n".join(
+            f"- {item}" for item in (task.get("acceptance") or [])
+        ) or "- none"
+        attributed = "\n".join(f"- {item}" for item in changed) or "- none"
+        messages = [
+            ModelMessage(
+                "system",
+                "You are finishing a coding task. The runtime observed files "
+                "changed during the task but could not attribute every "
+                "uncommitted file. Decide which uncommitted files belong to "
+                "this task's coherent change. Use the task requirements and "
+                "the content preview. Exclude unrelated or parallel work. "
+                'Return exactly one JSON object: {"files": ["relative/path"]}. '
+                "Use an empty list when none belong.",
+            ),
+            ModelMessage(
+                "user",
+                f"Task: {task.get('title') or task.get('id')}\n"
+                f"Summary: {task.get('summary') or ''}\n\n"
+                f"Requirements:\n{requirements}\n\n"
+                f"Acceptance:\n{acceptance}\n\n"
+                f"Files already attributed to the task:\n{attributed}\n\n"
+                "Uncommitted files:\n" + "\n\n".join(previews),
+            ),
+        ]
+        try:
+            raw = self.client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError as exc:
+            log(
+                f"[agent] {task['id']}: completion file selection failed: "
+                f"{exc}"
+            )
+            return None
+        objects = json_objects(raw)
+        data = objects[-1] if objects else None
+        files = data.get("files") if isinstance(data, dict) else None
+        if not isinstance(files, list):
+            return None
+        allowed = set(unexplained)
+        selected: list[str] = []
+        for item in files:
+            path = _task_path(str(item))
+            if path in allowed and path not in selected:
+                selected.append(path)
+        log(
+            f"[agent] {task['id']}: completion selected "
+            f"{len(selected)} of {len(unexplained)} unexplained file(s)"
+        )
+        return selected
+
     def _converse(
         self,
         layout: ProjectLayout,
@@ -687,6 +835,9 @@ class CodingAgent:
         str,
         list[str],
         dict[str, Any],
+        str,
+        list[str],
+        list[dict[str, str]],
         list[dict[str, str]],
     ]:
         """Run the model loop and the final test, returning the run state.
@@ -729,6 +880,7 @@ class CodingAgent:
         ]
         test_removals: list[dict[str, str]] = []
         spec_issues: list[dict[str, str]] = []
+        reported_files: list[str] = []
         status = "failed"
         summary = "agent did not finish within the session limit"
         failure_kind = "agent"
@@ -884,6 +1036,10 @@ class CodingAgent:
                             value = str(item).strip()
                             if value and value not in assumptions:
                                 assumptions.append(value)
+                        for item in action.get("files", []):
+                            value = str(item).strip()
+                            if value and value not in reported_files:
+                                reported_files.append(value)
                         for item in action.get("test_removals", []):
                             if not isinstance(item, dict):
                                 continue
@@ -1056,6 +1212,7 @@ class CodingAgent:
             assumptions,
             context_stats,
             failure_kind,
+            reported_files,
             test_removals,
             spec_issues,
         )

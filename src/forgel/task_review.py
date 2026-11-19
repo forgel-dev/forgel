@@ -1060,7 +1060,35 @@ def _push_accepted(
             return {"status": "failed", "detail": str(exc)}
         return {"status": "pushed", "detail": "", "branch": branch}
 
-    pushed = push_one(repo)
+    own_dirty: list[str] = []
+    if (repo / ".git").exists():
+        task_files = [
+            str(item)
+            for item in ((task.get("result") or {}).get("files_changed") or [])
+        ]
+
+        def _owned(path: str) -> bool:
+            for item in task_files:
+                if item.endswith("/") and path.startswith(item):
+                    return True
+                if path == item:
+                    return True
+            return False
+
+        own_dirty = [
+            item for item in git_ops.status_paths(repo) if _owned(item)
+        ]
+    if own_dirty:
+        pushed = {
+            "status": "failed",
+            "detail": (
+                "the task's own files are uncommitted: "
+                + ", ".join(own_dirty)
+            ),
+            "branch": "",
+        }
+    else:
+        pushed = push_one(repo)
     control = layout.root if layout.is_linked else layout.control
     control_result: dict[str, str] | None = None
     if control.resolve() != repo.resolve():

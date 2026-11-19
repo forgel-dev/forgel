@@ -35,6 +35,7 @@ from .environment import (
     load_environment,
     mount_env_name,
 )
+from .git_ops import status_paths
 from .integration import integration_problem, integration_warning
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -563,6 +564,57 @@ def run_task_qa(
     task = get_task(layout, str(task["id"])) or task
     log(f"[qa] {project['id']}: task {task['id']}: running")
     repo_id = _task_repo_id(layout, task)
+    result_data = dict(task.get("result") or {})
+    task_files = [
+        str(item) for item in (result_data.get("files_changed") or [])
+    ]
+    if repo_id:
+        repo_path = layout.repo_path(repo_id)
+        if (repo_path / ".git").exists():
+            dirty = status_paths(repo_path)
+
+            def _owned(path: str) -> bool:
+                for item in task_files:
+                    if item.endswith("/") and path.startswith(item):
+                        return True
+                    if path == item:
+                        return True
+                return False
+
+            own = [item for item in dirty if _owned(item)]
+            if own:
+                detail = (
+                    "the task repository still has the task's uncommitted "
+                    "files: " + ", ".join(own)
+                )
+                checks = [
+                    {
+                        "criterion": "the task repository is committed",
+                        "command": "",
+                        "exit_code": 1,
+                        "verdict": "fail",
+                        "scope": "task",
+                        "repo": repo_id,
+                        "workdir": str(repo_path),
+                        "output": detail,
+                        "failure": "code",
+                    }
+                ]
+                return _record(
+                    ledger,
+                    layout,
+                    project,
+                    task,
+                    TaskQAResult(
+                        status="fail",
+                        runtime="uncommitted",
+                        output=detail,
+                        checks=checks,
+                        failure_kind="code",
+                    ),
+                    1,
+                    log,
+                )
     if _documentation_only(task):
         return _record(
             ledger,

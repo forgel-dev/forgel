@@ -573,6 +573,7 @@ class CodingAgentTest(unittest.TestCase):
             json.dumps(
                 {"action": "done", "summary": "inspected and done"}
             ),
+            json.dumps({"files": []}),
         ]
         result = CodingAgent(
             self.settings,
@@ -809,7 +810,10 @@ class CodingAgentTest(unittest.TestCase):
                 }
             )
             for number in range(1, 6)
-        ] + [json.dumps({"action": "done", "summary": "read"})]
+        ] + [
+            json.dumps({"action": "done", "summary": "read"}),
+            json.dumps({"files": []}),
+        ]
         client = ScriptedModelClient(responses)
         result = CodingAgent(
             self.settings, self.ledger, client
@@ -1051,6 +1055,145 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("template/app.py", prompt)
         self.assertIn("Do not repeat finished work", prompt)
         self.assertNotIn("If the blocker is missing evidence", prompt)
+
+    def test_done_commits_only_the_task_files(self) -> None:
+        parallel = self.repo / "parallel.py"
+        parallel.write_text("value = 0\n", encoding="utf-8")
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 2\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "finished"}),
+                json.dumps({"files": []}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        tracked = _run(
+            self.repo, "ls-files", "parallel.py", "work.py"
+        ).stdout.split()
+        self.assertEqual(sorted(tracked), ["work.py"])
+        status = _run(
+            self.repo, "status", "--porcelain"
+        ).stdout.strip()
+        self.assertIn("parallel.py", status)
+        self.assertIn("work.py", result.files_changed)
+        self.assertNotIn("parallel.py", result.files_changed)
+
+    def test_a_failed_attempt_does_not_commit(self) -> None:
+        parallel = self.repo / "parallel.py"
+        parallel.write_text("value = 0\n", encoding="utf-8")
+        task = create_task(
+            self.layout,
+            "Partial work",
+            ["Write a work file"],
+            ["The work is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 2\n",
+                    }
+                ),
+                json.dumps({"action": "fail", "reason": "not finished"}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        tracked = _run(
+            self.repo, "ls-files", "parallel.py", "work.py"
+        ).stdout.split()
+        self.assertEqual(tracked, [])
+        status = _run(
+            self.repo, "status", "--porcelain"
+        ).stdout.strip()
+        self.assertIn("work.py", status)
+        self.assertIn("work.py", result.files_changed)
+
+    def test_completion_attributes_earlier_session_files(self) -> None:
+        leftover = self.repo / "leftover"
+        leftover.mkdir()
+        (leftover / "note.py").write_text("value = 1\n", encoding="utf-8")
+        task = create_task(
+            self.layout,
+            "Finish a partial change",
+            ["Keep the note", "Add a work file"],
+            ["Everything is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 2\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "finished"}),
+                json.dumps({"files": ["leftover/note.py"]}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        tracked = _run(
+            self.repo, "ls-files", "leftover/note.py", "work.py"
+        ).stdout.split()
+        self.assertEqual(
+            sorted(tracked), ["leftover/note.py", "work.py"]
+        )
+        self.assertEqual(
+            _run(
+                self.repo,
+                "status",
+                "--porcelain",
+                "--",
+                "leftover/note.py",
+                "work.py",
+            ).stdout.strip(),
+            "",
+        )
+        self.assertIn("leftover/note.py", result.files_changed)
 
     def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
         leftover = self.repo / "leftover"
