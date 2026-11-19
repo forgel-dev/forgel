@@ -3,8 +3,8 @@
 - Task: `20261119210845_install-forgel-code-with-one-command-via`
 - Status: `failed`
 - Repository: `code`
-- Steps: 60
-- Finished: 2026-11-19T21:33:26+00:00
+- Steps: 28
+- Finished: 2026-11-19T21:39:31+00:00
 
 ## Requirements
 
@@ -28,28 +28,23 @@
 - Offline tests invoke the installer with the local source tree (a source override or `sh install.sh` run from the checkout) and a temporary HOME, so no network is used.
 - The README example keeps the `v0.1.0` tag, matching the current released version.
 - Windows fallback remains `pip install --user` as a single line outside the main path.
-- Opt-out переменная названа `FORGEL_CODE_NO_MODIFY_PATH` (в спецификации имя не задано); для совместимости принимается и `FORGEL_CODE_NO_PROFILE_EDIT` из заметок приёмки.
-- Открытый вопрос про офлайн-источник решён переменной окружения `FORGEL_CODE_SOURCE` (плюс каталог скрипта как второй вариант), поэтому README не меняется.
-- Профиль выбирается по `$SHELL` (zsh -> ~/.zshrc, bash -> ~/.bashrc|~/.bash_profile, иначе ~/.profile); тесты дополнительно фиксируют `FORGEL_CODE_PROFILE`.
-- Строка удаления в README использует форму `curl ... | sh -s -- --uninstall`, чтобы это оставалась та же команда с флагом.
-- Лаунчер — маленький sh-скрипт, экспортирующий `PYTHONPATH=<prefix>` и запускающий `<python> -m forgel_code "$@"`, поэтому работает без активации venv.
-- Если установщик запущен из checkout'а, он ставит из этого каталога; при `curl | sh` каталога нет, берётся архив тега `FORGEL_CODE_TAG` (по умолчанию `v0.1.0`).
-- Финальный прогон выполнен `python -m unittest discover -s tests`, потому что pytest не установлен в этом окружении; тестовый набор и файлы те же, что у `python -m pytest -q`.
+- Офлайн-источник установки — переменная окружения `FORGEL_CODE_SOURCE` (плюс автоопределение каталога самого скрипта и текущего каталога), как допускает раздел Open Questions: это обратимо и не меняет README.
+- Opt-out переменная — `FORGEL_CODE_NO_MODIFY_PATH` (имя из спецификации), при этом сохранено и старое имя `FORGEL_CODE_NO_PROFILE_EDIT`, зафиксированное при intake, чтобы обе формулировки работали.
+- Тестовый прогон выполнен через `python -m unittest discover -s tests`, поскольку pytest в окружении отсутствует, а установка пакетов запрещена; набор тестов совместим с pytest (классы unittest), так что при наличии pytest команды A1–A7 из спеки отработают без правок.
 
 ## Test Removals
 
-- tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command: replaced -> tests/test_readme_install.py::ReadmeInstallTest::test_first_install_command_is_the_installer_line
-- tests/test_cli.py::ReadmeTest::test_readme_documents_the_update_path: replaced -> tests/test_readme_install.py::ReadmeInstallTest::test_one_update_line_and_one_uninstall_line
+- tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_pip_install: replaced -> tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 60
-- Estimated input tokens (all calls): 7428421
-- Provider input/output tokens: 6473407 / 386224
-- Estimated prompt at the end: 479257 tokens
+- Model calls: 28
+- Estimated input tokens (all calls): 587518
+- Provider input/output tokens: 603747 / 45773
+- Estimated prompt at the end: 37936 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261119210845_install-forgel-code-with-one-command-via.md`)
@@ -245,16 +240,7 @@ Forgel Code can currently only be obtained by cloning the repository and creatin
 
 ## Summary
 
-Добавлен одно-командный установщик и переписан раздел установки README, всё покрыто тестами.
-
-Что сделано:
-1. `install.sh` в корне репозитория (POSIX sh, права 755, проходит `sh -n`): ставит клиент в `${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}` и пишет исполняемый лаунчер `forgel-code` в `${FORGEL_CODE_BIN:-$HOME/.local/bin}`; PATH добавляется ровно одним блоком с маркерами `# >>> forgel-code >>>` / `# <<< forgel-code <<<` (профиль выбирается по `$SHELL`, по умолчанию `~/.profile`); поддержан opt-out (печатает точную строку `export PATH=...` и ничего не открывает на запись); `--uninstall` удаляет каталог, лаунчер и блок; повторный запуск идемпотентен; в конце печатается установленная версия (`forgel-code 0.1.0`). Скрипт не читает stdin (все вызовы с `</dev/null`), поэтому работает в виде `curl ... | sh`. Офлайн-источник — `FORGEL_CODE_SOURCE` (или каталог самого скрипта), иначе архив тега `v0.1.0`.
-2. `README.md`: первый и единственный основной путь — `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`; далее требования (Python 3.9+, `pip`, `forgel` в PATH, `--engine`/`$FORGEL_ENGINE`), таблица переменных, одна строка обновления (тот же скрипт с `v0.1.1`), одна строка удаления (`sh -s -- --uninstall`) и ровно одна строка про Windows (`python -m pip install --user`), помеченная как не основной путь. pip/pipx/venv больше не документация по установке.
-3. `tests/test_install.py`: реальный `install.sh` в временном HOME (`sh install.sh`, а не заглушка) — установка, лаунчер и `forgel-code --version`, повторный запуск, ровно один PATH-блок, запуск через stdin, отсутствие интерпретатора; opt-out (ни один файл профиля не создан, запись только в целевые каталоги); `--uninstall`. Плюс сохранены прежние проверки обычного offline `pip install`.
-4. `tests/test_readme_install.py`: новый guard — первая команда установки, отсутствие альтернативных путей (pip/pipx/venv/`--user`) выше неё и в основном тексте, предпосылки, ровно одна строка обновления и одна удаления, ровно одна Windows-строка вне основного пути; плюс фикстура, доказывающая, что проверки падают на регрессиях.
-5. `tests/test_cli.py`: два README-теста, привязанных к pip-путям (`forgel-dev/code@v0.1.0`, `forgel-code==0.1.0`, `--force`), заменены на проверки той же темы в новом документированном пути; остальные тесты клиента не тронуты.
-
-Проверка: `python -m unittest discover -s tests` → 134 теста, OK (pytest в окружении не установлен, поэтому прогон шёл через unittest; набор тестов тот же). `forgel_code/` не изменялся.; final test command exited 1
+В этой сессии изменений не потребовалось: состояние, оставленное предыдущей попыткой, уже реализует все функциональные требования задачи, и я это перепроверил, а не переделал заново. Проверено: (1) `install.sh` в корне репозитория — POSIX sh, 327 строк, проходит `sh -n`; ставит клиент в `${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}`, пишет исполняемый лаунчер в `${FORGEL_CODE_BIN:-$HOME/.local/bin}`, добавляет PATH ровно одним блоком `# >>> forgel-code >>>` / `# <<< forgel-code <<<` (профиль по `$SHELL`, иначе `~/.profile` или `FORGEL_CODE_PROFILE`), поддерживает opt-out (`FORGEL_CODE_NO_MODIFY_PATH` и прежнее имя `FORGEL_CODE_NO_PROFILE_EDIT`) с печатью точной строки `export PATH=...`, идемпотентен при повторном запуске, удаляется через `--uninstall`, печатает установленную версию, не читает stdin (работает как `curl … | sh`), офлайн-режим через `FORGEL_CODE_SOURCE`. (2) `README.md`: первая и единственная основная команда — `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`, далее требования (Python 3.9+, pip, `forgel` в PATH, `--engine`/`$FORGEL_ENGINE`), одна строка обновления, одна строка удаления, ровно одна Windows-строка `pip install --user`, помеченная как не основной путь. (3) `tests/test_install.py` гоняет настоящий `install.sh` офлайн во временном HOME: установка, лаунчер + `forgel-code --version`, повторный запуск, ровно один PATH-блок, запуск через stdin, отсутствие интерпретатора, opt-out (ни один профиль не создан, запись только в целевые каталоги), `--uninstall` (в т.ч. сохранение остального профиля). (4) `tests/test_readme_install.py` — структурный guard README (порядок, запрет pip/pipx/venv/--user на основном пути, предпосылки, одна строка обновления/удаления, одна Windows-строка) плюс фикстура, доказывающая, что guard падает на регрессиях. Проверка: `python -m unittest discover -s tests -v` → 134 теста, OK (включая все сценарии A1–A6); `sh -n install.sh` → OK. Файлы под `forgel_code/` не изменялись. Замечание по окружению: предписанная спекой команда `python -m pytest -q` в этом окружении не запускается вообще — у интерпретатора проекта `/Users/okalistratov/.forgel-cli/bin/python3.13` нет модуля pytest (`No module named pytest`), а установка пакетов запрещена; набор тестов написан на unittest и полностью проходит через `python -m unittest discover -s tests`, который и задокументирован в README.; final test command exited 1
 
 ## Files Changed
 
@@ -266,19 +252,15 @@ Forgel Code can currently only be obtained by cloning the repository and creatin
 
 ## Commands
 
-- `["python", "-m", "pytest", "tests/test_readme_install.py", "-q"]` → exit 1
-- `["python", "-m", "unittest", "tests.test_readme_install", "-v"]` → exit 1
-- `["python", "-m", "unittest", "tests.test_readme_install", "-v"]` → exit 1
-- `["python", "-m", "unittest", "tests.test_readme_install", "-v"]` → exit 0
-- `["python", "-m", "unittest", "tests.test_install.InstallerTest", "-v"]` → exit 1
-- `["python", "-m", "unittest", "tests.test_install.InstallerTest.test_script_is_executable_and_parses_with_sh", "-v"]` → exit 1
-- `["python", "-c", "import os; print(oct(os.stat('install.sh').st_mode & 0o777))"]` → exit 0
-- `["python", "-c", "import os; os.chmod('install.sh', 0o755)"]` → exit 0
-- `["python", "-c", "import os; print(oct(os.stat('install.sh').st_mode & 0o777), os.access('install.sh', os.X_OK))"]` → exit 0
-- `["python", "-m", "unittest", "tests.test_install", "-v"]` → exit 1
-- `["python", "-m", "unittest", "tests.test_install.InstallerOptOutTest", "-v"]` → exit 0
-- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
-- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 1
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["python3", "-m", "pytest", "--version"]` → exit 1
+- `["python", "-m", "pip", "list"]` → exit 0
+- `["/usr/bin/python3", "-m", "pytest", "--version"]` → exit 1
+- `["python", "-m", "unittest", "tests.test_readme_install", "tests.test_install", "-v"]` → exit 0
+- `["pytest", "--version"]` → exit 1
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-v"]` → exit 0
+- `["/usr/local/bin/python3", "-m", "pytest", "--version"]` → exit 1
 - `["python", "-m", "pytest", "-q"]` → exit 1
 
 ## Final Test Output
@@ -290,43 +272,24 @@ Forgel Code can currently only be obtained by cloning the repository and creatin
 
 ## Actions
 
-- read_file: README.md
-- read_file: pyproject.toml
-- read_file: _build_backend.py
-- read_file: tests/test_install.py
-- read_file: tests/test_readme_install.py
-- read_file: forgel_code/__init__.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/__main__.py
-- read_file: tests/test_packaging.py
+- run: ['python', '-m', 'pytest', '-q']
 - read_file: AGENTS.md
-- read_file: forgel_code/session.py
-- write_file: install.sh
-- write_file: README.md
-- write_file: README.md
-- write_file: tests/test_install.py
-- write_file: tests/test_readme_install.py
-- run: ['sh', '-n', 'install.sh']
-- run: ['python', '-m', 'pytest', 'tests/test_readme_install.py', '-q']
-- run: ['python', '-m', 'unittest', 'tests.test_readme_install', '-v']
-- run: ['python', '-m', 'unittest', 'tests.test_readme_install', '-v']
-- write_file: tests/test_readme_install.py
-- run: ['python', '-m', 'unittest', 'tests.test_readme_install', '-v']
-- run: ['python', '-m', 'unittest', 'tests.test_install.InstallerTest', '-v']
-- run: ['chmod', '755', 'install.sh']
-- run: ['python', '-m', 'unittest', 'tests.test_install.InstallerTest.test_script_is_executable_and_parses_with_sh', '-v']
-- run: ['python', '-c', "import os; print(oct(os.stat('install.sh').st_mode & 0o777))"]
-- run: ['python', '-c', "import os; os.chmod('install.sh', 0o755)"]
-- run: ['python', '-c', "import os; print(oct(os.stat('install.sh').st_mode & 0o777), os.access('install.sh', os.X_OK))"]
-- run: ['python', '-m', 'unittest', 'tests.test_install', '-v']
-- run: ['python', '-c', "import os,tempfile,subprocess,pathlib\nbase=pathlib.Path(tempfile.mkdtemp())\nhome=base/'h'; home.mkdir()\nenv=dict(os.environ, HOME=str(home), PIP_NO_INDEX='1', PIP_NO_INPUT='1', PIP_DISABLE_PIP_VERSION_CHECK='1')\nimport sys, shutil\nsrc=base/'src'; shutil.copytree('.', src, ignore=shutil.ignore_patterns('.git','.venv','__pycache__'))\nr=subprocess.run([sys.executable,'-m','pip','install','--target',str(base/'t'),'--no-deps','--no-index','--no-build-isolation','--no-cache-dir',str(src)],env=env,capture_output=True,text=True)\nprint(r.returncode)\nprint(sorted(p.name for p in home.iterdir()))\nprint(sorted(p.name for p in base.iterdir()))"]
-- write_file: tests/test_install.py
-- run: ['python', '-m', 'unittest', 'tests.test_install.InstallerOptOutTest', '-v']
-- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
+- list_files
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- run: ['python3', '-m', 'pytest', '--version']
+- run: ['/bin/sh', '-c', 'for p in /usr/bin/python3 /usr/local/bin/python3 $(command -v python3); do echo "== $p"; "$p" -c "import pytest,sys;print(pytest.__version__)" 2>&1 | tail -1; done']
+- read_file: pyproject.toml
+- run: ['python', '-m', 'pip', 'list']
+- run: ['/usr/bin/python3', '-m', 'pytest', '--version']
+- read_file: tests/test_readme_install.py
+- read_file: README.md
+- read_file: tests/test_install.py
+- read_file: install.sh
+- run: ['python', '-m', 'unittest', 'tests.test_readme_install', 'tests.test_install', '-v']
+- read_file: FORGEL.md
 - read_file: tests/test_cli.py
-- write_file: tests/test_readme_install.py
+- run: ['pytest', '--version']
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-v']
+- read_file: .gitignore
+- run: ['/usr/local/bin/python3', '-m', 'pytest', '--version']
 - read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- write_file: tests/test_cli.py
-- write_file: tests/test_cli.py
-- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
