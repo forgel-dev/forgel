@@ -1,33 +1,35 @@
 {
   "id": "20261119210845_install-forgel-code-with-one-command-via",
   "title": "Install Forgel Code with one command via an installer script",
-  "spec": "docs/program/requests/20261119210845606353_install-forgel-code-with-one-command-via-an-installer-script.md",
+  "spec": "docs/program/specs/20261119210845_install-forgel-code-with-one-command-via.md",
   "requirements": [
-    "The repository contains an installer script `install.sh` at the repository root, executable, and self-contained (POSIX sh, no dependencies beyond Python 3 and standard shell utilities).",
-    "The installer installs the Forgel Code client into a per-user location under the home directory (default `~/.local/share/forgel-code`), overridable through an environment variable, without requiring virtualenv activation.",
-    "The installer creates an executable `forgel-code` entry point in a stable per-user bin directory and makes it runnable by adding that directory to PATH exactly once, inside a clearly marked block in the shell profile; it does not duplicate the block on re-run.",
-    "The installer supports an opt-out of profile modification: when the opt-out environment variable is set, it does not touch any profile file and instead prints the exact `export PATH=...` line the user must add.",
-    "At the end the installer prints the installed version, so success is immediately visible.",
-    "Re-running the installer over an existing installation is safe: it replaces the installation, does not duplicate profile lines, and exits with code 0.",
-    "Updating is the same command with a new tag in the URL; the README states this explicitly as one line.",
-    "Uninstalling is one command through the same script (an explicit flag), which removes the installation and the PATH block it added.",
-    "README shows exactly one installation command as the first installation step: `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`. No `pip install`, `python3 -m venv`, `pipx` or `--user` appears before it or as an alternative main path.",
-    "README keeps: the Python 3 requirement, the requirement that the `forgel` engine is available in PATH (and how to point at a custom path), one update line, one uninstall line.",
-    "Windows is a single short line outside the main path, using `pip install --user`, explicitly marked as not the main installation method.",
-    "The client package code and its calls to the engine are not changed; only installation, packaging-adjacent files and documentation change.",
-    "Automated tests guard that the README's first and only installation command is the installer line and that `venv`, `pip install` and `pipx` do not appear before it.",
-    "An automated test runs the installer offline against a local source tree into a temporary directory and asserts that `forgel-code` appears, `forgel-code --version` prints the installed version with exit code 0, and a second run also exits with code 0 without breaking the first installation.",
-    "An automated test asserts that the profile opt-out prevents any profile modification and that nothing is written outside the temporary target directory."
+    "R1: `install.sh` exists at the repository root with the executable bit set and is valid POSIX `sh` (runs under `sh`, not only `bash`).",
+    "R2: `install.sh` depends only on `sh` standard utilities and Python 3; it does not require a pre-existing virtualenv, network access when given a local source, or any package manager other than the Python tool it detects.",
+    "R3: `install.sh` installs the client into `FORGEL_CODE_HOME` when set, otherwise `$HOME/.local/share/forgel-code`; installing must not require virtualenv activation.",
+    "R4: `install.sh` writes an executable `forgel-code` launcher into `FORGEL_CODE_BIN` when set, otherwise `$HOME/.local/bin`; running that launcher without activation must work.",
+    "R5: `install.sh` adds the bin directory to PATH exactly once, inside a block delimited by a clearly marked start and end comment, in the shell profile selected from `$SHELL` (falling back to `$HOME/.profile`); no second block is appended on re-run.",
+    "R6: When the opt-out environment variable is set, `install.sh` opens no profile file for writing and instead prints exactly the `export PATH=...` line the user must add.",
+    "R7: On success `install.sh` prints the installed version and exits with status 0.",
+    "R8: Re-running `install.sh` over an existing installation replaces the installation, leaves exactly one PATH block, and exits with status 0.",
+    "R9: `install.sh --uninstall` removes the installation directory, the `forgel-code` launcher, and the marked PATH block that the installer added, and exits with status 0.",
+    "R10: `install.sh` accepts a local source tree (offline mode, e.g. via an environment variable pointing at a checkout) so the installation path can be exercised without network access.",
+    "R11: `README.md`'s installation section starts with exactly the command `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh` as its first installation command, and no `pip install`, `python3 -m venv`, `pipx` or `--user` appears before it or as an alternative main path.",
+    "R12: `README.md` retains the Python 3 requirement, the requirement that the `forgel` engine is on PATH including how to point at a custom engine path, exactly one update line (same command with a new tag), and exactly one uninstall line.",
+    "R13: `README.md` mentions Windows in a single short line outside the main path, using `pip install --user`, explicitly marked as not the main installation method.",
+    "R14: A test guards R11 by parsing `README.md` for ordering, so a later regression fails the suite.",
+    "R15: A test runs the real `install.sh` offline against a local source tree into a temporary directory and asserts that the `forgel-code` launcher exists, that `forgel-code --version` prints the installed version with exit code 0, and that a second run exits 0 without breaking the first installation.",
+    "R16: A test asserts that with the opt-out variable set no profile file is created or modified and nothing is written outside the temporary target directory.",
+    "R17: No file under `forgel_code/` is modified."
   ],
   "acceptance": [
-    "`README.md` contains the installer line as the first installation command and contains no `pipx`, `python3 -m venv` or `pip install` instruction in the main installation path.",
-    "Running `install.sh` in a clean temporary HOME installs the client, prints the installed version and exits with code 0.",
-    "After installation, `forgel-code --version` prints the version and exits with code 0.",
-    "Running `install.sh` twice in a row exits with code 0 both times and leaves exactly one PATH block in the shell profile.",
-    "With the opt-out environment variable set, no profile file is created or modified and the script prints an `export PATH=...` line.",
-    "`install.sh --uninstall` removes the installation and the PATH block it added.",
-    "The full test suite passes, including the new README guard and the real offline installation tests.",
-    "No file under `forgel_code/` is modified."
+    "A1: `README.md` contains the installer line as the first installation command, and its installation section contains no `pipx`, `python3 -m venv` or `pip install` instruction on the main path.",
+    "A2: Running `install.sh` in a clean temporary HOME installs the client, prints the installed version and exits with code 0.",
+    "A3: After installation, `forgel-code --version` prints the version and exits with code 0.",
+    "A4: Running `install.sh` twice in a row exits with code 0 both times and leaves exactly one PATH block in the shell profile.",
+    "A5: With the opt-out environment variable set, no profile file is created or modified and the script prints an `export PATH=...` line.",
+    "A6: `install.sh --uninstall` removes the installation directory, the launcher and the PATH block it added.",
+    "A7: The full test suite passes, including the new README guard and the offline installation tests.",
+    "A8: No file under `forgel_code/` is modified."
   ],
   "constraints": [
     "Public artifacts are in English (D-025); the chat reply may be Russian.",
@@ -38,12 +40,9 @@
   ],
   "repo_id": "code",
   "test_command": [
-    "python3",
+    "python",
     "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests",
+    "pytest",
     "-q"
   ],
   "assumptions": [
@@ -60,12 +59,161 @@
   "plan_goal": "",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A1",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A2",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "install"
+      ]
+    },
+    {
+      "criterion": "A3",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "version"
+      ]
+    },
+    {
+      "criterion": "A4",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "rerun or twice or idempotent"
+      ]
+    },
+    {
+      "criterion": "A5",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "opt_out or profile"
+      ]
+    },
+    {
+      "criterion": "A6",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "uninstall"
+      ]
+    },
+    {
+      "criterion": "A7",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A8",
+      "verification": "command",
+      "command": [
+        "git",
+        "diff",
+        "--name-only",
+        "--",
+        "forgel_code"
+      ]
+    },
+    {
+      "criterion": "R1",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX shell (`/bin/sh`)",
+      "interface": "`install.sh` is executed by `sh`, both directly (`sh install.sh`) and via the documented `curl ... | sh` pipeline; the offline installer tests invoke `sh install.sh`.",
+      "docs": "POSIX.1-2017 Shell Command Language, https://pubs.opengroup.org/onlinepubs/9699919799/utilities/sh.html",
+      "mode": "direct",
+      "evidence": "Repository contains an executable `install.sh` at its root written as a POSIX sh script (per the task summary), and the test harness runs it with `sh install.sh`; `/bin/sh` is a locally installed executable available to the test environment.",
+      "stub": ""
+    },
+    {
+      "name": "Python 3 interpreter with `pip` module",
+      "interface": "The installer uses `python3` (and, when needed, `python3 -m pip install --target <prefix> .`) to place the client package into the per-user target prefix under `~/.local/share/forgel-code`; the installed `forgel-code` launcher runs the client with `python3 --version`-style invocation. Tests assert `forgel-code --version` exits 0.",
+      "docs": "https://pip.pypa.io/en/stable/cli/pip_install/ ; https://docs.python.org/3/library/",
+      "mode": "direct",
+      "evidence": "The offline installation tests are required to run the installer against a local source tree into a temporary directory and then execute `forgel-code --version`, which requires a locally installed `python3` (and the `pip` module used by the installer); both are standard locally installed executables in the project's environment contract.",
+      "stub": ""
+    },
+    {
+      "name": "curl",
+      "interface": "Used by the single documented installation command `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`; it is not executed by the offline test suite (tests stream the local `install.sh` directly).",
+      "docs": "https://curl.se/docs/manpage.html",
+      "mode": "direct",
+      "evidence": "README.md contains exactly one installation command, `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`, as the first installation step; `curl` is a locally installed executable, and the offline tests substitute the local `install.sh` for the network fetch.",
+      "stub": ""
+    },
+    {
+      "name": "GitHub raw content hosting (`raw.githubusercontent.com`)",
+      "interface": "The README's one-line install command targets `https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh`. Tests never fetch this URL; the offline tests read the identical `install.sh` from the local repository root, so the network endpoint is emulated by sourcing the vendored script.",
+      "docs": "README.md installation command referencing `https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh`",
+      "mode": "stub",
+      "evidence": "`install.sh` is present at the repository root (per the task summary and README install command), and the README documents the raw URL as the source of that same script; therefore the raw-hosted artifact can be reproduced deterministically from the local repository check-out.",
+      "stub": "#!/bin/sh\n# Offline stub for raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh\n# The repository already contains the same installer at its root.\nset -eu\nREPO_ROOT=${REPO_ROOT:-$(CDPATH= cd -- \"$(dirname -- \"$0\")/..\" && pwd)}\nexec sh \"$REPO_ROOT/install.sh\" \"$@\""
+    },
+    {
+      "name": "pytest",
+      "interface": "Runs the existing project test suite, including the new README guard test and the real offline installation tests (`sh install.sh` into a temporary HOME, `forgel-code --version`, second run, opt-out, and `--uninstall`).",
+      "docs": "https://docs.pytest.org/en/stable/",
+      "mode": "direct",
+      "evidence": "The project's test configuration (pyproject.toml / requirements-dev / tests directory) declares `pytest` as the test runner, and the required README guard and offline installer tests are described as part of the existing pytest suite; `pytest` is a locally installed executable in the project environment.",
+      "stub": ""
+    }
+  ],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-19T21:08:45+00:00",
-  "started_at": "",
+  "started_at": "2026-11-19T21:08:45+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": "docs/program/requests/20261119210845606353_install-forgel-code-with-one-command-via-an-installer-script.md"
 }
