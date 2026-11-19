@@ -210,10 +210,211 @@
     }
   ],
   "language": "ru",
-  "status": "running",
+  "status": "failed",
   "created_at": "2026-11-19T21:08:45+00:00",
   "started_at": "2026-11-19T21:08:45+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-19T21:33:26+00:00",
+  "result": {
+    "summary": "Добавлен одно-командный установщик и переписан раздел установки README, всё покрыто тестами.\n\nЧто сделано:\n1. `install.sh` в корне репозитория (POSIX sh, права 755, проходит `sh -n`): ставит клиент в `${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}` и пишет исполняемый лаунчер `forgel-code` в `${FORGEL_CODE_BIN:-$HOME/.local/bin}`; PATH добавляется ровно одним блоком с маркерами `# >>> forgel-code >>>` / `# <<< forgel-code <<<` (профиль выбирается по `$SHELL`, по умолчанию `~/.profile`); поддержан opt-out (печатает точную строку `export PATH=...` и ничего не открывает на запись); `--uninstall` удаляет каталог, лаунчер и блок; повторный запуск идемпотентен; в конце печатается установленная версия (`forgel-code 0.1.0`). Скрипт не читает stdin (все вызовы с `</dev/null`), поэтому работает в виде `curl ... | sh`. Офлайн-источник — `FORGEL_CODE_SOURCE` (или каталог самого скрипта), иначе архив тега `v0.1.0`.\n2. `README.md`: первый и единственный основной путь — `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`; далее требования (Python 3.9+, `pip`, `forgel` в PATH, `--engine`/`$FORGEL_ENGINE`), таблица переменных, одна строка обновления (тот же скрипт с `v0.1.1`), одна строка удаления (`sh -s -- --uninstall`) и ровно одна строка про Windows (`python -m pip install --user`), помеченная как не основной путь. pip/pipx/venv больше не документация по установке.\n3. `tests/test_install.py`: реальный `install.sh` в временном HOME (`sh install.sh`, а не заглушка) — установка, лаунчер и `forgel-code --version`, повторный запуск, ровно один PATH-блок, запуск через stdin, отсутствие интерпретатора; opt-out (ни один файл профиля не создан, запись только в целевые каталоги); `--uninstall`. Плюс сохранены прежние проверки обычного offline `pip install`.\n4. `tests/test_readme_install.py`: новый guard — первая команда установки, отсутствие альтернативных путей (pip/pipx/venv/`--user`) выше неё и в основном тексте, предпосылки, ровно одна строка обновления и одна удаления, ровно одна Windows-строка вне основного пути; плюс фикстура, доказывающая, что проверки падают на регрессиях.\n5. `tests/test_cli.py`: два README-теста, привязанных к pip-путям (`forgel-dev/code@v0.1.0`, `forgel-code==0.1.0`, `--force`), заменены на проверки той же темы в новом документированном пути; остальные тесты клиента не тронуты.\n\nПроверка: `python -m unittest discover -s tests` → 134 теста, OK (pytest в окружении не установлен, поэтому прогон шёл через unittest; набор тестов тот же). `forgel_code/` не изменялся.; final test command exited 1",
+    "files_changed": [
+      "README.md",
+      "install.sh",
+      "tests/test_cli.py",
+      "tests/test_install.py",
+      "tests/test_readme_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_readme_install.py",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_readme_install",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_readme_install",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_readme_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install.InstallerTest",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install.InstallerTest.test_script_is_executable_and_parses_with_sh",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import os; print(oct(os.stat('install.sh').st_mode & 0o777))"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import os; os.chmod('install.sh', 0o755)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import os; print(oct(os.stat('install.sh').st_mode & 0o777), os.access('install.sh', os.X_OK))"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install.InstallerOptOutTest",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1,
+        "final_test": true
+      }
+    ],
+    "test_output": "/Users/okalistratov/.forgel-cli/bin/python3.13: No module named pytest\n",
+    "assumptions": [
+      "The `code` repository is the target: its README carries the current pip/pipx installation instructions, `pyproject.toml` declares the `forgel-code` entry point, and the package lives under `forgel_code/`.",
+      "Default installation directory is `~/.local/share/forgel-code`, overridable by an environment variable; the executable goes to `~/.local/bin`, the conventional per-user bin directory.",
+      "The profile file is chosen per shell (`~/.profile` by default, `.bashrc`/`.zshrc` when detectable); the added block is delimited by a comment marker naming Forgel Code.",
+      "The opt-out variable is named `FORGEL_CODE_NO_PROFILE_EDIT` and the install root override `FORGEL_CODE_HOME`.",
+      "Uninstall is an explicit `--uninstall` flag on the same script, as 'one command' through the same entry point.",
+      "Offline tests invoke the installer with the local source tree (a source override or `sh install.sh` run from the checkout) and a temporary HOME, so no network is used.",
+      "The README example keeps the `v0.1.0` tag, matching the current released version.",
+      "Windows fallback remains `pip install --user` as a single line outside the main path.",
+      "Opt-out переменная названа `FORGEL_CODE_NO_MODIFY_PATH` (в спецификации имя не задано); для совместимости принимается и `FORGEL_CODE_NO_PROFILE_EDIT` из заметок приёмки.",
+      "Открытый вопрос про офлайн-источник решён переменной окружения `FORGEL_CODE_SOURCE` (плюс каталог скрипта как второй вариант), поэтому README не меняется.",
+      "Профиль выбирается по `$SHELL` (zsh -> ~/.zshrc, bash -> ~/.bashrc|~/.bash_profile, иначе ~/.profile); тесты дополнительно фиксируют `FORGEL_CODE_PROFILE`.",
+      "Строка удаления в README использует форму `curl ... | sh -s -- --uninstall`, чтобы это оставалась та же команда с флагом.",
+      "Лаунчер — маленький sh-скрипт, экспортирующий `PYTHONPATH=<prefix>` и запускающий `<python> -m forgel_code \"$@\"`, поэтому работает без активации venv.",
+      "Если установщик запущен из checkout'а, он ставит из этого каталога; при `curl | sh` каталога нет, берётся архив тега `FORGEL_CODE_TAG` (по умолчанию `v0.1.0`).",
+      "Финальный прогон выполнен `python -m unittest discover -s tests`, потому что pytest не установлен в этом окружении; тестовый набор и файлы те же, что у `python -m pytest -q`."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 60,
+      "estimated_input_tokens": 7428421,
+      "provider_input_tokens": 6473407,
+      "provider_output_tokens": 386224,
+      "estimated_tokens": 479257,
+      "state": ""
+    },
+    "test_removals": [
+      {
+        "test": "tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command",
+        "reason": "replaced",
+        "replacement": "tests/test_readme_install.py::ReadmeInstallTest::test_first_install_command_is_the_installer_line"
+      },
+      {
+        "test": "tests/test_cli.py::ReadmeTest::test_readme_documents_the_update_path",
+        "reason": "replaced",
+        "replacement": "tests/test_readme_install.py::ReadmeInstallTest::test_one_update_line_and_one_uninstall_line"
+      }
+    ],
+    "spec_issues": [],
+    "git": {
+      "base": "bd3f299d98841f40d1ba2d0e2a096723c0ffd010",
+      "head": "bd3f299d98841f40d1ba2d0e2a096723c0ffd010",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "qa",
+      "message": "Добавлен одно-командный установщик и переписан раздел установки README, всё покрыто тестами.\n\nЧто сделано:\n1. `install.sh` в корне репозитория (POSIX sh, права 755, проходит `sh -n`): ставит клиент в `${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}` и пишет исполняемый лаунчер `forgel-code` в `${FORGEL_CODE_BIN:-$HOME/.local/bin}`; PATH добавляется ровно одним блоком с маркерами `# >>> forgel-code >>>` / `# <<< forgel-code <<<` (профиль выбирается по `$SHELL`, по умолчанию `~/.profile`); поддержан opt-out (печатает точную строку `export PATH=...` и ничего не открывает на запись); `--uninstall` удаляет каталог, лаунчер и блок; повторный запуск идемпотентен; в конце печатается установленная версия (`forgel-code 0.1.0`). Скрипт не читает stdin (все вызовы с `</dev/null`), поэтому работает в виде `curl ... | sh`. Офлайн-источник — `FORGEL_CODE_SOURCE` (или каталог самого скрипта), иначе архив тега `v0.1.0`.\n2. `README.md`: первый и единственный основной путь — `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`; далее требования (Python 3.9+, `pip`, `forgel` в PATH, `--engine`/`$FORGEL_ENGINE`), таблица переменных, одна строка обновления (тот же скрипт с `v0.1.1`), одна строка удаления (`sh -s -- --uninstall`) и ровно одна строка про Windows (`python -m pip install --user`), помеченная как не основной путь. pip/pipx/venv больше не документация по установке.\n3. `tests/test_install.py`: реальный `install.sh` в временном HOME (`sh install.sh`, а не заглушка) — установка, лаунчер и `forgel-code --version`, повторный запуск, ровно один PATH-блок, запуск через stdin, отсутствие интерпретатора; opt-out (ни один файл профиля не создан, запись только в целевые каталоги); `--uninstall`. Плюс сохранены прежние проверки обычного offline `pip install`.\n4. `tests/test_readme_install.py`: новый guard — первая команда установки, отсутствие альтернативных путей (pip/pipx/venv/`--user`) выше неё и в основном тексте, предпосылки, ровно одна строка обновления и одна удаления, ровно одна Windows-строка вне основного пути; плюс фикстура, доказывающая, что проверки падают на регрессиях.\n5. `tests/test_cli.py`: два README-теста, привязанных к pip-путям (`forgel-dev/code@v0.1.0`, `forgel-code==0.1.0`, `--force`), заменены на проверки той же темы в новом документированном пути; остальные тесты клиента не тронуты.\n\nПроверка: `python -m unittest discover -s tests` → 134 теста, OK (pytest в окружении не установлен, поэтому прогон шёл через unittest; набор тестов тот же). `forgel_code/` не изменялся.; final test command exited 1"
+    },
+    "report": "docs/program/agent/20261119210845_install-forgel-code-with-one-command-via.md"
+  },
   "request": "docs/program/requests/20261119210845606353_install-forgel-code-with-one-command-via-an-installer-script.md"
 }
