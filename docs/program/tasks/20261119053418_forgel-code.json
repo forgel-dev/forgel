@@ -224,20 +224,19 @@
     }
   ],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-19T05:34:18+00:00",
-  "started_at": "2026-11-19T11:12:57+00:00",
-  "finished_at": "2026-11-19T11:14:44+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Проверил текущее состояние репозитория после прерванного прошлого прогона: все требования спецификации уже реализованы в дереве, менять ничего не потребовалось — этот прогон не вносил правок. Подтверждение: `python -m unittest discover -s tests` из корня репозитория завершается с кодом 0, прогоняются 96 тестов (без пропусков и ошибок импорта), включая подпроцессные проверки (`tests/test_cli_extra.py`), контрактные проверки стаба движка (`tests/test_stub_contract.py`) и упаковочные проверки (`tests/test_packaging.py`, `tests/test_packaging_types.py`). Соответствие требованиям подтверждено тестами: R1/R1a — `tests/test_cli.py::ProjectPropagationTest`, `tests/test_stub_contract.py::StubContractTest::test_the_selected_key_reaches_every_scoped_command`; R2 — `tests/test_cli.py::ArgumentParseErrorTest`; R3 — `tests/test_cli.py::TimeoutTest`, `tests/test_cli_extra.py::TimeoutBoundTest`; R4/R5 — `tests/test_cli.py::EngineCallTest`; R6/R7 — `tests/test_cli.py::StructuredErrorTest`, `tests/test_cli_extra.py::StructuredErrorPassthroughTest`; R8 — `tests/test_cli_extra.py::ExactPhraseTest`; R9 — `tests/test_cli.py::TaskLookupTest`; R10 — `tests/test_cli.py::MissingEngineCommandTest`; R11 — `tests/test_cli.py::ProjectPropagationTest::test_json_envelope_reports_the_project_actually_passed`; R12 — `tests/test_cli_extra.py::CliSmokeTests` и `EngineIdentityTest`; R13 — `tests/test_cli.py::PlanShapeTest`; R14/R15/R16 — `tests/test_packaging.py`, `tests/test_packaging_types.py`; R17 — `tests/test_cli.py::ReadmeTest`; R19 — общий прогон discover. Код единого пути вызова движка (`forgel_code/engine.py`) содержит таймаут, UTF-8-декодирование, `stdin=subprocess.DEVNULL`, проброс структурированной ошибки и трактовку `ok: false` как отказа; CLI разбирает глобальные флаги парсером без текстовых подстановок.",
+    "summary": "Проверил текущее состояние репозитория после прерванного прошлого прогона: все требования спецификации уже реализованы в дереве, менять ничего не потребовалось — этот прогон не вносил правок. Подтверждение: `python -m unittest discover -s tests` из корня репозитория завершается с кодом 0, прогоняются 96 тестов (без пропусков и ошибок импорта), включая подпроцессные проверки (`tests/test_cli_extra.py`), контрактные проверки стаба движка (`tests/test_stub_contract.py`) и упаковочные проверки (`tests/test_packaging.py`, `tests/test_packaging_types.py`). Соответствие требованиям подтверждено тестами: R1/R1a — `tests/test_cli.py::ProjectPropagationTest`, `tests/test_stub_contract.py::StubContractTest::test_the_selected_key_reaches_every_scoped_command`; R2 — `tests/test_cli.py::ArgumentParseErrorTest`; R3 — `tests/test_cli.py::TimeoutTest`, `tests/test_cli_extra.py::TimeoutBoundTest`; R4/R5 — `tests/test_cli.py::EngineCallTest`; R6/R7 — `tests/test_cli.py::StructuredErrorTest`, `tests/test_cli_extra.py::StructuredErrorPassthroughTest`; R8 — `tests/test_cli_extra.py::ExactPhraseTest`; R9 — `tests/test_cli.py::TaskLookupTest`; R10 — `tests/test_cli.py::MissingEngineCommandTest`; R11 — `tests/test_cli.py::ProjectPropagationTest::test_json_envelope_reports_the_project_actually_passed`; R12 — `tests/test_cli_extra.py::CliSmokeTests` и `EngineIdentityTest`; R13 — `tests/test_cli.py::PlanShapeTest`; R14/R15/R16 — `tests/test_packaging.py`, `tests/test_packaging_types.py`; R17 — `tests/test_cli.py::ReadmeTest`; R19 — общий прогон discover. Код единого пути вызова движка (`forgel_code/engine.py`) содержит таймаут, UTF-8-декодирование, `stdin=subprocess.DEVNULL`, проброс структурированной ошибки и трактовку `ok: false` как отказа; CLI разбирает глобальные флаги парсером без текстовых подстановок.; task QA failed: `forgel-code --help` and `forgel-code --version` exit 0. [task code @ /Users/okalistratov/Documents/sites/code]",
     "last_failure": {
-      "kind": "external",
-      "message": "IncompleteRead(0 bytes read)",
-      "retryable": false,
-      "traceback": "Traceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 579, in _get_chunk_left\n    chunk_left = self._read_next_chunk_size()\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 546, in _read_next_chunk_size\n    return int(line, 16)\nValueError: invalid literal for int() with base 16: b''\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 597, in _read_chunked\n    while (chunk_left := self._get_chunk_left()) is not None:\n                         ~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 581, in _get_chunk_left\n    raise IncompleteRead(b'')\nhttp.client.IncompleteRead: IncompleteRead(0 bytes read)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/daemon.py\", line 885, in _run_task\n    result = CodingAgent(settings, ledger, model).run(\n        project, task, log\n    )\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/coding_agent.py\", line 455, in run\n    ) = self._converse(\n        ~~~~~~~~~~~~~~^\n        layout,\n        ^^^^^^^\n    ...<6 lines>...\n        log,\n        ^^^^\n    )\n    ^\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/coding_agent.py\", line 807, in _converse\n    raw = self.client.complete(messages, model=model)\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/model.py\", line 95, in complete\n    raise errors[0]\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/model.py\", line 83, in run\n    result[\"text\"] = self._complete(messages, model)\n                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/model.py\", line 128, in _complete\n    body = json.loads(response.read().decode(\"utf-8\"))\n                      ~~~~~~~~~~~~~^^\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 473, in read\n    return self._read_chunked(amt)\n           ~~~~~~~~~~~~~~~~~~^^^^^\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 609, in _read_chunked\n    raise IncompleteRead(b''.join(value)) from exc\nhttp.client.IncompleteRead: IncompleteRead(0 bytes read)\n"
+      "kind": "qa",
+      "message": "task QA failed: `forgel-code --help` and `forgel-code --version` exit 0. [task code @ /Users/okalistratov/Documents/sites/code]",
+      "retryable": false
     },
     "attempts": 0,
-    "rework_count": 0,
+    "rework_count": 1,
     "manual_retries": 1,
     "files_changed": [],
     "commands": [
@@ -297,8 +296,169 @@
       "commit": "",
       "commits": []
     },
-    "failure": {},
-    "report": "docs/program/agent/20261119053418_forgel-code.md"
+    "report": "docs/program/agent/20261119053418_forgel-code.md",
+    "qa": {
+      "status": "fail",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261119053418_forgel-code.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m unittest tests.test_cli.CliSmokeTests -v",
+          "exit_code": 1,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m unittest tests.test_cli -v",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m unittest tests.test_packaging -v",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "`python -m unittest discover -s tests` from the client repository root exits 0 with no import errors.",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "`forgel-code --help` and `forgel-code --version` exit 0.",
+          "command": "python -m unittest tests.test_cli.CliSmokeTests -v",
+          "exit_code": 1,
+          "verdict": "fail",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "$ python -m unittest tests.test_cli.CliSmokeTests -v\n# cwd: /Users/okalistratov/Documents/sites/code\nCliSmokeTests (unittest.loader._FailedTest.CliSmokeTests) ... ERROR\n\n======================================================================\nERROR: CliSmokeTests (unittest.loader._FailedTest.CliSmokeTests)\n----------------------------------------------------------------------\nAttributeError: module 'tests.test_cli' has no attribute 'CliSmokeTests'\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)",
+          "failure": "code"
+        },
+        {
+          "criterion": "After `use <key>`, every project-scoped command forwards the selected key to the engine (fake engine records argv).",
+          "command": "python -m unittest tests.test_cli -v",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "sdist is named `forgel_code-<version>` with metadata at root; wheel includes subpackages and the type file.",
+          "command": "python -m unittest tests.test_packaging -v",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "README has no default-branch or development/editable install and pins a commit, tag or built package with an upgrade procedure.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The full suite is green and no pre-existing test was deleted or weakened.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": true,
+      "failure_kind": "code"
+    },
+    "feedback": [
+      "QA check failed: `forgel-code --help` and `forgel-code --version` exit 0.\n  repository: code\n  cwd: /Users/okalistratov/Documents/sites/code\n  command: python -m unittest tests.test_cli.CliSmokeTests -v\n  exit: 1\n  output:\n$ python -m unittest tests.test_cli.CliSmokeTests -v\n# cwd: /Users/okalistratov/Documents/sites/code\nCliSmokeTests (unittest.loader._FailedTest.CliSmokeTests) ... ERROR\n\n======================================================================\nERROR: CliSmokeTests (unittest.loader._FailedTest.CliSmokeTests)\n----------------------------------------------------------------------\nAttributeError: module 'tests.test_cli' has no attribute 'CliSmokeTests'\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)"
+    ]
   },
   "request": "docs/program/requests/20261119053418955569_forgel-code.md"
 }
