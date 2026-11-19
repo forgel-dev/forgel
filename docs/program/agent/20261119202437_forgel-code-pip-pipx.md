@@ -3,8 +3,8 @@
 - Task: `20261119202437_forgel-code-pip-pipx`
 - Status: `failed`
 - Repository: `code`
-- Steps: 35
-- Finished: 2026-11-19T20:31:47+00:00
+- Steps: 14
+- Finished: 2026-11-19T20:33:45+00:00
 
 ## Requirements
 
@@ -24,11 +24,9 @@
 - Запасной запуск через `python3 -m forgel_code` возможен: в пакете есть `forgel_code/__main__.py`.
 - Проверка установки выполняется из локального исходного дерева с отключённым индексом пакетов и без изоляции сборки, чтобы не ходить в сеть.
 - Пометка о необязательности pipx формулируется по-английски вместе с остальным README.
-- Пин выражен тегом `v0.1.0` в VCS-URL (как было в README); тест проверяет форму пина (не плавающая ветка), а не конкретный URL.
-- Установочный тест ставит локальное дерево (`--target`, `--no-index`, `--no-build-isolation`, `--no-deps`), а README показывает удалённую форму с пином — тест проверяет механизм pip, а не удалённую ревизию.
-- Тест документации считает pipx-упоминанием любую строку, содержащую `pipx`; формулировка в README держит его в одной строке со словом `optional`.
-- Добавленный в README блок с `forgel-code==0.1.0` нужен, чтобы не сломать существующий тест `tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command`.
-- Финальная команда из задания `python3 -m pytest -q` в этом окружении недоступна (pytest не установлен, ставить пакеты запрещено); тесты написаны на unittest и прогонялись документированным в проекте раннером `python3 -m unittest discover -s tests`, под pytest они также совместимы.
+- Новая работа в этой сессии не понадобилась: предыдущая попытка уже оставила README.md и оба теста в требуемом виде, все 120 тестов проходят.
+- Проверка выполнена через `python3 -m unittest discover -s tests`, так как pytest отсутствует в интерпретаторе рантайма; тесты написаны на unittest и совместимы с pytest при его наличии.
+- Запасной запуск `python3 -m forgel_code --version` подтверждён тестом установки; пакет `forgel_code/` не изменялся.
 
 ## Test Removals
 
@@ -39,10 +37,10 @@
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 35
-- Estimated input tokens (all calls): 829367
-- Provider input/output tokens: 813914 / 68883
-- Estimated prompt at the end: 49940 tokens
+- Model calls: 14
+- Estimated input tokens (all calls): 205338
+- Provider input/output tokens: 210813 / 15064
+- Estimated prompt at the end: 20072 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261119202437_forgel-code-pip-pipx.md`)
@@ -256,7 +254,7 @@ In the `code` repository the README's primary installation path is not a plain p
 
 ## Summary
 
-Переписал раздел установки README.md: основным путём стал обычный pip, первая команда — `python3 -m venv .venv` + активация + `python3 -m pip install "git+https://github.com/forgel-dev/code@v0.1.0"` (пин на тег, без pipx). Добавлены: вариант `--user` без venv, вариант точной версии (`forgel-code==0.1.0`), раздел о том, где pip кладёт `forgel-code` (venv `bin`/`Scripts`, `~/.local/bin`, `%APPDATA%\Python\Python3x\Scripts`), как найти каталог скриптов (`python3 -m site --user-base`, `python3 -m pip show -f forgel-code`) и как поправить PATH, а также запасной запуск `python3 -m forgel_code --version`. pipx упомянут ровно один раз, строкой ниже pip-инструкций, с пометкой `optional`. Раздел Update переписан на pip: `--upgrade` на новый пин и `--upgrade --force-reinstall` для случая, когда номер версии не изменился, а коммит другой. Сохранены прежние ограничения: сборка без зависимостей и без сети (in-tree PEP 517 backend), editable-установка не поддерживается, движок `forgel` через PATH или `--engine`/`$FORGEL_ENGINE`. Добавлены два теста: `tests/test_readme_install.py` (структурный разбор README: первый блок установки — plain pip с пином, наличие venv и `--user`, расположение исполняемого файла/PATH/запасной запуск, раздел Update, pipx ≤1 раз, помечен optional, после pip; отдельный класс проверяет, что эти проверки действительно падают на pipx-first, на голом `pip`, на плавающей ветке, на pipx до pip и без пометки optional) и `tests/test_install.py` (оффлайн-установка локального дерева обычным pip в временный `--target` с `--no-index --no-build-isolation --no-deps`, проверка кода возврата, `forgel-code --version` и `python3 -m forgel_code --version` печатают установленную версию с кодом 0). Проверено: `python3 -m unittest discover -s tests` — 120 тестов, OK (включая прежний набор и `tests/test_packaging.py`); отдельно `tests/test_install.py` и `tests/test_readme_install.py` — OK. Файлы под `forgel_code/` не менялись.; final test command exited 1
+Задача выполнена в предыдущих попытках; в этой сессии работа не потребовалась — состояние дерева проверено и все тесты проходят. README.md документирует обычный pip как основной путь: первый блок команд — `python3 -m venv .venv`, активация и `python3 -m pip install "git+https://github.com/forgel-dev/code@v0.1.0"` (пин на тег, без pipx); далее вариант `--user`, вариант точной версии `forgel-code==0.1.0`, раздел о том, куда pip кладёт `forgel-code` (venv `bin`/`Scripts`, пользовательские скрипты `~/.local/bin` и `%APPDATA%\Python\Python3x\Scripts`), как найти каталог скриптов и поправить PATH, запасной запуск `python3 -m forgel_code --version`; pipx упомянут ровно один раз, помечен `optional` и стоит после pip-инструкций; раздел Update переписан на pip с `--upgrade` на новый пин и `--upgrade --force-reinstall` для случая неизменного номера версии при другом коммите; сохранены ограничения (сборка без зависимостей и без сети через in-tree PEP 517 backend, editable-установка не поддерживается, движок `forgel` через PATH или `--engine`/`$FORGEL_ENGINE`). Тесты `tests/test_readme_install.py` (структурная проверка README + проверки, что они падают на pipx-first, голом pip, плавающей ветке, pipx до pip и без пометки optional) и `tests/test_install.py` (оффлайн-установка локального дерева обычным pip в временный `--target` с `--no-index --no-build-isolation --no-deps`, проверка кода возврата, `forgel-code --version` и `python3 -m forgel_code --version`) присутствуют. Проверка в этой сессии: `python3 -m unittest discover -s tests -v` — 120 тестов, OK (включая весь прежний набор, `tests/test_packaging*.py`, оба новых файла). Файлы под `forgel_code/` не менялись. Запуск `python3 -m pytest -q` в среде рантайма невозможен: интерпретатор `python3` (venv `.forgel-cli`, Python 3.13) не содержит pytest (`No module named pytest`), а установка пакетов запрещена; поэтому прогон выполнен эквивалентным штатным раннером проекта из README (`python -m unittest discover -s tests`).; final test command exited 1
 
 ## Files Changed
 
@@ -267,12 +265,10 @@ In the `code` repository the README's primary installation path is not a plain p
 ## Commands
 
 - `["python3", "-m", "pytest", "-q"]` → exit 1
-- `["python3", "-m", "pip", "--version"]` → exit 0
-- `["python3", "-m", "pytest", "-q", "tests/test_readme_install.py"]` → exit 1
-- `["python3", "-m", "unittest", "tests.test_readme_install", "-v"]` → exit 1
-- `["python3", "-m", "unittest", "tests.test_install", "-v"]` → exit 0
-- `["python3", "-m", "unittest", "discover", "-s", "tests", "-v"]` → exit 1
-- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests", "-v"]` → exit 0
+- `["python3", "-c", "import importlib.util, sys; print(sys.executable, sys.version.split()[0]); print('pytest spec:', importlib.util.find_spec('pytest'))"]` → exit 0
+- `["/usr/bin/python3", "-c", "import importlib.util, sys; print(sys.executable, sys.version.split()[0], importlib.util.find_spec('pytest'))"]` → exit 0
+- `["python3", "-c", "import shutil,os,subprocess\nfor n in ('pytest','python','python3','python3.11','python3.12','python3.13','pipx','pip3'):\n    print(n, shutil.which(n))\nprint(os.environ.get('PATH'))"]` → exit 0
 - `["python3", "-m", "pytest", "-q"]` → exit 1
 
 ## Final Test Output
@@ -284,27 +280,12 @@ In the `code` repository the README's primary installation path is not a plain p
 
 ## Actions
 
+- run: ['python3', '-m', 'pytest', '-q']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests', '-v']
 - read_file: README.md
 - read_file: pyproject.toml
-- read_file: forgel_code/__main__.py
-- read_file: tests/test_packaging.py
-- read_file: AGENTS.md
-- read_file: forgel_code/__init__.py
-- write_file: README.md
-- read_file: _build_backend.py
-- run: ['bash', '-lc', 'tmp=$(mktemp -d) && python3 -m pip install --target "$tmp/t" --no-index --no-build-isolation --disable-pip-version-check . >/dev/null 2>&1; echo rc=$?; ls "$tmp/t"; ls "$tmp/t/bin" 2>/dev/null; python3 --version; python3 -m pip --version']
-- run: ['python3', '-m', 'pytest', '-q']
-- run: ['python3', '-m', 'pip', '--version']
-- read_file: forgel_code/cli.py
-- write_file: README.md
-- write_file: tests/test_readme_install.py
-- write_file: tests/test_readme_install.py
-- run: ['python3', '-m', 'pytest', '-q', 'tests/test_readme_install.py']
-- run: ['python3', '-m', 'unittest', 'tests.test_readme_install', '-v']
-- write_file: tests/test_readme_install.py
-- write_file: tests/test_install.py
-- run: ['python3', '-m', 'unittest', 'tests.test_install', '-v']
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests', '-v']
-- read_file: tests/test_cli.py
-- write_file: README.md
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_install.py
+- run: ['/bin/sh', '-c', 'for p in python python3 /usr/bin/python3 /opt/homebrew/bin/python3 /usr/local/bin/python3; do printf \'== %s: \' "$p"; $p -c \'import sys,pytest;print(sys.executable, pytest.__version__)\' 2>&1 | tail -1; done']
+- run: ['python3', '-c', "import importlib.util, sys; print(sys.executable, sys.version.split()[0]); print('pytest spec:', importlib.util.find_spec('pytest'))"]
+- run: ['/usr/bin/python3', '-c', "import importlib.util, sys; print(sys.executable, sys.version.split()[0], importlib.util.find_spec('pytest'))"]
+- run: ['python3', '-c', "import shutil,os,subprocess\nfor n in ('pytest','python','python3','python3.11','python3.12','python3.13','pipx','pip3'):\n    print(n, shutil.which(n))\nprint(os.environ.get('PATH'))"]
