@@ -326,7 +326,354 @@
     },
     "attempts": 0,
     "manual_retries": 1,
-    "failure": {}
+    "failure": {},
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261119210845_install-forgel-code-with-one-command-via.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m pytest tests/test_readme_install.py -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_install.py -q -k install",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_install.py -q -k version",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_install.py -q -k 'rerun or twice or idempotent'",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_install.py -q -k 'opt_out or profile'",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_install.py -q -k uninstall",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "git diff --name-only -- forgel_code",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "sh -n install.sh",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A1",
+          "command": "python -m pytest tests/test_readme_install.py -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A2",
+          "command": "python -m pytest tests/test_install.py -q -k install",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A3",
+          "command": "python -m pytest tests/test_install.py -q -k version",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A4",
+          "command": "python -m pytest tests/test_install.py -q -k 'rerun or twice or idempotent'",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A5",
+          "command": "python -m pytest tests/test_install.py -q -k 'opt_out or profile'",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A6",
+          "command": "python -m pytest tests/test_install.py -q -k uninstall",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A7",
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A8",
+          "command": "git diff --name-only -- forgel_code",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "R1",
+          "command": "sh -n install.sh",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": false,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The attributed commit delivers the one-command installer exactly as specified: a POSIX `sh` `install.sh` at the repository root (executable, syntax-clean), installing into `${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}` with a self-contained launcher in `${FORGEL_CODE_BIN:-$HOME/.local/bin}`, one marked PATH block selected from `$SHELL`, an opt-out that prints the `export PATH=...` line, idempotent re-run, `--uninstall`, version reporting, and offline local-source install. The README install section leads with the required `curl -fsSL .../v0.1.0/install.sh | sh` command, keeps Python 3 and the `forgel` engine prerequisite, has exactly one update and one uninstall line, and a single non-main Windows `pip install --user` line. Guards in `tests/test_readme_install.py` pin the README ordering and forbid pip/venv/pipx as a main path, and `tests/test_install.py` runs the real installer offline into a temporary HOME. `forgel_code/` is untouched. The fifteen removed tests are all pip/venv/pipx-era README-documentation guards whose scenario the task itself retires (R11 forbids `pip install`/`python -m venv`/`pipx` on the main path); the spec explicitly sanctions replacing these test files' content, and equivalent installer-command guards are present and passing, so this is a legitimate replacement rather than a weakened or silently dropped coverage. Deterministic checks (A1-A8, R1, environment) all pass. No product, security, or architectural defect found.",
+      "requirements": [
+        {
+          "requirement": "FR-1: install.sh exists at repo root, executable, valid POSIX sh",
+          "verdict": "pass",
+          "note": "install.sh present, mode 100755, `sh -n` clean (R1 pass), written POSIX sh."
+        },
+        {
+          "requirement": "FR-2: relies only on sh utilities and Python 3, no pre-existing venv",
+          "verdict": "pass",
+          "note": "Uses sh builtins, grep/awk/mkdir/cp/mv, and python3; --target pip install needs no venv."
+        },
+        {
+          "requirement": "FR-3: installs into FORGEL_CODE_HOME else ~/.local/share/forgel-code",
+          "verdict": "pass",
+          "note": "PREFIX=${FORGEL_CODE_HOME:-$HOME/.local/share/forgel-code}; 'pip install --target $PREFIX'."
+        },
+        {
+          "requirement": "FR-4: launcher in FORGEL_CODE_BIN else ~/.local/bin, no activation needed",
+          "verdict": "pass",
+          "note": "write_launcher creates executable wrapper embedding PYTHONPATH=$PREFIX and runs 'python -m forgel_code'."
+        },
+        {
+          "requirement": "FR-5: adds bin to PATH once in a marked block chosen from $SHELL",
+          "verdict": "pass",
+          "note": "profile_path maps zsh/bash/other to .zshrc/.bashrc/.profile; MARKER_START/END block; remove_profile_block guarantees one block."
+        },
+        {
+          "requirement": "FR-6: opt-out writes no profile and prints the export PATH line",
+          "verdict": "pass",
+          "note": "no_profile_edit short-circuits add_path, which only prints 'export PATH=\"...\"'; A5 passes."
+        },
+        {
+          "requirement": "FR-7: success prints installed version and exits 0",
+          "verdict": "pass",
+          "note": "install_client runs the launcher --version, prints it, returns success; A2/A3 pass."
+        },
+        {
+          "requirement": "FR-8: re-run replaces install, one PATH block, exit 0",
+          "verdict": "pass",
+          "note": "add_profile_block strips then re-adds the block; --upgrade; A4 passes."
+        },
+        {
+          "requirement": "FR-9: --uninstall removes prefix, launcher, marked block, exit 0",
+          "verdict": "pass",
+          "note": "uninstall() rm -rf PREFIX, rm LAUNCHER, remove_profile_block; A6 passes."
+        },
+        {
+          "requirement": "FR-10: accepts a local source tree for offline install",
+          "verdict": "pass",
+          "note": "FORGEL_CODE_SOURCE validated via is_forgel_code_source; used by install_client."
+        },
+        {
+          "requirement": "FR-11: README leads with the installer command; no pip/venv/pipx main path",
+          "verdict": "pass",
+          "note": "Active README install section first block is the required curl|sh line; no pip/venv/pipx before it; A1 passes."
+        },
+        {
+          "requirement": "FR-12: keep Python 3 and forgel-engine prerequisite, one update and one uninstall line",
+          "verdict": "pass",
+          "note": "Python 3.9+ and engine-on-PATH with --engine/$FORGEL_ENGINE present; single update and single uninstall lines."
+        },
+        {
+          "requirement": "FR-13: one short Windows line, pip install --user, marked not main",
+          "verdict": "pass",
+          "note": "Single Windows line marked 'not the main installation method' using pip install --user."
+        },
+        {
+          "requirement": "FR-14: a test guards README ordering",
+          "verdict": "pass",
+          "note": "tests/test_readme_install.py asserts installer-first ordering and forbids alternatives; A1 passes."
+        },
+        {
+          "requirement": "FR-15: offline real-installer test asserts launcher, --version, re-run",
+          "verdict": "pass",
+          "note": "tests/test_install.py runs real install.sh into temp HOME; A2/A3/A4 pass."
+        },
+        {
+          "requirement": "FR-16: opt-out test asserts no profile created/modified",
+          "verdict": "pass",
+          "note": "Test sets HOME/SHELL and asserts profiles untouched; A5 passes."
+        },
+        {
+          "requirement": "FR-17 / AC-8: no file under forgel_code/ modified",
+          "verdict": "pass",
+          "note": "Not among attributed files; A8 passes."
+        },
+        {
+          "requirement": "Technical: tests never write the developer's real HOME/profile",
+          "verdict": "pass",
+          "note": "Every installer test overrides HOME, SHELL, FORGEL_CODE_PYTHON and target vars to a temp tree."
+        },
+        {
+          "requirement": "No test deletions without an allowed justification",
+          "verdict": "pass",
+          "note": "The 15 removed tests are pip/venv/pipx-era README guards that R11 makes obsolete; the spec sanctions replacing these files' content and equivalent installer-command guards (test_readme_install.py) are present and passing — legitimate replacement, not weakened coverage."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261119210845_install-forgel-code-with-one-command-via.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-19T22:17:34+00:00",
+      "notes": ""
+    },
+    "push": {
+      "status": "pushed",
+      "repo": "code",
+      "branch": "main",
+      "detail": "",
+      "control": {
+        "status": "pushed",
+        "detail": "",
+        "branch": "main"
+      }
+    }
   },
   "request": "docs/program/requests/20261119210845606353_install-forgel-code-with-one-command-via-an-installer-script.md"
 }
