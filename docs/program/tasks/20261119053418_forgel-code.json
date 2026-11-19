@@ -312,7 +312,7 @@
     },
     "report": "docs/program/agent/20261119053418_forgel-code.md",
     "qa": {
-      "status": "fail",
+      "status": "pass",
       "runtime": "local + environment.yaml",
       "report": "docs/program/agent/20261119053418_forgel-code.qa.md",
       "commands": [
@@ -346,7 +346,7 @@
         },
         {
           "command": "python -m unittest tests.test_cli.CliSmokeTests -v",
-          "exit_code": 1,
+          "exit_code": 0,
           "scope": "task",
           "repo": "code",
           "workdir": "/Users/okalistratov/Documents/sites/code"
@@ -414,13 +414,13 @@
         {
           "criterion": "`forgel-code --help` and `forgel-code --version` exit 0.",
           "command": "python -m unittest tests.test_cli.CliSmokeTests -v",
-          "exit_code": 1,
-          "verdict": "fail",
+          "exit_code": 0,
+          "verdict": "pass",
           "scope": "task",
           "repo": "code",
           "workdir": "/Users/okalistratov/Documents/sites/code",
-          "output": "$ python -m unittest tests.test_cli.CliSmokeTests -v\n# cwd: /Users/okalistratov/Documents/sites/code\nCliSmokeTests (unittest.loader._FailedTest.CliSmokeTests) ... ERROR\n\n======================================================================\nERROR: CliSmokeTests (unittest.loader._FailedTest.CliSmokeTests)\n----------------------------------------------------------------------\nAttributeError: module 'tests.test_cli' has no attribute 'CliSmokeTests'\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)",
-          "failure": "code"
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "After `use <key>`, every project-scoped command forwards the selected key to the engine (fake engine records argv).",
@@ -468,12 +468,102 @@
         }
       ],
       "review_required": true,
-      "failure_kind": "code"
+      "failure_kind": ""
     },
     "feedback": [
       "QA check failed: `forgel-code --help` and `forgel-code --version` exit 0.\n  repository: code\n  cwd: /Users/okalistratov/Documents/sites/code\n  command: python -m unittest tests.test_cli.CliSmokeTests -v\n  exit: 1\n  output:\n$ python -m unittest tests.test_cli.CliSmokeTests -v\n# cwd: /Users/okalistratov/Documents/sites/code\nCliSmokeTests (unittest.loader._FailedTest.CliSmokeTests) ... ERROR\n\n======================================================================\nERROR: CliSmokeTests (unittest.loader._FailedTest.CliSmokeTests)\n----------------------------------------------------------------------\nAttributeError: module 'tests.test_cli' has no attribute 'CliSmokeTests'\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (errors=1)"
     ],
-    "failure": {}
+    "failure": {},
+    "review": {
+      "status": "pass",
+      "summary": "The attributed commit adds a `CliSmokeTests` class to `tests/test_cli.py`, which is exactly the class the specification's named acceptance command (`python -m unittest tests.test_cli.CliSmokeTests -v`) requires to exist in that module; it covers `--help` (top level and per command), `--version` printing the client version, and both as real processes. The rest of the task's contribution is present in the current repository state (modified `forgel_code/cli.py`, `forgel_code/engine.py`, `README.md`, plus new `forgel_code/py.typed`, `tests/stub_engine.py`, `tests/test_cli_extra.py`, `tests/test_packaging_types.py`, `tests/test_stub_contract.py`), and the deterministic QA gate (environment tests, `python -m unittest discover -s tests`, help/version, project-key forwarding via a recording fake engine, packaging sdist/wheel checks) all pass. The README now pins installs to a tag/commit/exact version, explicitly rejects editable installs, and documents an upgrade path. No pre-existing test was deleted, skipped or loosened, and the added tests assert observable behaviour (exit codes, stdout, recorded engine argv) rather than tautologies. I found no logical, architectural or security defect in the contribution and no unmet written requirement.",
+      "requirements": [
+        {
+          "requirement": "R1/R1a (AC-3): after `use <key>` every project-scoped command forwards the selected key to the engine, asserted by a fake engine that records argv",
+          "verdict": "pass",
+          "note": "`PROJECT_SCOPED` in cli.py plus `tests/test_stub_contract.py` (PROJECT_CASES over say/status/tasks/task/accept/rework/resume/pause/plan/history/projects/session) and the stub's `--project` log enforce this; QA's forwarding check passed."
+        },
+        {
+          "requirement": "R2 (AC-4): with `--json`, argument-parse failures produce exactly one `ok: false` JSON object, no parser help on stdout, non-zero exit",
+          "verdict": "pass",
+          "note": "`_Parser.error` raises `_ParserError` instead of `SystemExit` and the suite (test_cli.py) asserts a single JSON line with `ok: false` and no `usage:` text."
+        },
+        {
+          "requirement": "R3 (AC-5): every engine call is bounded by a timeout and a hung engine yields non-zero exit plus structured error within limit + margin",
+          "verdict": "pass",
+          "note": "`Engine.run` passes `timeout=self.timeout` to `subprocess.run` and the `sleep`/`FAKE_ENGINE_SLEEP` tests assert bounded return."
+        },
+        {
+          "requirement": "R4/R5: UTF-8 decoding independent of locale, and the child does not inherit stdin",
+          "verdict": "pass",
+          "note": "`Engine.run` uses `stdin=subprocess.DEVNULL` and decodes the captured bytes as UTF-8; the `stdin` and `non-ascii` stub modes assert isolation and UTF-8 handling."
+        },
+        {
+          "requirement": "R6/R7 (AC-6/AC-7): structured engine errors on non-zero exit are surfaced, and `ok: false` with exit 0 is a failure",
+          "verdict": "pass",
+          "note": "`_structured_message` renders the engine's own fields into the error payload; `test_ok_false_with_exit_zero_is_a_failure` asserts non-zero exit and `engine_error.code`."
+        },
+        {
+          "requirement": "R8 (AC-8): global flags parsed without text substitution so flag-like words and hyphen-leading remarks reach the engine unchanged",
+          "verdict": "pass",
+          "note": "Global options are declared once via a `parents` parser with `SUPPRESS`; `ExactPhraseTest` asserts `say \"добавь флаг --json\"` and a `--notes ...` remark arrive byte-for-byte."
+        },
+        {
+          "requirement": "R9/R10/R11: unambiguous task-id lookup, stable missing-command signal, truthful project field",
+          "verdict": "pass",
+          "note": "Missing-command detection uses `ENGINE_USAGE_EXIT_CODE`/`USAGE_CODES` rather than message substrings; `task` rejects ambiguous/absent ids; `project` is null when nothing was selected (`Session.load` marks unselected state and no `local` is sent)."
+        },
+        {
+          "requirement": "R12 (AC-2): `--version` works and failures name the engine",
+          "verdict": "pass",
+          "note": "`--version` is registered on the parser and the new `CliSmokeTests` asserts exit 0 and the `forgel-code <version>` string both in-process and as a child process; `Engine.label`/`failure` prefix messages with the engine path."
+        },
+        {
+          "requirement": "R13 (AC-9): `plan` sends goal text as goal, never as a milestone name",
+          "verdict": "pass",
+          "note": "The client maps the phrase to `--goal` and `--milestone` to the engine's positional milestone; `COMMAND_CASES` encodes both shapes."
+        },
+        {
+          "requirement": "R14/R15/R16 (AC-10): PEP 625 sdist name with root metadata, complete wheel (subpackages, type file, data), single-source version",
+          "verdict": "pass",
+          "note": "`tests/test_packaging.py` builds via `_build_backend.py` and asserts the sdist name/root `PKG-INFO` and wheel contents; `py.typed` is now checked in and `__version__` lives only in `forgel_code/__init__.py`."
+        },
+        {
+          "requirement": "R17 (AC-11, review-only): README pins installs to a tag/commit/version, no default-branch or editable install, and documents upgrading over an installed copy",
+          "verdict": "pass",
+          "note": "The README's Install section pins `@v0.1.0`, a commit sha and `forgel-code==0.1.0`; it states editable installs are unsupported, and it has an explicit `### Update` section with `pipx install --force`/`pip install --upgrade` on a newer pin."
+        },
+        {
+          "requirement": "R18 (review-only): each fixed item has a test that would fail on pre-fix code and pass after",
+          "verdict": "pass",
+          "note": "Each listed behaviour has a behavioural test (recorded argv, exit codes, single JSON object, timing bound, sdist/wheel inspection) rather than an assertion on implementation internals, so they would have failed against the described defects."
+        },
+        {
+          "requirement": "R19 (AC-1/AC-12, review-only): the whole suite runs green with one command from the repo root and no pre-existing test was deleted or weakened",
+          "verdict": "pass",
+          "note": "QA ran `python -m unittest discover -s tests` to exit 0; the attributed diff only appends a test class, and the removal scan found no deleted tests. The new `CliSmokeTests` in `tests/test_cli.py` supplies the module-scoped class the spec's named acceptance command requires."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261119053418_forgel-code.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-19T11:22:58+00:00",
+      "notes": ""
+    },
+    "push": {
+      "status": "pushed",
+      "repo": "code",
+      "branch": "main",
+      "detail": "",
+      "control": {
+        "status": "pushed",
+        "detail": "",
+        "branch": "main"
+      }
+    }
   },
   "request": "docs/program/requests/20261119053418955569_forgel-code.md"
 }
