@@ -1,0 +1,71 @@
+{
+  "id": "20261119210845_install-forgel-code-with-one-command-via",
+  "title": "Install Forgel Code with one command via an installer script",
+  "spec": "docs/program/requests/20261119210845606353_install-forgel-code-with-one-command-via-an-installer-script.md",
+  "requirements": [
+    "The repository contains an installer script `install.sh` at the repository root, executable, and self-contained (POSIX sh, no dependencies beyond Python 3 and standard shell utilities).",
+    "The installer installs the Forgel Code client into a per-user location under the home directory (default `~/.local/share/forgel-code`), overridable through an environment variable, without requiring virtualenv activation.",
+    "The installer creates an executable `forgel-code` entry point in a stable per-user bin directory and makes it runnable by adding that directory to PATH exactly once, inside a clearly marked block in the shell profile; it does not duplicate the block on re-run.",
+    "The installer supports an opt-out of profile modification: when the opt-out environment variable is set, it does not touch any profile file and instead prints the exact `export PATH=...` line the user must add.",
+    "At the end the installer prints the installed version, so success is immediately visible.",
+    "Re-running the installer over an existing installation is safe: it replaces the installation, does not duplicate profile lines, and exits with code 0.",
+    "Updating is the same command with a new tag in the URL; the README states this explicitly as one line.",
+    "Uninstalling is one command through the same script (an explicit flag), which removes the installation and the PATH block it added.",
+    "README shows exactly one installation command as the first installation step: `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh | sh`. No `pip install`, `python3 -m venv`, `pipx` or `--user` appears before it or as an alternative main path.",
+    "README keeps: the Python 3 requirement, the requirement that the `forgel` engine is available in PATH (and how to point at a custom path), one update line, one uninstall line.",
+    "Windows is a single short line outside the main path, using `pip install --user`, explicitly marked as not the main installation method.",
+    "The client package code and its calls to the engine are not changed; only installation, packaging-adjacent files and documentation change.",
+    "Automated tests guard that the README's first and only installation command is the installer line and that `venv`, `pip install` and `pipx` do not appear before it.",
+    "An automated test runs the installer offline against a local source tree into a temporary directory and asserts that `forgel-code` appears, `forgel-code --version` prints the installed version with exit code 0, and a second run also exits with code 0 without breaking the first installation.",
+    "An automated test asserts that the profile opt-out prevents any profile modification and that nothing is written outside the temporary target directory."
+  ],
+  "acceptance": [
+    "`README.md` contains the installer line as the first installation command and contains no `pipx`, `python3 -m venv` or `pip install` instruction in the main installation path.",
+    "Running `install.sh` in a clean temporary HOME installs the client, prints the installed version and exits with code 0.",
+    "After installation, `forgel-code --version` prints the version and exits with code 0.",
+    "Running `install.sh` twice in a row exits with code 0 both times and leaves exactly one PATH block in the shell profile.",
+    "With the opt-out environment variable set, no profile file is created or modified and the script prints an `export PATH=...` line.",
+    "`install.sh --uninstall` removes the installation and the PATH block it added.",
+    "The full test suite passes, including the new README guard and the real offline installation tests.",
+    "No file under `forgel_code/` is modified."
+  ],
+  "constraints": [
+    "Public artifacts are in English (D-025); the chat reply may be Russian.",
+    "The client is a thin UI over the engine's parameterized commands (D-002); installation changes must not add model access, project file reads or checks to the client.",
+    "The installer must not require network access at run time beyond fetching the script itself, and must work when the source tree is local (used by tests).",
+    "Do not weaken or delete existing tests to make the suite pass.",
+    "Keep the existing built-in build backend usable; no new third-party runtime dependency."
+  ],
+  "repo_id": "code",
+  "test_command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests",
+    "-q"
+  ],
+  "assumptions": [
+    "The `code` repository is the target: its README carries the current pip/pipx installation instructions, `pyproject.toml` declares the `forgel-code` entry point, and the package lives under `forgel_code/`.",
+    "Default installation directory is `~/.local/share/forgel-code`, overridable by an environment variable; the executable goes to `~/.local/bin`, the conventional per-user bin directory.",
+    "The profile file is chosen per shell (`~/.profile` by default, `.bashrc`/`.zshrc` when detectable); the added block is delimited by a comment marker naming Forgel Code.",
+    "The opt-out variable is named `FORGEL_CODE_NO_PROFILE_EDIT` and the install root override `FORGEL_CODE_HOME`.",
+    "Uninstall is an explicit `--uninstall` flag on the same script, as 'one command' through the same entry point.",
+    "Offline tests invoke the installer with the local source tree (a source override or `sh install.sh` run from the checkout) and a temporary HOME, so no network is used.",
+    "The README example keeps the `v0.1.0` tag, matching the current released version.",
+    "Windows fallback remains `pip install --user` as a single line outside the main path."
+  ],
+  "plan_id": "",
+  "plan_goal": "",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "ru",
+  "status": "pending",
+  "created_at": "2026-11-19T21:08:45+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
