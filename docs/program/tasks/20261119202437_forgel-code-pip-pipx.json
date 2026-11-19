@@ -1,29 +1,35 @@
 {
   "id": "20261119202437_forgel-code-pip-pipx",
   "title": "Установка Forgel Code обычным pip, pipx — необязательный вариант",
-  "spec": "docs/program/requests/20261119202437966205_forgel-code-pip-pipx.md",
+  "spec": "docs/program/specs/20261119202437_forgel-code-pip-pipx.md",
   "requirements": [
-    "В README репозитория `code` основной путь установки — обычный pip, который ставится вместе с Python: первая команда установки должна быть вида `python3 -m pip install` с закреплённой ревизией (тег, коммит или точная версия), не с плавающей веткой по умолчанию.",
-    "Показать вариант установки в виртуальное окружение и вариант с `--user` для системного Python, когда окружение не создаётся.",
-    "Объяснить, куда pip кладёт исполняемый файл `forgel-code` (каталог bin виртуального окружения или пользовательский каталог скриптов pip) и как поправить PATH, если команда не находится.",
-    "Дать запасной запуск без зависимости от PATH: `python3 -m forgel_code` (модуль запуска уже есть в пакете), с примером проверки версии.",
-    "Переписать раздел обновления: обновление — установка более новой закреплённой ревизии через `python3 -m pip install --upgrade`/`--force-reinstall`, включая случай, когда номер версии не изменился, а коммит другой.",
-    "pipx остаётся не более чем одной строкой, явно помеченной как необязательный вариант для изоляции, и размещается после инструкций для pip.",
-    "Сохранить существующие ограничения, о которых README уже говорит: сборка без зависимостей и без сети, editable-установка не поддерживается, движок `forgel` должен быть доступен через PATH или `--engine`/`$FORGEL_ENGINE`.",
-    "Добавить проверку документации: первая команда установки использует обычный pip, а pipx встречается только позже и с пометкой о необязательности.",
-    "Добавить проверку установки: клиент ставится обычным pip во временный каталог без обращения к сети из локального исходного дерева и после этого команда `forgel-code` и запуск через модуль работают и печатают версию.",
-    "Не менять файлы пакета `forgel_code/` и вызовы движка; поведение клиента остаётся прежним."
+    "`README.md` install section's first command block contains a `python3 -m pip install` command pinned to an exact revision (tag, commit hash or exact version); no floating branch is used as the default.",
+    "The first install command block does not require pipx and can be executed with only Python and pip.",
+    "README shows installing inside a virtual environment (create/activate plus `python3 -m pip install`).",
+    "README shows a `--user` install for a system Python where no virtual environment is created.",
+    "README states where the `forgel-code` executable is placed (virtual environment `bin`/`Scripts` directory or pip's user scripts directory) and how to add that directory to PATH, including how to locate it if unknown.",
+    "README documents the fallback launch `python3 -m forgel_code` and includes a version check example (e.g. `python3 -m forgel_code --version`).",
+    "README's update section describes upgrading by installing a newer pinned revision with `python3 -m pip install --upgrade` and/or `--force-reinstall`, and explicitly covers the case where the version number is unchanged but the commit differs (forcing reinstall of the pinned commit).",
+    "`pipx` appears at most once in `README.md`, is explicitly marked as optional (an isolation alternative), and appears after the pip installation instructions.",
+    "README keeps the existing stated constraints: build needs no dependencies and no network, editable installation is not supported, and the `forgel` engine must be available via PATH or `--engine`/`$FORGEL_ENGINE`.",
+    "A documentation test checks that the first install command in the README install section is a plain `python3 -m pip install` (or `python -m pip install`) command and fails if it is not.",
+    "The documentation test checks that if `pipx` appears in `README.md`, it appears after the pip instructions and within an explicitly optional-marked line, failing otherwise.",
+    "An installation test creates a temporary target directory, installs the local source tree with plain pip in a no-network configuration (e.g. `--no-index`/`--no-build-isolation` as appropriate to the existing build backend), and asserts exit code 0.",
+    "The installation test asserts that the installed `forgel-code --version` prints the installed version and exits 0.",
+    "The installation test asserts that `python3 -m forgel_code --version` (run against the installed target) prints the installed version and exits 0.",
+    "No file under `forgel_code/` is modified by this task.",
+    "The existing test suite in `tests/` continues to pass unchanged."
   ],
   "acceptance": [
-    "Первый блок команд в разделе установки README содержит `python3 -m pip install` с закреплённой ревизией и не требует pipx.",
-    "README показывает установку в виртуальное окружение и с `--user`.",
-    "README объясняет, где искать исполняемый файл, как поправить PATH и как запустить клиент через `python3 -m forgel_code`.",
-    "pipx упоминается не более одного раза, помечен как необязательный и стоит после инструкций для pip.",
-    "Раздел обновления описывает переход на более новую закреплённую ревизию через pip, в том числе при неизменившемся номере версии.",
-    "Тест документации проходит: он падает, если первая команда установки перестала быть обычным pip или если pipx оказался раньше и без пометки о необязательности.",
-    "Тест установки проходит: во временном каталоге без сети клиент ставится обычным pip, `forgel-code --version` и `python3 -m forgel_code --version` печатают установленную версию, код возврата 0.",
-    "Существующий набор тестов клиента проходит без изменений в поведении.",
-    "В диффе нет изменений файлов пакета `forgel_code/`."
+    "The first command block in the README installation section contains `python3 -m pip install` with a pinned revision and does not require pipx.",
+    "README shows both a virtual-environment install and a `--user` install.",
+    "README explains where to find the `forgel-code` executable, how to fix PATH, and how to run the client via `python3 -m forgel_code`.",
+    "pipx is mentioned at most once, marked optional, and positioned after the pip instructions.",
+    "The update section describes moving to a newer pinned revision via pip, including the unchanged-version-number case.",
+    "The documentation test passes and fails as designed if the first install command stops being plain pip or if pipx appears earlier or without an optional marker.",
+    "The installation test passes: in a temporary directory without network, the client installs with plain pip, and `forgel-code --version` and `python3 -m forgel_code --version` print the installed version with exit code 0.",
+    "The existing client test suite passes with no behaviour change.",
+    "The diff contains no changes to files under `forgel_code/`."
   ],
   "constraints": [
     "Работа идёт только в репозитории `code`; движок `main` и его контракт команд не трогаются (D-002, D-003).",
@@ -36,10 +42,8 @@
   "test_command": [
     "python3",
     "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests"
+    "pytest",
+    "-q"
   ],
   "assumptions": [
     "Задача относится к репозиторию `code`: его README.md описывает установку Forgel Code (`pipx install \"git+https://github.com/forgel-dev/code@v0.1.0\"`, исполняемый файл `forgel-code`), а pyproject.toml объявляет `name = \"forgel-code\"` и точку входа `forgel_code.cli:main`; обсуждаемый раздел установки находится именно там. Репозиторий `main` — движок (src/forgel, registry, jurisdiction) и остаётся нетронутым.",
@@ -51,12 +55,141 @@
   "plan_goal": "",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "The first command block in the README installation section contains `python3 -m pip install` with a pinned revision and does not require pipx.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "README shows both a virtual-environment install and a `--user` install.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "README explains where to find the `forgel-code` executable, how to fix PATH, and how to run the client via `python3 -m forgel_code`.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "pipx is mentioned at most once, marked optional, and positioned after the pip instructions.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The update section describes moving to a newer pinned revision via pip, including the unchanged-version-number case.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The documentation test passes and fails as designed if the first install command stops being plain pip or if pipx appears earlier or without an optional marker.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The installation test passes: in a temporary directory without network, the client installs with plain pip, and `forgel-code --version` and `python3 -m forgel_code --version` print the installed version with exit code 0.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The existing client test suite passes with no behaviour change.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "tests",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The diff contains no changes to files under `forgel_code/`.",
+      "verification": "command",
+      "command": [
+        "git",
+        "diff",
+        "--name-only",
+        "HEAD~1",
+        "--",
+        "forgel_code"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "pip (plain pip bundled with Python)",
+      "interface": "`python3 -m pip install` for normal installs, plus `--user`, `--upgrade`, `--force-reinstall`, `--target`, `--no-index`, and `--no-build-isolation`; the install test uses local-source, offline pip installation into a temporary target.",
+      "docs": "https://pip.pypa.io/en/stable/cli/pip_install/",
+      "mode": "direct",
+      "evidence": "The repository environment provides Python 3 with its bundled pip, invoked as `python3 -m pip`. The README install/update sections and the installation test use that local pip CLI with a pinned revision and with `--target`, `--no-index`, and `--no-build-isolation` for an offline local-source install.",
+      "stub": ""
+    },
+    {
+      "name": "Python standard library `venv`",
+      "interface": "`python3 -m venv <dir>` creates the documented isolated environment; the installed client is then at `<dir>/bin/forgel-code`, with activation via `<dir>/bin/activate`.",
+      "docs": "https://docs.python.org/3/library/venv.html",
+      "mode": "direct",
+      "evidence": "`venv` is part of the Python 3 standard library used by the project. The README’s primary installation path can therefore show `python3 -m venv .venv` and use `.venv/bin/forgel-code`, without any external package or service.",
+      "stub": ""
+    },
+    {
+      "name": "PEP 517/518 build backend interface",
+      "interface": "pip builds the local source tree through the project’s in-tree backend declared by `pyproject.toml`; tests call pip with `--no-build-isolation --no-index`, so the repository’s `_build_backend.py` is driven directly and no network or extra build dependency is needed.",
+      "docs": "https://peps.python.org/pep-0517/",
+      "mode": "direct",
+      "evidence": "`pyproject.toml` declares the project build backend and `_build_backend.py` implements the PEP 517 hooks used by pip. The dependency specification explicitly identifies this local backend as the path pip uses to build the wheel offline.",
+      "stub": ""
+    },
+    {
+      "name": "`forgel` engine binary (external program)",
+      "interface": "The client resolves the engine from `PATH`, or from `--engine <path>` / `FORGEL_ENGINE`. Install tests use `forgel-code --version` and `python3 -m forgel_code --version`, so a deterministic fake `forgel` executable is sufficient for PATH/option-resolution tests; tests must not require real engine semantics.",
+      "docs": "README.md, install/engine requirements section",
+      "mode": "stub",
+      "evidence": "README.md documents the existing constraint that the `forgel` engine must be available through `PATH` or supplied via `--engine`/`$FORGEL_ENGINE`. The engine is not vendored in the repository and no real engine binary is declared by the environment contract, so tests must use a fake executable rather than the real engine.",
+      "stub": "#!/usr/bin/env python3\nimport json\nimport sys\n\n\ndef main(argv):\n    if \"--version\" in argv or \"-V\" in argv:\n        print(\"forgel 0.0.0-stub\")\n        return 0\n    if \"--help\" in argv or \"-h\" in argv:\n        print(\"forgel stub\")\n        return 0\n    print(json.dumps({\"diagnostics\": [], \"status\": \"ok\"}, sort_keys=True))\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main(sys.argv[1:]))"
+    }
+  ],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-19T20:24:37+00:00",
-  "started_at": "",
+  "started_at": "2026-11-19T20:24:38+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": "docs/program/requests/20261119202437966205_forgel-code-pip-pipx.md"
 }
