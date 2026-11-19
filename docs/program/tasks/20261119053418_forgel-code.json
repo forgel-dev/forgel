@@ -224,12 +224,12 @@
     }
   ],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-19T05:34:18+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-19T11:12:57+00:00",
+  "finished_at": "2026-11-19T11:14:44+00:00",
   "result": {
-    "summary": "agent crashed: IncompleteRead(0 bytes read)",
+    "summary": "Проверил текущее состояние репозитория после прерванного прошлого прогона: все требования спецификации уже реализованы в дереве, менять ничего не потребовалось — этот прогон не вносил правок. Подтверждение: `python -m unittest discover -s tests` из корня репозитория завершается с кодом 0, прогоняются 96 тестов (без пропусков и ошибок импорта), включая подпроцессные проверки (`tests/test_cli_extra.py`), контрактные проверки стаба движка (`tests/test_stub_contract.py`) и упаковочные проверки (`tests/test_packaging.py`, `tests/test_packaging_types.py`). Соответствие требованиям подтверждено тестами: R1/R1a — `tests/test_cli.py::ProjectPropagationTest`, `tests/test_stub_contract.py::StubContractTest::test_the_selected_key_reaches_every_scoped_command`; R2 — `tests/test_cli.py::ArgumentParseErrorTest`; R3 — `tests/test_cli.py::TimeoutTest`, `tests/test_cli_extra.py::TimeoutBoundTest`; R4/R5 — `tests/test_cli.py::EngineCallTest`; R6/R7 — `tests/test_cli.py::StructuredErrorTest`, `tests/test_cli_extra.py::StructuredErrorPassthroughTest`; R8 — `tests/test_cli_extra.py::ExactPhraseTest`; R9 — `tests/test_cli.py::TaskLookupTest`; R10 — `tests/test_cli.py::MissingEngineCommandTest`; R11 — `tests/test_cli.py::ProjectPropagationTest::test_json_envelope_reports_the_project_actually_passed`; R12 — `tests/test_cli_extra.py::CliSmokeTests` и `EngineIdentityTest`; R13 — `tests/test_cli.py::PlanShapeTest`; R14/R15/R16 — `tests/test_packaging.py`, `tests/test_packaging_types.py`; R17 — `tests/test_cli.py::ReadmeTest`; R19 — общий прогон discover. Код единого пути вызова движка (`forgel_code/engine.py`) содержит таймаут, UTF-8-декодирование, `stdin=subprocess.DEVNULL`, проброс структурированной ошибки и трактовку `ok: false` как отказа; CLI разбирает глобальные флаги парсером без текстовых подстановок.",
     "last_failure": {
       "kind": "external",
       "message": "IncompleteRead(0 bytes read)",
@@ -238,7 +238,67 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "files_changed": [],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "................................................................................................\n----------------------------------------------------------------------\nRan 96 tests in 27.190s\n\nOK\n",
+    "assumptions": [
+      "Целевой репозиторий — code: задача целиком про клиент Forgel Code, который живёт в отдельном репозитории и не импортирует движок.",
+      "Проверка задаётся запуском по каталогу тестов из корня репозитория, а не адресацией модулей: прошлый прогон показал, что адресация модулей в окружении исполнения не работает, а запуск по каталогу проходит полностью. Это обратимое решение и не меняет структуру тестов.",
+      "Агент должен сначала свериться с текущим состоянием файлов, потому что часть исправлений могла быть внесена прошлым прогоном, и не переписывать уже корректное.",
+      "Ограничение по времени вызова движка выбирается консервативным значением по умолчанию с возможностью переопределения через переменную окружения; конкретное значение — на усмотрение реализации.",
+      "Два ранее непроверенных критерия (установка не с плавающей ветки и доказательство падения новых тестов на исходном коде) входят в эту задачу и проверяются в её приёмке.",
+      "Изменения прошлого прогона считаются завершёнными: повторный анализ дерева показал, что все пункты R1-R19 уже покрыты кодом и тестами, поэтому правки не вносились.",
+      "Проверка выполняется запуском по каталогу тестов из корня репозитория (`python -m unittest discover -s tests`), как зафиксировано во входных допущениях.",
+      "Значение таймаута по умолчанию (600 с) и его переопределение через `--timeout`/`FORGEL_CODE_TIMEOUT` принято как есть — спецификация оставляет конкретику на усмотрение реализации.",
+      "Критерий R18 (падение новых тестов на исходном коде) проверяется ревью: внутри одного коммита его доказать нельзя, что отмечено в самой спецификации."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 13,
+      "estimated_input_tokens": 396112,
+      "provider_input_tokens": 412658,
+      "provider_output_tokens": 5887,
+      "estimated_tokens": 42873,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "ecb4a431e1f367bb16ceadf688f33ce260506c1f",
+      "head": "ecb4a431e1f367bb16ceadf688f33ce260506c1f",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261119053418_forgel-code.md"
   },
   "request": "docs/program/requests/20261119053418955569_forgel-code.md"
 }
