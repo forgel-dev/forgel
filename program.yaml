@@ -13,4 +13,4 @@ repos:
     path: ../code
     provider: github
     url: "https://github.com/forgel-dev/code.git"
-    depends_on: []
+    depends_on: [main]
