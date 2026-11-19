@@ -224,18 +224,21 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-19T05:34:18+00:00",
-  "started_at": "2026-11-19T05:34:19+00:00",
-  "finished_at": "2026-11-19T05:48:52+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "agent crashed: IncompleteRead(0 bytes read)",
-    "failure": {
+    "last_failure": {
       "kind": "external",
       "message": "IncompleteRead(0 bytes read)",
       "retryable": false,
       "traceback": "Traceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 579, in _get_chunk_left\n    chunk_left = self._read_next_chunk_size()\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 546, in _read_next_chunk_size\n    return int(line, 16)\nValueError: invalid literal for int() with base 16: b''\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 597, in _read_chunked\n    while (chunk_left := self._get_chunk_left()) is not None:\n                         ~~~~~~~~~~~~~~~~~~~~^^\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 581, in _get_chunk_left\n    raise IncompleteRead(b'')\nhttp.client.IncompleteRead: IncompleteRead(0 bytes read)\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/daemon.py\", line 885, in _run_task\n    result = CodingAgent(settings, ledger, model).run(\n        project, task, log\n    )\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/coding_agent.py\", line 455, in run\n    ) = self._converse(\n        ~~~~~~~~~~~~~~^\n        layout,\n        ^^^^^^^\n    ...<6 lines>...\n        log,\n        ^^^^\n    )\n    ^\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/coding_agent.py\", line 807, in _converse\n    raw = self.client.complete(messages, model=model)\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/model.py\", line 95, in complete\n    raise errors[0]\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/model.py\", line 83, in run\n    result[\"text\"] = self._complete(messages, model)\n                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^\n  File \"/Users/okalistratov/.forgel-cli/lib/python3.13/site-packages/forgel/model.py\", line 128, in _complete\n    body = json.loads(response.read().decode(\"utf-8\"))\n                      ~~~~~~~~~~~~~^^\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 473, in read\n    return self._read_chunked(amt)\n           ~~~~~~~~~~~~~~~~~~^^^^^\n  File \"/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 609, in _read_chunked\n    raise IncompleteRead(b''.join(value)) from exc\nhttp.client.IncompleteRead: IncompleteRead(0 bytes read)\n"
-    }
+    },
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   },
   "request": "docs/program/requests/20261119053418955569_forgel-code.md"
 }
