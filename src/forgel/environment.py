@@ -45,11 +45,21 @@ FIELDS = {
     "setup",
     "test",
     "e2e",
+    "e2e_requires",
     "env",
     "ports",
     "health",
 }
 COMMAND_FIELDS = ("setup", "test", "e2e")
+# Heavy tools the QA runner probes on the current machine. A browser is not
+# listed: it is installable almost everywhere and the e2e command reports a
+# missing browser itself.
+E2E_REQUIREMENTS = {
+    "ios-simulator",
+    "android-emulator",
+    "mobile-simulator",
+    "docker",
+}
 REPO_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
 ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}")
 RESERVED_ENV = {"HOME", "TMPDIR"}
@@ -59,6 +69,12 @@ ENV_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,127}=")
 
 class EnvironmentError(ValueError):
     """The environment contract is malformed or inconsistent with the project."""
+
+
+def mount_env_name(repo_id: str) -> str:
+    """The environment variable that names a mounted sibling repository."""
+
+    return "FORGEL_REPO_" + re.sub(r"[^A-Za-z0-9]", "_", repo_id).upper()
 
 
 @dataclass(frozen=True)
@@ -73,6 +89,7 @@ class Environment:
     setup: tuple[str, ...] = ()
     test: tuple[str, ...] = ()
     e2e: tuple[str, ...] = ()
+    e2e_requires: tuple[str, ...] = ()
     env: tuple[tuple[str, str], ...] = ()
     ports: tuple[int, ...] = ()
     health: str = ""
@@ -113,7 +130,14 @@ class Environment:
             data["build"] = self.build
         if self.repo:
             data["repo"] = self.repo
-        for key in ("mounts", "services", "setup", "test", "e2e"):
+        for key in (
+            "mounts",
+            "services",
+            "setup",
+            "test",
+            "e2e",
+            "e2e_requires",
+        ):
             values = getattr(self, key)
             if values:
                 data[key] = list(values)
@@ -469,6 +493,15 @@ def parse_environment(
         raise EnvironmentError(
             f"{source}: 'health' must be a path or an http(s) URL"
         )
+    e2e_requires = tuple(
+        dict.fromkeys(_strings(data, "e2e_requires", source))
+    )
+    for item in e2e_requires:
+        if item not in E2E_REQUIREMENTS:
+            raise EnvironmentError(
+                f"{source}: unknown e2e requirement {item!r}; expected "
+                + ", ".join(sorted(E2E_REQUIREMENTS))
+            )
     return Environment(
         image=image,
         build=build,
@@ -478,6 +511,7 @@ def parse_environment(
         setup=_commands(data, "setup", source),
         test=_commands(data, "test", source),
         e2e=_commands(data, "e2e", source),
+        e2e_requires=e2e_requires,
         env=_env_map(data, source),
         ports=ports,
         health=health,
@@ -586,7 +620,14 @@ def render_environment(environment: Environment) -> str:
     for key in ("image", "build", "repo"):
         if key in data:
             lines.append(f"{key}: {data[key]}")
-    for key in ("mounts", "services", "setup", "test", "e2e"):
+    for key in (
+        "mounts",
+        "services",
+        "setup",
+        "test",
+        "e2e",
+        "e2e_requires",
+    ):
         if key not in data:
             continue
         values = data[key]

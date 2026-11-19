@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol, Sequence
 
 from .config import Settings
-from .environment import Environment, command_argv
+from .environment import Environment, command_argv, mount_env_name
 from .layout import ProjectLayout
 from .proc import merge_output
 
@@ -287,7 +287,7 @@ class DockerSandbox:
             raise SandboxError(f"repository not found: {repo}")
         image = self.ensure_image(layout, environment, project_id)
         setup = environment.setup if environment is not None else ()
-        env = environment.env if environment is not None else ()
+        env = list(environment.env if environment is not None else ())
         extra: list[tuple[str, str]] = []
         if environment is not None:
             for sibling in environment.mounts:
@@ -297,13 +297,14 @@ class DockerSandbox:
                         f"repository {sibling!r} from 'mounts' not found"
                     )
                 extra.append((self.daemon_path(path), f"/{sibling}"))
+                env.append((mount_env_name(sibling), f"/{sibling}"))
         return DockerSession(
             sandbox=self,
             project_id=project_id,
             image=image,
             mount=self.daemon_path(repo),
             setup=setup,
-            env=env,
+            env=tuple(env),
             extra_mounts=extra,
             log=self.log,
         )

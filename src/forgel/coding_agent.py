@@ -1149,7 +1149,7 @@ class CodingAgent:
         if feedback:
             lines.append(
                 "\nReviewer feedback:\n"
-                + "\n".join(f"- {_cap(item, 500)}" for item in feedback[:5])
+                + "\n".join(f"- {_cap(item, 3000)}" for item in feedback[:5])
             )
         if files:
             lines.append(

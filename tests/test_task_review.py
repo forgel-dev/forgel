@@ -747,7 +747,9 @@ class TaskReviewTest(unittest.TestCase):
         stored = get_task(self.layout, first["id"])
         assert stored is not None
         self.assertEqual(stored["status"], "failed")
-        self.assertEqual(stored["result"]["failure"]["kind"], "qa")
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "environment"
+        )
         dependent = get_task(self.layout, second["id"])
         assert dependent is not None
         self.assertEqual(dependent["status"], "blocked")

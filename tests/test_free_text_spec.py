@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgel.adopt import adopt_repository
 from forgel.config import Settings
@@ -42,8 +43,9 @@ SPEC = {
     "revision_history": ["1.0.0 — initial"],
     "checks": [
         {
-            "criterion": "feature.py exists",
-            "verification": "review",
+            "criterion": "The fixture command exits 0",
+            "verification": "command",
+            "command": ["python", "-c", "print('ok')"],
         }
     ],
     "test_command": [],
@@ -135,13 +137,16 @@ class FreeTextSpecTest(unittest.TestCase):
                 json.dumps({"action": "done", "summary": "added"}),
             ]
         )
-        run_daemon(
-            self.settings,
-            self.ledger,
-            once=True,
-            log=lambda _m: None,
-            client=client,
-        )
+        with patch(
+            "forgel.daemon.peak.project_policy", return_value="always"
+        ):
+            run_daemon(
+                self.settings,
+                self.ledger,
+                once=True,
+                log=lambda _m: None,
+                client=client,
+            )
         stored = get_task(self.layout, "task-1")
         assert stored is not None
         self.assertTrue(stored["spec"].endswith("docs/program/specs/task-1.md"))
@@ -179,13 +184,16 @@ class FreeTextSpecTest(unittest.TestCase):
                 ),
             ]
         )
-        run_daemon(
-            self.settings,
-            self.ledger,
-            once=True,
-            log=lambda _m: None,
-            client=client,
-        )
+        with patch(
+            "forgel.daemon.peak.project_policy", return_value="always"
+        ):
+            run_daemon(
+                self.settings,
+                self.ledger,
+                once=True,
+                log=lambda _m: None,
+                client=client,
+            )
         stored = get_task(self.layout, "task-1")
         assert stored is not None
         self.assertEqual(stored["status"], "failed")

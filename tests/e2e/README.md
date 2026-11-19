@@ -1,14 +1,17 @@
 # Forgel E2E
 
-Two end-to-end drivers live here:
+Three end-to-end drivers live here:
 
 - `run_self_hosting_e2e.py` — the offline self-hosting gate declared in
   `environment.yaml`.
+- `run_client_e2e.py` — the cross-repository engine + Forgel Code gate declared
+  in `environment.yaml`.
 - `run_blog_e2e.py` — a manual end-to-end test of the Forgel harness.
 
 ## Self-hosting gate
 
-`environment.yaml` declares both `test` and `e2e`. The `e2e` command is:
+`environment.yaml` declares `test` and two `e2e` commands. The first is the
+self-hosting smoke:
 
 ```bash
 env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
@@ -31,8 +34,66 @@ fixture repository are removed on exit.
 
 The driver exits non-zero when any gate is red (missing scripted model, a task
 that did not stop at the gate, QA or review failure, or a pipeline that ran
-through to `done`). `tests/test_e2e.py` invokes the declared command and
-asserts exit code 0, so the suite covers the gate.
+through to `done`). `tests/test_e2e.py` invokes every declared `e2e` command
+and asserts exit code 0, so the suite covers both gates.
+
+## Client gate
+
+The second `e2e` command is the cross-repository integration gate:
+
+```bash
+env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py
+```
+
+It runs the **real engine** from this repository and the **real client** from
+the `code` repository, each as a separate process, over the machine-readable
+JSON contract. The scenario:
+
+1. create a temporary project and home;
+2. `forgel-code projects` sees the project;
+3. `forgel-code use <id>` selects it;
+4. `forgel-code status` and `forgel-code session` pass `--project <id>` to the
+   engine and get the project back;
+5. `forgel-code say "..."` sends the phrase in `--text`, the engine answers
+   with the scripted model, and the client parses the answer.
+
+The client repository is located through `FORGEL_REPO_CODE`. The environment
+contract declares `mounts: [code]`, so the QA runner points this variable at the
+real sibling path locally and at `/code` inside the sandbox. Without the
+variable the driver falls back to `../code` next to this repository. No
+network, Docker or provider model is used.
+
+This gate caught a real contract defect on its first run: the client sent the
+phrase as a positional argument to `forgel say`, but the engine reserves that
+positional for the project key, so the phrase was consumed and the call failed
+with `say needs text`. The client now sends `--text`; its unit tests alone could
+not see this because they run against a fake engine.
+
+## Where the e2e lives
+
+The program e2e suite lives in the project's main repository — the one the
+project started from. For a project that was multi-repo from the start, it
+lives in the control repository. It is not duplicated into every repository;
+sibling repositories are exposed to it through `environment.yaml`'s `mounts`
+(`FORGEL_REPO_<ID>` locally and `/<id>` in the sandbox).
+
+A program e2e is required when repositories interact through a `depends_on`
+edge, when the project has a frontend/acceptance or mobile repository, or when
+the environment mounts siblings. A database or cache covered by the unit-test
+framework does not by itself require a program e2e; a browser, a mobile
+simulator/emulator or an external tool without a standard test harness belongs
+in the task specification's real-interface command check. The planner refuses
+to plan such a project without an e2e command; QA fails a task whose project
+needs one and does not declare it. A red e2e is returned to the coding agent
+with the command, workdir and output.
+
+Heavy tools are declared in `e2e_requires` (`ios-simulator`,
+`android-emulator`, `mobile-simulator`, `docker`). The QA runner probes them on
+the current machine; when one is absent, the e2e step is recorded as `skipped`
+with an explanation and installation instructions instead of failing the task.
+A mobile simulator is deferred, never a hard blocker, and the e2e can be added
+later once the tool is installed. A browser is not probed: it is installable
+almost everywhere and a missing browser is reported by the e2e command itself.
 
 ## Blog harness
 

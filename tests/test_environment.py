@@ -30,6 +30,7 @@ setup:
   - pip install -r requirements.txt
 test: ["python -m unittest discover -s tests"]
 e2e: python e2e/check.py
+e2e_requires: [ios-simulator]
 ports: [8000, 8443]
 health: "/health"
 """
@@ -52,8 +53,17 @@ class ParseEnvironmentTest(unittest.TestCase):
             ("python -m unittest discover -s tests",),
         )
         self.assertEqual(environment.e2e, ("python e2e/check.py",))
+        self.assertEqual(
+            environment.e2e_requires, ("ios-simulator",)
+        )
         self.assertEqual(environment.ports, (8000, 8443))
         self.assertEqual(environment.health, "/health")
+
+    def test_an_unknown_e2e_requirement_is_rejected(self) -> None:
+        with self.assertRaises(EnvironmentError):
+            parse_environment(
+                "image: x\ne2e_requires: [teleporter]\n"
+            )
 
     def test_image_may_contain_a_colon(self) -> None:
         environment = parse_environment("image: python:3.12-slim\n")
@@ -342,32 +352,39 @@ class LoadEnvironmentTest(unittest.TestCase):
 
 class RepositoryEnvironmentTest(unittest.TestCase):
     def test_the_repository_environment_contract_is_valid(self) -> None:
-        layout = ProjectLayout(root=REPO_ROOT, kind="legacy")
+        layout = ProjectLayout.detect(REPO_ROOT)
         environment = load_environment(layout)
         self.assertIsNotNone(environment)
         assert environment is not None
         self.assertEqual(environment.build, "environment")
+        self.assertEqual(environment.mounts, ("code",))
         self.assertEqual(
             environment.test, ("python -m unittest discover -s tests",)
         )
         self.assertEqual(environment.env_map, {"PYTHONPATH": "src"})
         self.assertTrue((REPO_ROOT / "environment" / "Dockerfile").is_file())
 
-    def test_the_repository_declares_a_self_hosting_e2e_gate(self) -> None:
-        environment = load_environment(
-            ProjectLayout(root=REPO_ROOT, kind="legacy")
-        )
+    def test_the_repository_declares_the_e2e_gates(self) -> None:
+        environment = load_environment(ProjectLayout.detect(REPO_ROOT))
         self.assertIsNotNone(environment)
         assert environment is not None
         self.assertTrue(environment.test, "environment.yaml declares no test")
         self.assertTrue(environment.e2e, "environment.yaml declares no e2e")
-        argv = command_argv(environment.e2e[0])
-        self.assertTrue(argv, "the e2e command does not parse into an argument list")
-        self.assertIn("FORGEL_MODEL_MODE=script", environment.e2e[0])
-        self.assertTrue(
-            any(argv_item.endswith("run_self_hosting_e2e.py") for argv_item in argv),
-            argv,
-        )
+        self_hosting = [
+            command
+            for command in environment.e2e
+            if "run_self_hosting_e2e.py" in command
+        ]
+        client = [
+            command
+            for command in environment.e2e
+            if "run_client_e2e.py" in command
+        ]
+        self.assertEqual(len(self_hosting), 1)
+        self.assertEqual(len(client), 1)
+        self.assertIn("FORGEL_MODEL_MODE=script", self_hosting[0])
+        argv = command_argv(client[0])
+        self.assertTrue(argv, "the client e2e command does not parse")
 
 
 class CommandArgvTest(unittest.TestCase):

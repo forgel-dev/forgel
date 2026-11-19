@@ -118,6 +118,13 @@ def _classify_crash(exc: Exception) -> dict[str, Any]:
     return _failure("external", message, retryable=False)
 
 
+def _tail(text: Any, limit: int = 3_000) -> str:
+    value = str(text or "").strip()
+    if len(value) <= limit:
+        return value
+    return "… [truncated]\n" + value[-limit:]
+
+
 def _feedback_from(data: dict[str, Any]) -> list[str]:
     feedback: list[str] = []
     review = data.get("review") if isinstance(data.get("review"), dict) else {}
@@ -126,12 +133,31 @@ def _feedback_from(data: dict[str, Any]) -> list[str]:
     if review.get("summary"):
         feedback.append(f"review summary: {review['summary']}")
     qa = data.get("qa") if isinstance(data.get("qa"), dict) else {}
+    failure_kind = str(qa.get("failure_kind") or "").strip()
+    if failure_kind in {"spec", "environment", "infrastructure"}:
+        feedback.append(
+            f"QA failure kind: {failure_kind}. This is not a code defect; "
+            "the runtime routes it away from the coding agent."
+        )
     for item in qa.get("checks") or []:
-        if item.get("verdict") == "fail":
-            feedback.append(
-                f"QA check failed: {item.get('criterion')} "
-                f"(exit {item.get('exit_code')})"
+        if item.get("verdict") != "fail":
+            continue
+        lines = [
+            f"QA check failed: {item.get('criterion')}",
+            f"  repository: {item.get('repo') or 'project root'}",
+            f"  cwd: {item.get('workdir') or '-'}",
+            f"  command: {item.get('command') or '-'}",
+            f"  exit: {item.get('exit_code')}",
+        ]
+        output = _tail(item.get("output"))
+        if output:
+            lines.append("  output:\n" + output)
+        if item.get("scope") == "e2e":
+            lines.append(
+                "  note: program e2e failure; fix the integration, not only "
+                "the unit test"
             )
+        feedback.append("\n".join(lines))
     if not feedback:
         feedback.append(
             str(data.get("summary") or "the previous attempt failed")
@@ -369,6 +395,73 @@ def _quarantine(
     )
 
 
+def _rewrite_spec_from_failure(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task: dict[str, Any],
+    client: ModelClient,
+    failure: dict[str, Any],
+    log: Callable[[str], None],
+) -> bool:
+    """Repair an invalid check or criterion without sending the coder back.
+
+    A specification defect is the planner's problem, not the code's. Rewriting
+    the spec keeps ``rework_count`` for code failures only and prevents a
+    coder from being asked to fix a check that cannot pass.
+    """
+
+    task_id = str(task["id"])
+    data = dict(task.get("result") or {})
+    reworks = int(data.get("spec_rework_count", 0))
+    limit = max(1, settings.task_reworks)
+    if reworks >= limit:
+        log(
+            f"[spec] {project['id']}: task {task_id}: "
+            "specification rework limit reached"
+        )
+        return False
+    issue = str(failure.get("message") or "").strip() or (
+        "the specification has an invalid acceptance check"
+    )
+    from . import protocol
+
+    try:
+        protocol.rewrite_task_spec(
+            settings, ledger, project, layout, task, client, issue, log
+        )
+    except Exception as exc:  # noqa: BLE001 - the failure path must not crash
+        log(
+            f"[spec] {project['id']}: task {task_id}: "
+            f"specification rewrite failed: {exc}"
+        )
+        return False
+    data["spec_rework_count"] = reworks + 1
+    data["feedback"] = [
+        "The specification was rewritten after an invalid check: "
+        + _tail(issue, 800),
+        "Implement the new specification. Do not change code only to "
+        "satisfy the old check.",
+    ]
+    data["last_failure"] = failure
+    data.pop("failure", None)
+    tasks.update_task(
+        layout,
+        task_id,
+        status="pending",
+        started_at="",
+        finished_at="",
+        result=data,
+    )
+    log(
+        f"[spec] {project['id']}: task {task_id}: invalid check; "
+        f"specification rewritten; spec rework "
+        f"{reworks + 1}/{limit}"
+    )
+    return True
+
+
 def handle_failure(
     settings: Settings,
     ledger: Ledger,
@@ -414,6 +507,27 @@ def handle_failure(
             f"[retry] {project['id']}: task {task_id} infrastructure "
             f"failure; retry {attempts + 1}/{settings.task_retries} "
             f"in {delay}m (at {retry_at})"
+        )
+        return
+    spec_feedback = [
+        str(item) for item in (data.get("spec_feedback") or [])
+    ]
+    if kind == "spec" and not spec_feedback:
+        # An invalid check or criterion is the planner's defect. Rewrite the
+        # spec; never spend a coder rework on a check that cannot pass.
+        if client is not None and _rewrite_spec_from_failure(
+            settings, ledger, project, layout, task, client, failure, log
+        ):
+            return
+        _quarantine(
+            settings, ledger, project, layout, task_id, failure, attempts, log
+        )
+        return
+    if kind == "environment":
+        # A project-level environment gate or a broken contract is not the
+        # code under test. Keep the coder out of it and show the evidence.
+        _quarantine(
+            settings, ledger, project, layout, task_id, failure, attempts, log
         )
         return
     filtered_feedback: list[str] | None = None
@@ -494,7 +608,7 @@ def handle_failure(
                         f"{item.finding} — {item.reason}"
                         for item in valid
                     ]
-    if kind in {"qa", "review", "spec"}:
+    if kind in {"qa", "review"} or (kind == "spec" and spec_feedback):
         reworks = int(data.get("rework_count", 0))
         if reworks < settings.task_reworks:
             data["rework_count"] = reworks + 1

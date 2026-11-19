@@ -34,38 +34,57 @@ def approve_and_run(
     orchestrator.run(project_id)
 
 
-class SelfHostingE2ETest(unittest.TestCase):
-    """The environment contract's e2e command is a green offline gate."""
+class DeclaredE2ETest(unittest.TestCase):
+    """The environment contract's e2e commands are green offline gates."""
 
-    def test_the_declared_e2e_command_exits_zero(self) -> None:
-        environment = load_environment(
-            ProjectLayout(root=REPO_ROOT, kind="legacy")
-        )
+    def test_the_declared_e2e_commands_exit_zero(self) -> None:
+        environment = load_environment(ProjectLayout.detect(REPO_ROOT))
         self.assertIsNotNone(environment)
         assert environment is not None
         self.assertTrue(environment.e2e)
-        argv = command_argv(environment.e2e[0])
-        self.assertTrue(argv)
-        completed = subprocess.run(
-            argv,
-            cwd=str(REPO_ROOT),
-            env={
-                key: value
-                for key, value in os.environ.items()
-                if not key.startswith(("FORGEL_", "GITHUB_"))
-            },
-            capture_output=True,
-            text=True,
-            timeout=240,
-            check=False,
+        base_env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("FORGEL_", "GITHUB_"))
+        }
+        self.assertTrue(
+            any(
+                "run_self_hosting_e2e.py" in command
+                for command in environment.e2e
+            )
         )
-        self.assertEqual(
-            completed.returncode,
-            0,
-            completed.stdout[-4000:] + completed.stderr[-4000:],
+        self.assertTrue(
+            any(
+                "run_client_e2e.py" in command
+                for command in environment.e2e
+            )
         )
-        self.assertIn("self-hosting gate is green", completed.stdout)
-        self.assertNotIn("FAIL ", completed.stdout)
+        for command in environment.e2e:
+            argv = command_argv(command)
+            self.assertTrue(argv)
+            completed = subprocess.run(
+                argv,
+                cwd=str(REPO_ROOT),
+                env=base_env,
+                capture_output=True,
+                text=True,
+                timeout=240,
+                check=False,
+            )
+            self.assertEqual(
+                completed.returncode,
+                0,
+                completed.stdout[-4000:] + completed.stderr[-4000:],
+            )
+            self.assertNotIn("FAIL ", completed.stdout)
+            if "run_self_hosting_e2e.py" in command:
+                self.assertIn(
+                    "self-hosting gate is green", completed.stdout
+                )
+            if "run_client_e2e.py" in command:
+                self.assertIn(
+                    "client e2e is green", completed.stdout
+                )
 
 
 class EndToEndTest(unittest.TestCase):

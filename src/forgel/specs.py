@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Sequence
 
 from . import requirements as requirements_doc
+from .check_commands import check_problems
 from .layout import ProjectLayout
 from .model_output import json_objects
 from .model import (
@@ -116,7 +117,13 @@ Rules:
   format, a protocol), record the contract the implementation needs, derived
   from its authoritative source, and add a command check that exercises the
   real interface when it is available; a hand-written stub is not proof of
-  the contract.
+  the contract. A task that needs a browser, a mobile simulator or emulator,
+  a live third-party service, a message broker, object storage or another
+  tool without a standard test harness must include at least one command
+  check that exercises that real interface; a fake engine, a mock or a stub
+  is not proof. A database or cache that the project's unit-test framework
+  already handles needs the normal test command, not a separate integration
+  environment.
 - A specification is rewritten only for the concrete defect the planner
   reported; keep unrelated scope stable and never treat a preference, a
   simpler path or a wording change as a defect.
@@ -210,6 +217,27 @@ def _normalize_spec(
         raise SpecError("the specification has no acceptance criteria")
     if not checks:
         raise SpecError("the specification has no checks")
+    external_dependencies = [
+        {
+            "name": str(item.get("name") or "").strip(),
+            "interface": str(item.get("interface") or "").strip(),
+            "docs": str(item.get("docs") or "").strip(),
+            "mode": str(item.get("mode") or "").strip(),
+            "evidence": str(item.get("evidence") or "").strip(),
+            "stub": str(item.get("stub") or "").strip(),
+        }
+        for item in (data.get("external_dependencies") or [])
+        if isinstance(item, dict)
+        and str(item.get("name") or "").strip()
+    ]
+    if external_dependencies and not any(
+        item["verification"] == "command" and item["command"]
+        for item in checks
+    ):
+        raise SpecError(
+            "an external dependency needs at least one command check that "
+            "exercises the real interface"
+        )
     return {
         "title": str(intent.get("title") or "").strip(),
         "summary": str(intent.get("summary") or "").strip(),
@@ -223,19 +251,7 @@ def _normalize_spec(
         "acceptance": acceptance,
         "constraints": _strings(data.get("constraints")),
         "assumptions": _strings(data.get("assumptions")),
-        "external_dependencies": [
-            {
-                "name": str(item.get("name") or "").strip(),
-                "interface": str(item.get("interface") or "").strip(),
-                "docs": str(item.get("docs") or "").strip(),
-                "mode": str(item.get("mode") or "").strip(),
-                "evidence": str(item.get("evidence") or "").strip(),
-                "stub": str(item.get("stub") or "").strip(),
-            }
-            for item in (data.get("external_dependencies") or [])
-            if isinstance(item, dict)
-            and str(item.get("name") or "").strip()
-        ],
+        "external_dependencies": external_dependencies,
         "risks": _strings(data.get("risks")),
         "goals": _strings(data.get("goals"))
         or ([str(data.get("outcome") or "").strip()]
@@ -345,8 +361,8 @@ def write_task_spec(
             f"Project repositories:\n{repo_lines}\n\n"
             f"Repository file tree:\n{_context(layout, repo_id)}\n\n"
             + (
-                "The plan review rejected the previous version for this "
-                f"task:\n{review_issue}\n\n"
+                "The previous version was rejected for this concrete "
+                f"defect:\n{review_issue}\n\n"
                 if review_issue
                 else ""
             )
@@ -420,6 +436,13 @@ def write_task_spec(
         if finals:
             try:
                 parsed = _normalize_spec(finals[-1], intent)
+                problems = check_problems(
+                    layout,
+                    str(intent.get("repo_id") or ""),
+                    parsed.get("checks") or [],
+                )
+                if problems:
+                    raise SpecError("; ".join(problems))
                 break
             except SpecError as exc:
                 if retries >= 1:
@@ -441,8 +464,12 @@ def write_task_spec(
                 messages.append(
                     ModelMessage(
                         "user",
-                        "Return a complete JSON specification with explicit "
-                        "requirements, acceptance criteria and checks.",
+                        f"The specification is invalid: {exc}. Return a "
+                        "complete JSON specification. Every command check "
+                        "must run in the task repository "
+                        f"'{intent.get('repo_id') or 'project root'}' and "
+                        "must not point at files that exist only in another "
+                        "repository.",
                     )
                 )
                 retries += 1

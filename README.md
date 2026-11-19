@@ -174,7 +174,22 @@ daemon start and continues from its state file, up to three resumes. See
 **Task QA and milestones.** A task that the coding agent reports done is
 followed by an independent QA pass over the project's `environment.yaml`
 (`test`, then `e2e`) in the sandbox; a red gate fails the task with
-`docs/program/agent/<task>.qa.md`. `forgel plan` (or `/plan`) turns a
+`docs/program/agent/<task>.qa.md`. The `e2e` command is the program gate, not
+another unit run: it tests the whole construction, and the planner refuses a
+project that needs it (interacting repositories, a frontend/acceptance or
+mobile repository, or sibling mounts) without one. The e2e suite
+lives in the project's main repository, or in the control repository for a
+project that started multi-repo; a red e2e returns to the coding agent with the
+command, workdir and output. A database or cache covered by the unit-test
+framework does not by itself require a program e2e; a browser, a mobile
+simulator/emulator or an external tool without a standard harness is covered by
+a real-interface command check in the task specification. A mobile simulator or
+emulator is deferrable: when it is absent on the current machine, the e2e step
+is `skipped` with instructions and the task is not blocked; heavy tools are
+declared in `e2e_requires`. A red environment
+`test` is a project failure, not
+a code defect, and does not spend a coder rework. `forgel plan` (or `/plan`)
+turns a
 milestone goal into an ordered backlog of task intents; a separate
 requirements writer expands each intent into a formal specification under
 `docs/program/specs/<task>.md`, and a plan review checks the whole set against

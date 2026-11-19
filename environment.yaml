@@ -5,12 +5,18 @@
 # the package from `src`, and the suite creates git repositories, so the image
 # carries git.
 #
-# `e2e` is the offline self-hosting gate: it adopts a local fixture repository,
-# plans a milestone with the scripted model, runs one task through the coding
-# agent, task QA and review, and stops at the staging approval gate. It never
-# touches the network, Docker or cloud resources.
+# `e2e` is the program gate. The first command is the offline self-hosting
+# smoke: adopt a local fixture, plan a milestone, run one task through the
+# coding agent, QA and review, and stop at the approval gate. The second is
+# the cross-repository engine + Forgel Code gate. `mounts` exposes the client
+# repository to it as FORGEL_REPO_CODE (the real sibling path locally, /code
+# in the sandbox). Neither command touches the network, Docker or cloud
+# resources.
 build: environment
+mounts: [code]
 test: ["python -m unittest discover -s tests"]
-e2e: ["env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py"]
+e2e:
+  - "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py"
+  - "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py"
 env:
   PYTHONPATH: src

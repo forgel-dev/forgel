@@ -27,6 +27,7 @@ from .agent import build_context
 from .artifacts import write_text
 from .config import Settings
 from .environment import load_environment
+from .integration import integration_problem, integration_warning
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model_output import json_objects
@@ -233,6 +234,15 @@ Rules:
   implement, test and commit on its own.
 - Do not create tasks for production deploys, payments, secrets, data
   destruction or legal decisions.
+- If the project has interacting repositories (a dependency edge), a
+  frontend/acceptance or mobile repository, or sibling mounts, the environment
+  contract must declare e2e. A mobile repository needs a simulator/emulator;
+  a frontend repository needs a real browser. A missing simulator defers the
+  mobile e2e but must not stop planning. A database or cache covered by
+  the unit-test framework does not by itself require a program e2e; a browser
+  or an external tool without a standard test harness belongs in the
+  specification's real-interface check. The plan gate rejects a missing
+  program e2e for the hard cases; never plan around it or invent a substitute.
 - Work autonomously: do not ask questions; put assumptions in "notes".
 """
 
@@ -521,6 +531,16 @@ def plan_project(
         raise PlanningError("a milestone goal is required")
     max_tasks = max(1, min(int(max_tasks), MAX_TASKS))
     layout = ProjectLayout.detect(str(project["workspace"]))
+    try:
+        environment = load_environment(layout)
+    except Exception as exc:  # noqa: BLE001 - the contract is project data
+        raise PlanningError(f"environment contract: {exc}") from exc
+    problem = integration_problem(layout, environment)
+    if problem:
+        raise PlanningError(problem)
+    deferred = integration_warning(layout, environment)
+    if deferred:
+        log(f"[plan] {project['id']}: {deferred}")
     policy = peak.project_policy(settings, layout.control)
     if peak.should_defer(policy, hours=settings.peak_hours):
         raise PlanningError(
@@ -652,6 +672,13 @@ def plan_project(
     if parsed is None:
         raise PlanningError("the planner did not return a plan")
     notes, items, repositories = parsed
+    problem = integration_problem(layout, environment, repositories)
+    if problem:
+        raise PlanningError(problem)
+    deferred = integration_warning(layout, environment, repositories)
+    if deferred:
+        notes = notes + "\n\n## Integration deferred\n\n" + deferred
+        log(f"[plan] {project['id']}: {deferred}")
     plan_id = _plan_id(goal)
     task_language = language.detect(goal)
     used: set[str] = set()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import unittest
@@ -10,7 +11,13 @@ from unittest.mock import patch
 from forgel import tasks
 from forgel.approvals import awaits_approval, record_approval
 from forgel.config import Settings
-from forgel.daemon import project_is_done, run_daemon, run_once
+from forgel.daemon import (
+    _feedback_from,
+    handle_failure,
+    project_is_done,
+    run_daemon,
+    run_once,
+)
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger, new_project_id
 from forgel.model import ScriptedModelClient
@@ -19,6 +26,30 @@ from forgel.projects import create_project
 from forgel.tasks import create_task, get_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+SPEC = {
+    "problem": "The work is missing.",
+    "outcome": "The work exists.",
+    "scope": ["the work"],
+    "non_goals": [],
+    "requirements": ["Do the work"],
+    "acceptance": ["The work is present"],
+    "constraints": [],
+    "assumptions": [],
+    "risks": [],
+    "goals": ["The work is present"],
+    "user_decisions": [],
+    "user_stories": [],
+    "open_questions": [],
+    "affected_files": ["work.py"],
+    "related_documents": [],
+    "revision_history": ["1.0.0 — initial"],
+    "checks": [
+        {"criterion": "The work is present", "verification": "review"}
+    ],
+    "test_command": [],
+    "external_dependencies": [],
+}
 
 
 class DaemonTest(unittest.TestCase):
@@ -144,6 +175,117 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(stored["status"], "failed")
             self.assertEqual(
                 stored["result"]["failure"]["kind"], "infrastructure"
+            )
+
+    def test_qa_feedback_carries_the_command_workdir_and_output(
+        self,
+    ) -> None:
+        feedback = "\n".join(
+            _feedback_from(
+                {
+                    "qa": {
+                        "failure_kind": "code",
+                        "checks": [
+                            {
+                                "criterion": "The client tests pass",
+                                "verdict": "fail",
+                                "command": (
+                                    "python -m unittest tests.test_cli"
+                                ),
+                                "exit_code": 1,
+                                "repo": "code",
+                                "workdir": "/project/repos/code",
+                                "output": (
+                                    "ModuleNotFoundError: No module "
+                                    "named 'tests.test_cli'"
+                                ),
+                            }
+                        ],
+                    }
+                }
+            )
+        )
+        self.assertIn("python -m unittest tests.test_cli", feedback)
+        self.assertIn("/project/repos/code", feedback)
+        self.assertIn("ModuleNotFoundError", feedback)
+        self.assertIn("repository: code", feedback)
+
+    def test_a_spec_failure_rewrites_the_spec_without_a_coder_rework(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = self._settings(tmp)
+            settings = Settings(
+                home=base.home,
+                registry_path=base.registry_path,
+                templates_path=base.templates_path,
+                jurisdiction_path=base.jurisdiction_path,
+                qa_runtime="local",
+                task_reworks=2,
+            )
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+            project_id = create_project(
+                settings,
+                ledger,
+                "Spec rewrite",
+                "A demo brief.",
+                mode="brownfield",
+            )
+            project = ledger.get_project(project_id)
+            assert project is not None
+            layout = ProjectLayout.detect(project["workspace"])
+            set_entries(
+                layout,
+                [
+                    {
+                        "id": "main",
+                        "role": "application",
+                        "provider": "local",
+                        "url": "",
+                        "depends_on": [],
+                    }
+                ],
+            )
+            repo = layout.repo_path("main")
+            repo.mkdir(parents=True, exist_ok=True)
+            (repo / "README.md").write_text("demo\n", encoding="utf-8")
+            task = create_task(
+                layout, "Do work", ["A"], ["B"], repo_id="main"
+            )
+            tasks.update_task(
+                layout,
+                task["id"],
+                status="failed",
+                result={
+                    "summary": "task QA failed: bad check",
+                    "failure": {
+                        "kind": "spec",
+                        "message": (
+                            "check command references 'tests.test_cli', "
+                            "which exists in repository 'main' but not in "
+                            "the task repository 'code'"
+                        ),
+                    },
+                },
+            )
+            client = ScriptedModelClient([json.dumps(SPEC)])
+            handle_failure(
+                settings,
+                ledger,
+                project,
+                layout,
+                task["id"],
+                client,
+                lambda _m: None,
+            )
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "pending")
+            self.assertEqual(stored["result"]["spec_rework_count"], 1)
+            self.assertFalse(stored["result"].get("rework_count"))
+            self.assertTrue(
+                layout.artifact(stored["spec"]).exists()
             )
 
     def test_peak_hours_defer_model_work(self) -> None:

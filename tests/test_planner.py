@@ -58,7 +58,8 @@ def _spec_for(intent: dict) -> dict:
         "checks": [
             {
                 "criterion": "The outcome is observable",
-                "verification": "review",
+                "verification": "command",
+                "command": ["python", "-c", "print('ok')"],
             }
         ],
         "test_command": [],
@@ -549,7 +550,21 @@ class PlannerTest(unittest.TestCase):
                 }
             ]
         }
-        result = self._plan(payload)
+        result = self._plan(
+            payload,
+            specs=[
+                {
+                    "requirements": ["Write the docs"],
+                    "acceptance": ["The prose is accurate"],
+                    "checks": [
+                        {
+                            "criterion": "The prose is accurate",
+                            "verification": "review",
+                        }
+                    ],
+                }
+            ],
+        )
         self.assertEqual(
             result.tasks[0]["checks"][0]["verification"], "review"
         )
@@ -596,6 +611,18 @@ class PlannerTest(unittest.TestCase):
             ],
         }
         client = self._client(payload)
+        from forgel.artifacts import write_text
+        from forgel.environment import Environment, render_environment
+
+        write_text(
+            self.layout.control / "environment.yaml",
+            render_environment(
+                Environment(
+                    image="python:3.12-slim",
+                    e2e=("python -c \"print('e2e')\"",),
+                )
+            ),
+        )
         with patch(
             "forgel.planner.add_repository"
         ) as add, patch(
@@ -618,6 +645,80 @@ class PlannerTest(unittest.TestCase):
         )
         self.assertIn("## Repositories", artifact)
         self.assertIn("`web`", artifact)
+
+    def test_a_plan_that_adds_an_interacting_repository_requires_e2e(
+        self,
+    ) -> None:
+        payload = {
+            "notes": "Add the frontend repository first.",
+            "repositories": [
+                {
+                    "id": "web",
+                    "role": "frontend",
+                    "path": "/tmp/web",
+                    "create": False,
+                    "depends_on": ["main"],
+                }
+            ],
+            "tasks": [
+                {
+                    "title": "Add a page",
+                    "requirements": ["Add a page"],
+                    "acceptance": ["The page exists"],
+                    "repo_id": "web",
+                    "checks": [
+                        {
+                            "criterion": "The page exists",
+                            "verification": "review",
+                        }
+                    ],
+                }
+            ],
+        }
+        with self.assertRaises(PlanningError) as caught:
+            self._plan(payload)
+        self.assertIn("needs a program e2e", str(caught.exception))
+
+    def test_an_existing_interacting_project_requires_e2e(self) -> None:
+        set_entries(
+            self.layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                },
+                {
+                    "id": "code",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": ["main"],
+                },
+            ],
+        )
+        with self.assertRaises(PlanningError) as caught:
+            self._plan()
+        self.assertIn("needs a program e2e", str(caught.exception))
+
+    def test_a_mobile_project_defers_e2e_instead_of_blocking(self) -> None:
+        set_entries(
+            self.layout,
+            [
+                {
+                    "id": "main",
+                    "role": "mobile",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        result = self._plan()
+        self.assertIn("Integration deferred", result.notes)
+        self.assertIn("simulator", result.notes)
 
     def test_forward_dependency_is_rejected(self) -> None:
         payload = {
