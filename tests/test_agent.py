@@ -222,6 +222,8 @@ class AgentTest(unittest.TestCase):
 
     def test_persistent_change_request_without_reply_is_not_an_error(self) -> None:
         project = self._project("Gamma", "A gamma brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
         response = json.dumps(
             {
                 "kind": "change_request",
@@ -229,6 +231,7 @@ class AgentTest(unittest.TestCase):
                 "summary": "Expose a health endpoint.",
                 "requirements": ["Expose /health"],
                 "acceptance": ["GET /health returns 200"],
+                "repo_id": repo_id,
             }
         )
         client = ScriptedModelClient([response] * 4)
@@ -242,12 +245,15 @@ class AgentTest(unittest.TestCase):
 
     def test_change_request_is_recorded_as_an_artifact(self) -> None:
         project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        repo_id = manifest_entries(layout)[0]["id"]
         response = {
             "kind": "change_request",
             "reply": "I recorded the request.",
             "title": "Add a dark theme",
             "summary": "Support a dark theme on the landing page.",
             "acceptance": ["The theme can be toggled."],
+            "repo_id": repo_id,
         }
         client = ScriptedModelClient([json.dumps(response)])
         agent = ProjectAgent(self.settings, self.ledger, client)
@@ -256,7 +262,6 @@ class AgentTest(unittest.TestCase):
 
         self.assertEqual(result.kind, "change_request")
         self.assertIsNotNone(result.request)
-        self.assertIsNone(result.task_id)
         assert result.request is not None
         artifact = Path(project["workspace"]) / result.request
         self.assertTrue(artifact.exists())
@@ -277,6 +282,128 @@ class AgentTest(unittest.TestCase):
         stages = [event["stage"] for event in self.ledger.events(project["id"])]
         self.assertIn("request", stages)
         self.assertIn("agent", stages)
+
+    def test_an_unclear_target_asks_instead_of_guessing(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Unclear",
+            "A multi-repository brief.",
+            mode="brownfield",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                },
+                {
+                    "id": "code",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": ["main"],
+                },
+            ],
+        )
+        response = {
+            "kind": "change_request",
+            "reply": "I will change it.",
+            "title": "Fix the install guide",
+            "summary": "Use plain pip.",
+            "requirements": ["Use plain pip"],
+            "acceptance": ["The first install command uses pip"],
+            "repo_id": "",
+        }
+        client = ScriptedModelClient([json.dumps(response)])
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        result = agent.handle(project, "Поправь установку", "@tester")
+
+        self.assertEqual(result.kind, "answer")
+        self.assertIn("Which repository", result.text)
+        self.assertIsNone(result.request)
+        self.assertIsNone(result.task_id)
+
+    def test_the_agent_can_inspect_another_repository(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Inspect",
+            "A multi-repository brief.",
+            mode="brownfield",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                },
+                {
+                    "id": "code",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": ["main"],
+                },
+            ],
+        )
+        code = layout.repo_path("code")
+        source = code / "src" / "client.py"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(
+            "FORGEL-CODE-MARKER = 1\n", encoding="utf-8"
+        )
+        reading = json.dumps(
+            {
+                "kind": "action",
+                "action": "read_file",
+                "action_args": {
+                    "path": "src/client.py",
+                    "repo_id": "code",
+                },
+            }
+        )
+        final = json.dumps(
+            {
+                "kind": "change_request",
+                "reply": "I will update the install guide.",
+                "title": "Install Forgel Code with pip",
+                "summary": "Use plain pip.",
+                "requirements": ["Use plain pip"],
+                "acceptance": ["The first install command uses pip"],
+                "repo_id": "code",
+            }
+        )
+        client = ScriptedModelClient([reading, final])
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        result = agent.handle(
+            project, "По Forgel Code: замени pipx на pip", "@tester"
+        )
+
+        self.assertIsNotNone(result.task_id)
+        assert result.task_id is not None
+        task = get_task(layout, result.task_id)
+        assert task is not None
+        self.assertEqual(task["repo_id"], "code")
+        self.assertIn(
+            "FORGEL-CODE-MARKER", client.requests[1][-1].content
+        )
 
     def test_change_request_queues_a_task(self) -> None:
         project_id = create_project(

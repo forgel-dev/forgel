@@ -99,8 +99,12 @@ Before answering questions about the project, its documents or its code,
 inspect the repository yourself. Reply with exactly one JSON action:
 {"kind": "action", "action": "list_files", "action_args": {"path": ".", "repo_id": "main"}}
 {"kind": "action", "action": "read_file", "action_args": {"path": "PLAN.md", "repo_id": "main"}}
-Paths are relative and may not leave the repository. Read PLAN.md, README.md,
-FORGEL.md, docs and code instead of guessing. Do not read files under
+repo_id is any id from the repository map (for example "code"). Use
+list_files and read_file with that id to inspect any repository; the map
+itself only names the repositories.
+Paths are relative and may not leave the repository. Read the project
+documents, manifests and source code instead of guessing; use whichever files
+exist in the repository. Do not read files under
 docs/program: that is Forgel's process state, not project documentation. After
 the observation, return the final answer JSON.
 
@@ -111,6 +115,20 @@ Read only what the question needs: list a directory to discover names, then
 read specific files. Do not read the whole repository. Files already read are
 provided in the context; use them instead of re-reading unchanged files, and
 re-read only when you need a different part or the file changed.
+
+Determining the target repository is part of the task, not a lookup by name.
+For a change request:
+a) read the user's task and the conversation;
+b) inspect the candidate repositories themselves — list their files and read
+   their documentation, manifests and source code with the repository id —
+   and choose the repository whose actual contents match the work.
+The repository map is only an index of ids, roles and URLs; it does not
+describe what a repository contains. Never choose from a name, id or role
+alone. Inspect the contents of every plausible candidate before setting
+repo_id; when the user names a product, confirm the id against what the
+repository actually contains (a README is one source among the docs, manifests
+and code, not a required file). Record the evidence for the choice in
+"assumptions".
 
 The user is the product owner, not a Forgel developer. Answer from the
 project documents and code, not from Forgel's process metadata. For any
@@ -153,7 +171,7 @@ Reply in the language of the user's message. Return exactly one JSON object:
   "risks": ["what can make this fail or miss the goal"],
   "open_questions": ["only a question that cannot be decided reversibly"],
   "affected_files": ["path or area"],
-  "repo_id": "one of the repositories in program.yaml, or empty",
+  "repo_id": "the repository id for a change request; empty only when the repository choice needs the user's decision",
   "test_command": ["command", "arg"] or [],
   "assumptions": ["what you decided where the request was silent"]
 }
@@ -236,10 +254,24 @@ For a change request:
   data format, a protocol), record the relevant contract in the requirements
   or assumptions from its authoritative source; never leave the coder to
   guess it;
-- set repo_id from program.yaml. With several repositories, choose the one the
-  request most likely targets from the roles, dependency edges and recent
-  tasks, and record why in "assumptions"; do not ask which repository. Leave
-  repo_id empty only when nothing in the context points to one;
+- Choose the repository for a change request in this order:
+  1. one repository and nothing points elsewhere — use it;
+  2. the user asks to create a repository — use the repo_create or repo_add
+     action;
+  3. the task clearly needs a new repository — inspect the existing
+     repositories' contents first, then return kind=answer with the
+     recommendation and ask whether to create it or use an existing one;
+  4. the request names a repository or product — confirm the id by inspecting
+     that repository's contents (README, docs, manifests, source code), then
+     use it;
+  5. no name, but the request implies where it belongs — inspect the candidate
+     repositories' contents and use the one whose actual work matches; if it
+     spans several repositories, return the plan action instead of a
+     change_request;
+  6. none of the above (several repositories, no clear target) — after
+     inspecting the candidates, return kind=answer asking which repository to
+     use. Do not guess.
+  Record the choice in "assumptions" when it was inferred;
 - set test_command only when the project's test command is evident from the
   context, otherwise leave it empty;
 - the daemon will run the task with a separate coding agent; you cannot edit
@@ -548,11 +580,7 @@ def build_context(
         f"Brief: {_plain_brief(project.get('brief', ''))}",
     ]
     repos = manifest_entries(layout)
-    repo_lines = "\n".join(
-        f"- {entry['id']} ({entry.get('role', 'application')})"
-        for entry in repos
-    ) or "- none"
-    parts.append("Repositories:\n" + repo_lines)
+    parts.append("Repositories:\n" + _repo_map(repos))
 
     task_items = tasks.list_tasks(layout)
     if task_items:
@@ -605,6 +633,23 @@ def build_context(
 def _slug(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug[:60] or "request"
+
+
+def _repo_map(repos: list[dict[str, Any]]) -> str:
+    """Ids, roles and locations the model can inspect by repo_id."""
+
+    lines: list[str] = []
+    for entry in repos:
+        location = str(
+            entry.get("url") or entry.get("path") or ""
+        ).strip()
+        line = (
+            f"- {entry['id']} ({entry.get('role') or 'application'})"
+        )
+        if location:
+            line += f" — {location}"
+        lines.append(line)
+    return "\n".join(lines) or "- none"
 
 
 def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
@@ -1168,23 +1213,35 @@ class ProjectAgent:
         request = None
         task_id = None
         if answer["kind"] == "change_request":
-            request = self._record_request(
-                layout, project, text, actor, answer
-            )
-            task = self._queue_task(layout, text, answer, spec=request)
-            if task is not None:
-                task_id = str(task["id"])
-                result_text += (
-                    f"\n\nRecorded as `{request}`. Queued task "
-                    f"`{task_id}` for repository `{task['repo_id']}`; the "
-                    "daemon will start it and report back."
+            known_repo_ids = {str(entry["id"]) for entry in repos}
+            chosen = str(answer.get("repo_id") or "")
+            if len(repos) > 1 and chosen not in known_repo_ids:
+                # Case 6: several repositories and no clear target. Ask the
+                # user instead of recording a request that cannot be queued.
+                result_text = (
+                    "Which repository should I use?\n"
+                    + _repo_map(repos)
                 )
+                answer["kind"] = "answer"
             else:
-                result_text += (
-                    f"\n\nRecorded as `{request}`. I did not queue a task: "
-                    "the project has several repositories and I could not "
-                    "choose one. Tell me which repository to use."
+                request = self._record_request(
+                    layout, project, text, actor, answer
                 )
+                task = self._queue_task(layout, text, answer, spec=request)
+                if task is not None:
+                    task_id = str(task["id"])
+                    result_text += (
+                        f"\n\nRecorded as `{request}`. Queued task "
+                        f"`{task_id}` for repository `{task['repo_id']}`; the "
+                        "daemon will start it and report back."
+                    )
+                else:
+                    result_text += (
+                        f"\n\nRecorded as `{request}`. I did not queue a "
+                        "task: the project has several repositories and I "
+                        "could not choose one. Tell me which repository to "
+                        "use."
+                    )
 
         append_history(
             layout, "assistant", result_text, actor, session=session
