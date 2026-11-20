@@ -792,10 +792,16 @@ def audit_release(
     audit["at"] = _now()
     if client is None:
         audit["verdict"] = "skipped"
-        audit["summary"] = "no model is configured; the audit was skipped"
+        audit["summary"] = (
+            "no model is configured for the release audit; "
+            "the release is not published without an audit"
+        )
         release["audit"] = audit
+        release["status"] = "blocked"
+        release["detail"] = audit["summary"]
         save_release(layout, release)
-        return True
+        log(f"[release] {release['id']}: audit requires a model")
+        return False
     messages = [
         ModelMessage("system", AUDIT_PROMPT),
         ModelMessage(
