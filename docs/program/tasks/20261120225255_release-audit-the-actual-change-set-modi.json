@@ -1,0 +1,33 @@
+{
+  "id": "20261120225255_release-audit-the-actual-change-set-modi",
+  "title": "Release audit: The actual change set modifies only tests/test_extras.py. It does not include th",
+  "spec": "",
+  "summary": "Include the missing implementation and README changes in the release diff, or provide head-state evidence that they already exist and correct the task/release records; then rerun the packaging tests.",
+  "requirements": [
+    "The actual change set modifies only tests/test_extras.py. It does not include the pyproject.toml, _build_backend.py, or README.md changes that the task lists and R1/R3/R8 require, so the release does not evidence the declared test extra, the emitted Provides-Extra/Requires-Dist metadata, or the README [test] install instructions. The review's claim that those files changed is contradicted by the repository diff."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The actual change set modifies only tests/test_extras.py. It does not include the pyproject.toml, _build_backend.py, or README.md changes that the task lists and R1/R3/R8 require, so the release does not evidence the declared test extra, the emitted Provides-Extra/Requires-Dist metadata, or the README [test] install instructions. The review's claim that those files changed is contradicted by the repository diff.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code 0.1.0",
+  "release_id": "",
+  "release_class": "minor",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "cancelled",
+  "created_at": "2026-11-20T22:52:55+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {
+    "summary": "cancelled: the audit was re-run against the complete change set"
+  }
+}

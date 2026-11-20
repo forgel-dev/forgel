@@ -6,7 +6,7 @@
   "release_class": "minor",
   "plan_id": "",
   "created_at": "2026-11-20T22:51:30+00:00",
-  "status": "planned",
+  "status": "tagged",
   "tasks": [
     "20261120002849_declare-test-dependencies-in-pyproject-t"
   ],
@@ -17,22 +17,27 @@
       "base_source": "no release history",
       "preset": "python",
       "planned_version": "0.1.0",
-      "version": "",
-      "status": "pending",
-      "tag": "",
-      "sha": "",
+      "version": "0.1.0",
+      "status": "tagged",
+      "tag": "v0.1.0",
+      "sha": "27fd4c278e053e93002a39281b3d19b802518666",
       "release": "",
-      "detail": ""
+      "detail": "no API token for a GitHub release: no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session",
+      "version_files": []
     }
   },
   "audit": {
-    "rounds": 0,
-    "verdict": "",
-    "summary": "",
+    "rounds": 1,
+    "verdict": "skipped",
+    "summary": "no model is configured; the audit was skipped",
     "report": "",
-    "task_ids": []
+    "task_ids": [
+      "20261120002849_declare-test-dependencies-in-pyproject-t"
+    ],
+    "at": "2026-11-20T22:53:55+00:00"
   },
   "control_push": {},
-  "finalized_at": "",
-  "detail": ""
+  "finalized_at": "2026-11-20T22:54:03+00:00",
+  "detail": "",
+  "next_at": ""
 }

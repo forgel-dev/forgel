@@ -3,7 +3,7 @@
 - Project: `forgel-1d2bf685`
 - Request: Forgel Code 0.1.0
 - Class: minor
-- Status: planned
+- Status: tagged
 - Created: 2026-11-20T22:51:30+00:00
 
 
@@ -13,7 +13,7 @@ Publish Forgel Code 0.1.0: declare the test dependencies in pyproject.toml and s
 
 ## Repositories
 
-- `code` — pending, preset python, planned 0.1.0
+- `code` — tagged, preset python, releases 0.1.0
 
 ## Tasks
 
@@ -21,6 +21,6 @@ Publish Forgel Code 0.1.0: declare the test dependencies in pyproject.toml and s
 
 ## Audit
 
-- Rounds: 0
-- Verdict: not run
+- Rounds: 1
+- Verdict: skipped
 - Report: `—`

@@ -1,0 +1,33 @@
+{
+  "id": "20261120225255_release-audit-r13-requires-tests-test-re",
+  "title": "Release audit: R13 requires tests/test_readme_install.py to gain an assertion that no editable-",
+  "spec": "",
+  "summary": "Add the no-editable-install assertion to tests/test_readme_install.py, include it in the release diff, and run the README install tests.",
+  "requirements": [
+    "R13 requires tests/test_readme_install.py to gain an assertion that no editable-install instruction appears anywhere in README.md. That file is not in the change set and no test output identifies the new assertion, leaving the required guard unverified."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: R13 requires tests/test_readme_install.py to gain an assertion that no editable-install instruction appears anywhere in README.md. That file is not in the change set and no test output identifies the new assertion, leaving the required guard unverified.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code 0.1.0",
+  "release_id": "",
+  "release_class": "minor",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "cancelled",
+  "created_at": "2026-11-20T22:52:55+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {
+    "summary": "cancelled: the audit was re-run against the complete change set"
+  }
+}
