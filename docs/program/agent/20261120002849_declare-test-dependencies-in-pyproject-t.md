@@ -1,10 +1,10 @@
 # Agent Run: Declare test dependencies in pyproject.toml
 
 - Task: `20261120002849_declare-test-dependencies-in-pyproject-t`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 36
-- Finished: 2026-11-20T00:43:22+00:00
+- Steps: 26
+- Finished: 2026-11-20T00:54:52+00:00
 
 ## Requirements
 
@@ -25,26 +25,25 @@
 - The single source of the extras is `pyproject.toml`; the backend derives the metadata from it rather than repeating the version.
 - The README's existing Tests section is the place to document the extra; the rest of the install documentation is not restructured.
 - The existing offline-install test style (`--no-index --no-build-isolation --no-deps` into a temporary `--target`) is the pattern for the new extras test.
-- The lower bound is `pytest>=7`, as recorded at intake; only the shape (lower bound, no cap) is binding.
-- The requirement marker is spelled `extra == "test"` with double quotes and one space before the semicolon.
-- `Metadata-Version` stays `2.1`; both new field names are legal there.
-- The README install line uses the tagged `v0.1.1` source archive URL with `[test]`, consistent with the tag already used by the update line.
-- The `## Tests` exception in the doc guard requires the `pip install` line to be inside that section, to carry `[test]` and to not use `--user`; the `## Install` section still forbids every alternative path.
-- The fallback is exercised by setting `sys.modules['tomllib'] = None` and reloading the backend from a copied tree, which triggers the real `ImportError` path on any interpreter.
+- The lower bound is `pytest>=7` (lower bound only, no upper cap, as required by the spec's shape).
+- `Metadata-Version` stays `2.1`; both `Provides-Extra` and `Requires-Dist` are legal there.
+- The marker is spelled `extra == "test"` with double quotes and one space after the requirement.
+- The README example uses the tagged git archive URL already present in the file (`v0.1.1`) rather than a local wheel path.
+- The doc guard's new exception is keyed to the `## Tests` section and to a line containing `[test]`, so no other installation path becomes legal.
 
 ## Test Removals
 
-- tests/test_readme_install.py::ChecksFailAsDesignedTest::test_accepts_the_good_shape: replaced -> tests/test_readme_install.py::ChecksFailAsDesignedTest::test_accepts_the_extra_install_inside_the_tests_section
+- none
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 36
-- Estimated input tokens (all calls): 1751584
-- Provider input/output tokens: 1863057 / 93626
-- Estimated prompt at the end: 60771 tokens
+- Model calls: 26
+- Estimated input tokens (all calls): 656721
+- Provider input/output tokens: 696950 / 23989
+- Estimated prompt at the end: 36580 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261120002849_declare-test-dependencies-in-pyproject-t.md`)
@@ -247,7 +246,7 @@ The repository has no declared way to obtain the tools its own test suite needs.
 
 ## Summary
 
-Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = ["pytest>=7"]`, runtime `dependencies = []` untouched), made `_build_backend.py` derive `Provides-Extra: test` and `Requires-Dist: pytest>=7; extra == "test"` from that table so wheel METADATA, sdist PKG-INFO and `prepare_metadata_for_build_wheel` share one source, and added an in-tree TOML fallback for Python 3.9/3.10 (no `tomllib`, no new build requirement). Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` and running `python -m pytest -q` while keeping `python -m unittest discover -s tests` as the no-install path. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line that carries `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install, and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between pyproject and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Tested with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty.; final test command exited 124
+Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = ["pytest>=7"]`) while `[project] dependencies` stays `[]`. `_build_backend.py` now reads that table back out of `pyproject.toml` (via stdlib `tomllib` on 3.11+, and an in-tree parser limited to the extras-table shape on 3.9/3.10) and emits `Provides-Extra: test` plus `Requires-Dist: pytest>=7; extra == "test"` from the single `_metadata()` text that feeds the wheel `METADATA`, the sdist `PKG-INFO` and `prepare_metadata_for_build_wheel`; the backend still declares `requires = []` and no third-party build dependency. Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` followed by `python -m pytest -q`, keeping `python -m unittest discover -s tests` as the no-install path, and kept the editable-install caveat. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line carrying `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between `pyproject.toml` and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Verified with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty. The earlier failure was a wall-clock timeout on the aggregated command, not a test failure: the same command completes in about 50s here, and every module was also run separately.
 
 ## Files Changed
 
@@ -259,50 +258,47 @@ Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependenc
 
 ## Commands
 
-- `["python3", "-c", "import sys, pytest; print(sys.version); print(pytest.__version__)"]` → exit 0
-- `["python3", "-m", "pytest", "-q", "tests/test_extras.py", "-k", "pyproject or wheel or drift or single_source or sdist or fallback"]` → exit 0
-- `["python3", "-m", "pytest", "-q", "tests/test_extras.py", "-k", "offline_install"]` → exit 5
-- `["python3", "-m", "pytest", "-q", "tests/test_extras.py"]` → exit 0
-- `["python3", "-m", "pytest", "-q", "tests/test_readme_install.py"]` → exit 0
-- `["python3", "-m", "pytest", "-q"]` → exit 0
-- `["git", "status", "--porcelain", "--", "forgel_code"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "tests/test_extras.py", "--durations=20"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "--durations=25"]` → exit 124
+- `["python3", "-m", "pytest", "-q", "tests/test_readme_install.py", "tests/test_packaging.py", "tests/test_packaging_types.py", "--durations=10"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "tests/test_install.py", "--durations=20"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "tests/test_cli.py", "tests/test_cli_extra.py", "tests/test_stub_contract.py", "--durations=15"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "tests/test_cli.py", "tests/test_cli_extra.py", "tests/test_extras.py", "tests/test_stub_contract.py", "--durations=5"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider"]` → exit 0
 - `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
 - `["python3", "-m", "pytest", "-q"]` → exit 0
-- `["python3", "-m", "pytest", "-q"]` → exit 124
+- `["python3", "-m", "pytest", "-q"]` → exit 0
 
 ## Final Test Output
 
 ```
-timed out after 120s
 ...................................................... [ 33%]
 ................................................. [ 63%]
-........
+............................................................                                                             [100%]
+163 passed, 137 subtests passed in 48.94s
+
 ```
 
 ## Actions
 
 - read_file: pyproject.toml
-- read_file: _build_backend.py
-- read_file: README.md
-- read_file: tests/test_packaging.py
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_install.py
-- read_file: forgel_code/__init__.py
-- read_file: tests/test_packaging_types.py
-- run: ['python3', '-c', 'import sys, pytest; print(sys.version); print(pytest.__version__)']
-- write_file: pyproject.toml
-- write_file: _build_backend.py
-- write_file: README.md
-- write_file: tests/test_readme_install.py
-- write_file: tests/test_extras.py
-- write_file: tests/test_extras.py
-- run: ['python3', '-m', 'pytest', '-q', 'tests/test_extras.py', '-k', 'pyproject or wheel or drift or single_source or sdist or fallback']
-- run: ['python3', '-m', 'pytest', '-q', 'tests/test_extras.py', '-k', 'offline_install']
 - read_file: tests/test_extras.py
-- run: ['python3', '-m', 'pytest', '-q', 'tests/test_extras.py']
-- run: ['python3', '-m', 'pytest', '-q', 'tests/test_readme_install.py']
-- run: ['python3', '-m', 'pytest', '-q']
-- run: ['git', 'status', '--porcelain', '--', 'forgel_code']
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_extras.py
+- run: ['python3', '-m', 'pytest', '-q', 'tests/test_extras.py', '--durations=20']
+- run: ['python3', '-m', 'pytest', '-q', '--durations=25']
+- run: ['python3', '-m', 'pytest', '-q', 'tests/test_readme_install.py', 'tests/test_packaging.py', 'tests/test_packaging_types.py', '--durations=10']
+- run: ['python3', '-m', 'pytest', '-q', 'tests/test_install.py', '--durations=20']
+- run: ['python3', '-m', 'pytest', '-q', 'tests/test_cli.py', 'tests/test_cli_extra.py', 'tests/test_stub_contract.py', '--durations=15']
 - read_file: .gitignore
+- list_files
+- run: ['python3', '-m', 'pytest', '-q', 'tests/test_cli.py', 'tests/test_cli_extra.py', 'tests/test_extras.py', 'tests/test_stub_contract.py', '--durations=5']
+- run: ['python3', '-m', 'pytest', '-q', '-p', 'no:cacheprovider']
+- read_file: README.md
+- read_file: _build_backend.py
+- read_file: _build_backend.py
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_readme_install.py
+- read_file: tests/stub_engine.py
+- run: ['git', 'status', '--porcelain']
 - run: ['python3', '-m', 'pytest', '-q']
