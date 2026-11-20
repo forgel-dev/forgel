@@ -29,6 +29,7 @@ DEFAULT_TEMPLATE_REPOS: tuple[dict[str, Any], ...] = (
         "url": "",
         "depends_on": [],
         "contracts": {"publishes": ["openapi.yaml"]},
+        "preset": "python",
     },
     {
         "id": "web",
@@ -37,6 +38,7 @@ DEFAULT_TEMPLATE_REPOS: tuple[dict[str, Any], ...] = (
         "url": "",
         "depends_on": ["api"],
         "contracts": {"consumes": ["api/openapi.yaml"]},
+        "preset": "node",
     },
     {
         "id": "infra",
@@ -93,6 +95,8 @@ def _normalize(entry: dict[str, Any]) -> dict[str, Any]:
     }
     if entry.get("path"):
         normalized["path"] = str(entry["path"])
+    if entry.get("preset"):
+        normalized["preset"] = str(entry["preset"])
     return normalized
 
 
@@ -177,6 +181,8 @@ def render_program(
         depends_on = entry.get("depends_on") or []
         rendered = ", ".join(depends_on) if depends_on else ""
         lines.append(f"    depends_on: [{rendered}]")
+        if entry.get("preset"):
+            lines.append(f"    preset: {entry['preset']}")
         contracts = entry.get("contracts") or {}
         if contracts:
             lines.append("    contracts:")

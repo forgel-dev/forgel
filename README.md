@@ -509,6 +509,16 @@ changed behaviour) the minor number. A major release is only meaningful from
 the same release for up to two rounds; after that the release is blocked and
 reported.
 
+Version manifests are written by the repository's runtime preset, not by the
+release train. A repository selects one explicitly with `preset:` in
+`program.yaml`, or the runtime detects it from `pyproject.toml`/`setup.cfg`/
+`requirements.txt`/`manage.py` (Python), `package.json` (Node) or `Gemfile`
+(Rails). The Python preset updates static `pyproject.toml`/`setup.cfg`
+metadata and `__version__` constants; the Node preset updates the root and
+`apps/*/package.json`; the Rails preset updates `API_VERSION` in
+`config/initializers/version.rb`. Presets are data under `presets` in the
+registry; a project can add its own manifest layout there and select it by id.
+
 The explicit command remains for a manual release outside the request flow.
 It tags every code repository at a committed SHA and, when an API token is
 available (GitHub App, PAT or `gh` session), creates the provider release

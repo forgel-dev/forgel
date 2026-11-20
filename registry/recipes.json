@@ -42,5 +42,50 @@
       },
       "template": "django-drf-react"
     }
+  ],
+  "presets": [
+    {
+      "id": "python",
+      "description": "Python package: pyproject/setup metadata plus __version__ in the package.",
+      "detect": ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "manage.py"],
+      "read": [
+        {"path": "pyproject.toml", "kind": "toml", "section": "project", "key": "version"},
+        {"path": "setup.cfg", "kind": "ini", "section": "metadata", "key": "version"},
+        {"path": "VERSION", "kind": "text"},
+        {"path": "*/__init__.py", "kind": "regex", "pattern": "(?m)^__version__\\s*=\\s*[\"']([^\"']+)[\"']"},
+        {"path": "src/*/__init__.py", "kind": "regex", "pattern": "(?m)^__version__\\s*=\\s*[\"']([^\"']+)[\"']"}
+      ],
+      "write": [
+        {"path": "pyproject.toml", "kind": "toml", "section": "project", "key": "version"},
+        {"path": "setup.cfg", "kind": "ini", "section": "metadata", "key": "version"},
+        {"path": "VERSION", "kind": "text"},
+        {"path": "*/__init__.py", "kind": "regex", "pattern": "(?m)^__version__\\s*=\\s*[\"']([^\"']+)[\"']", "replacement": "__version__ = \"{version}\""},
+        {"path": "src/*/__init__.py", "kind": "regex", "pattern": "(?m)^__version__\\s*=\\s*[\"']([^\"']+)[\"']", "replacement": "__version__ = \"{version}\""}
+      ]
+    },
+    {
+      "id": "node",
+      "description": "Node package or workspace: the root and app package manifests.",
+      "detect": ["package.json"],
+      "read": [
+        {"path": "package.json", "kind": "json", "key": "version"},
+        {"path": "apps/*/package.json", "kind": "json", "key": "version"}
+      ],
+      "write": [
+        {"path": "package.json", "kind": "json", "key": "version"},
+        {"path": "apps/*/package.json", "kind": "json", "key": "version"}
+      ]
+    },
+    {
+      "id": "rails",
+      "description": "Rails application: API_VERSION in the version initializer.",
+      "detect": ["Gemfile"],
+      "read": [
+        {"path": "config/initializers/version.rb", "kind": "ruby", "key": "API_VERSION"}
+      ],
+      "write": [
+        {"path": "config/initializers/version.rb", "kind": "ruby", "key": "API_VERSION"}
+      ]
+    }
   ]
 }

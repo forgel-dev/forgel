@@ -41,6 +41,14 @@ from .model import (
 )
 from .model_output import json_objects
 from .program_manifest import entries as manifest_entries
+from .presets import (
+    PresetError,
+    find_preset,
+    load_presets,
+    read_versions,
+    write_paths,
+    write_version,
+)
 from .providers import ProviderError, get_provider
 from .providers.github import GithubProvider
 from .providers.github_api import GithubAPIError
@@ -199,6 +207,48 @@ def discover_planned(repo: Path) -> str:
     return _format(max(planned)) if planned else ""
 
 
+def _preset_id(
+    settings: Settings | None,
+    repo: Path,
+    entry: Mapping[str, Any],
+) -> str:
+    if settings is None:
+        return ""
+    try:
+        preset = find_preset(
+            load_presets(settings.registry_path), repo, entry
+        )
+    except PresetError:
+        return ""
+    return preset.id if preset is not None else ""
+
+
+def _preset_base(
+    settings: Settings | None,
+    repo: Path,
+    entry: Mapping[str, Any],
+    base: str | None,
+    source: str,
+) -> tuple[str | None, str]:
+    if settings is None:
+        return base, source
+    try:
+        presets = load_presets(settings.registry_path)
+        values = read_versions(presets, repo, entry)
+    except PresetError:
+        return base, source
+    current = parse_version(base or "")
+    for value, origin in values:
+        parsed = parse_version(value)
+        if parsed is None:
+            continue
+        if current is None or parsed > current:
+            base = _format(parsed)
+            source = origin
+            current = parsed
+    return base, source
+
+
 def _version_after(base: str | None, planned: str, release_class: str) -> str:
     kind = str(release_class or "").strip().lower()
     if kind == "major":
@@ -323,6 +373,8 @@ def render_plan(
         version = str(repo.get("version") or "")
         status = str(repo.get("status") or "pending")
         line = f"- `{repo_id}` — {status}"
+        if repo.get("preset"):
+            line += f", preset {repo['preset']}"
         if base:
             line += f", base {base}"
         if version:
@@ -375,6 +427,7 @@ def plan_release(
     task_items: list[dict[str, Any]],
     plan_id: str = "",
     ledger: Ledger | None = None,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     """Create the release plan for a user request and its tasks."""
 
@@ -382,6 +435,9 @@ def plan_release(
     if kind not in RELEASE_CLASSES:
         kind = "minor"
     grouped = _repo_tasks({}, task_items)
+    entries = {
+        str(entry["id"]): entry for entry in manifest_entries(layout)
+    }
     repos: dict[str, dict[str, Any]] = {}
     for repo_id in grouped:
         repo = layout.repo_path(repo_id)
@@ -392,10 +448,16 @@ def plan_release(
             except git_ops.GitOperationError:
                 base_sha = ""
         base_version, source = discover_base(repo)
+        base_version, source = _preset_base(
+            settings, repo, entries.get(repo_id, {}), base_version, source
+        )
         repos[repo_id] = {
             "base_sha": base_sha,
             "base_version": base_version or "",
             "base_source": source,
+            "preset": _preset_id(
+                settings, repo, entries.get(repo_id, {})
+            ),
             "planned_version": next_version(base_version, kind),
             "version": "",
             "status": "pending",
@@ -979,12 +1041,15 @@ def _repo_plan(
     repo_id: str,
     version: str,
     items: list[dict[str, Any]],
+    preset_id: str = "",
+    version_files: list[str] | None = None,
 ) -> str:
     staged = "\n".join(
         f"- {task.get('title')} (`{task.get('id')}`, "
         f"{task.get('status')})"
         for task in items
     )
+    files = ", ".join(f"`{path}`" for path in (version_files or []))
     return f"""# Release plan {version}
 
 - Repository: `{repo_id}`
@@ -992,6 +1057,8 @@ def _repo_plan(
 - Release train: `{release.get('id')}`
 - Request: {release.get('title')}
 - Class: {release.get('release_class')}
+- Preset: {preset_id or 'none'}
+- Version files: {files or 'none'}
 - Created: {release.get('created_at')}
 
 ## What is included
@@ -1010,17 +1077,22 @@ def _repo_record(
     version: str,
     items: list[dict[str, Any]],
     release_url: str,
+    preset_id: str = "",
+    version_files: list[str] | None = None,
 ) -> str:
     staged = "\n".join(
         f"- {task.get('title')} (`{task.get('id')}`)"
         for task in items
     )
+    files = ", ".join(f"`{path}`" for path in (version_files or []))
     return f"""# Release {version}
 
 - Tag: `v{version}`
 - Date: {_today()}
 - Project: `{release.get('project')}`
 - Release train: `{release.get('id')}`
+- Preset: {preset_id or 'none'}
+- Version files: {files or 'none'}
 - GitHub release: {release_url or 'pending'}
 
 ## Tasks
@@ -1118,6 +1190,16 @@ def _finalize_repo(
         )
         return result
     base_version, source = discover_base(repo)
+    try:
+        preset_list = load_presets(settings.registry_path)
+        base_version, source = _preset_base(
+            settings, repo, entry, base_version, source
+        )
+    except PresetError as exc:
+        result.update(
+            {"status": "failed", "detail": f"preset: {exc}"}
+        )
+        return result
     version = str(result.get("version") or "")
     if not version:
         planned = discover_planned(repo)
@@ -1131,11 +1213,21 @@ def _finalize_repo(
         result["base_source"] = source
         if planned:
             result["planned_version"] = planned
+    try:
+        preset_paths = write_paths(
+            preset_list, repo, entry, version
+        )
+    except PresetError as exc:
+        result.update(
+            {"status": "failed", "detail": f"preset: {exc}"}
+        )
+        return result
     tag = f"v{version}"
     allowed = {
         CHANGELOG,
         f"{REPO_RELEASES_DIR}/{version}/plan.md",
         f"{REPO_RELEASES_DIR}/{version}/release.md",
+        *preset_paths,
     }
     dirty = [
         path
@@ -1150,6 +1242,17 @@ def _finalize_repo(
             }
         )
         return result
+    try:
+        preset_id, version_files = write_version(
+            preset_list, repo, entry, version
+        )
+    except PresetError as exc:
+        result.update(
+            {"status": "failed", "detail": f"preset: {exc}"}
+        )
+        return result
+    result["preset"] = preset_id
+    result["version_files"] = version_files
     section, entries, subsection = _changelog_parts(
         release, version, items
     )
@@ -1158,11 +1261,25 @@ def _finalize_repo(
     )
     write_text(
         repo / REPO_RELEASES_DIR / version / "plan.md",
-        _repo_plan(release, repo_id, version, items),
+        _repo_plan(
+            release,
+            repo_id,
+            version,
+            items,
+            preset_id,
+            version_files,
+        ),
     )
     write_text(
         repo / REPO_RELEASES_DIR / version / "release.md",
-        _repo_record(release, version, items, ""),
+        _repo_record(
+            release,
+            version,
+            items,
+            "",
+            preset_id,
+            version_files,
+        ),
     )
     sha = git_ops.commit_all(repo, f"Release v{version}")
     result["sha"] = sha
@@ -1229,7 +1346,14 @@ def _finalize_repo(
     if url:
         write_text(
             repo / REPO_RELEASES_DIR / version / "release.md",
-            _repo_record(release, version, items, url),
+            _repo_record(
+                release,
+                version,
+                items,
+                url,
+                str(result.get("preset") or ""),
+                list(result.get("version_files") or []),
+            ),
         )
         try:
             git_ops.commit_all(repo, f"Record release v{version}")
@@ -1320,7 +1444,8 @@ def finalize_release(
 
 def _render_release_record(release: Mapping[str, Any]) -> str:
     rows = "\n".join(
-        f"| `{repo_id}` | {data.get('base_version') or '—'} | "
+        f"| `{repo_id}` | {data.get('preset') or '—'} | "
+        f"{data.get('base_version') or '—'} | "
         f"{data.get('version') or '—'} | {data.get('tag') or '—'} | "
         f"{data.get('sha') or '—'} | {data.get('release') or '—'} | "
         f"{data.get('detail') or '—'} |"
@@ -1336,9 +1461,9 @@ def _render_release_record(release: Mapping[str, Any]) -> str:
 
 ## Repositories
 
-| Repository | Base | Version | Tag | Commit | GitHub release | Detail |
-|---|---|---|---|---|---|---|
-{rows or '| — | — | — | — | — | — | — |'}
+| Repository | Preset | Base | Version | Tag | Commit | GitHub release | Detail |
+|---|---|---|---|---|---|---|---|
+{rows or '| — | — | — | — | — | — | — | — |'}
 """
 
 

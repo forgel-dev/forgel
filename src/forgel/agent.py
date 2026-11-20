@@ -1341,6 +1341,7 @@ class ProjectAgent:
                         release_class=release_class,
                         task_items=[task],
                         ledger=self.ledger,
+                        settings=self.settings,
                     )
                 result_text += (
                     f"\n\nRecorded as `{request}`. Queued task "

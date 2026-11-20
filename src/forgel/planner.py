@@ -905,6 +905,7 @@ def plan_project(
         task_items=task_records,
         plan_id=plan_id,
         ledger=ledger,
+        settings=settings,
     )
     ledger.append_event(
         str(project["id"]),

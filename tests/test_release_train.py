@@ -225,6 +225,7 @@ class ReleaseTrainTest(unittest.TestCase):
             release_class=release_class,
             task_items=[stored],
             ledger=self.ledger,
+            settings=self.settings,
         )
         return release, stored
 
@@ -561,6 +562,55 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertIn(
             releases[api_release["id"]]["status"], {"tagged", "released"}
         )
+
+    def test_a_release_updates_the_runtime_preset_manifest(self) -> None:
+        api = self.layout.repo_path("api")
+        write_text(
+            api / "package.json",
+            json.dumps({"name": "api", "version": "1.2.3"}) + "\n",
+        )
+        _run(api, "add", "package.json")
+        _run(
+            api,
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "package manifest",
+        )
+        _run(api, "push", "origin", "main")
+        release, _task = self._release(
+            repo_id="api",
+            release_id="20261120140000_api",
+            title="API change",
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient([PASS_AUDIT]),
+            log=lambda _m: None,
+        )
+
+        stored = list_releases(self.layout)[0]
+        self.assertEqual(stored["repos"]["api"]["preset"], "node")
+        self.assertEqual(stored["repos"]["api"]["version"], "1.3.0")
+        self.assertIn(
+            '"version": "1.3.0"',
+            (api / "package.json").read_text(encoding="utf-8"),
+        )
+        remote = _run(
+            self.remotes["api"],
+            "show",
+            "main:package.json",
+        ).stdout
+        self.assertIn('"version": "1.3.0"', remote)
+        self.assertEqual(release["id"], stored["id"])
 
     def test_a_failing_audit_queues_a_fix_task(self) -> None:
         release, _task = self._release()

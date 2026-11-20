@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .presets import PresetError, load_presets
+
 DEFAULT_TEMPLATES_PATH = Path(__file__).resolve().parent / "templates"
 KNOWN_STATUSES = frozenset({"draft", "conformant", "deprecated"})
 
@@ -125,6 +127,10 @@ def load_registry(
         )
     if not recipes:
         raise RegistryError(f"Registry contains no recipes: {path}")
+    try:
+        load_presets(path)
+    except PresetError as exc:
+        raise RegistryError(str(exc)) from exc
     validate_recipes(recipes, templates_path)
     return recipes
 
