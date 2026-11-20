@@ -1470,7 +1470,13 @@ class CommandRouter:
 
     # ------------------------------------------------------------ config
 
-    def _plan(self, chat_id: int, rest: str, _actor: str) -> Reply:
+    def _plan(
+        self,
+        chat_id: int,
+        rest: str,
+        _actor: str,
+        release_class: str = "minor",
+    ) -> Reply:
         project = self._selected(chat_id)
         if isinstance(project, Reply):
             return project
@@ -1534,6 +1540,7 @@ class CommandRouter:
                 project,
                 goal,
                 dry_run=dry_run,
+                release_class=release_class,
             )
         except PlanningError as exc:
             return self._error(chat_id, "chat_error", error=exc)
@@ -1781,7 +1788,16 @@ class CommandRouter:
             goal = str(args.get("goal") or "").strip()
             if not goal:
                 return self._error(chat_id, "chat_action_no_goal")
-            return combine(self._plan(chat_id, goal, actor))
+            release_class = str(
+                args.get("release_class") or "minor"
+            ).strip().lower()
+            if release_class not in {"patch", "minor", "major"}:
+                release_class = "minor"
+            return combine(
+                self._plan(
+                    chat_id, goal, actor, release_class=release_class
+                )
+            )
         if action == "status":
             return combine(self._status(chat_id, "", actor))
         if action == "tasks":

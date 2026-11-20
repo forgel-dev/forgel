@@ -639,6 +639,9 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
             goal,
             max_tasks=args.max_tasks,
             dry_run=bool(getattr(args, "dry_run", False)),
+            release_class=str(
+                getattr(args, "release_class", "minor") or "minor"
+            ),
         )
     except PlanningError as exc:
         return fail(args, "plan", str(exc))

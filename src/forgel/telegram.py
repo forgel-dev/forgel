@@ -33,6 +33,7 @@ from .i18n import t as _t
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import build_model_client
+from .release_train import list_releases
 from .secrets import get_secret
 from .tasks import latest_task
 
@@ -278,6 +279,15 @@ class TelegramGateway:
             project["id"]: project_state(ledger, project)
             for project in ledger.list_projects()
         }
+        self._release_states: dict[str, str] = {
+            f"{project['id']}:{release['id']}": str(
+                release.get("status") or ""
+            )
+            for project in ledger.list_projects()
+            for release in list_releases(
+                ProjectLayout.detect(project["workspace"])
+            )
+        }
 
     # -------------------------------------------------------------- updates
 
@@ -402,7 +412,43 @@ class TelegramGateway:
                 run_once(self.settings, self.ledger, self.log)
             except Exception as exc:  # noqa: BLE001 - the gateway must stay up
                 self.log(f"[telegram] daemon cycle failed: {exc}")
+        self._notify_releases()
         self._notify_transitions()
+
+    def _notify_releases(self) -> None:
+        for project in self.ledger.list_projects():
+            layout = ProjectLayout.detect(project["workspace"])
+            for release in list_releases(layout):
+                key = f"{project['id']}:{release['id']}"
+                status = str(release.get("status") or "")
+                if self._release_states.get(key) == status:
+                    continue
+                previous = self._release_states.get(key)
+                self._release_states[key] = status
+                if previous == "tagged" and status == "released":
+                    continue
+                if status in {"released", "tagged"}:
+                    message_key = "tg_release_published"
+                elif status in {"blocked", "partial", "failed"}:
+                    message_key = "tg_release_blocked"
+                else:
+                    continue
+                repos = ", ".join(
+                    f"{repo_id} {data.get('version') or '—'}"
+                    for repo_id, data in (
+                        release.get("repos") or {}
+                    ).items()
+                ) or "—"
+                for chat_id in sorted(self.config.allowed_chat_ids):
+                    text = _t(
+                        self.router.language(chat_id),
+                        message_key,
+                        title=release.get("title") or release["id"],
+                        repos=repos,
+                        detail=str(release.get("detail") or ""),
+                    )
+                    if text:
+                        self._send(chat_id, Reply(text))
 
     # --------------------------------------------------------- notifications
 
@@ -481,6 +527,9 @@ class TelegramGateway:
                 stage=stage,
             )
         if state == "task pending":
+            task = latest_task(ProjectLayout.detect(project["workspace"]))
+            if task is not None and task.get("release_id"):
+                return None
             return _t(
                 lang,
                 "tg_task_pending",
@@ -489,6 +538,9 @@ class TelegramGateway:
             )
         if state == "task done":
             task = latest_task(ProjectLayout.detect(project["workspace"]))
+            if task is not None and task.get("release_id"):
+                # The release notification is the user-facing outcome.
+                return None
             title = task["title"] if task else _t(
                 lang, "tg_task_default_title"
             )

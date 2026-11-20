@@ -113,6 +113,33 @@ def status_paths(repo: Path) -> list[str]:
     return paths
 
 
+def tags(repo: Path) -> list[str]:
+    """All tag names, oldest to newest is not guaranteed; callers sort."""
+
+    result = _run(repo, "tag", "--list")
+    return [
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip()
+    ]
+
+
+def diff(
+    repo: Path,
+    base: str,
+    head: str = "HEAD",
+    stat: bool = False,
+) -> str:
+    """A diff between two revisions, optionally the shortstat form."""
+
+    args = ["diff"]
+    if stat:
+        args.append("--stat")
+    args.append(f"{base}..{head}")
+    result = _run(repo, *args)
+    return result.stdout if result.returncode == 0 else ""
+
+
 def tag_baseline(repo: Path) -> None:
     _ok(repo, "tag", "-f", "forgel-baseline")
 

@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--goal", default="")
     plan.add_argument("--status", action="store_true")
     plan.add_argument("--max-tasks", type=int, default=8)
+    plan.add_argument(
+        "--release-class",
+        choices=["patch", "minor", "major"],
+        default="minor",
+    )
     plan.add_argument("--dry-run", action="store_true")
     plan.set_defaults(func=client_cli.plan)
 

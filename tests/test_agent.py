@@ -27,6 +27,7 @@ from forgel.program_manifest import set_entries
 from forgel.repo_tools import RepoActionError, execute_repo_action
 from forgel.project_config import render_project_config
 from forgel.projects import create_project
+from forgel.release_train import list_releases
 from forgel.tasks import get_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -518,6 +519,13 @@ class AgentTest(unittest.TestCase):
         assert task is not None
         self.assertEqual(task["status"], "pending")
         self.assertEqual(task["repo_id"], "main")
+        self.assertEqual(task["release_class"], "minor")
+        self.assertTrue(task["release_id"])
+        releases = list_releases(layout)
+        self.assertEqual(len(releases), 1)
+        self.assertEqual(releases[0]["id"], task["release_id"])
+        self.assertEqual(releases[0]["release_class"], "minor")
+        self.assertIn("main", releases[0]["repos"])
         self.assertEqual(task["requirements"], ["Add a dark theme toggle"])
         self.assertEqual(
             task["assumptions"],

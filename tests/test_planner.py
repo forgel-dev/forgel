@@ -21,6 +21,7 @@ from forgel.planner import (
 )
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
+from forgel.release_train import list_releases
 from forgel.tasks import list_tasks, update_task
 from tests import pin_peak_always
 
@@ -152,6 +153,16 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(second["depends_on"], [first["id"]])
         self.assertEqual(first["plan_id"], result.plan_id)
         self.assertEqual(first["plan_goal"], "Bring the project to M1")
+        self.assertTrue(result.release_id)
+        self.assertEqual(first["release_id"], result.release_id)
+        self.assertEqual(second["release_id"], result.release_id)
+        self.assertEqual(first["release_class"], "minor")
+        releases = list_releases(self.layout)
+        self.assertEqual(len(releases), 1)
+        self.assertEqual(releases[0]["id"], result.release_id)
+        self.assertEqual(
+            sorted(releases[0]["tasks"]), sorted(task["id"] for task in created)
+        )
         self.assertTrue(
             (self.layout.root / result.artifact).exists()
         )

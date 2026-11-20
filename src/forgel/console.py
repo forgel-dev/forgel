@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover - platform without readline
     readline = None  # type: ignore[assignment]
 
 from .agent import ProjectAgent, append_history, load_history
-from .agent import OUTCOME_PROMPT
+from .agent import OUTCOME_PROMPT, RELEASE_OUTCOME_PROMPT
 from .banner import BANNER
 from .chat import CommandRouter
 from .config import Settings
@@ -43,6 +43,7 @@ from .ledger import Ledger
 from .model import build_model_client
 from .planner import plan_status
 from .projects import ProjectError, resolve_project
+from .release_train import list_releases
 from .tasks import latest_task, list_tasks, next_pending_task, retry_moment
 
 PROMPT = "forgel> "
@@ -343,7 +344,11 @@ def _explain_outcomes(
 ) -> str:
     """Ask the model for a plain-language account of what just happened."""
 
-    changed = _changed_tasks(layout, before)
+    changed = [
+        task
+        for task in _changed_tasks(layout, before)
+        if not task.get("release_id")
+    ]
     if not changed:
         return ""
     last = changed[-1]
@@ -424,6 +429,127 @@ def _explain_outcomes(
     if answer:
         return answer
     return fallback
+
+
+TERMINAL_RELEASES = {"released", "tagged", "partial", "blocked", "failed"}
+
+
+def _release_snapshot(layout: ProjectLayout) -> dict[str, str]:
+    return {
+        str(release.get("id")): str(release.get("status") or "")
+        for release in list_releases(layout)
+    }
+
+
+def _changed_releases(
+    layout: ProjectLayout, before: dict[str, str]
+) -> list[dict]:
+    changed: list[dict] = []
+    for release in list_releases(layout):
+        release_id = str(release.get("id") or "")
+        status = str(release.get("status") or "")
+        if before.get(release_id) == status:
+            continue
+        if before.get(release_id) == "tagged" and status == "released":
+            continue
+        if status not in TERMINAL_RELEASES:
+            continue
+        changed.append(release)
+    return changed
+
+
+def _release_fallback(lang: str, release: dict) -> str:
+    repos = ", ".join(
+        f"{repo_id} {data.get('version') or '—'} "
+        f"({data.get('status') or 'pending'})"
+        for repo_id, data in (release.get("repos") or {}).items()
+    )
+    text = _t(
+        lang,
+        "release_outcome_fallback",
+        release=release.get("id") or "",
+        repos=repos or "—",
+    )
+    detail = str(
+        release.get("detail")
+        or (release.get("audit") or {}).get("summary")
+        or ""
+    ).strip()
+    if detail and str(release.get("status")) in {"blocked", "failed", "partial"}:
+        text += " " + _t(lang, "release_outcome_detail", detail=detail)
+    return text
+
+
+def _release_observation(
+    layout: ProjectLayout, release: dict, session: str
+) -> str:
+    return json.dumps(
+        {
+            "release": {
+                "id": release.get("id"),
+                "title": release.get("title"),
+                "request": release.get("request"),
+                "class": release.get("release_class"),
+                "status": release.get("status"),
+                "detail": release.get("detail"),
+                "audit_summary": (release.get("audit") or {}).get(
+                    "summary"
+                ),
+                "repos": {
+                    repo_id: {
+                        "version": data.get("version"),
+                        "tag": data.get("tag"),
+                        "status": data.get("status"),
+                        "release": data.get("release"),
+                        "detail": data.get("detail"),
+                    }
+                    for repo_id, data in (
+                        release.get("repos") or {}
+                    ).items()
+                },
+            },
+            "recent_conversation": _conversation_observation(
+                layout, session
+            ),
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def _explain_release_outcome(
+    agent: ProjectAgent | None,
+    project: dict | None,
+    layout: ProjectLayout,
+    before: dict[str, str],
+    lang: str,
+    user_text: str,
+    session: str = "",
+) -> str:
+    changed = _changed_releases(layout, before)
+    if not changed:
+        return ""
+    release = changed[-1]
+    fallback = _release_fallback(lang, release)
+    if agent is None or project is None:
+        return fallback
+    observation = _release_observation(layout, release, session)
+    question = _t(
+        lang,
+        "release_outcome_question",
+        text=user_text or "(no message)",
+    )
+    try:
+        answer = agent.explain(
+            project,
+            question,
+            observation,
+            fallback=fallback,
+            prompt=RELEASE_OUTCOME_PROMPT,
+        )
+    except Exception:  # noqa: BLE001 - the console must stay up
+        answer = fallback
+    return str(answer or "").strip() or fallback
 
 
 def _report_state(
@@ -547,21 +673,34 @@ def _drain(
     )
     while True:
         before = _task_snapshot(layout) if layout is not None else {}
+        before_releases = (
+            _release_snapshot(layout) if layout is not None else {}
+        )
         try:
             processed = run_once(settings, ledger, log=output)
         except Exception as exc:  # noqa: BLE001 - the console must stay up
             output(_t(lang, "daemon_error", error=exc))
             return
         if layout is not None:
-            explanation = _explain_outcomes(
+            explanation = _explain_release_outcome(
                 agent,
                 project,
                 layout,
-                before,
+                before_releases,
                 lang,
                 user_text,
                 session=session,
             )
+            if not explanation:
+                explanation = _explain_outcomes(
+                    agent,
+                    project,
+                    layout,
+                    before,
+                    lang,
+                    user_text,
+                    session=session,
+                )
             if explanation:
                 output(explanation)
                 append_history(

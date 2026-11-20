@@ -8,10 +8,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from forgel.agent import ProjectAgent
+from forgel.artifacts import write_json
 from forgel.config import Settings
 from forgel.console import (
     _drain,
     _explain_outcomes,
+    _explain_release_outcome,
     _peak_wait,
     _task_observation,
     _task_snapshot,
@@ -354,6 +356,109 @@ class ConsoleTest(unittest.TestCase):
         self.assertNotIn("Fixed the retry's only remaining failure", prompt)
         self.assertNotIn("QA check failed", prompt)
         self.assertNotIn("task QA failed", prompt)
+
+    def test_a_release_is_reported_instead_of_its_tasks(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Releases",
+            "A brief.",
+            mode="brownfield",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        write_json(
+            layout.artifact(
+                "docs/program/releases/20261120120000_widget/release.json"
+            ),
+            {
+                "id": "20261120120000_widget",
+                "project": project_id,
+                "title": "Add a widget",
+                "request": "Add a widget",
+                "release_class": "minor",
+                "status": "released",
+                "created_at": "2026-11-20T12:00:00+00:00",
+                "finalized_at": "2026-11-20T12:30:00+00:00",
+                "repos": {
+                    "web": {
+                        "version": "1.9.0",
+                        "tag": "v1.9.0",
+                        "status": "released",
+                        "release": "https://github.com/o/r/releases/tag/v1.9.0",
+                        "detail": "",
+                    }
+                },
+                "audit": {"verdict": "pass", "summary": "", "rounds": 1},
+            },
+        )
+        reply = "Релиз 1.9.0 репозитория web опубликован."
+        client = ScriptedModelClient([reply])
+
+        answer = _explain_release_outcome(
+            ProjectAgent(self.settings, self.ledger, client),
+            project,
+            layout,
+            {},
+            "ru",
+            "Добавь виджет",
+        )
+
+        self.assertEqual(answer, reply)
+        system = client.requests[0][0].content
+        self.assertIn("Report only the result", system)
+        prompt = client.requests[0][-1].content
+        self.assertIn("1.9.0", prompt)
+        self.assertIn("v1.9.0", prompt)
+        self.assertNotIn("audit.md", prompt)
+
+    def test_a_task_in_a_release_is_not_reported_separately(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "No task report",
+            "A brief.",
+            mode="brownfield",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        task = create_task(
+            layout,
+            "Add a widget",
+            ["Add a widget"],
+            ["The widget works"],
+            repo_id="web",
+            release_id="20261120120000_widget",
+            release_class="minor",
+        )
+        update_task(
+            layout,
+            str(task["id"]),
+            status="done",
+            result={
+                "acceptance": {
+                    "status": "accepted",
+                    "actor": "auto",
+                    "at": "2026-11-20T00:00:00+00:00",
+                    "notes": "",
+                }
+            },
+        )
+        client = ScriptedModelClient([])
+
+        answer = _explain_outcomes(
+            ProjectAgent(self.settings, self.ledger, client),
+            project,
+            layout,
+            {},
+            "ru",
+            "Добавь виджет",
+        )
+
+        self.assertEqual(answer, "")
+        self.assertEqual(client.requests, [])
 
     def test_peak_deferral_waits_instead_of_returning(self) -> None:
         output: list[str] = []

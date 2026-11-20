@@ -69,7 +69,7 @@ forgel say "add a health endpoint" [--json]
 forgel status <id> [--json]
 forgel tasks <id> [--json]
 forgel task accept|reject|retry|cancel|add --project <id> [--task <id>] [--json]
-forgel plan <id> --goal "..." [--dry-run] [--json]
+forgel plan <id> --goal "..." [--release-class minor] [--dry-run] [--json]
 forgel plan <id> --status [--json]
 forgel projects [--json]
 forgel session [<id>] [--session <key>] [--json]
@@ -489,10 +489,31 @@ yet; the config field is reserved.
 
 ## Releases
 
-A release tags every code repository at a committed SHA and, when an API
-token is available (GitHub App, PAT or `gh` session), creates the provider
-release object — a GitHub release with notes. Without a token the tag is
-still created and pushed; the result says `tagged` and names the fallback.
+Every accepted change request is a release. The agent turns the request into a
+release train, the planner splits it into tasks, and when every task is
+accepted the runtime audits the whole change set and publishes one version in
+each repository the request touched. A request that depends on several
+repositories releases them together; versions still differ per repository.
+Before publication the runtime writes the release plan and the audit under
+`docs/program/releases/<release_id>/`, the repository gets `CHANGELOG.md` and
+`releases/<version>/{plan,release}.md`, then an annotated `v<version>` tag and
+the provider release are pushed. Publication retries a failed push and a
+missing provider release on later daemon cycles.
+
+The version comes from the repository itself. Release tags and `CHANGELOG.md`
+set the base; without release history the first version is `0.1.0`. A patch
+release increments the patch number, a minor release (new functionality or
+changed behaviour) the minor number. A major release is only meaningful from
+`1.0.0` onward: before that a breaking change is still a minor release, and
+`1.0.0` is the first product release. A failed audit may queue fix tasks in
+the same release for up to two rounds; after that the release is blocked and
+reported.
+
+The explicit command remains for a manual release outside the request flow.
+It tags every code repository at a committed SHA and, when an API token is
+available (GitHub App, PAT or `gh` session), creates the provider release
+object — a GitHub release with notes. Without a token the tag is still
+created and pushed; the result says `tagged` and names the fallback.
 
 ```bash
 forgel release <project> --version 1.2.0 [--notes "..."] [--repo api] [--draft] [--generate-notes]
@@ -514,8 +535,7 @@ read/write permission already required for pushing — the App needs no extra
 scope, a fine-grained PAT needs Contents read/write and a classic PAT needs
 `repo`. The installation must include the repository; without the permission
 the API returns a 403 and the release falls back to a tagged result. This is
-the release step after the human-approved staging candidate; a per-repository
-release train remains a later extension.
+the release step after the human-approved staging candidate.
 
 ## Coding Agent
 

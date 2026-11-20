@@ -27,6 +27,11 @@ from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .program_manifest import entries as manifest_entries
+from .release_train import (
+    attach_blocked_release,
+    new_release_id,
+    plan_release,
+)
 from .repo_tools import (
     MAX_READ_CHARS,
     RESEARCH_ACTIONS,
@@ -176,6 +181,7 @@ instructions say otherwise. Return exactly one JSON object:
   "open_questions": ["only a question that cannot be decided reversibly"],
   "affected_files": ["path or area"],
   "repo_id": "an existing repository id; required for a change_request",
+  "release_class": "patch for a bug fix, minor for new functionality or changed behaviour; major only for the first product release or a breaking change after 1.0.0",
   "test_command": ["command", "arg"] or [],
   "assumptions": ["what you decided where the request was silent"]
 }
@@ -204,7 +210,9 @@ Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
 - adopt {url, brief?}: adopt a repository as a new project and select it;
   "this repository" means the working directory shown in the message.
-- plan {goal, max_tasks?}: turn a milestone goal into an ordered backlog.
+- plan {goal, release_class?, max_tasks?}: turn a milestone goal into an
+  ordered backlog and one release; release_class follows the same rule as a
+  change request.
 - status {}: project, milestone and task state.
 - tasks {}: list the task queue.
 - accept {task_id?}: accept the task awaiting review (the runtime picks the
@@ -265,6 +273,11 @@ For a change request:
   is about. If the work needs a repository that does not exist, use the
   repo_create action instead of inventing an id. Record an inferred choice in
   "assumptions";
+- every change request is a release. Set release_class to "patch" for a bug
+  fix and "minor" for new functionality or a change in existing behaviour.
+  Before 1.0.0 a breaking change is still a minor release. Use "major" only
+  when the user explicitly asks for the first product release or, after
+  1.0.0, for a change that breaks a published contract;
 - set test_command only when the project's test command is evident from the
   context, otherwise leave it empty;
 - the daemon will run the task with a separate coding agent; you cannot edit
@@ -326,6 +339,24 @@ Rules:
   names, no task ids unless the user needs one to act.
 """
 
+RELEASE_OUTCOME_PROMPT = """You are Forgel's project agent. A release the user
+asked for has been audited and published. Report only the result, in the
+language of the user's message.
+
+Rules:
+- Name the request, the repositories and the released version of each one.
+- Say whether the release is published: the tag exists and a provider release
+  exists, or the tag exists without a provider release.
+- If a repository failed to publish, say which one and that the runtime will
+  retry automatically. If the release is blocked, state the one concrete
+  blocker and what the user must decide.
+- Do not describe tasks, audits, intermediate checks, retries, commits, ledger
+  events or any other internal process. The user sees the request and the
+  released result.
+- Use only facts present in the context. Return plain prose, no JSON, no field
+  names, no internal identifiers unless the user needs one to act.
+"""
+
 
 SUMMARY_PROMPT = """You compact the conversation of a project assistant.
 
@@ -342,6 +373,7 @@ class AgentResult:
     kind: str
     request: str | None = None
     task_id: str | None = None
+    release_id: str = ""
     action: str = ""
     args: dict[str, Any] | None = None
     actions: list[dict[str, Any]] | None = None
@@ -809,6 +841,7 @@ def parse_answer(raw: str) -> dict[str, Any]:
             str(item) for item in constraints if str(item).strip()
         ],
         "repo_id": str(data.get("repo_id", "")).strip(),
+        "release_class": str(data.get("release_class", "")).strip().lower(),
         "test_command": [
             str(item) for item in test_command if str(item).strip()
         ],
@@ -1272,19 +1305,50 @@ class ProjectAgent:
             result_text = ""
         request = None
         task_id = None
+        release_id = ""
         if answer["kind"] == "change_request":
             request = self._record_request(
                 layout, project, text, actor, answer
             )
-            task = self._queue_task(layout, text, answer, spec=request)
+            release_class = (
+                str(answer.get("release_class") or "minor").strip().lower()
+            )
+            release_id = new_release_id(
+                str(answer.get("title") or text or "release")
+            )
+            task = self._queue_task(
+                layout,
+                text,
+                answer,
+                spec=request,
+                release_id=release_id,
+                release_class=release_class,
+            )
             if task is not None:
                 task_id = str(task["id"])
+                attached = attach_blocked_release(
+                    layout, project, task
+                )
+                if attached:
+                    release_id = attached
+                else:
+                    plan_release(
+                        layout,
+                        project,
+                        release_id,
+                        title=str(answer.get("title") or text or "change"),
+                        request=str(answer.get("summary") or text),
+                        release_class=release_class,
+                        task_items=[task],
+                        ledger=self.ledger,
+                    )
                 result_text += (
                     f"\n\nRecorded as `{request}`. Queued task "
                     f"`{task_id}` for repository `{task['repo_id']}`; the "
                     "daemon will start it and report back."
                 )
             else:
+                release_id = ""
                 result_text += (
                     f"\n\nRecorded as `{request}`. No task was queued: the "
                     "request does not name a repository."
@@ -1299,6 +1363,7 @@ class ProjectAgent:
             kind=answer["kind"],
             request=request,
             task_id=task_id,
+            release_id=release_id,
             action=answer.get("action", "") if answer["kind"] == "action" else "",
             args=(
                 answer.get("action_args") or {}
@@ -1497,6 +1562,8 @@ class ProjectAgent:
         text: str,
         answer: Mapping[str, Any],
         spec: str = "",
+        release_id: str = "",
+        release_class: str = "",
     ) -> dict[str, Any] | None:
         repos = manifest_entries(layout)
         if not repos:
@@ -1533,6 +1600,9 @@ class ProjectAgent:
             ],
             language=language.detect(text),
             spec=spec,
+            release_id=release_id,
+            release_class=release_class,
+            summary=str(answer.get("summary") or ""),
         )
         tasks.commit_task(
             layout, str(task["id"]), f"Queue task {task['id']}"

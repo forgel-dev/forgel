@@ -106,6 +106,9 @@ def create_task(
     spec: str = "",
     external_dependencies: list[dict[str, Any]] | None = None,
     task_id: str = "",
+    release_id: str = "",
+    release_class: str = "",
+    summary: str = "",
 ) -> dict[str, Any]:
     title = title.strip()
     requirements = [item.strip() for item in requirements if item.strip()]
@@ -121,6 +124,7 @@ def create_task(
         "id": task_id,
         "title": title,
         "spec": spec.strip(),
+        "summary": summary.strip(),
         "requirements": requirements,
         "acceptance": acceptance,
         "constraints": [
@@ -133,6 +137,8 @@ def create_task(
         ],
         "plan_id": plan_id,
         "plan_goal": plan_goal,
+        "release_id": release_id.strip(),
+        "release_class": release_class.strip().lower(),
         "order": order,
         "depends_on": [
             item for item in (depends_on or []) if item
@@ -432,12 +438,16 @@ def _retry_ready(
 
 
 def next_pending_task(
-    layout: ProjectLayout, now: datetime | None = None
+    layout: ProjectLayout,
+    now: datetime | None = None,
+    release_id: str = "",
 ) -> dict[str, Any] | None:
     tasks = list_tasks(layout)
     statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
     for task in tasks:
         if task.get("status") != "pending":
+            continue
+        if release_id and str(task.get("release_id") or "") != release_id:
             continue
         if _dependency_blockers(task, statuses):
             continue

@@ -1751,6 +1751,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
                 args.goal,
                 max_tasks=args.max_tasks,
                 dry_run=args.dry_run,
+                release_class=args.release_class,
             )
         except PlanningError as exc:
             print(_say("cli_error", error=exc), file=sys.stderr)
@@ -2044,6 +2045,11 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--goal", default="")
     plan.add_argument("--status", action="store_true")
     plan.add_argument("--max-tasks", type=int, default=8)
+    plan.add_argument(
+        "--release-class",
+        choices=["patch", "minor", "major"],
+        default="minor",
+    )
     plan.add_argument("--dry-run", action="store_true")
     plan.add_argument("--home", default=None)
     plan.set_defaults(func=cmd_plan)

@@ -43,6 +43,7 @@ from .program_manifest import slugify_repo_id
 from .providers import ProviderError
 from .providers.github_api import GithubAPIError
 from .providers.github_auth import GithubAuthError
+from .release_train import new_release_id, plan_release
 from .repo_tools import (
     MAX_READ_CHARS,
     RESEARCH_ACTIONS,
@@ -67,6 +68,7 @@ class PlanResult:
     tasks: list[dict[str, Any]] = field(default_factory=list)
     repositories: list[dict[str, Any]] = field(default_factory=list)
     artifact: str = ""
+    release_id: str = ""
     dry_run: bool = False
 
 
@@ -526,12 +528,18 @@ def plan_project(
     dry_run: bool = False,
     client: ModelClient | None = None,
     log: Callable[[str], None] = print,
+    release_id: str = "",
+    release_class: str = "minor",
 ) -> PlanResult:
     """Ask the model for an ordered backlog and queue it as tasks."""
 
     goal = goal.strip()
     if not goal:
         raise PlanningError("a milestone goal is required")
+    release_class = str(release_class or "minor").strip().lower()
+    if release_class not in {"patch", "minor", "major"}:
+        release_class = "minor"
+    release_id = release_id.strip() or new_release_id(goal)
     max_tasks = max(1, min(int(max_tasks), MAX_TASKS))
     layout = ProjectLayout.detect(str(project["workspace"]))
     try:
@@ -722,6 +730,7 @@ def plan_project(
             notes=notes,
             tasks=preview,
             repositories=repositories,
+            release_id=release_id,
             dry_run=True,
         )
 
@@ -786,6 +795,7 @@ def plan_project(
     notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
 
     created: list[dict[str, Any]] = []
+    task_records: list[dict[str, Any]] = []
     for index, (item, spec) in enumerate(zip(items, task_specs)):
         dependencies = [ids[position] for position in item["depends_on"]]
         spec_ref = specs.spec_path(ids[index])
@@ -807,6 +817,9 @@ def plan_project(
                 spec.get("external_dependencies") or []
             ),
             task_id=ids[index],
+            release_id=release_id,
+            release_class=release_class,
+            summary=str(item.get("summary") or ""),
         )
         write_text(
             layout.artifact(spec_ref),
@@ -827,6 +840,7 @@ def plan_project(
                 "depends_on": dependencies,
             }
         )
+        task_records.append(task)
     path = layout.artifact(f"docs/program/plans/{plan_id}.md")
     task_lines = "\n".join(
         f"{index}. `{item['task_id']}` {item['title']}\n"
@@ -881,6 +895,17 @@ def plan_project(
 """,
     )
     tasks.commit_task(layout, ids[-1], f"Plan {plan_id}")
+    plan_release(
+        layout,
+        project,
+        release_id,
+        title=goal,
+        request=goal,
+        release_class=release_class,
+        task_items=task_records,
+        plan_id=plan_id,
+        ledger=ledger,
+    )
     ledger.append_event(
         str(project["id"]),
         "plan",
@@ -902,4 +927,5 @@ def plan_project(
         tasks=created,
         repositories=repositories,
         artifact=str(path.relative_to(layout.root)),
+        release_id=release_id,
     )

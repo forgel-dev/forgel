@@ -28,6 +28,7 @@ from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import ModelClient, build_model_client
 from .orchestrator import Orchestrator
+from .release_train import eligible_pending_task, process_releases
 from .state import STAGES
 
 
@@ -1015,6 +1016,11 @@ def run_once(
                 "after an earlier failure"
             )
         if project_is_done(ledger, project_id):
+            layout = ProjectLayout.detect(project["workspace"])
+            if process_releases(
+                settings, ledger, project, layout, client, log
+            ):
+                processed.append(project_id)
             continue
         layout = ProjectLayout.detect(project["workspace"])
         for task_id in accept_parked_green_tasks(
@@ -1030,7 +1036,15 @@ def run_once(
                 f"[daemon] {project_id}: recovered interrupted task "
                 f"{task['id']} ({task['status']})"
             )
-        task = tasks.next_pending_task(layout)
+        release_actions = process_releases(
+            settings, ledger, project, layout, client, log
+        )
+        if any(
+            action.startswith("released:")
+            for action in release_actions
+        ):
+            processed.append(project_id)
+        task = eligible_pending_task(layout)
         if task is None and tasks.waiting_pending(layout):
             continue
         if task is not None:
