@@ -45,7 +45,6 @@ from .presets import (
     PresetError,
     find_preset,
     load_presets,
-    read_versions,
     write_paths,
     write_version,
 )
@@ -221,32 +220,6 @@ def _preset_id(
     except PresetError:
         return ""
     return preset.id if preset is not None else ""
-
-
-def _preset_base(
-    settings: Settings | None,
-    repo: Path,
-    entry: Mapping[str, Any],
-    base: str | None,
-    source: str,
-) -> tuple[str | None, str]:
-    if settings is None:
-        return base, source
-    try:
-        presets = load_presets(settings.registry_path)
-        values = read_versions(presets, repo, entry)
-    except PresetError:
-        return base, source
-    current = parse_version(base or "")
-    for value, origin in values:
-        parsed = parse_version(value)
-        if parsed is None:
-            continue
-        if current is None or parsed > current:
-            base = _format(parsed)
-            source = origin
-            current = parsed
-    return base, source
 
 
 def _version_after(base: str | None, planned: str, release_class: str) -> str:
@@ -448,9 +421,6 @@ def plan_release(
             except git_ops.GitOperationError:
                 base_sha = ""
         base_version, source = discover_base(repo)
-        base_version, source = _preset_base(
-            settings, repo, entries.get(repo_id, {}), base_version, source
-        )
         repos[repo_id] = {
             "base_sha": base_sha,
             "base_version": base_version or "",
@@ -669,6 +639,16 @@ def _repo_diff(
         git = (task.get("result") or {}).get("git") or {}
         base = str(git.get("base") or "")
         if base:
+            commits = [
+                str(item) for item in (git.get("commits") or [])
+            ]
+            if not commits and git.get("commit"):
+                commits = [str(git["commit"])]
+            # A rework records the previous attempt's head as its base; when
+            # that base is the task's own first commit, the release must
+            # start from that commit's parent to include the whole change.
+            if commits and base == commits[0]:
+                base = f"{commits[0]}^"
             break
     if not base:
         base = str(recorded.get("base_sha") or "")
@@ -1017,9 +997,10 @@ def _changelog_parts(
         line = f"- {task.get('title')}"
         if summary:
             line += f" — {summary}"
-        requirements = list(task.get("requirements") or [])
-        if requirements:
-            line += " (" + "; ".join(requirements[:3]) + ")"
+        else:
+            requirements = list(task.get("requirements") or [])
+            if requirements:
+                line += " (" + "; ".join(requirements[:3]) + ")"
         lines.append(line)
     section = (
         f"## [{version}] - {_today()}\n\n"
@@ -1192,9 +1173,6 @@ def _finalize_repo(
     base_version, source = discover_base(repo)
     try:
         preset_list = load_presets(settings.registry_path)
-        base_version, source = _preset_base(
-            settings, repo, entry, base_version, source
-        )
     except PresetError as exc:
         result.update(
             {"status": "failed", "detail": f"preset: {exc}"}
@@ -1501,6 +1479,32 @@ def _retry_tagged_release(
             data["release"] = url
             data["status"] = "released"
             data["detail"] = ""
+            try:
+                write_text(
+                    repo
+                    / REPO_RELEASES_DIR
+                    / version
+                    / "release.md",
+                    _repo_record(
+                        release,
+                        version,
+                        repo_items,
+                        url,
+                        str(data.get("preset") or ""),
+                        list(data.get("version_files") or []),
+                    ),
+                )
+                git_ops.commit_all(
+                    repo, f"Record release v{version}"
+                )
+                pushed = _push_repo(settings, repo)
+                if pushed.get("status") != "pushed":
+                    data["detail"] = (
+                        "release record push failed: "
+                        f"{pushed.get('detail')}"
+                    )
+            except git_ops.GitOperationError as exc:
+                data["detail"] = f"release record failed: {exc}"
             changed = True
         elif detail:
             data["detail"] = detail

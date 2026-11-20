@@ -1923,6 +1923,22 @@ class CommandRouter:
                     chat_id, "publish " + " ".join(parts), actor
                 )
             )
+        if action == "release":
+            version = str(args.get("version") or "").strip()
+            if not version:
+                return self._error(chat_id, "chat_release_usage")
+            parts = [f"--version {shlex.quote(version)}"]
+            repo_id = str(
+                args.get("repo") or args.get("repo_id") or ""
+            ).strip()
+            if repo_id:
+                parts.append(f"--repo {shlex.quote(repo_id)}")
+            notes = str(args.get("notes") or "").strip()
+            if notes:
+                parts.append(f"--notes {shlex.quote(notes)}")
+            return combine(
+                self._release(chat_id, " ".join(parts), actor)
+            )
         if action == "peak":
             policy = str(args.get("policy") or "").strip()
             return combine(self._peak(chat_id, policy, actor))

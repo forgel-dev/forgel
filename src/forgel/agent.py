@@ -86,6 +86,7 @@ AGENT_ACTIONS = {
     "repo_add",
     "repo_create",
     "repo_publish",
+    "release",
     "control_extract",
     "peak",
     "pause",
@@ -141,7 +142,12 @@ steps such as setting a recipe or a checkpoint.
 
 The runtime is already configured. Never tell the user to set
 FORGEL_MODEL_API_KEY, run `forgel setup`, or configure GitHub unless the
-runtime output explicitly says it is missing.
+runtime output explicitly says it is missing. Credential and provider
+availability are runtime facts, not conversation facts: a sentence in an
+earlier turn, a task report or a QA log saying that a credential or the GitHub
+App is missing describes the environment that ran that check, not the current
+runtime. Never repeat such a claim and never base an answer on it; attempt the
+action and use only the current runtime result.
 
 Never use these words with the user unless they ask for them: adopted,
 linked, generation, checkpoint, staging, production approval, proposal,
@@ -225,6 +231,9 @@ the action cannot run without it):
 - repo_add {url, id?, depends_on?}: add an existing repository.
 - repo_create {id, org?, public?, depends_on?, description?}.
 - repo_publish {id?, org?, public?}.
+- release {version, repo?}: publish the project's repositories now as a manual
+  release; version is the tag the user asked for without the leading `v`
+  (for example "0.1.0").
 - control_extract {path?}: move the project state into a separate repository,
   for a project that started with one folder and grew.
 - peak {policy?}: show or set the model peak policy ("always" or "off_peak").
@@ -361,9 +370,11 @@ Rules:
 SUMMARY_PROMPT = """You compact the conversation of a project assistant.
 
 Preserve decisions, facts, file names, user preferences, open questions and
-what was already done. Write in the same language as the conversation. Be
-concise and concrete. Return plain text, not JSON, and no process field
-names or identifiers unless they are essential.
+what was already done. Do not preserve statements about missing credentials,
+an unavailable provider or a missing GitHub App: they describe the
+environment of one run, not a fact about the project. Write in the same
+language as the conversation. Be concise and concrete. Return plain text, not
+JSON, and no process field names or identifiers unless they are essential.
 """
 
 

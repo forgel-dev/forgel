@@ -582,6 +582,8 @@ class ReleaseTrainTest(unittest.TestCase):
             "package manifest",
         )
         _run(api, "push", "origin", "main")
+        _run(api, "tag", "-a", "v1.2.3", "-m", "v1.2.3")
+        _run(api, "push", "origin", "--tags")
         release, _task = self._release(
             repo_id="api",
             release_id="20261120140000_api",
