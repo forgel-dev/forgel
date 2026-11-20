@@ -225,10 +225,10 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-20T00:28:49+00:00",
-  "started_at": "2026-11-20T00:28:49+00:00",
-  "finished_at": "2026-11-20T00:43:22+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`, runtime `dependencies = []` untouched), made `_build_backend.py` derive `Provides-Extra: test` and `Requires-Dist: pytest>=7; extra == \"test\"` from that table so wheel METADATA, sdist PKG-INFO and `prepare_metadata_for_build_wheel` share one source, and added an in-tree TOML fallback for Python 3.9/3.10 (no `tomllib`, no new build requirement). Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` and running `python -m pytest -q` while keeping `python -m unittest discover -s tests` as the no-install path. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line that carries `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install, and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between pyproject and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Tested with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty.; final test command exited 124",
     "files_changed": [
@@ -381,11 +381,15 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261120002849_declare-test-dependencies-in-pyproject-t.md",
+    "rework_count": 1,
+    "feedback": [
+      "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`, runtime `dependencies = []` untouched), made `_build_backend.py` derive `Provides-Extra: test` and `Requires-Dist: pytest>=7; extra == \"test\"` from that table so wheel METADATA, sdist PKG-INFO and `prepare_metadata_for_build_wheel` share one source, and added an in-tree TOML fallback for Python 3.9/3.10 (no `tomllib`, no new build requirement). Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` and running `python -m pytest -q` while keeping `python -m unittest discover -s tests` as the no-install path. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line that carries `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install, and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between pyproject and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Tested with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty.; final test command exited 124"
+    ],
+    "last_failure": {
       "kind": "qa",
       "message": "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`, runtime `dependencies = []` untouched), made `_build_backend.py` derive `Provides-Extra: test` and `Requires-Dist: pytest>=7; extra == \"test\"` from that table so wheel METADATA, sdist PKG-INFO and `prepare_metadata_for_build_wheel` share one source, and added an in-tree TOML fallback for Python 3.9/3.10 (no `tomllib`, no new build requirement). Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` and running `python -m pytest -q` while keeping `python -m unittest discover -s tests` as the no-install path. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line that carries `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install, and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between pyproject and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Tested with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty.; final test command exited 124"
-    },
-    "report": "docs/program/agent/20261120002849_declare-test-dependencies-in-pyproject-t.md"
+    }
   },
   "request": "docs/program/requests/20261120002849568467_declare-test-dependencies-in-pyproject-toml.md"
 }
