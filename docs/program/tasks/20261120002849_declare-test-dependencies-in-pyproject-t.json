@@ -709,5 +709,8 @@
       "next_at": ""
     }
   },
-  "request": "docs/program/requests/20261120002849568467_declare-test-dependencies-in-pyproject-toml.md"
+  "request": "docs/program/requests/20261120002849568467_declare-test-dependencies-in-pyproject-toml.md",
+  "release_id": "20261120225130120934_forgel-code-0-1-0",
+  "release_class": "minor",
+  "summary": "Declare a test extra with pytest in pyproject.toml and emit it from the in-tree build backend."
 }
