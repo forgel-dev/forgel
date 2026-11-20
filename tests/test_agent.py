@@ -322,7 +322,7 @@ class AgentTest(unittest.TestCase):
         self.assertIn("request", stages)
         self.assertIn("agent", stages)
 
-    def test_an_unclear_target_asks_instead_of_guessing(self) -> None:
+    def test_the_runtime_does_not_choose_a_repository_itself(self) -> None:
         project_id = create_project(
             self.settings,
             self.ledger,
@@ -366,10 +366,35 @@ class AgentTest(unittest.TestCase):
 
         result = agent.handle(project, "Поправь установку", "@tester")
 
-        self.assertEqual(result.kind, "answer")
-        self.assertIn("Which repository", result.text)
-        self.assertIsNone(result.request)
+        self.assertIsNotNone(result.request)
         self.assertIsNone(result.task_id)
+        self.assertNotIn("Which repository", result.text)
+        self.assertIn("No task was queued", result.text)
+
+    def test_a_long_answer_keeps_the_previous_message_in_context(
+        self,
+    ) -> None:
+        project = self._project("Alpha", "An alpha brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        append_history(
+            layout,
+            "user",
+            "REPO-DECISION-MARKER: use the code repository",
+            session="0",
+        )
+        append_history(
+            layout, "assistant", "x" * 30_000, session="0"
+        )
+        client = ScriptedModelClient(
+            [json.dumps({"kind": "answer", "reply": "ok"})]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        agent.handle(project, "Add test dependencies", "@tester", session="0")
+
+        prompt = client.requests[0][1].content
+        self.assertIn("REPO-DECISION-MARKER", prompt)
+        self.assertIn("turn truncated", prompt)
 
     def test_the_agent_can_inspect_another_repository(self) -> None:
         project_id = create_project(

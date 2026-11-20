@@ -18,7 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from . import i18n, language, requirements as requirements_doc, tasks
 from .artifacts import write_text
@@ -46,6 +46,8 @@ CONVERSATIONS_DIR = "conversations"
 HISTORY_RECENT_CHARS = 12_000
 HISTORY_COMPACT_CHARS = 24_000
 HISTORY_KEEP_TURNS = 4
+HISTORY_VISIBLE_TURNS = 6
+HISTORY_TURN_CHARS = 4_000
 HISTORY_SUMMARY_CHARS = 6_000
 MAX_CONTEXT_CHARS = 24_000
 OVERVIEW_DOC_CHARS = 4_000
@@ -114,22 +116,17 @@ the runtime understands only the JSON forms above.
 
 Read only what the question needs: list a directory to discover names, then
 read specific files. Do not read the whole repository. Files already read are
-provided in the context; use them instead of re-reading unchanged files, and
-re-read only when you need a different part or the file changed.
+provided in the conversation; use them instead of re-reading unchanged files,
+and re-read only when you need a different part or the file changed.
 
-Determining the target repository is part of the task, not a lookup by name.
-For a change request:
-a) read the user's task and the conversation;
-b) inspect the candidate repositories themselves — list their files and read
-   their documentation, manifests and source code with the repository id —
-   and choose the repository whose actual contents match the work.
-The repository map is only an index of ids, roles and URLs; it does not
-describe what a repository contains. Never choose from a name, id or role
-alone. Inspect the contents of every plausible candidate before setting
-repo_id; when the user names a product, confirm the id against what the
-repository actually contains (a README is one source among the docs, manifests
-and code, not a required file). Record the evidence for the choice in
-"assumptions".
+Each repository in the context has an id, a role and a location. The map does
+not describe what a repository contains. Determine the target repository
+yourself: inspect the candidates with list_files and read_file using their
+ids, then choose from what you actually read. The user's message and the
+whole conversation are part of the request; a follow-up belongs to the
+repository the conversation has been about, even when the message itself does
+not name it. Set repo_id to an existing id and never leave it empty while the
+conversation and the contents identify a repository.
 
 The user is the product owner, not a Forgel developer. Answer from the
 project documents and code, not from Forgel's process metadata. For any
@@ -178,7 +175,7 @@ instructions say otherwise. Return exactly one JSON object:
   "risks": ["what can make this fail or miss the goal"],
   "open_questions": ["only a question that cannot be decided reversibly"],
   "affected_files": ["path or area"],
-  "repo_id": "the repository id for a change request; empty only when the repository choice needs the user's decision",
+  "repo_id": "an existing repository id; required for a change_request",
   "test_command": ["command", "arg"] or [],
   "assumptions": ["what you decided where the request was silent"]
 }
@@ -262,24 +259,12 @@ For a change request:
   data format, a protocol), record the relevant contract in the requirements
   or assumptions from its authoritative source; never leave the coder to
   guess it;
-- Choose the repository for a change request in this order:
-  1. one repository and nothing points elsewhere — use it;
-  2. the user asks to create a repository — use the repo_create or repo_add
-     action;
-  3. the task clearly needs a new repository — inspect the existing
-     repositories' contents first, then return kind=answer with the
-     recommendation and ask whether to create it or use an existing one;
-  4. the request names a repository or product — confirm the id by inspecting
-     that repository's contents (README, docs, manifests, source code), then
-     use it;
-  5. no name, but the request implies where it belongs — inspect the candidate
-     repositories' contents and use the one whose actual work matches; if it
-     spans several repositories, return the plan action instead of a
-     change_request;
-  6. none of the above (several repositories, no clear target) — after
-     inspecting the candidates, return kind=answer asking which repository to
-     use. Do not guess.
-  Record the choice in "assumptions" when it was inferred;
+- determine repo_id by reading the candidate repositories with list_files
+  and read_file, then set the id whose contents match the request and the
+  whole conversation. A follow-up belongs to the repository the conversation
+  is about. If the work needs a repository that does not exist, use the
+  repo_create action instead of inventing an id. Record an inferred choice in
+  "assumptions";
 - set test_command only when the project's test command is evident from the
   context, otherwise leave it empty;
 - the daemon will run the task with a separate coding agent; you cannot edit
@@ -443,6 +428,7 @@ def append_history(
     session: str = "",
     tool: str = "",
     path: str = "",
+    repo: str = "",
 ) -> None:
     path_obj = conversation_path(layout, session)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -456,6 +442,8 @@ def append_history(
         entry["tool"] = tool
     if path:
         entry["path"] = path
+    if repo:
+        entry["repo"] = repo
     with path_obj.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
@@ -648,8 +636,8 @@ def _slug(title: str) -> str:
     return slug[:60] or "request"
 
 
-def _repo_map(repos: list[dict[str, Any]]) -> str:
-    """Ids, roles and locations the model can inspect by repo_id."""
+def _repo_map(repos: Sequence[Mapping[str, Any]]) -> str:
+    """Ids, roles and locations; the model reads the contents itself."""
 
     lines: list[str] = []
     for entry in repos:
@@ -814,16 +802,39 @@ def _turn_chars(turns: list[dict[str, Any]]) -> int:
     return sum(len(str(turn.get("text", ""))) for turn in turns)
 
 
+def _trim_turn(turn: dict[str, Any], limit: int) -> dict[str, Any]:
+    text = str(turn.get("text", ""))
+    if len(text) <= limit:
+        return turn
+    trimmed = dict(turn)
+    trimmed["text"] = (
+        text[:limit]
+        + "\n... [turn truncated; the full text is in the history file]"
+    )
+    return trimmed
+
+
 def _recent_turns(
-    turns: list[dict[str, Any]], limit: int
+    turns: list[dict[str, Any]],
+    limit: int,
+    min_turns: int = HISTORY_VISIBLE_TURNS,
+    turn_limit: int = HISTORY_TURN_CHARS,
 ) -> list[dict[str, Any]]:
+    """Recent turns for the prompt, newest kept and long turns trimmed.
+
+    The newest ``min_turns`` turns are always present, so one long answer
+    cannot push the message before it out of the prompt and break the
+    continuity between two consecutive messages.
+    """
+
     selected: list[dict[str, Any]] = []
     used = 0
-    for turn in reversed(turns):
-        size = len(str(turn.get("text", "")))
-        if selected and used + size > limit:
+    for index, turn in enumerate(reversed(turns)):
+        size = min(len(str(turn.get("text", ""))), turn_limit)
+        forced = index < min_turns
+        if selected and not forced and used + size > limit:
             break
-        selected.append(turn)
+        selected.append(_trim_turn(turn, turn_limit))
         used += size
     return list(reversed(selected))
 
@@ -1007,9 +1018,13 @@ class ProjectAgent:
                         continue
                     label = "Tool result"
                     tool = str(turn.get("tool", "")).strip()
+                    repo = str(turn.get("repo", "")).strip()
                     path = str(turn.get("path", "")).strip()
-                    if tool or path:
-                        label += f" ({tool} {path})".rstrip()
+                    target = ":".join(
+                        part for part in (repo, path) if part
+                    )
+                    if tool or target:
+                        label += f" ({tool} {target})".rstrip()
                 else:
                     label = role.capitalize()
                 lines.append(f"{label}: {turn.get('text', '')}")
@@ -1151,6 +1166,16 @@ class ProjectAgent:
                         observation = f"error: {exc}"
                     observations.append(observation)
                     research_steps += 1
+                    repo = str(args.get("repo_id") or "").strip()
+                    if not repo:
+                        repo = next(
+                            (
+                                str(entry["id"])
+                                for entry in repos
+                                if str(entry["id"]) == "main"
+                            ),
+                            str(repos[0]["id"]) if repos else "",
+                        )
                     append_history(
                         layout,
                         "tool",
@@ -1159,6 +1184,7 @@ class ProjectAgent:
                         session=session,
                         tool=str(data["action"]),
                         path=str(args.get("path") or ""),
+                        repo=repo,
                     )
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
@@ -1226,35 +1252,22 @@ class ProjectAgent:
         request = None
         task_id = None
         if answer["kind"] == "change_request":
-            known_repo_ids = {str(entry["id"]) for entry in repos}
-            chosen = str(answer.get("repo_id") or "")
-            if len(repos) > 1 and chosen not in known_repo_ids:
-                # Case 6: several repositories and no clear target. Ask the
-                # user instead of recording a request that cannot be queued.
-                result_text = (
-                    "Which repository should I use?\n"
-                    + _repo_map(repos)
+            request = self._record_request(
+                layout, project, text, actor, answer
+            )
+            task = self._queue_task(layout, text, answer, spec=request)
+            if task is not None:
+                task_id = str(task["id"])
+                result_text += (
+                    f"\n\nRecorded as `{request}`. Queued task "
+                    f"`{task_id}` for repository `{task['repo_id']}`; the "
+                    "daemon will start it and report back."
                 )
-                answer["kind"] = "answer"
             else:
-                request = self._record_request(
-                    layout, project, text, actor, answer
+                result_text += (
+                    f"\n\nRecorded as `{request}`. No task was queued: the "
+                    "request does not name a repository."
                 )
-                task = self._queue_task(layout, text, answer, spec=request)
-                if task is not None:
-                    task_id = str(task["id"])
-                    result_text += (
-                        f"\n\nRecorded as `{request}`. Queued task "
-                        f"`{task_id}` for repository `{task['repo_id']}`; the "
-                        "daemon will start it and report back."
-                    )
-                else:
-                    result_text += (
-                        f"\n\nRecorded as `{request}`. I did not queue a "
-                        "task: the project has several repositories and I "
-                        "could not choose one. Tell me which repository to "
-                        "use."
-                    )
 
         append_history(
             layout, "assistant", result_text, actor, session=session
@@ -1467,13 +1480,9 @@ class ProjectAgent:
         repos = manifest_entries(layout)
         if not repos:
             return None
-        known = {entry["id"] for entry in repos}
+        known = {str(entry["id"]) for entry in repos}
         repo_id = str(answer.get("repo_id") or "").strip()
-        if repo_id and repo_id not in known:
-            repo_id = ""
-        if not repo_id and len(repos) == 1:
-            repo_id = repos[0]["id"]
-        if not repo_id:
+        if repo_id not in known:
             return None
         title = (
             str(answer.get("title") or "").strip() or "Change request"
