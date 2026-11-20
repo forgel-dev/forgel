@@ -696,16 +696,17 @@
       "notes": ""
     },
     "push": {
-      "status": "failed",
+      "status": "pushed",
       "repo": "code",
-      "branch": "",
-      "detail": "push failed (no force-push is attempted): ssh: Could not resolve hostname github.com: nodename nor servname provided, or not known\nfatal: Не удалось прочитать из внешнего репозитория.\n\nУдостоверьтесь, что у вас есть необходимые права доступа\nи репозиторий существует.",
+      "branch": "main",
+      "detail": "",
       "control": {
-        "status": "failed",
-        "detail": "push failed (no force-push is attempted): ssh: Could not resolve hostname github.com: nodename nor servname provided, or not known\nfatal: Не удалось прочитать из внешнего репозитория.\n\nУдостоверьтесь, что у вас есть необходимые права доступа\nи репозиторий существует."
+        "status": "pushed",
+        "detail": "",
+        "branch": "main"
       },
-      "attempts": 1,
-      "next_at": "2026-11-20T01:30:52+00:00"
+      "attempts": 2,
+      "next_at": ""
     }
   },
   "request": "docs/program/requests/20261120002849568467_declare-test-dependencies-in-pyproject-toml.md"
