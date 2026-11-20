@@ -225,12 +225,12 @@
     }
   ],
   "language": "ru",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-20T00:28:49+00:00",
-  "started_at": "2026-11-20T00:43:22+00:00",
-  "finished_at": "2026-11-20T00:54:52+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`) while `[project] dependencies` stays `[]`. `_build_backend.py` now reads that table back out of `pyproject.toml` (via stdlib `tomllib` on 3.11+, and an in-tree parser limited to the extras-table shape on 3.9/3.10) and emits `Provides-Extra: test` plus `Requires-Dist: pytest>=7; extra == \"test\"` from the single `_metadata()` text that feeds the wheel `METADATA`, the sdist `PKG-INFO` and `prepare_metadata_for_build_wheel`; the backend still declares `requires = []` and no third-party build dependency. Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` followed by `python -m pytest -q`, keeping `python -m unittest discover -s tests` as the no-install path, and kept the editable-install caveat. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line carrying `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between `pyproject.toml` and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Verified with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty. The earlier failure was a wall-clock timeout on the aggregated command, not a test failure: the same command completes in about 50s here, and every module was also run separately.",
+    "summary": "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`) while `[project] dependencies` stays `[]`. `_build_backend.py` now reads that table back out of `pyproject.toml` (via stdlib `tomllib` on 3.11+, and an in-tree parser limited to the extras-table shape on 3.9/3.10) and emits `Provides-Extra: test` plus `Requires-Dist: pytest>=7; extra == \"test\"` from the single `_metadata()` text that feeds the wheel `METADATA`, the sdist `PKG-INFO` and `prepare_metadata_for_build_wheel`; the backend still declares `requires = []` and no third-party build dependency. Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` followed by `python -m pytest -q`, keeping `python -m unittest discover -s tests` as the no-install path, and kept the editable-install caveat. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line carrying `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between `pyproject.toml` and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Verified with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty. The earlier failure was a wall-clock timeout on the aggregated command, not a test failure: the same command completes in about 50s here, and every module was also run separately.; task QA failed: A3 [task code @ /Users/okalistratov/Documents/sites/code]",
     "files_changed": [
       "README.md",
       "_build_backend.py",
@@ -403,15 +403,262 @@
       ]
     },
     "report": "docs/program/agent/20261120002849_declare-test-dependencies-in-pyproject-t.md",
-    "rework_count": 1,
+    "rework_count": 2,
     "feedback": [
-      "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`, runtime `dependencies = []` untouched), made `_build_backend.py` derive `Provides-Extra: test` and `Requires-Dist: pytest>=7; extra == \"test\"` from that table so wheel METADATA, sdist PKG-INFO and `prepare_metadata_for_build_wheel` share one source, and added an in-tree TOML fallback for Python 3.9/3.10 (no `tomllib`, no new build requirement). Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` and running `python -m pytest -q` while keeping `python -m unittest discover -s tests` as the no-install path. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line that carries `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install, and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between pyproject and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Tested with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty.; final test command exited 124"
+      "QA check failed: A3\n  repository: code\n  cwd: /Users/okalistratov/Documents/sites/code\n  command: python3 -m pytest -q tests/test_extras.py -k 'drift or single_source'\n  exit: 5\n  output:\n$ python3 -m pytest -q tests/test_extras.py -k 'drift or single_source'\n# cwd: /Users/okalistratov/Documents/sites/code\n\n20 deselected in 0.02s",
+      "QA check failed: A5\n  repository: code\n  cwd: /Users/okalistratov/Documents/sites/code\n  command: python3 -m pytest -q tests/test_extras.py -k single_source\n  exit: 5\n  output:\n$ python3 -m pytest -q tests/test_extras.py -k single_source\n# cwd: /Users/okalistratov/Documents/sites/code\n\n20 deselected in 0.02s",
+      "QA check failed: A7\n  repository: code\n  cwd: /Users/okalistratov/Documents/sites/code\n  command: python3 -m pytest -q tests/test_extras.py -k offline_install\n  exit: 5\n  output:\n$ python3 -m pytest -q tests/test_extras.py -k offline_install\n# cwd: /Users/okalistratov/Documents/sites/code\n\n20 deselected in 0.02s"
     ],
     "last_failure": {
       "kind": "qa",
-      "message": "Declared the `test` extra once in `pyproject.toml` (`[project.optional-dependencies] test = [\"pytest>=7\"]`, runtime `dependencies = []` untouched), made `_build_backend.py` derive `Provides-Extra: test` and `Requires-Dist: pytest>=7; extra == \"test\"` from that table so wheel METADATA, sdist PKG-INFO and `prepare_metadata_for_build_wheel` share one source, and added an in-tree TOML fallback for Python 3.9/3.10 (no `tomllib`, no new build requirement). Rewrote the README `## Tests` section to show installing a pinned revision with `[test]` and running `python -m pytest -q` while keeping `python -m unittest discover -s tests` as the no-install path. Extended `tests/test_readme_install.py` narrowly: the pip-install guard now allows exactly one `pip install` line that carries `[test]` inside the `## Tests` section, plus a new assertion forbidding any editable install, and a new `Tests` section check. Added `tests/test_extras.py` covering the declaration shape, wheel METADATA, sdist PKG-INFO, drift between pyproject and METADATA, single-source behaviour via a rewritten copy, the fallback parser versus `tomllib`, and a real offline `pip install` of the tree with `[test]`. Tested with `python3 -m pytest -q` (163 passed, 137 subtests) and `python3 -m unittest discover -s tests` (163 tests, OK); `git status --porcelain -- forgel_code` is empty.; final test command exited 124"
+      "message": "task QA failed: A3 [task code @ /Users/okalistratov/Documents/sites/code]",
+      "retryable": false
     },
-    "failure": {}
+    "qa": {
+      "status": "fail",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261120002849_declare-test-dependencies-in-pyproject-t.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k pyproject",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k wheel",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k 'drift or single_source'",
+          "exit_code": 5,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k sdist",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k single_source",
+          "exit_code": 5,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k fallback",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_extras.py -k offline_install",
+          "exit_code": 5,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q tests/test_readme_install.py",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "git status --porcelain -- forgel_code",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python3 -m pytest -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A1",
+          "command": "python3 -m pytest -q tests/test_extras.py -k pyproject",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A2",
+          "command": "python3 -m pytest -q tests/test_extras.py -k wheel",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A3",
+          "command": "python3 -m pytest -q tests/test_extras.py -k 'drift or single_source'",
+          "exit_code": 5,
+          "verdict": "fail",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "$ python3 -m pytest -q tests/test_extras.py -k 'drift or single_source'\n# cwd: /Users/okalistratov/Documents/sites/code\n\n20 deselected in 0.02s",
+          "failure": "code"
+        },
+        {
+          "criterion": "A4",
+          "command": "python3 -m pytest -q tests/test_extras.py -k sdist",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A5",
+          "command": "python3 -m pytest -q tests/test_extras.py -k single_source",
+          "exit_code": 5,
+          "verdict": "fail",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "$ python3 -m pytest -q tests/test_extras.py -k single_source\n# cwd: /Users/okalistratov/Documents/sites/code\n\n20 deselected in 0.02s",
+          "failure": "code"
+        },
+        {
+          "criterion": "A6",
+          "command": "python3 -m pytest -q tests/test_extras.py -k fallback",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A7",
+          "command": "python3 -m pytest -q tests/test_extras.py -k offline_install",
+          "exit_code": 5,
+          "verdict": "fail",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "$ python3 -m pytest -q tests/test_extras.py -k offline_install\n# cwd: /Users/okalistratov/Documents/sites/code\n\n20 deselected in 0.02s",
+          "failure": "code"
+        },
+        {
+          "criterion": "A8",
+          "command": "python3 -m pytest -q tests/test_readme_install.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A9",
+          "command": "git status --porcelain -- forgel_code",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A10",
+          "command": "python3 -m pytest -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": false,
+      "failure_kind": "code"
+    }
   },
   "request": "docs/program/requests/20261120002849568467_declare-test-dependencies-in-pyproject-toml.md"
 }
