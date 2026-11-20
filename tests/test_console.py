@@ -283,6 +283,78 @@ class ConsoleTest(unittest.TestCase):
         self.assertIn("repeated action loop", prompt)
         self.assertIn("README.md", prompt)
 
+    def test_an_accepted_task_reports_only_the_outcome(self) -> None:
+        project_id = create_project(
+            self.settings,
+            self.ledger,
+            "Accepted",
+            "A brief.",
+            mode="brownfield",
+        )
+        project = self.ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        task = create_task(
+            layout,
+            "Declare test dependencies",
+            ["Declare a test extra"],
+            ["The extra is declared"],
+            repo_id="main",
+            test_command=[],
+        )
+        before = _task_snapshot(layout)
+        update_task(
+            layout,
+            str(task["id"]),
+            status="done",
+            result={
+                "summary": "Fixed the retry's only remaining failure.",
+                "feedback": ["QA check failed: A3"],
+                "last_failure": {
+                    "kind": "qa",
+                    "message": "task QA failed: A3",
+                },
+                "rework_count": 2,
+                "files_changed": ["pyproject.toml"],
+                "acceptance": {
+                    "status": "accepted",
+                    "actor": "auto",
+                    "at": "2026-11-20T01:05:18+00:00",
+                    "notes": "",
+                },
+                "push": {
+                    "status": "failed",
+                    "repo": "main",
+                    "branch": "",
+                    "detail": "ssh: Could not resolve hostname",
+                },
+            },
+        )
+        reply = (
+            "Готово: тестовые зависимости объявлены. Работа принята "
+            "локально, но ещё не опубликована — повторю автоматически."
+        )
+        client = ScriptedModelClient([reply])
+        answer = _explain_outcomes(
+            ProjectAgent(self.settings, self.ledger, client),
+            project,
+            layout,
+            before,
+            "ru",
+            "Добавь тестовые зависимости",
+        )
+
+        self.assertEqual(answer, reply)
+        system = client.requests[0][0].content
+        self.assertIn("Report only the outcome", system)
+        prompt = client.requests[0][-1].content
+        self.assertIn("Добавь тестовые зависимости", prompt)
+        self.assertIn('"push"', prompt)
+        self.assertIn('"failed"', prompt)
+        self.assertNotIn("Fixed the retry's only remaining failure", prompt)
+        self.assertNotIn("QA check failed", prompt)
+        self.assertNotIn("task QA failed", prompt)
+
     def test_peak_deferral_waits_instead_of_returning(self) -> None:
         output: list[str] = []
         slept: list[float] = []

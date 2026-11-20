@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - platform without readline
     readline = None  # type: ignore[assignment]
 
 from .agent import ProjectAgent, append_history, load_history
+from .agent import OUTCOME_PROMPT
 from .banner import BANNER
 from .chat import CommandRouter
 from .config import Settings
@@ -293,6 +294,44 @@ def _decision_log(layout: ProjectLayout) -> str:
     return _cap_text(text, 6000)
 
 
+def _task_is_accepted(task: dict) -> bool:
+    acceptance = (task.get("result") or {}).get("acceptance") or {}
+    return str(acceptance.get("status") or "") == "accepted"
+
+
+def _outcome_fallback(lang: str, task: dict) -> str:
+    text = _t(lang, "outcome_fallback", task=task.get("id") or "")
+    push_status = str(
+        ((task.get("result") or {}).get("push") or {}).get("status")
+        or ""
+    )
+    if push_status == "failed":
+        text += _t(lang, "outcome_push_failed")
+    return text
+
+
+def _outcome_observation(task: dict) -> dict:
+    """Only what the user asked for and what came out of it."""
+
+    result = dict(task.get("result") or {})
+    push = dict(result.get("push") or {})
+    return {
+        "id": task.get("id"),
+        "title": task.get("title"),
+        "status": task.get("status"),
+        "repo_id": task.get("repo_id"),
+        "requirements": list(task.get("requirements") or []),
+        "acceptance": list(task.get("acceptance") or []),
+        "files_changed": list(result.get("files_changed") or [])[:40],
+        "outcome": result.get("acceptance") or {},
+        "push": {
+            "status": push.get("status"),
+            "repo": push.get("repo"),
+            "branch": push.get("branch"),
+        },
+    }
+
+
 def _explain_outcomes(
     agent: ProjectAgent | None,
     project: dict | None,
@@ -308,8 +347,13 @@ def _explain_outcomes(
     if not changed:
         return ""
     last = changed[-1]
-    reports = _task_observation(last, layout)["reports"]
+    accepted = _task_is_accepted(last)
+    reports = (
+        [] if accepted else _task_observation(last, layout)["reports"]
+    )
     if agent is None or project is None:
+        if accepted:
+            return _outcome_fallback(lang, last)
         return _t(
             lang,
             "explain_missing_model",
@@ -317,36 +361,62 @@ def _explain_outcomes(
             status=_status_name(lang, str(last.get("status") or "")),
             reports=", ".join(reports) or "—",
         )
-    observation = json.dumps(
-        {
-            "project": {
-                "name": project.get("name"),
-                "brief": _cap_text(project.get("brief"), 800),
+    if accepted:
+        observation = json.dumps(
+            {
+                "project": {
+                    "name": project.get("name"),
+                    "brief": _cap_text(project.get("brief"), 800),
+                },
+                "task": _outcome_observation(last),
+                "recent_conversation": _conversation_observation(
+                    layout, session
+                ),
             },
-            "plan": _plan_observation(layout),
-            "changed_tasks": [
-                _task_observation(task, layout) for task in changed
-            ],
-            "recent_conversation": _conversation_observation(
-                layout, session
-            ),
-            "user_decisions": _decision_log(layout),
-        },
-        ensure_ascii=False,
-        indent=2,
-    )
-    question = _t(
-        lang, "explain_question", text=user_text or "(no message)"
-    )
-    fallback = _t(
-        lang,
-        "explain_failed",
-        status=_status_name(lang, str(last.get("status") or "")),
-        reports=", ".join(reports) or "—",
-    )
+            ensure_ascii=False,
+            indent=2,
+        )
+        question = _t(
+            lang, "outcome_question", text=user_text or "(no message)"
+        )
+        fallback = _outcome_fallback(lang, last)
+        prompt = OUTCOME_PROMPT
+    else:
+        observation = json.dumps(
+            {
+                "project": {
+                    "name": project.get("name"),
+                    "brief": _cap_text(project.get("brief"), 800),
+                },
+                "plan": _plan_observation(layout),
+                "changed_tasks": [
+                    _task_observation(task, layout) for task in changed
+                ],
+                "recent_conversation": _conversation_observation(
+                    layout, session
+                ),
+                "user_decisions": _decision_log(layout),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        question = _t(
+            lang, "explain_question", text=user_text or "(no message)"
+        )
+        fallback = _t(
+            lang,
+            "explain_failed",
+            status=_status_name(lang, str(last.get("status") or "")),
+            reports=", ".join(reports) or "—",
+        )
+        prompt = ""
     try:
         answer = agent.explain(
-            project, question, observation, fallback=fallback
+            project,
+            question,
+            observation,
+            fallback=fallback,
+            prompt=prompt,
         )
     except Exception:  # noqa: BLE001 - the console must stay up
         answer = fallback

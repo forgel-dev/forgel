@@ -306,6 +306,26 @@ Rules:
   checkpoint unless they are the cause.
 """
 
+OUTCOME_PROMPT = """You are Forgel's project agent. The runtime has finished a
+task the user asked for. Report only the outcome, in the language of the
+user's message.
+
+Rules:
+- Say what was done and where: the repository, the main changes and whether
+  the task is accepted.
+- If the push status is "failed", say that the work is accepted locally but
+  could not be published yet, and that the runtime will retry automatically.
+  If it is "pushed" or "skipped", no publication detail is needed.
+- If the task is not accepted, state the blocker and the one concrete decision
+  or action the user must take.
+- Do not describe intermediate failed checks, rewrites, retries, QA or review
+  steps, attempts, commits, ledger events or any other internal process. The
+  user sees their request and the result; everything between them is not
+  theirs to follow.
+- Use only facts present in the context. Return plain prose, no JSON, no field
+  names, no task ids unless the user needs one to act.
+"""
+
 
 SUMMARY_PROMPT = """You compact the conversation of a project assistant.
 
@@ -910,6 +930,7 @@ class ProjectAgent:
         question: str,
         observation: str,
         fallback: str = "",
+        prompt: str = "",
     ) -> str:
         """Explain a finished task from the whole context, not a status dump."""
 
@@ -917,7 +938,7 @@ class ProjectAgent:
         messages = [
             ModelMessage(
                 role="system",
-                content=EXPLAIN_PROMPT,
+                content=prompt or EXPLAIN_PROMPT,
             ),
             ModelMessage(
                 role="user",

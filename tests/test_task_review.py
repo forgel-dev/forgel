@@ -23,6 +23,7 @@ from forgel.task_review import (
     process_task_result,
     reject_task,
     rerun_review,
+    retry_failed_pushes,
     run_task_review,
     task_diff,
 )
@@ -1083,6 +1084,68 @@ class TaskReviewTest(unittest.TestCase):
         self.assertEqual(
             stored["result"]["push"]["status"], "pushed"
         )
+
+    def test_a_failed_push_is_retried_after_acceptance(self) -> None:
+        bare = self.home / "remote.git"
+        subprocess.run(
+            ["git", "init", "--bare", "-q", str(bare)], check=True
+        )
+        subprocess.run(
+            ["git", "remote", "add", "origin", str(bare)],
+            cwd=self.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self._git("push", "-u", "origin", "main")
+        write_text(self.repo / "app.py", "value = 2\n")
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "accepted change",
+        )
+        task = self._task()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="done",
+            result={
+                "acceptance": {
+                    "status": "accepted",
+                    "actor": "auto",
+                    "at": "2026-11-20T00:00:00+00:00",
+                    "notes": "",
+                },
+                "files_changed": ["app.py"],
+                "push": {
+                    "status": "failed",
+                    "repo": "main",
+                    "branch": "",
+                    "detail": "ssh: Could not resolve hostname",
+                    "attempts": 1,
+                    "next_at": "",
+                },
+            },
+        )
+
+        pushed = retry_failed_pushes(
+            self.settings, self.ledger, self.project
+        )
+
+        self.assertEqual(pushed, [task["id"]])
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["push"]["status"], "pushed"
+        )
+        self.assertEqual(stored["result"]["push"]["attempts"], 2)
+        log = subprocess.run(
+            ["git", "--git-dir", str(bare), "log", "--format=%s", "main"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertIn("accepted change", log)
 
     def test_rejecting_a_review_fails_the_task(self) -> None:
         task = self._task()

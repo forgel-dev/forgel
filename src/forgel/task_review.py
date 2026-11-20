@@ -16,7 +16,7 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -42,12 +42,19 @@ from .repo_tools import (
 )
 from .session_context import budget_for
 from .task_qa import TaskQAResult, run_task_qa
-from .tasks import attempt_number, get_task, list_tasks, update_task
+from .tasks import (
+    attempt_number,
+    commit_control,
+    get_task,
+    list_tasks,
+    update_task,
+)
 
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
 MAX_QA_CHARS = 2_000
 REMOVAL_REASONS = {"removed", "replaced", "wrong"}
+PUSH_RETRY_SECONDS = 60
 TEST_PATH = re.compile(
     r"(^|/)(tests?|spec|__tests__)/"
     r"|(^|/)test_[^/]+\.(py|js|ts|tsx|jsx|mjs)$"
@@ -1039,6 +1046,11 @@ def _push_accepted(
     layout = ProjectLayout.detect(str(project["workspace"]))
     task_id = str(task["id"])
     repo_id, repo = _repo(layout, task)
+    previous = dict((task.get("result") or {}).get("push") or {})
+    try:
+        push_attempt = int(previous.get("attempts") or 0) + 1
+    except (TypeError, ValueError):
+        push_attempt = 1
 
     def push_one(path: Path) -> dict[str, str]:
         if not (path / ".git").exists():
@@ -1103,26 +1115,35 @@ def _push_accepted(
     control_result: dict[str, str] | None = None
     if control.resolve() != repo.resolve():
         try:
-            tasks.commit_control(layout, f"Accept task {task_id}")
+            commit_control(layout, f"Accept task {task_id}")
         except Exception:  # noqa: BLE001 - a commit must not undo acceptance
             pass
         control_result = push_one(control)
     data = dict(task.get("result") or {})
+    status = pushed.get("status", "failed")
+    next_at = ""
+    if status == "failed":
+        next_at = (
+            datetime.now(timezone.utc)
+            + timedelta(seconds=PUSH_RETRY_SECONDS)
+        ).isoformat(timespec="seconds")
     data["push"] = {
-        "status": pushed.get("status", "failed"),
+        "status": status,
         "repo": repo_id,
         "branch": pushed.get("branch", ""),
         "detail": pushed.get("detail", ""),
         "control": control_result,
+        "attempts": push_attempt,
+        "next_at": next_at,
     }
     update_task(layout, task_id, result=data)
     ledger.append_event(
         str(project["id"]),
         "task_push",
-        status=pushed.get("status", "failed"),
+        status=status,
         idempotency_key=(
             f"{project['id']}:task_push:{task_id}:"
-            f"r{attempt_number(task)}"
+            f"r{attempt_number(task)}:p{push_attempt}"
         ),
         artifact_refs=[],
         payload={
@@ -1134,6 +1155,39 @@ def _push_accepted(
         },
         generation=ledger.current_generation(str(project["id"])),
     )
+
+
+def retry_failed_pushes(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+) -> list[str]:
+    """Retry publication of accepted tasks whose push failed and is due."""
+
+    layout = ProjectLayout.detect(str(project["workspace"]))
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    pushed: list[str] = []
+    for task in list_tasks(layout):
+        if str(task.get("status") or "") != "done":
+            continue
+        result = task.get("result") or {}
+        acceptance = result.get("acceptance") or {}
+        if str(acceptance.get("status") or "") != "accepted":
+            continue
+        push = result.get("push") or {}
+        if str(push.get("status") or "") != "failed":
+            continue
+        next_at = str(push.get("next_at") or "")
+        if next_at and next_at > now:
+            continue
+        task_id = str(task["id"])
+        fresh = get_task(layout, task_id) or task
+        _push_accepted(settings, ledger, project, fresh)
+        updated = get_task(layout, task_id) or fresh
+        current = (updated.get("result") or {}).get("push") or {}
+        if str(current.get("status") or "") == "pushed":
+            pushed.append(task_id)
+    return pushed
 
 
 def reject_task(

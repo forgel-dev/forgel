@@ -17,7 +17,11 @@ from . import dependencies, peak, specs, tasks
 from .artifacts import write_text
 from .approvals import awaits_approval, latest_approval
 from .coding_agent import CodingAgent
-from .task_review import accept_parked_green_tasks, process_task_result
+from .task_review import (
+    accept_parked_green_tasks,
+    process_task_result,
+    retry_failed_pushes,
+)
 from .config import Settings
 from .control import is_paused
 from .layout import ProjectLayout
@@ -1005,6 +1009,11 @@ def run_once(
             )
             continue
         seen[workspace] = project_id
+        for task_id in retry_failed_pushes(settings, ledger, project):
+            log(
+                f"[daemon] {project_id}: pushed {task_id} "
+                "after an earlier failure"
+            )
         if project_is_done(ledger, project_id):
             continue
         layout = ProjectLayout.detect(project["workspace"])
