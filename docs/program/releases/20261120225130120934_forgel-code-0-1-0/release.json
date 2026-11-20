@@ -6,7 +6,7 @@
   "release_class": "minor",
   "plan_id": "",
   "created_at": "2026-11-20T22:51:30+00:00",
-  "status": "tagged",
+  "status": "released",
   "tasks": [
     "20261120002849_declare-test-dependencies-in-pyproject-t"
   ],
@@ -18,23 +18,44 @@
       "preset": "python",
       "planned_version": "0.1.0",
       "version": "0.1.0",
-      "status": "tagged",
+      "status": "released",
       "tag": "v0.1.0",
       "sha": "27fd4c278e053e93002a39281b3d19b802518666",
-      "release": "",
-      "detail": "no API token for a GitHub release: no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session",
+      "release": "https://github.com/forgel-dev/code/releases/tag/v0.1.0",
+      "detail": "",
       "version_files": []
     }
   },
   "audit": {
-    "rounds": 1,
-    "verdict": "skipped",
-    "summary": "no model is configured; the audit was skipped",
-    "report": "",
+    "rounds": 2,
+    "verdict": "fail",
+    "summary": "The change set implements the test extra and metadata emission, and the test suite passes, but the README test-extra install URL points at v0.1.1 instead of the 0.1.0 release tag, so the documented install path is broken; minor documentation and lint issues remain.",
+    "report": "docs/program/releases/20261120225130120934_forgel-code-0-1-0/audit.md",
     "task_ids": [
       "20261120002849_declare-test-dependencies-in-pyproject-t"
     ],
-    "at": "2026-11-20T22:53:55+00:00"
+    "at": "2026-11-20T22:58:32+00:00",
+    "findings": [
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "README's new test-extra install command points at `.../refs/tags/v0.1.1.tar.gz[test]`, while the release record, changelog and release id are 0.1.0 (`v0.1.0`). Users following the release docs will fetch a wrong or nonexistent tag, breaking the documented test-extra install path.",
+        "suggestion": "Change the URL to `v0.1.0` (or the actual published tag) and add a README-test assertion that the tag matches the package/release version so it cannot drift."
+      },
+      {
+        "severity": "minor",
+        "repo_id": "code",
+        "issue": "README's new sentence says the checkout suite 'needs nothing but the Python standard library', but `tests/test_extras.py`'s `OfflineExtraInstallTest` calls `_pip_python()` and fails if no Python 3.9+ with pip is available, so the documented no-install command can fail on a stdlib-only interpreter.",
+        "suggestion": "Reword the claim to say no package installation is required, or make the pip test skip when pip is unavailable while keeping the offline install test in environments with pip."
+      },
+      {
+        "severity": "minor",
+        "repo_id": "code",
+        "issue": "`_build_backend.py` adds `import re` but never uses it; this can fail the project's `make lint` check.",
+        "suggestion": "Remove the unused import or use it."
+      }
+    ],
+    "post_release": true
   },
   "control_push": {
     "status": "pushed",
@@ -42,6 +63,7 @@
     "detail": ""
   },
   "finalized_at": "2026-11-20T22:54:03+00:00",
-  "detail": "",
-  "next_at": ""
+  "detail": "The change set implements the test extra and metadata emission, and the test suite passes, but the README test-extra install URL points at v0.1.1 instead of the 0.1.0 release tag, so the documented install path is broken; minor documentation and lint issues remain.",
+  "next_at": "",
+  "provider_retry_at": ""
 }
