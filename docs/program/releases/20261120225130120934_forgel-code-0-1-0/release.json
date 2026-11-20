@@ -1,0 +1,38 @@
+{
+  "id": "20261120225130120934_forgel-code-0-1-0",
+  "project": "forgel-1d2bf685",
+  "title": "Forgel Code 0.1.0",
+  "request": "Publish Forgel Code 0.1.0: declare the test dependencies in pyproject.toml and ship the client release.",
+  "release_class": "minor",
+  "plan_id": "",
+  "created_at": "2026-11-20T22:51:30+00:00",
+  "status": "planned",
+  "tasks": [
+    "20261120002849_declare-test-dependencies-in-pyproject-t"
+  ],
+  "repos": {
+    "code": {
+      "base_sha": "40909c4c3b5da86753a98728be559d5d0783a864",
+      "base_version": "",
+      "base_source": "no release history",
+      "preset": "python",
+      "planned_version": "0.1.0",
+      "version": "",
+      "status": "pending",
+      "tag": "",
+      "sha": "",
+      "release": "",
+      "detail": ""
+    }
+  },
+  "audit": {
+    "rounds": 0,
+    "verdict": "",
+    "summary": "",
+    "report": "",
+    "task_ids": []
+  },
+  "control_push": {},
+  "finalized_at": "",
+  "detail": ""
+}
