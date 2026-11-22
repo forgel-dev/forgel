@@ -191,7 +191,218 @@
       ]
     },
     "failure": {},
-    "report": "docs/program/agent/20261122034544_release-audit-uninstall-omits-bashrc-alt.md"
+    "report": "docs/program/agent/20261122034544_release-audit-uninstall-omits-bashrc-alt.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261122034544_release-audit-uninstall-omits-bashrc-alt.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m pytest -q tests/test_install.py -k bashrc",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest -q tests/test_install.py -k idempotent",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "sh -n install.sh",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A simulated install into a bash home with the block in ~/.bashrc, followed by `--uninstall`, leaves no block or marker line",
+          "command": "python -m pytest -q tests/test_install.py -k bashrc",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A second `--uninstall` run leaves every candidate startup file unchanged, and missing or block-free files do not fail the uninstall",
+          "command": "python -m pytest -q tests/test_install.py -k idempotent",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The full existing test suite passes",
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "install.sh remains syntactically valid in its shell dialect",
+          "command": "sh -n install.sh",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": false,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The change is minimal and targeted: `PROFILE_NAMES` in install.sh gains `.bashrc`, and since that variable is consumed only by `uninstall`, the uninstall path now strips the marked block from `~/.bashrc` while the install path, marker text and CLI surface are untouched. `remove_profile_block` already tolerates missing, unreadable and block-free files and is idempotent, so FR-3/FR-4/FR-5 hold for the new candidate without extra logic. tests/test_install.py adds a `bashrc` regression test with an exact byte-for-byte expectation, adds an `idempotent` double-uninstall test over every candidate profile, extends `CANDIDATE_PROFILES`, and factors the block text into a `_marked_block` helper whose output matches the installer's block byte for byte; the pre-existing string-concatenation refactors keep the same content. All tests use a temporary HOME and no test was deleted or weakened. One cosmetic nit: `assertNotIn(\"Removed the PATH block\", second.stdout)` is vacuous because the script never prints that phrase, but it does not affect the requirement. Minor note: the bashrc test writes the block in the exact install format rather than invoking the installer (whose bash branch cannot select `~/.bashrc`, since a fresh bash install verifies through `-l -i`), which is the only feasible way to reproduce the audited state and matches the spec's fixture allowance.",
+      "requirements": [
+        {
+          "requirement": "FR-1: uninstall treats ~/.bashrc as a file that can contain the marked block",
+          "verdict": "pass",
+          "note": "`.bashrc` added to `PROFILE_NAMES`, which `uninstall` iterates."
+        },
+        {
+          "requirement": "FR-2: uninstall file set is a superset of the bash install targets (`.bash_profile` branch and `.bashrc`)",
+          "verdict": "pass",
+          "note": "List covers .bash_profile, .bash_login, .profile plus .bashrc; a custom FORGEL_CODE_PROFILE is still cleaned as before."
+        },
+        {
+          "requirement": "FR-3: block between existing markers removed, all other lines unchanged in content and order",
+          "verdict": "pass",
+          "note": "Unchanged awk-based `remove_profile_block`; the bashrc test compares the full file against `# keep-before\\nexport EDITOR=vi\\n# keep-after\\n`."
+        },
+        {
+          "requirement": "FR-4: missing/unreadable/block-free candidate does not fail or modify the file",
+          "verdict": "pass",
+          "note": "`remove_profile_block` returns 0 for non-files and for files without MARKER_START; idempotence test exercises block-free reruns."
+        },
+        {
+          "requirement": "FR-5: second uninstall produces the same result as the first",
+          "verdict": "pass",
+          "note": "`test_repeated_uninstall_of_bashrc_is_idempotent` snapshots all candidate files after run one and compares after run two."
+        },
+        {
+          "requirement": "FR-6: install path behaviour unchanged (one block in the same selected file)",
+          "verdict": "pass",
+          "note": "Only the uninstall-only `PROFILE_NAMES` list changed; `profile_path`, markers and block-writing code are untouched."
+        },
+        {
+          "requirement": "FR-7: regression test with `bashrc` in its name, temp HOME, block in ~/.bashrc, no ~/.bash_profile, asserts block gone and unrelated lines survive",
+          "verdict": "pass",
+          "note": "`test_uninstall_removes_the_marked_block_from_bashrc` does all of this; it writes the block in the installer's exact byte format via `_marked_block` rather than running the installer, which matches the spec's fixture allowance and is the only reproducible state since the install path's bash branch never selects ~/.bashrc."
+        },
+        {
+          "requirement": "FR-8: idempotence test with `idempotent` in its name, two uninstall runs, unchanged file, no markers",
+          "verdict": "pass",
+          "note": "`test_repeated_uninstall_of_bashrc_is_idempotent` verifies both runs and marker counts; the `assertNotIn(\"Removed the PATH block\", ...)` line is vacuous but harmless."
+        },
+        {
+          "requirement": "FR-9: tests use a temporary HOME and never touch the real startup files",
+          "verdict": "pass",
+          "note": "`InstallerCase` uses `tempfile.mkdtemp` and `HOME`/`FORGEL_CODE_*` overrides; no real home path is read or written."
+        },
+        {
+          "requirement": "FR-10: install.sh remains valid POSIX sh",
+          "verdict": "pass",
+          "note": "Change is a string literal only; QA ran `sh -n install.sh` (pass)."
+        },
+        {
+          "requirement": "Scope: only install.sh and tests/test_install.py change; no README/CHANGELOG/pyproject/releases/forgel_code edits",
+          "verdict": "pass",
+          "note": "Attributed diff touches exactly the two files."
+        },
+        {
+          "requirement": "No weakened or deleted tests; refactors preserve semantics",
+          "verdict": "pass",
+          "note": "Refactors replace inline block text with `_marked_block`, which yields identical content; no test was removed."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261122034544_release-audit-uninstall-omits-bashrc-alt.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-22T04:04:24+00:00",
+      "notes": ""
+    }
   },
   "request": ""
 }
