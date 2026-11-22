@@ -788,6 +788,84 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertEqual(stored["status"], "blocked")
         self.assertEqual(stored["detail"], question)
 
+    def test_a_failed_release_task_goes_back_to_work(self) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "qa", "message": "the test failed"},
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "rework",
+                        "reason": "redo the work",
+                        "feedback": ["Fix the failing test"],
+                    }
+                )
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+        again = get_task(self.layout, str(task["id"]))
+        assert again is not None
+        self.assertEqual(again["status"], "pending")
+        self.assertEqual(
+            again["result"]["feedback"], ["Fix the failing test"]
+        )
+
+    def test_a_failed_release_task_can_be_stopped(self) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "qa", "message": "the test failed"},
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "stop",
+                        "reason": "the work cannot be fixed",
+                    }
+                )
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(stored["detail"], "the work cannot be fixed")
+
     def test_a_release_waits_for_its_own_tasks(self) -> None:
         release, task = self._release()
         update_task(

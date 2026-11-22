@@ -1774,6 +1774,114 @@ def process_releases(
                 for task in items
             )
         ):
+            stopped = [
+                task
+                for task in items
+                if str(task.get("status") or "")
+                in {"failed", "cancelled", "blocked"}
+            ]
+            decision = None
+            if ledger is not None and client is not None and stopped:
+                from . import controller
+
+                try:
+                    decision = controller.decide(
+                        settings,
+                        ledger,
+                        project,
+                        layout,
+                        "release_failed_task",
+                        {
+                            "release": {
+                                "id": release.get("id"),
+                                "title": release.get("title"),
+                                "status": release.get("status"),
+                            },
+                            "tasks": [
+                                {
+                                    "id": task.get("id"),
+                                    "title": task.get("title"),
+                                    "status": task.get("status"),
+                                    "summary": (
+                                        (task.get("result") or {}).get(
+                                            "summary"
+                                        )
+                                        or ""
+                                    ),
+                                    "failure": (
+                                        (task.get("result") or {}).get(
+                                            "failure"
+                                        )
+                                        or (task.get("result") or {}).get(
+                                            "last_failure"
+                                        )
+                                        or {}
+                                    ),
+                                }
+                                for task in stopped
+                            ],
+                        },
+                        client,
+                        log,
+                    )
+                except Exception as exc:  # noqa: BLE001 - keep the train
+                    log(
+                        f"[controller] release failed-task decision "
+                        f"failed: {exc}"
+                    )
+                    decision = None
+            if decision is not None:
+                action = controller.release_action(decision.operation)
+                if action == "block":
+                    release["status"] = "blocked"
+                    release["detail"] = (
+                        decision.reason
+                        or decision.summary
+                        or "the release stopped on a task"
+                    )
+                    save_release(layout, release)
+                    actions.append(f"blocked:{release_id}")
+                    continue
+                if action == "ask_user":
+                    release["status"] = "blocked"
+                    release["detail"] = (
+                        decision.question
+                        or decision.reason
+                        or "the release stopped on a task"
+                    )
+                    save_release(layout, release)
+                    log(
+                        f"[release] {release_id}: needs the owner: "
+                        f"{release['detail']}"
+                    )
+                    actions.append(f"blocked:{release_id}")
+                    continue
+                task = stopped[0]
+                data = dict(task.get("result") or {})
+                data["last_failure"] = (
+                    data.get("failure")
+                    or {"kind": "external", "message": "the release stopped"}
+                )
+                data.pop("failure", None)
+                data["feedback"] = decision.feedback or (
+                    [decision.reason] if decision.reason else []
+                )
+                tasks.update_task(
+                    layout,
+                    str(task["id"]),
+                    status="pending",
+                    started_at="",
+                    finished_at="",
+                    result=data,
+                )
+                release["status"] = "running"
+                save_release(layout, release)
+                actions.append(f"retry:{task['id']}")
+                log(
+                    f"[release] {release_id}: sent task "
+                    f"{task['id']} back to work"
+                )
+                continue
             release["status"] = "blocked"
             release["detail"] = (
                 "the release has a failed or cancelled task"
