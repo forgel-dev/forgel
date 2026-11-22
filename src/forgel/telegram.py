@@ -334,10 +334,11 @@ class TelegramGateway:
                     + _t(
                         self.router.language(chat_id),
                         "tg_delete_warning",
-                    )
+                    ),
+                    drain=reply.drain,
                 )
         self._send(chat_id, reply)
-        return True
+        return reply.drain
 
     def _process_callback(self, callback: dict[str, Any]) -> bool:
         message = callback.get("message") or {}
@@ -364,7 +365,7 @@ class TelegramGateway:
                 self._send(chat_id, Reply(reply.text))
         else:
             self._send(chat_id, Reply(reply.text))
-        return True
+        return reply.drain
 
     # ----------------------------------------------------------------- loop
 
@@ -388,15 +389,17 @@ class TelegramGateway:
                 if max_cycles is not None and cycles >= max_cycles:
                     return
                 continue
-            handled = False
+            wants_runtime = False
             for update in updates:
                 self.offset = int(update.get("update_id", 0)) + 1
                 try:
-                    handled = self.process(update) or handled
+                    wants_runtime = (
+                        self.process(update) or wants_runtime
+                    )
                 except Exception as exc:  # noqa: BLE001 - keep polling
                     self.log(f"[telegram] update failed: {exc}")
             if self.daemon_enabled and (
-                handled or time.monotonic() >= next_cycle
+                wants_runtime or time.monotonic() >= next_cycle
             ):
                 self._daemon_cycle()
                 next_cycle = time.monotonic() + interval
