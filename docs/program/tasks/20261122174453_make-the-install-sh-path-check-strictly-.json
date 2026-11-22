@@ -151,10 +151,10 @@
     }
   ],
   "language": "ru",
-  "status": "blocked",
+  "status": "pending",
   "created_at": "2026-11-22T17:44:53+00:00",
-  "started_at": "2026-11-22T18:34:39+00:00",
-  "finished_at": "2026-11-22T18:39:10+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "the controlling agent stopped: the chosen step failed (task_review); try again later",
     "files_changed": [
@@ -436,7 +436,7 @@
       ],
       "report": "docs/program/agent/20261122174453_make-the-install-sh-path-check-strictly-.review.md"
     },
-    "rework_count": 1,
+    "rework_count": 0,
     "feedback": [
       "Delete err.txt and out.txt from the repository root; they are captured command output, not product artifacts.",
       "Delete tests/test_zz_probe.py. If it contained a meaningful assertion, move that assertion into tests/test_install.py as part of the existing installer test classes with a real check; do not leave a scratch module collected by pytest.",
@@ -448,7 +448,9 @@
       "message": "The install.sh work itself looks sound: the fresh-shell check is bounded by a watchdog implemented with POSIX sh primitives only (sleep + background job + `kill -TERM`, grace, `kill -KILL` on the process group/tree), the timeout is recorded before signalling so it deterministically wins the success decision (CHECK_STATUS=124), the bound is configurable through FORGEL_CODE_TIMEOUT with a ten-second default, the temporary directory is created with umask 077 under a random token and removed by cleanup_check, and the block append/removal pair was reworked with a separator comment plus trailing-newline detection so install/install and install/uninstall are byte-stable. All QA gates pass, including the hang test and `sh -n install.sh`. What blocks the change is repository hygiene: the attributed commit also adds `err.txt`, `out.txt` and `tests/test_zz_probe.py`, which are not in the specification's affected files (`install.sh`, `tests/test_install.py`, `tests/test_readme_install.py`) and are debug output / probe leftovers rather than product artifacts; `test_zz_probe.py` in particular is collected by the suite and adds a scratch module with a sort-order name next to the real installer tests.",
       "retryable": false
     },
-    "blocked_by": "controller"
+    "blocked_by": "controller",
+    "attempts": 0,
+    "manual_retries": 1
   },
   "request": "docs/program/requests/20261122174453437402_make-the-install-sh-path-check-strictly-bounded-and-keep-the.md"
 }
