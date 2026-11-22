@@ -979,6 +979,46 @@ class CodingAgentTest(unittest.TestCase):
         )
         self.assertLessEqual(result.steps, 10)
 
+    def test_recall_reads_an_earlier_step_from_the_transcript(self) -> None:
+        task = self._task()
+        task["test_command"] = [
+            sys.executable,
+            "-c",
+            "print('ok')",
+        ]
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {"action": "read_file", "path": "README.md"}
+                ),
+                json.dumps(
+                    {"action": "recall", "from": 1, "count": 1}
+                ),
+                json.dumps(
+                    {"action": "done", "summary": "read the readme"}
+                ),
+            ]
+        )
+
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+
+        self.assertEqual(result.status, "done")
+        transcript = (
+            Path(self.project["workspace"])
+            / "docs/program/agent"
+            / f"{task['id']}.transcript.jsonl"
+        )
+        self.assertTrue(transcript.exists())
+        self.assertIn(
+            "README.md",
+            transcript.read_text(encoding="utf-8"),
+        )
+        recalled = client.requests[2][-1].content
+        self.assertIn("step 1", recalled)
+        self.assertIn("source", recalled)
+
     def test_a_failed_run_reports_the_changed_files(self) -> None:
         task = self._task()
         client = ScriptedModelClient(

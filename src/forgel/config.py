@@ -70,6 +70,7 @@ class Settings:
     sandbox_read_only: bool = True
     context_window: int = default_profile().context_window
     model_input_price: float = default_profile().input_price
+    model_cache_input_price: float = 0.0
     model_output_price: float = default_profile().output_price
     # The runtime reads the policy from the environment (off-peak by default).
     # Direct construction defaults to "always" so library and test code does
@@ -248,6 +249,9 @@ class Settings:
             model_input_price=_env_price(
                 "FORGEL_MODEL_INPUT_PRICE",
                 default_profile().input_price,
+            ),
+            model_cache_input_price=_env_price(
+                "FORGEL_MODEL_CACHE_INPUT_PRICE", 0.0
             ),
             model_output_price=_env_price(
                 "FORGEL_MODEL_OUTPUT_PRICE",

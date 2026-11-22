@@ -18,6 +18,11 @@ from typing import Any, Sequence
 from .tokens import count_tokens
 
 DEFAULT_WINDOW = 1_000_000
+# The model may accept a million tokens, but the working context is far
+# smaller: every step resends the whole prompt, so a large window is paid for
+# on every call. Handing off at a bounded working size keeps the cost linear
+# in the work, not in the model's advertised limit.
+WORKING_CONTEXT = 131_072
 MAX_RESERVE = 8_192
 COMPACT_AT = 0.7
 KEEP_RECENT = 3
@@ -65,10 +70,11 @@ class ContextBudget:
 
 
 def budget_for(window: int) -> ContextBudget:
-    """A budget with an output reserve proportional to the window."""
+    """A budget bounded by the working context, not the model's limit."""
 
-    reserve = min(MAX_RESERVE, max(1_024, window // 4))
-    return ContextBudget(window=window, reserve=reserve)
+    working = min(int(window), WORKING_CONTEXT) if window else WORKING_CONTEXT
+    reserve = min(MAX_RESERVE, max(1_024, working // 4))
+    return ContextBudget(window=working, reserve=reserve)
 
 
 @dataclass

@@ -26,6 +26,7 @@ from .model import (
     ModelClient,
     ModelError,
     ModelMessage,
+    cache_tokens,
     project_model_name,
 )
 from .model_output import json_objects
@@ -214,6 +215,7 @@ def decide(
     usage = getattr(client, "last_usage", None)
     if not isinstance(usage, dict):
         usage = {}
+    hit, miss = cache_tokens(usage)
     ledger.append_event(
         str(project["id"]),
         "controller",
@@ -229,6 +231,8 @@ def decide(
             "output_tokens": int(
                 usage.get("completion_tokens") or 0
             ),
+            "cache_hit_tokens": hit,
+            "cache_miss_tokens": miss,
         },
         generation=ledger.current_generation(str(project["id"])),
     )

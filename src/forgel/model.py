@@ -306,6 +306,25 @@ def unix_now() -> float:
     return time.time()
 
 
+def cache_tokens(usage: Mapping[str, Any]) -> tuple[int, int]:
+    """Provider cache hit and miss tokens, whatever shape the usage takes."""
+
+    try:
+        hit = usage.get("prompt_cache_hit_tokens")
+        if hit is None:
+            details = usage.get("prompt_tokens_details")
+            if isinstance(details, Mapping):
+                hit = details.get("cached_tokens")
+        hit = int(hit or 0)
+        miss = usage.get("prompt_cache_miss_tokens")
+        if miss is None:
+            miss = max(0, int(usage.get("prompt_tokens") or 0) - hit)
+        miss = int(miss or 0)
+    except (TypeError, ValueError):
+        return 0, 0
+    return max(0, hit), max(0, miss)
+
+
 class UsageCounter:
     """Wrap a client and total the provider usage of every call."""
 
@@ -314,6 +333,8 @@ class UsageCounter:
         self.calls = 0
         self.input_tokens = 0
         self.output_tokens = 0
+        self.cache_hit_tokens = 0
+        self.cache_miss_tokens = 0
 
     def complete(
         self,
@@ -328,6 +349,9 @@ class UsageCounter:
             self.output_tokens += int(
                 usage.get("completion_tokens") or 0
             )
+            hit, miss = cache_tokens(usage)
+            self.cache_hit_tokens += hit
+            self.cache_miss_tokens += miss
         return text
 
 

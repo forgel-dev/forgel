@@ -30,6 +30,7 @@ from .artifacts import write_text
 from .config import Settings
 from .instructions import instruction_context
 from .session_context import (
+    STATE_CONTEXT_RATIO,
     ContextBudget,
     SessionState,
     budget_for,
@@ -48,6 +49,7 @@ from .model import (
     ModelClient,
     ModelError,
     ModelMessage,
+    cache_tokens,
     project_model_name,
 )
 from .pricing import token_cost
@@ -67,6 +69,7 @@ MAX_REPEAT_CORRECTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
     "read_file",
+    "recall",
     "write_file",
     "delete_file",
     "run",
@@ -172,6 +175,7 @@ XML or provider-specific function calls; the runtime understands only the
 JSON actions below.
 {"action": "list_files", "path": "."}
 {"action": "read_file", "path": "relative/path", "offset": 1, "limit": 2000}
+{"action": "recall", "from": 1, "count": 5}
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
@@ -183,6 +187,10 @@ Context:
   state to a new session. Do not estimate tokens, warn about context limits or
   ask to continue; just keep working from the task, the repository and any
   SESSION HANDOFF you receive.
+- Every step is recorded in the task transcript and the prompt lists the
+  earlier steps. When you need a result that is no longer in the conversation,
+  read it with recall from its step number; never repeat an action only to see
+  its result again.
 
 Autonomy (D-075):
 - Work autonomously. The task is the source of truth. You cannot ask the user
@@ -333,6 +341,100 @@ def _safe_env(layout: ProjectLayout) -> dict[str, str]:
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["GIT_TERMINAL_PROMPT"] = "0"
     return env
+
+
+def _transcript_path(layout: ProjectLayout, task_id: str) -> Path:
+    return layout.artifact(
+        f"docs/program/agent/{task_id}.transcript.jsonl"
+    )
+
+
+def _load_transcript(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    entries: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict) and item.get("step"):
+            entries.append(item)
+    return entries
+
+
+def _append_transcript(path: Path, entry: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(dict(entry), ensure_ascii=False) + "\n"
+        )
+
+
+def _transcript_index(
+    entries: Sequence[Mapping[str, Any]], limit: int = 200
+) -> str:
+    lines = []
+    for entry in entries[-limit:]:
+        target = str(entry.get("target") or "").strip()
+        line = f"- step {entry.get('step')}: {entry.get('action')}"
+        if target:
+            line += f" {target}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _recall(
+    entries: Sequence[Mapping[str, Any]], start: Any, count: Any
+) -> str:
+    try:
+        first = max(1, int(start))
+    except (TypeError, ValueError):
+        first = 1
+    try:
+        size = max(1, min(int(count), 20))
+    except (TypeError, ValueError):
+        size = 5
+    selected = [
+        entry
+        for entry in entries
+        if first <= int(entry.get("step") or 0) < first + size
+    ]
+    if not selected:
+        return (
+            f"no transcript entries in steps {first}..{first + size - 1}"
+        )
+    return "\n\n".join(
+        f"step {entry.get('step')} [{entry.get('action')}]\n"
+        f"{entry.get('observation') or ''}"
+        for entry in selected
+    )
+
+
+def _transcript_section(
+    layout: ProjectLayout,
+    entries: Sequence[Mapping[str, Any]],
+    path: Path,
+) -> str:
+    ref = _ref(layout, path)
+    lines = [
+        "",
+        "## Transcript",
+        f"Every step is recorded in `{ref}`.",
+        "When an earlier step is no longer in the conversation, read it with "
+        '{"action": "recall", "from": <step>, "count": <n>} '
+        "instead of repeating the action.",
+    ]
+    index = _transcript_index(entries)
+    if index:
+        lines.append("")
+        lines.append("Earlier steps:")
+        lines.append(index)
+    return "\n".join(lines)
 
 
 def _observation_summary(
@@ -899,11 +1001,18 @@ class CodingAgent:
         estimated_input_tokens = 0
         provider_input_tokens = 0
         provider_output_tokens = 0
+        cache_hit_tokens = 0
+        cache_miss_tokens = 0
         state_path = layout.artifact(
             f"docs/program/agent/{task['id']}.state.md"
         )
         state_ref = _ref(layout, state_path) if state_path.exists() else ""
+        transcript_path = _transcript_path(layout, str(task["id"]))
+        transcript = _load_transcript(transcript_path)
         task_prompt = self._task_prompt(layout, task, repo_id, repo)
+        task_prompt += _transcript_section(
+            layout, transcript, transcript_path
+        )
         if state_path.exists():
             previous = state_path.read_text(encoding="utf-8")
             task_prompt += (
@@ -959,7 +1068,9 @@ class CodingAgent:
                 commands=list(commands),
                 observations=list(recent),
             )
-            max_state_tokens = max(512, int(window * 0.05))
+            max_state_tokens = max(
+                512, int(budget.window * STATE_CONTEXT_RATIO)
+            )
             write_text(
                 state_path,
                 state.to_markdown(
@@ -972,6 +1083,8 @@ class CodingAgent:
                     ModelMessage("system", SYSTEM_PROMPT),
                     ModelMessage("user", self._task_prompt(
                         layout, task, repo_id, repo
+                    ) + _transcript_section(
+                        layout, transcript, transcript_path
                     ) + "\n\n" + handoff_prompt(
                         state,
                         max_tokens=max_state_tokens,
@@ -1019,6 +1132,9 @@ class CodingAgent:
                         provider_output_tokens += int(
                             usage.get("completion_tokens", 0)
                         )
+                        hit, miss = cache_tokens(usage)
+                        cache_hit_tokens += hit
+                        cache_miss_tokens += miss
                     except (TypeError, ValueError):
                         pass
                 batch = parse_actions(raw)
@@ -1166,14 +1282,22 @@ class CodingAgent:
                                 f"repeated action corrected: {signature}"
                             )
                             continue
-                    observation, command = self._execute(
-                        layout,
-                        repo,
-                        action,
-                        touched,
-                        runner,
-                        environment.env_map if environment else None,
-                    )
+                    if kind == "recall":
+                        observation = _recall(
+                            transcript,
+                            action.get("from", 1),
+                            action.get("count", 5),
+                        )
+                        command = None
+                    else:
+                        observation, command = self._execute(
+                            layout,
+                            repo,
+                            action,
+                            touched,
+                            runner,
+                            environment.env_map if environment else None,
+                        )
                     actions.append(self._action_summary(action))
                     if command is not None:
                         commands.append(command)
@@ -1181,6 +1305,16 @@ class CodingAgent:
                         _observation_summary(action, observation, command)
                     )
                     recent = recent[-6:]
+                    if kind != "recall":
+                        entry = {
+                            "step": steps,
+                            "action": kind,
+                            "target": self._action_summary(action),
+                            "observation": _cap(observation),
+                            "command": command,
+                        }
+                        transcript.append(entry)
+                        _append_transcript(transcript_path, entry)
                     messages.append(
                         ModelMessage(
                             "user", f"OBSERVATION:\n{_cap(observation)}"
@@ -1261,6 +1395,8 @@ class CodingAgent:
             "estimated_input_tokens": estimated_input_tokens,
             "provider_input_tokens": provider_input_tokens,
             "provider_output_tokens": provider_output_tokens,
+            "cache_hit_tokens": cache_hit_tokens,
+            "cache_miss_tokens": cache_miss_tokens,
             "estimated_tokens": budget.usage(messages, model),
             "state": state_ref if compactions else "",
         }
@@ -1840,6 +1976,7 @@ Files:
 - Model calls: {context_stats.get('model_calls', 0)}
 - Estimated input tokens (all calls): {context_stats.get('estimated_input_tokens', 0)}
 - Provider input/output tokens: {context_stats.get('provider_input_tokens', 0)} / {context_stats.get('provider_output_tokens', 0)}
+- Provider cache hit/miss tokens: {context_stats.get('cache_hit_tokens', 0)} / {context_stats.get('cache_miss_tokens', 0)}
 - Estimated prompt at the end: {context_stats.get('estimated_tokens', 0)} tokens
 {('- State: `' + str(context_stats.get('state')) + '`') if context_stats.get('state') else '- State: not needed'}
 
@@ -1895,12 +2032,31 @@ Files:
         output_tokens = int(
             context_stats.get("provider_output_tokens") or 0
         )
-        cost = token_cost(
-            input_tokens,
-            output_tokens,
-            self.settings.model_input_price,
-            self.settings.model_output_price,
+        cache_hit = int(context_stats.get("cache_hit_tokens") or 0)
+        cache_miss = int(context_stats.get("cache_miss_tokens") or 0)
+        cache_price = float(
+            self.settings.model_cache_input_price or 0.0
         )
+        if cache_price <= 0:
+            cache_price = (
+                float(self.settings.model_input_price or 0.0) * 0.1
+            )
+        if cache_hit or cache_miss:
+            cost = token_cost(
+                cache_miss,
+                output_tokens,
+                self.settings.model_input_price,
+                self.settings.model_output_price,
+            ) + token_cost(
+                cache_hit, 0, cache_price, 0
+            )
+        else:
+            cost = token_cost(
+                input_tokens,
+                output_tokens,
+                self.settings.model_input_price,
+                self.settings.model_output_price,
+            )
         generation = self.ledger.current_generation(str(project["id"]))
         attempt = tasks.attempt_number(task)
         self.ledger.append_event(
@@ -1920,6 +2076,8 @@ Files:
                 "files_changed": files_changed,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
+                "cache_hit_tokens": cache_hit,
+                "cache_miss_tokens": cache_miss,
                 "rework": attempt,
             },
             generation=generation,
