@@ -500,10 +500,14 @@ def _apply_controller_decision(
     """Execute the controlling agent's next step for a failed task."""
 
     operation = str(decision.operation)
-    if operation == "retry":
+    if operation in {"retry", "run_task"}:
         data["attempts"] = attempts + 1
         data["last_failure"] = failure
         data.pop("failure", None)
+        if operation == "run_task":
+            data["feedback"] = decision.feedback or [
+                "The specification was rewritten; implement the new version."
+            ]
         tasks.update_task(
             layout,
             task_id,
@@ -512,7 +516,7 @@ def _apply_controller_decision(
             finished_at="",
             result=data,
         )
-        log(f"[controller] task {task_id}: retry")
+        log(f"[controller] task {task_id}: {operation}")
         return True
     if operation == "rework":
         data["rework_count"] = int(data.get("rework_count", 0)) + 1
@@ -543,6 +547,24 @@ def _apply_controller_decision(
         ):
             return True
         return False
+    if operation in {"task_process", "task_qa", "task_review"}:
+        from . import runtime_ops
+
+        try:
+            text = runtime_ops.run_operation(
+                settings,
+                ledger,
+                project,
+                operation,
+                {"task_id": task_id},
+                client,
+                log,
+            )
+        except ValueError as exc:
+            log(f"[controller] task {task_id}: {operation}: {exc}")
+            return False
+        log(f"[controller] task {task_id}: {operation}: {text}")
+        return True
     if operation == "accept":
         from .task_review import accept_task
 

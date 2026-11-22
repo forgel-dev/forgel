@@ -388,6 +388,42 @@ class DaemonTest(unittest.TestCase):
                 stored["result"]["feedback"], ["Add the test"]
             )
 
+    def test_the_controller_runs_the_task_after_a_spec_rewrite(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, ledger, project, layout, task = (
+                self._failed_task(tmp)
+            )
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "operation": "run_task",
+                            "reason": "the specification was rewritten",
+                        }
+                    )
+                ]
+            )
+
+            handle_failure(
+                settings,
+                ledger,
+                project,
+                layout,
+                task["id"],
+                client,
+                lambda _m: None,
+            )
+
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "pending")
+            self.assertIn(
+                "specification was rewritten",
+                " ".join(stored["result"]["feedback"]),
+            )
+
     def test_the_controller_asks_the_owner_as_the_last_resort(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings, ledger, project, layout, task = (
