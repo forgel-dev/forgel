@@ -1,18 +1,38 @@
 {
   "id": "20261122034544_release-audit-uninstall-omits-bashrc-alt",
   "title": "Release audit: --uninstall omits ~/.bashrc, although the previous installer wrote the marked bl",
-  "spec": "",
+  "spec": "docs/program/specs/20261122034544_release-audit-uninstall-omits-bashrc-alt.md",
   "summary": "Include ~/.bashrc in the legacy cleanup set for uninstall, update the README list, and extend CANDIDATE_PROFILES/test_uninstall_clears_every_candidate_profile to cover it.",
   "requirements": [
-    "--uninstall omits ~/.bashrc, although the previous installer wrote the marked block there for bash when ~/.bashrc existed or when no ~/.bash_profile existed. Upgrading and uninstalling therefore leaves the old PATH block behind."
+    "The uninstall path of install.sh must treat ~/.bashrc as a file that can contain the installer's marked block, in addition to the files it already handles.",
+    "The set of files the uninstall path cleans must be a superset of the set of files the install path can write the marked block to for bash, i.e. both the ~/.bash_profile branch and the ~/.bashrc branch.",
+    "Uninstall must remove the block delimited by the installer's existing begin/end marker lines, and must leave every other line of the file unchanged in content and order.",
+    "Uninstall must not fail, and must not modify a file, when a candidate startup file is missing, unreadable or contains no marked block.",
+    "Running uninstall twice must produce the same result as running it once: the second run finds no marked block and leaves the files unchanged.",
+    "The fix must not change the install path's behaviour: a fresh install still writes exactly one marked block into the same file it selected before.",
+    "tests/test_install.py must contain a regression test whose name contains `bashrc`; it sets up a temporary HOME with a ~/.bashrc containing the marked block written by the install path (no ~/.bash_profile present, or ~/.bashrc present), runs the uninstall, and asserts the block is gone and unrelated lines survive.",
+    "tests/test_install.py must contain an idempotence test whose name contains `idempotent`; it runs uninstall twice against the same temporary HOME and asserts the file is unchanged between the two runs and free of markers.",
+    "All tests must operate on a temporary HOME (or equivalent environment override already used by the suite) and must never read or write the invoking user's real startup files.",
+    "install.sh must remain syntactically valid POSIX sh compatible with the interpreter it already declares."
   ],
   "acceptance": [
-    "The release audit finding is resolved: --uninstall omits ~/.bashrc, although the previous installer wrote the marked block there for bash when ~/.bashrc existed or when no ~/.bash_profile existed. Upgrading and uninstalling therefore leaves the old PATH block behind.",
-    "Existing tests pass"
+    "After a simulated install for a bash home whose selected target is ~/.bashrc, running `install.sh --uninstall` leaves ~/.bashrc without the marked block and without any leftover marker line.",
+    "Unrelated lines in the cleaned startup file are preserved byte-for-byte (verified by comparing the file against a fixture with only the block removed).",
+    "A second `--uninstall` run leaves every candidate startup file unchanged.",
+    "A missing or block-free candidate startup file does not make uninstall fail (exit status remains the script's normal success status).",
+    "The regression test containing `bashrc` passes.",
+    "The idempotence test containing `idempotent` passes.",
+    "The full existing test suite passes.",
+    "install.sh passes a shell syntax check."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
@@ -20,12 +40,89 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A simulated install into a bash home with the block in ~/.bashrc, followed by `--uninstall`, leaves no block or marker line",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "bashrc"
+      ]
+    },
+    {
+      "criterion": "Unrelated lines in the cleaned startup file are preserved byte-for-byte",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "bashrc"
+      ]
+    },
+    {
+      "criterion": "A second `--uninstall` run leaves every candidate startup file unchanged, and missing or block-free files do not fail the uninstall",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "idempotent"
+      ]
+    },
+    {
+      "criterion": "The full existing test suite passes",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "install.sh remains syntactically valid in its shell dialect",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX shell (sh) executing install.sh",
+      "interface": "Run `install.sh` through the host POSIX shell; `tests/test_install.py` exercises the uninstall path with a temporary `HOME`.",
+      "docs": "POSIX.1-2017 Shell Command Language (XCU), section 2",
+      "mode": "direct",
+      "evidence": "`install.sh` is the repository's shell installer entrypoint and `tests/test_install.py` is the installer/uninstaller test module named by the dependency contract; the environment contract (`environment.yaml`, described in `AGENTS.md`) declares the project's commands, and `/bin/sh` is the local executable.",
+      "stub": ""
+    },
+    {
+      "name": "pytest test runner",
+      "interface": "`python -m pytest` runs `tests/test_install.py` and the full `tests/` suite.",
+      "docs": "https://docs.pytest.org/en/stable/how-to/usage.html",
+      "mode": "direct",
+      "evidence": "The project environment contract (`environment.yaml`, listed in `AGENTS.md`) supplies the test commands, and `tests/test_install.py` is the installer test module; the dependency contract specifies `python -m pytest` as the runner.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-22T03:45:44+00:00",
-  "started_at": "",
+  "started_at": "2026-11-22T03:56:02+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
