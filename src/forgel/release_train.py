@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from . import git_ops, tasks
+from . import git_ops, limits, tasks
 from .artifacts import write_json, write_text
 from .config import Settings
 from .instructions import instruction_context
@@ -950,6 +950,10 @@ def audit_release(
                         "summary": audit.get("summary"),
                         "findings": blocking,
                     },
+                    "limits": {
+                        **limits.LIMITS,
+                        **limits.load(layout),
+                    },
                     "tasks": [
                         {
                             "id": item.get("id"),
@@ -992,6 +996,20 @@ def audit_release(
             log(
                 f"[release] {release['id']}: needs the owner: "
                 f"{release['detail']}"
+            )
+            return False
+        if action == "set_limit":
+            limit_name = str(
+                decision.args.get("name") or "command_timeout"
+            ).strip()
+            value = limits.set_value(
+                layout, limit_name, decision.args.get("seconds")
+            )
+            release["status"] = "running"
+            save_release(layout, release)
+            log(
+                f"[release] {release['id']}: {limit_name} raised to "
+                f"{value:g}s"
             )
             return False
         if action == "fix" and _queue_fix_tasks(
@@ -1797,6 +1815,10 @@ def process_releases(
                                 "title": release.get("title"),
                                 "status": release.get("status"),
                             },
+                            "limits": {
+                                **limits.LIMITS,
+                                **limits.load(layout),
+                            },
                             "tasks": [
                                 {
                                     "id": task.get("id"),
@@ -1856,6 +1878,19 @@ def process_releases(
                     )
                     actions.append(f"blocked:{release_id}")
                     continue
+                if decision.operation == "set_limit":
+                    limit_name = str(
+                        decision.args.get("name") or "command_timeout"
+                    ).strip()
+                    value = limits.set_value(
+                        layout,
+                        limit_name,
+                        decision.args.get("seconds"),
+                    )
+                    log(
+                        f"[release] {release_id}: {limit_name} raised to "
+                        f"{value:g}s"
+                    )
                 task = stopped[0]
                 data = dict(task.get("result") or {})
                 data["last_failure"] = (

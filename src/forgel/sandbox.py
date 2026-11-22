@@ -442,7 +442,7 @@ class DockerSession:
                 )
 
     def run(
-        self, command: Sequence[str], timeout: float = 900.0
+        self, command: Sequence[str], timeout: float = 3_600.0
     ) -> tuple[int, str]:
         if self._dead:
             raise SandboxError(

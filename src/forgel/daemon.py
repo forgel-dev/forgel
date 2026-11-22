@@ -543,6 +543,34 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: rework")
         return True
+    if action == "set_limit":
+        from . import limits
+
+        limit_name = str(
+            decision.args.get("name") or "command_timeout"
+        ).strip()
+        value = limits.set_value(
+            layout, limit_name, decision.args.get("seconds")
+        )
+        data["feedback"] = [
+            f"The {limit_name} limit was raised to {value:g}s; "
+            "continue the work with the new limit."
+        ]
+        data["last_failure"] = failure
+        data.pop("failure", None)
+        tasks.update_task(
+            layout,
+            task_id,
+            status="pending",
+            started_at="",
+            finished_at="",
+            result=data,
+        )
+        log(
+            f"[controller] task {task_id}: {limit_name} raised to "
+            f"{value:g}s"
+        )
+        return True
     if action == "respec":
         issue = str(decision.issue or failure.get("message") or "")
         if client is not None and _rewrite_spec_from_failure(
@@ -746,7 +774,7 @@ def handle_failure(
             log,
         )
         return
-    from . import controller
+    from . import controller, limits
 
     for _ in range(MAX_CONTROLLER_STEPS):
         task = tasks.get_task(layout, task_id)
@@ -777,6 +805,10 @@ def handle_failure(
                         "constraints": task.get("constraints") or [],
                     },
                     "failure": failure,
+                    "limits": {
+                        **limits.LIMITS,
+                        **limits.load(layout),
+                    },
                     "result": {
                         "qa": data.get("qa"),
                         "review": data.get("review"),

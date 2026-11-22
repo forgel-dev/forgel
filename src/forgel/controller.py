@@ -51,6 +51,7 @@ OPERATIONS = (
     "release_audit",
     "release_finalize",
     "release_fix",
+    "set_limit",
     "ask_user",
     "stop",
 )
@@ -88,6 +89,8 @@ Operations:
 - run_task, task_process, task_qa, task_review: run a task operation now;
 - release_resume, release_audit, release_finalize, release_fix: run a
   release operation now;
+- set_limit {name, seconds}: raise a runtime limit when the work
+  legitimately needs more room (known limit: command_timeout);
 - ask_user: stop and ask the owner; only when the decision needs a product
   choice, access or an irreversible action that only the owner can make;
 - stop: stop and report the current state.
@@ -110,6 +113,7 @@ work. Do not ask the owner to choose between internal process options.
 
 TASK_ACTIONS = {
     "retry",
+    "set_limit",
     "rework",
     "respec",
     "accept",
@@ -120,7 +124,7 @@ TASK_ACTIONS = {
     "block",
     "ask_user",
 }
-RELEASE_ACTIONS = {"audit", "fix", "block", "ask_user"}
+RELEASE_ACTIONS = {"audit", "fix", "block", "ask_user", "set_limit"}
 # Any operation the model may choose is mapped to a stage action. Nothing
 # falls through: a tool that does not exist for the stage is its equivalent,
 # not a dead end.
@@ -136,6 +140,8 @@ _TASK_ALIASES = {
 
 def task_action(operation: str) -> str:
     name = str(operation or "").strip().lower()
+    if name == "set_limit":
+        return "set_limit"
     if name in {"retry", "run_task"}:
         return "retry"
     if name in TASK_ACTIONS:
@@ -145,6 +151,8 @@ def task_action(operation: str) -> str:
 
 def release_action(operation: str) -> str:
     name = str(operation or "").strip().lower()
+    if name == "set_limit":
+        return "set_limit"
     if name in {"release_resume", "release_audit"}:
         return "audit"
     if name == "ask_user":

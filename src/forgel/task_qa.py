@@ -37,6 +37,7 @@ from .environment import (
 )
 from .git_ops import status_paths
 from .integration import integration_problem, integration_warning
+from . import limits
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .proc import merge_output
@@ -355,7 +356,11 @@ def _run_sandbox(
                         argv,
                         timeout=max(
                             60.0,
-                            float(settings.command_timeout or 900),
+                            limits.get(
+                                layout,
+                                "command_timeout",
+                                settings.command_timeout or 3_600,
+                            ),
                         ),
                     )
                 except SandboxError as exc:
@@ -832,7 +837,14 @@ def run_task_qa(
             environment,
             repo_id,
             run_checks,
-            max(60.0, float(settings.command_timeout or 900)),
+            max(
+                60.0,
+                limits.get(
+                    layout,
+                    "command_timeout",
+                    settings.command_timeout or 3_600,
+                ),
+            ),
         )
         runtime = "local"
         if environment is not None and (environment.test or environment.e2e):

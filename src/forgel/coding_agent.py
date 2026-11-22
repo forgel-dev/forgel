@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import git_ops, language, tasks
+from . import git_ops, language, limits, tasks
 from .artifacts import write_text
 from .config import Settings
 from .instructions import instruction_context
@@ -1371,7 +1371,12 @@ class CodingAgent:
                     repo,
                     test_command,
                     timeout=max(
-                        60.0, float(self.settings.command_timeout or 900)
+                        60.0,
+                        limits.get(
+                            layout,
+                            "command_timeout",
+                            self.settings.command_timeout or 3_600,
+                        ),
                     ),
                     runner=runner,
                     extra_env=environment.env_map if environment else None,
@@ -1665,7 +1670,12 @@ Files:
                         None,
                     )
                 limit = max(
-                    60.0, float(self.settings.command_timeout or 900)
+                    60.0,
+                    limits.get(
+                        layout,
+                        "command_timeout",
+                        self.settings.command_timeout or 3_600,
+                    ),
                 )
                 timeout = action.get("timeout", limit)
                 try:

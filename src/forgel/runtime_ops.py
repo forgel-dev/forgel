@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 from .config import Settings
+from . import limits
 from .daemon import handle_failure, run_once
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -38,6 +39,7 @@ OPERATIONS = (
     "release_audit",
     "release_finalize",
     "orchestrate",
+    "set_limit",
 )
 
 
@@ -85,6 +87,15 @@ def run_operation(
             f"unknown runtime operation {name!r}; "
             f"expected one of {', '.join(OPERATIONS)}"
         )
+
+    if name == "set_limit":
+        limit_name = str(
+            args.get("name") or "command_timeout"
+        ).strip()
+        value = limits.set_value(
+            layout, limit_name, args.get("seconds")
+        )
+        return f"Limit {limit_name} is now {value:g}s."
 
     if name == "drive":
         processed = run_once(settings, ledger, log=log)
