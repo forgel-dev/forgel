@@ -768,6 +768,10 @@ Core, plugin SDK, official plugins and templates: Apache-2.0. Generated project 
 - [FORGEL.md](FORGEL.md) — native Forgel instructions, read first.
 - [docs/prompts.md](docs/prompts.md) — prompt discipline: role, state, task,
   constraints and context provenance only; never a concrete scenario.
+- The main chat agent receives the runtime process model from
+  `src/forgel/runtime_model.py` on every prompt: pipeline, stage owners, gates,
+  release policy and current releases. A main-chat prompt without it is
+  incomplete.
 
 ## Contributing
 

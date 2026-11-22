@@ -80,6 +80,9 @@ state, task, constraints and the provenance of its context.
   this agent's own turns and user-visible reports, each labeled by producer.
 - If a rule needs an example to be understood, it is not a rule yet; design
   the data and the boundary.
+- The main chat agent's prompt includes the runtime process model from
+  `src/forgel/runtime_model.py`. When a stage, owner, gate or release-policy
+  line changes, update the model and its test in the same change.
 
 This applies to every prompt in the engine and to every generated project
 instruction file. The canonical text is in [AGENTS.md](AGENTS.md) **Prompt

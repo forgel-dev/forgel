@@ -78,6 +78,9 @@ class AgentTest(unittest.TestCase):
         self.assertIn("An alpha brief.", user)
         self.assertIn("Runtime capabilities (this agent):", user)
         self.assertIn("github:", user)
+        self.assertIn("Runtime process:", user)
+        self.assertIn("runtime release train", user)
+        self.assertIn("published tag is immutable", user)
         self.assertTrue(conversation_path(ProjectLayout.detect(project["workspace"])).exists())
 
     def test_a_user_visible_report_keeps_its_producer(self) -> None:
@@ -561,6 +564,8 @@ class AgentTest(unittest.TestCase):
             ["The toggle belongs to the main application"],
         )
         self.assertIn("Queued task", result.text)
+        self.assertIn("Release plan", result.text)
+        self.assertIn("main 0.1.0", result.text)
         assert result.request is not None
         request_text = layout.artifact(result.request).read_text(
             encoding="utf-8"

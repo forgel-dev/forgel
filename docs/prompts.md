@@ -40,6 +40,21 @@ When an agent needs to know what it can do, the runtime passes that as
 structured state. It is not written in prose and it is not recovered from
 history.
 
+## Runtime Process Model
+
+The main chat agent receives a code-owned runtime process model on every
+prompt. It covers the pipeline, the owner of each stage, control and human
+gates, the release policy and the current releases. A main-chat prompt
+without this block is incomplete.
+
+The model lives in `src/forgel/runtime_model.py`, is rendered by
+`ProjectAgent.handle`, and is tested. It changes together with the runtime:
+when a stage, an owner, a gate or the release policy changes, update the model
+and its test in the same change.
+
+The agent answers questions about how work moves from this map, not from
+memory. Without the map it invents a process.
+
 ## What To Do Instead
 
 - Change the context builder so the right structured state reaches the agent.

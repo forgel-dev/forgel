@@ -32,9 +32,11 @@ from .release_train import (
     attach_blocked_release,
     discover_base,
     list_releases,
+    load_release,
     new_release_id,
     plan_release,
 )
+from .runtime_model import process_model
 from .repo_tools import (
     MAX_READ_CHARS,
     RESEARCH_ACTIONS,
@@ -150,6 +152,10 @@ conversation or from project artifacts; a run recorded in an artifact belongs
 to the agent and environment that produced it. The conversation distinguishes
 this agent's turns from reports produced by other runs; a report describes its
 producer's run, not this agent's state.
+
+The Runtime process block is the runtime map: the pipeline, the owner of each
+stage, the gates and the release policy. Use it for questions about how work
+moves and to stay in your role; never invent a stage, an owner or a process.
 
 Never use these words with the user unless they ask for them: adopted,
 linked, generation, checkpoint, staging, production approval, proposal,
@@ -625,6 +631,18 @@ def _repository_overview(
         budget -= len(excerpt)
         parts.append(f"--- {relative} ---\n{excerpt}")
     return "\n\n".join(parts)
+
+
+def _release_plan_line(release: Mapping[str, Any]) -> str:
+    repos = ", ".join(
+        f"{repo_id} "
+        f"{data.get('planned_version') or data.get('version') or '—'}"
+        for repo_id, data in (release.get("repos") or {}).items()
+    )
+    return (
+        f"Release plan `{release.get('id')}`: {repos or '—'}. "
+        "The release train will audit and publish it."
+    )
 
 
 def _plain_brief(text: str) -> str:
@@ -1232,6 +1250,8 @@ class ProjectAgent:
                     f"Working directory: {os.getcwd()}\n\n"
                     f"Runtime capabilities (this agent):\n"
                     f"{self._capabilities}\n\n"
+                    f"Runtime process:\n"
+                    f"{process_model(layout, project)}\n\n"
                     f"Context:\n{context}\n\n"
                     f"Session so far:\n{history_text or '(new session)'}\n\n"
                     f"New message:\n{text}"
@@ -1410,8 +1430,9 @@ class ProjectAgent:
                 )
                 if attached:
                     release_id = attached
+                    release_plan = load_release(layout, attached)
                 else:
-                    plan_release(
+                    release_plan = plan_release(
                         layout,
                         project,
                         release_id,
@@ -1427,6 +1448,10 @@ class ProjectAgent:
                     f"`{task_id}` for repository `{task['repo_id']}`; the "
                     "daemon will start it and report back."
                 )
+                if release_plan is not None:
+                    result_text += (
+                        "\n\n" + _release_plan_line(release_plan)
+                    )
             else:
                 release_id = ""
                 result_text += (

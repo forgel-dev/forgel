@@ -47,6 +47,16 @@ never moves an existing tag. Agents do not assign, promise or rewrite release
 versions or tags. The release report is the source of truth for the version
 and publication. A release without its audit is not published.
 
+## Runtime Process Model
+
+The main chat agent receives the runtime process model from
+`src/forgel/runtime_model.py` on every prompt: the pipeline, the owner of each
+stage, control and human gates, the release policy and the current releases.
+A main-chat prompt without this block is incomplete. The model is code-owned
+and tested; the agent must know how work moves and who owns each stage,
+otherwise it invents a process. Update the model when a stage, owner, gate or
+the release policy changes.
+
 ## Native Rules
 
 - The source of truth for agent instructions is `AGENTS.md`. This file adds

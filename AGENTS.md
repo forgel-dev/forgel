@@ -80,6 +80,20 @@ The same rule, in longer form, is in [docs/prompts.md](docs/prompts.md).
   release report is the source of truth for the version and publication.
 - A release without its audit is not published.
 
+## Runtime Process Model
+
+The main chat agent receives the runtime process model from
+`src/forgel/runtime_model.py` on every prompt: the pipeline, the owner of each
+stage, control and human gates, the release policy and the current releases.
+A main-chat prompt without this block is incomplete.
+
+- The model is code-owned and tested. Do not duplicate it in prompt prose and
+  do not describe the runtime from memory.
+- The agent must know how work moves and who owns each stage. Without the map
+  it invents a process and gives harmful instructions.
+- When a stage, an owner, a gate or the release policy changes, update the
+  model and its test in the same change.
+
 ## Change Workflow
 
 1. Read the relevant decision and feature documents.
