@@ -674,6 +674,40 @@ class ReleaseTrainTest(unittest.TestCase):
         ]
         self.assertEqual(len(fix_tasks), 1)
 
+    def test_a_rework_decision_queues_fix_tasks(self) -> None:
+        release, _task = self._release()
+        client = ScriptedModelClient(
+            [
+                FAIL_AUDIT,
+                json.dumps(
+                    {
+                        "operation": "rework",
+                        "reason": "the widget has no test",
+                        "feedback": ["Add the test"],
+                    }
+                ),
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = list_releases(self.layout)[0]
+        self.assertEqual(stored["status"], "running")
+        fix_tasks = [
+            task
+            for task in release_tasks(self.layout, str(release["id"]))
+            if task.get("status") == "pending"
+            and str(task.get("title") or "").startswith("Release audit:")
+        ]
+        self.assertEqual(len(fix_tasks), 1)
+
     def test_the_controller_asks_the_owner_for_a_blocked_release(
         self,
     ) -> None:

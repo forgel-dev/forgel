@@ -975,7 +975,11 @@ def audit_release(
             save_release(layout, release)
             log(f"[release] {release['id']}: controller stopped")
             return False
-        if decision.operation == "release_fix" and _queue_fix_tasks(
+        if decision.operation in {
+            "release_fix",
+            "rework",
+            "reject",
+        } and _queue_fix_tasks(
             layout, release, items, blocking, log
         ):
             release["status"] = "running"
