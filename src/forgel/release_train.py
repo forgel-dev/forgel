@@ -62,6 +62,7 @@ REPO_RELEASES_DIR = "releases"
 CHANGELOG = "CHANGELOG.md"
 INITIAL_VERSION = "0.1.0"
 MAX_AUDIT_ROUNDS = 2
+MAX_AUDIT_ERRORS = 3
 AUDIT_TOTAL_TIMEOUT = 900.0
 MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
@@ -848,7 +849,6 @@ def audit_release(
     """Run the whole-change-set audit. Returns True when the release passes."""
 
     audit = dict(release.get("audit") or {})
-    audit["rounds"] = int(audit.get("rounds") or 0) + 1
     audit["task_ids"] = [str(task["id"]) for task in items]
     audit["at"] = _now()
     if client is None:
@@ -879,15 +879,21 @@ def audit_release(
         )
         parsed = _parse_audit(raw)
     except (ModelError, ValueError) as exc:
+        # An infrastructure error says nothing about the change set: it does
+        # not consume an audit round and does not stop the release until the
+        # same error repeats MAX_AUDIT_ERRORS times.
+        audit["errors"] = int(audit.get("errors") or 0) + 1
         audit["verdict"] = "error"
         audit["summary"] = f"the audit could not run: {exc}"
         release["audit"] = audit
-        if int(audit["rounds"]) >= MAX_AUDIT_ROUNDS:
+        if int(audit["errors"]) >= MAX_AUDIT_ERRORS:
             release["status"] = "blocked"
             release["detail"] = audit["summary"]
         save_release(layout, release)
         log(f"[release] {release['id']}: audit error: {exc}")
         return False
+    audit["rounds"] = int(audit.get("rounds") or 0) + 1
+    audit["errors"] = 0
     audit.update(parsed)
     audit["at"] = _now()
     report = f"{RELEASES_DIR}/{release['id']}/audit.md"

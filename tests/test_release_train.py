@@ -20,6 +20,7 @@ from forgel.providers.github import GithubProvider
 from forgel.release_train import (
     AUDIT_TOTAL_TIMEOUT,
     INITIAL_VERSION,
+    MAX_AUDIT_ERRORS,
     _audit_client,
     attach_blocked_release,
     discover_base,
@@ -726,6 +727,45 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertEqual(
             audited.config.total_timeout, AUDIT_TOTAL_TIMEOUT
         )
+
+    def test_an_audit_error_does_not_consume_a_round(self) -> None:
+        release, _task = self._release()
+        release_id = str(release["id"])
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient([]),
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, release_id)
+        assert stored is not None
+        audit = stored.get("audit") or {}
+        self.assertEqual(audit.get("verdict"), "error")
+        self.assertEqual(audit.get("rounds"), 0)
+        self.assertEqual(audit.get("errors"), 1)
+        self.assertNotEqual(stored.get("status"), "blocked")
+
+    def test_repeated_audit_errors_block_the_release(self) -> None:
+        release, _task = self._release()
+        release_id = str(release["id"])
+
+        for _ in range(MAX_AUDIT_ERRORS):
+            process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                ScriptedModelClient([]),
+                log=lambda _m: None,
+            )
+
+        stored = load_release(self.layout, release_id)
+        assert stored is not None
+        self.assertEqual(stored.get("status"), "blocked")
 
 
 if __name__ == "__main__":
