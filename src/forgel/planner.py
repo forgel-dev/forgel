@@ -207,7 +207,7 @@ coding agent can implement, test and commit on its own.
 You may inspect the repositories yourself before planning. Reply with exactly
 one JSON action per turn:
 {{"action": "list_files", "path": ".", "repo_id": "main"}}
-{{"action": "read_file", "path": "PLAN.md", "repo_id": "main"}}
+{{"action": "read_file", "path": "README.md", "repo_id": "main"}}
 Paths are relative to the repository and may not leave it. Read the project's
 own documents and code instead of guessing; do not ask a human. The context
 below already includes the project documents and a file tree; read only what

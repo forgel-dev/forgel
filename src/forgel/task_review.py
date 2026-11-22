@@ -148,11 +148,6 @@ def _reference_text(path: Path) -> str:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return ""
-    if path.name == "PLAN.md" and "### 7.15" in text:
-        start = text.index("### 7.15")
-        end = text.find("\n### 7.16", start)
-        section = text[start : end if end >= 0 else start + 6_000]
-        return _cap(section, MAX_FILE_CHARS)
     return _cap(text, MAX_FILE_CHARS)
 
 
@@ -163,9 +158,7 @@ def _current_files_text(
     files, _commits = _attributed(task)
     if not files:
         files = [
-            name
-            for name in ("README.md", "PLAN.md")
-            if (repo / name).is_file()
+            name for name in ("README.md",) if (repo / name).is_file()
         ]
     parts: list[str] = []
     for relative in files:
@@ -193,7 +186,7 @@ def _commit_evidence(
         if text:
             lines.append(text)
     if not commits:
-        for relative in files or ["README.md", "PLAN.md"]:
+        for relative in files or ["README.md"]:
             text = _git_output(
                 repo,
                 ["log", "-1", "--format=fuller", "--", relative],

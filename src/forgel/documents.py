@@ -1,9 +1,10 @@
-"""Which documents the process takes into work.
+"""Which process documents the process takes into work.
 
-A repository may already hold documents when Forgel takes it over: a README,
-a plan, its own rule files. They stay readable, but they are not instructions
-for Forgel's process. The boundary is the project's initialization time,
-recorded when Forgel created or adopted the project.
+The process owns the documents it creates itself (plans, decisions, tasks,
+releases, specifications). Such a document cannot appear before Forgel
+initialized the project, so one dated before initialization is not work and is
+ignored. Repository documents (README, AGENTS, FORGEL and the repository's own
+docs) are the owner's material and are always readable; they are not filtered.
 
 A document's time is its first commit (``git log --diff-filter=A``), or the
 file's own creation time while it is not committed yet.

@@ -155,7 +155,7 @@ class AgentTest(unittest.TestCase):
         )
         context = build_context(layout, project, self.ledger)
         self.assertIn("README-MARKER", context)
-        self.assertIn("PLAN-MARKER", context)
+        self.assertNotIn("PLAN-MARKER", context)
         self.assertIn("AGENTS-MARKER", context)
         self.assertIn("FORGEL-MARKER", context)
         self.assertNotIn("Workspace layout", context)

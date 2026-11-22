@@ -9,11 +9,9 @@ receives both layers.
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from .documents import initialized_at, is_current
 from .layout import ProjectLayout
 from .program_manifest import entries
 
@@ -30,19 +28,12 @@ def _read(path: Path) -> str:
 
 
 def _files(
-    root: Path,
-    label: str,
-    seen: set[Path],
-    initialized: datetime | None = None,
+    root: Path, label: str, seen: set[Path]
 ) -> list[tuple[str, str]]:
     items: list[tuple[str, str]] = []
     for name in INSTRUCTION_FILES:
         path = root / name
         if not path.is_file():
-            continue
-        if not is_current(path, initialized):
-            # A rule file that existed before Forgel initialized the project
-            # is readable context, not an instruction for the process.
             continue
         try:
             key = path.resolve()
@@ -66,8 +57,7 @@ def instruction_context(
     """The project and repository instruction layers, labeled and bounded."""
 
     seen: set[Path] = set()
-    initialized = initialized_at(layout)
-    items = _files(layout.control, "Project", seen, initialized)
+    items = _files(layout.control, "Project", seen)
     ids: Iterable[str] = (
         list(repo_ids)
         if repo_ids is not None
@@ -75,10 +65,7 @@ def instruction_context(
     )
     for repo_id in ids:
         items += _files(
-            layout.repo_path(repo_id),
-            f"Repository {repo_id}",
-            seen,
-            initialized,
+            layout.repo_path(repo_id), f"Repository {repo_id}", seen
         )
     if not items:
         return ""

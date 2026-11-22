@@ -116,7 +116,7 @@ never claim that you did.
 Before answering questions about the project, its documents or its code,
 inspect the repository yourself. Reply with exactly one JSON action:
 {"kind": "action", "action": "list_files", "action_args": {"path": ".", "repo_id": "main"}}
-{"kind": "action", "action": "read_file", "action_args": {"path": "PLAN.md", "repo_id": "main"}}
+{"kind": "action", "action": "read_file", "action_args": {"path": "README.md", "repo_id": "main"}}
 repo_id is any id from the repository map (for example "code"). Use
 list_files and read_file with that id to inspect any repository; the map
 itself only names the repositories.
@@ -145,7 +145,7 @@ conversation and the contents identify a repository.
 
 The user is the product owner, not a Forgel developer. Answer from the
 project documents and code, not from Forgel's process metadata. For any
-question about status, plans or what to do next, use README, PLAN and the
+question about status, plans or what to do next, use README and the
 project's docs (the context already includes them). Do not invent process
 steps such as setting a recipe or a checkpoint.
 
@@ -645,20 +645,22 @@ def _repository_overview(
         str(repos[0]["id"]),
     )
     root = layout.repo_path(main_id)
-    initialized = initialized_at(layout)
     documents = []
     for relative in sorted(_repo_files(root)):
         if not relative.endswith(".md"):
             continue
-        if "/" in relative and not (
-            relative.startswith("docs/")
-            and not relative.startswith("docs/program/")
+        if not (
+            relative == "README.md"
+            or (
+                relative.startswith("docs/")
+                and not relative.startswith("docs/program/")
+            )
         ):
             continue
         if relative in {"FORGEL.md", "AGENTS.md"}:
             continue
         path = root / relative
-        if path.is_file() and is_current(path, initialized):
+        if path.is_file():
             documents.append(path)
     parts: list[str] = []
     budget = OVERVIEW_TOTAL_CHARS

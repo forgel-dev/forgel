@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from forgel.agent import build_context
+from forgel.artifacts import read_json, write_json
 from forgel.config import Settings
 from forgel.documents import (
     created_after,
@@ -21,14 +22,17 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
+from forgel.tasks import create_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OLD = "2020-01-01T00:00:00+00:00"
 
 
-def _commit(root: Path, files: list[str], date: str) -> None:
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "add", *files], cwd=root, check=True)
+def _git(root: Path, *args: str, date: str | None = None) -> None:
+    env = dict(os.environ)
+    if date:
+        env["GIT_AUTHOR_DATE"] = date
+        env["GIT_COMMITTER_DATE"] = date
     subprocess.run(
         [
             "git",
@@ -36,17 +40,23 @@ def _commit(root: Path, files: list[str], date: str) -> None:
             "user.name=Test",
             "-c",
             "user.email=test@example.com",
-            "commit",
-            "-q",
-            "-m",
-            "document",
+            *args,
         ],
         cwd=root,
-        env=dict(
-            os.environ, GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date
-        ),
+        env=env,
         check=True,
     )
+
+
+def _commit(root: Path, files: list[str], date: str) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    _git(root, "add", *files)
+    _git(root, "commit", "-q", "-m", "document", date=date)
+
+
+def _commit_more(root: Path, files: list[str]) -> None:
+    _git(root, "add", *files)
+    _git(root, "commit", "-q", "-m", "document")
 
 
 class DocumentTimeTest(unittest.TestCase):
@@ -130,61 +140,74 @@ class ContextTimeFilterTest(unittest.TestCase):
             initialized, parse_time(self.project["created_at"])
         )
 
-    def test_pre_initialization_instructions_are_not_used(self) -> None:
+    def test_repository_documents_are_read_regardless_of_age(self) -> None:
         control = self.layout.control
         control.mkdir(parents=True, exist_ok=True)
         (control / "FORGEL.md").write_text(
             "OLD-PROJECT-MARKER\n", encoding="utf-8"
         )
-        _commit(control, ["FORGEL.md"], OLD)
-
-        repo = self.layout.repo_path("main")
-        repo.mkdir(parents=True, exist_ok=True)
-        (repo / "AGENTS.md").write_text(
-            "CURRENT-REPO-MARKER\n", encoding="utf-8"
+        (control / "AGENTS.md").write_text(
+            "OLD-AGENTS-MARKER\n", encoding="utf-8"
         )
+        _commit(control, ["FORGEL.md", "AGENTS.md"], OLD)
 
-        context = instruction_context(self.layout)
-
-        self.assertIn("CURRENT-REPO-MARKER", context)
-        self.assertNotIn("OLD-PROJECT-MARKER", context)
-
-    def test_pre_initialization_project_documents_are_not_context(
-        self,
-    ) -> None:
         repo = self.layout.repo_path("main")
         repo.mkdir(parents=True, exist_ok=True)
         (repo / "README.md").write_text(
             "OLD-README-MARKER\n", encoding="utf-8"
         )
-        _commit(repo, ["README.md"], OLD)
-        (repo / "docs").mkdir(parents=True, exist_ok=True)
-        (repo / "docs" / "GUIDE.md").write_text(
-            "CURRENT-GUIDE-MARKER\n", encoding="utf-8"
+        (repo / "PLAN.md").write_text(
+            "OLD-PLAN-MARKER\n", encoding="utf-8"
         )
-        subprocess.run(
-            ["git", "add", "docs/GUIDE.md"], cwd=repo, check=True
+        _commit(repo, ["README.md", "PLAN.md"], OLD)
+
+        instructions = instruction_context(self.layout)
+        context = build_context(self.layout, self.project, self.ledger)
+
+        self.assertIn("OLD-PROJECT-MARKER", instructions)
+        self.assertIn("OLD-AGENTS-MARKER", instructions)
+        self.assertIn("OLD-README-MARKER", context)
+        self.assertNotIn("OLD-PLAN-MARKER", context)
+
+    def test_process_documents_from_before_initialization_are_ignored(
+        self,
+    ) -> None:
+        control = self.layout.control
+        plans = control / "docs" / "program" / "plans"
+        plans.mkdir(parents=True, exist_ok=True)
+        (plans / "20200101000000_old.md").write_text(
+            "# Plan: OLD-PLAN-MARKER\n", encoding="utf-8"
         )
-        subprocess.run(
-            [
-                "git",
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-q",
-                "-m",
-                "guide",
-            ],
-            cwd=repo,
-            check=True,
+        decisions = control / "docs" / "program" / "decisions.md"
+        decisions.write_text("OLD-DECISION-MARKER\n", encoding="utf-8")
+        _commit(
+            control,
+            ["docs/program/plans/20200101000000_old.md",
+             "docs/program/decisions.md"],
+            OLD,
         )
+
+        (plans / "20260101000000_new.md").write_text(
+            "# Plan: CURRENT-PLAN-MARKER\n", encoding="utf-8"
+        )
+        _commit_more(control, ["docs/program/plans/20260101000000_new.md"])
+
+        task = create_task(
+            self.layout, "OLD-TASK-MARKER", ["Do it"], ["Done"]
+        )
+        path = self.layout.artifact(
+            f"docs/program/tasks/{task['id']}.json"
+        )
+        data = read_json(path)
+        data["created_at"] = OLD
+        write_json(path, data)
 
         context = build_context(self.layout, self.project, self.ledger)
 
-        self.assertIn("CURRENT-GUIDE-MARKER", context)
-        self.assertNotIn("OLD-README-MARKER", context)
+        self.assertNotIn("OLD-PLAN-MARKER", context)
+        self.assertNotIn("OLD-DECISION-MARKER", context)
+        self.assertNotIn("OLD-TASK-MARKER", context)
+        self.assertIn("CURRENT-PLAN-MARKER", context)
 
 
 if __name__ == "__main__":
