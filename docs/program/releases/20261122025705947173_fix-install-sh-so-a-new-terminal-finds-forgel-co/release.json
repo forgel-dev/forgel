@@ -12,7 +12,9 @@
     "20261122034544_release-audit-uninstall-no-longer-honors",
     "20261122034544_release-audit-uninstall-omits-bashrc-alt",
     "20261122062911_make-install-sh-put-forgel-code-on-path-",
-    "20261122174453_make-the-install-sh-path-check-strictly-"
+    "20261122174453_make-the-install-sh-path-check-strictly-",
+    "20261122192217_release-audit-the-final-task-s-recorded-",
+    "20261122192217_release-audit-remove-profile-block-and-u"
   ],
   "repos": {
     "code": {
@@ -30,47 +32,30 @@
     }
   },
   "audit": {
-    "rounds": 0,
-    "verdict": "",
-    "summary": "The release implements most of the PATH detection, guarded block, fresh-shell verification and uninstall work, and the suite passes, but blocking defects remain. The fresh-shell watchdog creates predictable world-readable files under /tmp, ignores its timeout status when deciding success, and can still hang on a shell that ignores SIGTERM. Re-installing over a pre-existing profile also accumulates the separator blank line, so the profile is not byte-identical across runs.",
+    "rounds": 1,
+    "verdict": "fail",
+    "summary": "The change set largely implements the requested shell detection, profile selection, fresh-shell verification, uninstall cleanup, documentation and tests, but it cannot be published as-is. The recorded full-suite run for the final task timed out after 120 seconds and never completed, so the required full-suite acceptance is unverified. The block-removal logic also treats an unmatched start marker as an open block and deletes every following line, risking loss of unrelated profile content.",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
       "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
       "20261122034544_release-audit-uninstall-no-longer-honors",
       "20261122034544_release-audit-uninstall-omits-bashrc-alt",
-      "20261122062911_make-install-sh-put-forgel-code-on-path-"
+      "20261122062911_make-install-sh-put-forgel-code-on-path-",
+      "20261122174453_make-the-install-sh-path-check-strictly-"
     ],
-    "at": "2026-11-22T17:33:00+00:00",
+    "at": "2026-11-22T19:21:49+00:00",
     "findings": [
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "The final task's recorded test run shows only `timed out after 120s` and partial progress, with no completed passing suite. The acceptance criterion that the full repository test suite passes is therefore not evidenced, so a required check is left unverified.",
+        "suggestion": "Run the complete suite with an adequate timeout, fix or shorten any slow/hanging bounded-check tests (for example by setting a short `FORGEL_CODE_TIMEOUT` in those tests), and record the completed passing output."
+      },
       {
         "severity": "critical",
         "repo_id": "code",
-        "issue": "`bounded_run` creates its state files at predictable paths `${TMPDIR:-/tmp}/forgel-code-check.$$.{out,done,killed}` and initializes them with `: >` instead of a private `mktemp` file. A local user can pre-create a symlink for a guessed PID and cause the installer to truncate an arbitrary file writable by the installing user. The redirected fresh-shell output is also created with the default umask and may be readable by other users.",
-        "suggestion": "Create a private temporary directory with `mktemp -d` (mode 0700), create files with mode 0600, clean up the directory, and avoid following pre-existing symlinks."
-      },
-      {
-        "severity": "major",
-        "repo_id": "code",
-        "issue": "`verify_profile` ignores `BOUNDED_STATUS`. `bounded_run` sets it to 124 when the watchdog kills the shell, but if the captured output already contains `forgel-fresh-resolved=<launcher>`, `verify_profile` returns success. In addition, the watchdog only sends SIGTERM and the parent then blocks in `wait \"$child\"`, so a shell that ignores SIGTERM defeats the bounded time limit. The watchdog test only covers a shell that prints nothing and dies on TERM.",
-        "suggestion": "Treat `BOUNDED_STATUS=124` as a verification failure regardless of captured output, escalate from SIGTERM to SIGKILL after a grace period, and add a test where the detected shell prints the expected resolution and then hangs or ignores TERM."
-      },
-      {
-        "severity": "major",
-        "repo_id": "code",
-        "issue": "Re-install idempotence is not preserved for a profile that already contains user content. `add_profile_block` appends a blank line before the block whenever the file is non-empty, while the unchanged `remove_profile_block` is documented to keep every other line. Each re-run therefore leaves an additional separator blank line, violating the requirement that the rest of the file stay byte-identical. The new idempotence tests only cover an initially empty profile.",
-        "suggestion": "Remove the installer-added separator along with the marked block, or avoid adding a new separator when the preceding content already ends with a blank line. Add a test that seeds the profile with user content, runs install twice, and asserts exact bytes."
-      },
-      {
-        "severity": "minor",
-        "repo_id": "code",
-        "issue": "`detect_login_shell` accepts `$SHELL` when its basename is handled, but `verify_profile` only starts it when `[ -x \"$shell\" ]`. A valid `SHELL=zsh` (a bare command name) is detected, the block is written, then verification is skipped and the install exits non-zero even though `zsh` is available on PATH.",
-        "suggestion": "Resolve the selected shell with `command -v` before the `-x` check, or return the resolved executable path from detection. Add a test with a bare `$SHELL` name."
-      },
-      {
-        "severity": "minor",
-        "repo_id": "code",
-        "issue": "`CHANGELOG.md` says `--uninstall` cleans the override profile in addition to the \"six standard profile files\", but `install.sh` and `README.md` now clean seven standard files including `~/.bashrc`.",
-        "suggestion": "Update the changelog entry to say seven standard profile files, or list the files explicitly."
+        "issue": "`remove_profile_block` and `uninstall_profile` remove a block whenever `# >>> forgel-code >>>` is present. If that start marker has no matching `# <<< forgel-code <<<`, the AWK keeps `inside = 1` to EOF and deletes every line after the marker. Install re-runs and uninstall can therefore destroy unrelated profile content, contrary to the requirement to remove only the delimited block and leave every other line unchanged.",
+        "suggestion": "Only remove a block when both the start and matching end marker are present. If the end marker is missing, leave the file unchanged (or restore the original content), and add regression tests for an unmatched start marker on both install and uninstall paths."
       }
     ],
     "errors": 0

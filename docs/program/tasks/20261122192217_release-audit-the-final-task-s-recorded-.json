@@ -1,0 +1,31 @@
+{
+  "id": "20261122192217_release-audit-the-final-task-s-recorded-",
+  "title": "Release audit: The final task's recorded test run shows only `timed out after 120s` and partial",
+  "spec": "",
+  "summary": "Run the complete suite with an adequate timeout, fix or shorten any slow/hanging bounded-check tests (for example by setting a short `FORGEL_CODE_TIMEOUT` in those tests), and record the completed passing output.",
+  "requirements": [
+    "The final task's recorded test run shows only `timed out after 120s` and partial progress, with no completed passing suite. The acceptance criterion that the full repository test suite passes is therefore not evidenced, so a required check is left unverified."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The final task's recorded test run shows only `timed out after 120s` and partial progress, with no completed passing suite. The acceptance criterion that the full repository test suite passes is therefore not evidenced, so a required check is left unverified.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-22T19:22:17+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
