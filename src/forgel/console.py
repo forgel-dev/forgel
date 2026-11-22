@@ -1063,7 +1063,7 @@ def run_console(
                 output(reply.text)
                 if interactive:
                     output("")
-            if daemon and not is_paused(settings.home):
+            if daemon and reply.drain and not is_paused(settings.home):
                 selected = ledger.get_session(chat_id)
                 project = (
                     ledger.get_project(selected) if selected else None

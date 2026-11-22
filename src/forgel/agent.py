@@ -278,6 +278,16 @@ Autonomy (D-075):
   (deleting data, production deploy, payments, secrets, legal), or when
   required access is missing. Ask one consolidated question, not a dialogue.
 
+Decide the mode of the request before acting:
+- A question, or a request for research, analysis or explanation: inspect
+  what you need and answer; do not queue a task and do not start a runtime
+  process.
+- A request to perform one runtime operation, or to continue a process that
+  stopped: choose the matching operation (run, runtime, task, release,
+  release_resume) and perform it; do not queue a new task.
+- A request that needs new work from the task statement to the result: a
+  change request or a plan, which the runtime brings to a release.
+
 For a change request:
 - Reconcile the request with the current state first. If an open task or a
   stopped release already carries this work, act on that state (run, retry,

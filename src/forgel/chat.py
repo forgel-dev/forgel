@@ -103,10 +103,33 @@ class Reply:
     callback_text: str = ""
     delete_source: bool = False
     failed: bool = False
+    # Whether the console should let the runtime continue after this reply.
+    drain: bool = True
 
 
 def looks_like_secret(text: str) -> bool:
     return any(pattern.search(text) for pattern in SECRET_PATTERNS)
+
+
+DRAIN_ACTIONS = {
+    "run",
+    "plan",
+    "accept",
+    "reject",
+    "retry",
+    "release_resume",
+}
+
+
+def _wants_runtime(result: Any) -> bool:
+    """Whether the agent's decision asks the runtime to continue."""
+
+    if str(getattr(result, "kind", "")) == "change_request":
+        return True
+    return any(
+        str(item.get("action") or "") in DRAIN_ACTIONS
+        for item in (getattr(result, "actions", None) or [])
+    )
 
 
 class CommandRouter:
@@ -2076,7 +2099,9 @@ class CommandRouter:
                     error_text += self._text(
                         chat_id, "chat_earlier", results=done
                     )
-                return Reply(error_text, failed=True)
+                return Reply(
+                    error_text, failed=True, drain=False
+                )
             combined = "\n\n".join(
                 reply.text for reply in replies if reply.text
             )
@@ -2099,9 +2124,14 @@ class CommandRouter:
                         actor,
                         session=str(chat_id),
                     )
-                    return Reply(narrated)
-            return Reply(combined)
-        return Reply(result.text)
+                    return Reply(narrated, drain=False)
+            return Reply(
+                combined, drain=_wants_runtime(result)
+            )
+        return Reply(
+            result.text,
+            drain=str(getattr(result, "kind", "")) == "change_request",
+        )
 
     # -------------------------------------------------------------- helpers
 

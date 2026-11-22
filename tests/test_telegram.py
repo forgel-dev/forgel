@@ -588,6 +588,49 @@ class SelectionAndAgentTest(unittest.TestCase):
         operation.assert_called_once()
         self.assertIn("advanced", reply.text)
 
+    def test_the_agent_decides_whether_the_runtime_continues(self) -> None:
+        project = self._project("Drain", "A brief.")
+        self.ledger.set_session(7, project)
+        answer = self._router(
+            [json.dumps({"kind": "answer", "reply": "ok"})]
+        )
+        reply = answer.handle(7, "Что это?", "@tester")
+        self.assertFalse(reply.drain)
+
+        self.ledger.set_session(7, project)
+        run_router = self._router(
+            [
+                json.dumps(
+                    {
+                        "kind": "action",
+                        "action": "run",
+                        "reply": "",
+                    }
+                )
+            ]
+        )
+        reply = run_router.handle(7, "Запускай", "@tester")
+        self.assertTrue(reply.drain)
+
+        self.ledger.set_session(7, project)
+        runtime = self._router(
+            [
+                json.dumps(
+                    {
+                        "kind": "action",
+                        "action": "runtime",
+                        "action_args": {"operation": "drive"},
+                        "reply": "",
+                    }
+                )
+            ]
+        )
+        with patch(
+            "forgel.chat.run_operation", return_value="ran"
+        ):
+            reply = runtime.handle(7, "Один шаг", "@tester")
+        self.assertFalse(reply.drain)
+
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()
         project = self._project("Plan", "A brief.")
