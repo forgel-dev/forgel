@@ -1,0 +1,52 @@
+{
+  "id": "20261122174453_make-the-install-sh-path-check-strictly-",
+  "title": "Make the install.sh PATH check strictly bounded and keep the profile byte-identical on re-install",
+  "spec": "docs/program/requests/20261122174453437402_make-the-install-sh-path-check-strictly-bounded-and-keep-the.md",
+  "summary": "The install.sh fix task was accepted, but the full change-set check of the 0.1.1 release rejected the result: the fresh-shell check is not strictly bounded (the watchdog writes predictable files in a shared temporary directory, ignores its own timeout status when deciding success, and can wait forever on a shell that ignores the soft kill signal), and a re-install over an existing profile leaves an extra blank line instead of keeping the rest of the file byte-identical. The fix must live in install.sh itself, with tests for each case, so the release can pass its full check and be published.",
+  "requirements": [
+    "The fresh-shell check must be strictly bounded in time: when the bound elapses, the checked shell is stopped (a graceful signal first, a forceful stop after a short grace period) and the check counts as failed.",
+    "The timeout status must take part in the success decision. Success only when the path reported by the fresh login shell for forgel-code exactly matches the launcher path just written. Any other case, including a timed-out shell, is a failure.",
+    "The failure report names the edited profile file, the login shell that was checked, the PATH block that was written and the PATH the fresh shell reported.",
+    "Temporary files used by the check live in a private directory that other users cannot read, with unpredictable names, and are removed on every outcome; after the check finishes no file and no process from it is left behind.",
+    "A re-install must leave the rest of the profile byte-identical: repeated installs do not accumulate blank lines, and dropping the block restores the file content exactly as it was before the block was added, including the trailing-newline state.",
+    "install.sh stays POSIX sh and keeps working without GNU coreutils timeout, on macOS and Linux.",
+    "Existing behaviour is preserved: login shell detection, profile selection, FORGEL_CODE_PROFILE and FORGEL_CODE_NO_MODIFY_PATH opt-outs, idempotent --uninstall (including ~/.bashrc and FORGEL_CODE_PROFILE), --help and exit code 2 for an unknown argument.",
+    "Every fixed defect gets a test in the repository test suite; no existing test may be weakened to make the suite pass."
+  ],
+  "acceptance": [
+    "A check against a shell that never answers and ignores the graceful stop signal ends within a bounded time with a non-zero status and a report naming the profile file and the observed PATH.",
+    "The shell-inspection test finishes, leaves no stray process and leaves no temporary file behind.",
+    "Installing twice over the same profile produces a file byte-identical to the file after the first install; dropping the block restores the original content exactly.",
+    "The full test suite of the repository passes, including the existing installer, shell-detection, opt-out, uninstall and packaging tests.",
+    "Temporary files created by the check are not readable by other users and are gone after both a successful and a failed check."
+  ],
+  "constraints": [
+    "POSIX sh only; no dependency on GNU coreutils.",
+    "No new documented environment variables; existing variables keep their meaning.",
+    "Keep the current verification bound unless a documented reason forces a different value.",
+    "User-facing output in English, matching the existing installer tone.",
+    "All committed artifacts in English."
+  ],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [
+    "The whole fix stays inside install.sh and its tests; the client package and CHANGELOG are untouched.",
+    "The verification bound stays at its current value; no new environment variable is added for it.",
+    "The private temporary location is created under the system temporary directory with owner-only permissions and removed on every exit path.",
+    "The release of the installer fix is re-checked and published by the normal release process after the fix is accepted; no version or tag is chosen here."
+  ],
+  "plan_id": "",
+  "plan_goal": "",
+  "release_id": "20261122174453490970_make-the-install-sh-path-check-strictly-bounded-",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "ru",
+  "status": "pending",
+  "created_at": "2026-11-22T17:44:53+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

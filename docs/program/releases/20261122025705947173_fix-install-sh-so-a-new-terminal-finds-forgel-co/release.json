@@ -6,7 +6,7 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "running",
+  "status": "blocked",
   "tasks": [
     "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
     "20261122034544_release-audit-uninstall-no-longer-honors",
@@ -29,9 +29,9 @@
     }
   },
   "audit": {
-    "rounds": 0,
-    "verdict": "",
-    "summary": "The change set implements the requested shell detection, per-shell profile selection, guarded PATH block, fresh-shell verification and multi-file uninstall cleanup, and the recorded suites pass. However, the mandatory bounded fresh-shell check is not actually enforced: `verify_profile` ignores the watchdog's kill status, and the watchdog only sends SIGTERM, which an interactive bash ignores. A hanging login shell can therefore be reported as verified or hang the installer indefinitely instead of producing the required failure report. A predictable temporary path also introduces a local symlink race. These are blocking defects in the verification path the release claims to add.",
+    "rounds": 1,
+    "verdict": "fail",
+    "summary": "The release implements most of the PATH detection, guarded block, fresh-shell verification and uninstall work, and the suite passes, but blocking defects remain. The fresh-shell watchdog creates predictable world-readable files under /tmp, ignores its timeout status when deciding success, and can still hang on a shell that ignores SIGTERM. Re-installing over a pre-existing profile also accumulates the separator blank line, so the profile is not byte-identical across runs.",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
       "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
@@ -39,42 +39,43 @@
       "20261122034544_release-audit-uninstall-omits-bashrc-alt",
       "20261122062911_make-install-sh-put-forgel-code-on-path-"
     ],
-    "at": "2026-11-22T10:51:04+00:00",
+    "at": "2026-11-22T17:33:00+00:00",
     "findings": [
       {
-        "severity": "major",
+        "severity": "critical",
         "repo_id": "code",
-        "issue": "`bounded_run` records a watchdog kill as `BOUNDED_STATUS=124`, but `verify_profile` never reads `BOUNDED_STATUS` or the killed marker. It returns success whenever the captured output contains `forgel-fresh-resolved=$LAUNCHER`, so a fresh login shell that prints the resolution and then hangs (for example in a blocking `.zlogout`/EXIT trap) is killed by the watchdog yet still reported as verified. This contradicts the requirement that a killed shell be treated as a verification failure.",
-        "suggestion": "In `verify_profile`, check `BOUNDED_STATUS`/the killed marker first and fail with the standard report whenever the shell had to be killed, regardless of partial output; add a test whose fresh shell prints the resolution marker and then sleeps."
+        "issue": "`bounded_run` creates its state files at predictable paths `${TMPDIR:-/tmp}/forgel-code-check.$$.{out,done,killed}` and initializes them with `: >` instead of a private `mktemp` file. A local user can pre-create a symlink for a guessed PID and cause the installer to truncate an arbitrary file writable by the installing user. The redirected fresh-shell output is also created with the default umask and may be readable by other users.",
+        "suggestion": "Create a private temporary directory with `mktemp -d` (mode 0700), create files with mode 0600, clean up the directory, and avoid following pre-existing symlinks."
       },
       {
         "severity": "major",
         "repo_id": "code",
-        "issue": "The watchdog only sends SIGTERM (`kill -TERM \"$child\"`). The verification shell is started with `-i`, and interactive bash ignores SIGTERM. If the detected login shell is bash and a startup file never returns, `wait \"$child\"` blocks forever: the installer never exits and never prints the required failure message naming the profile and PATH. The watchdog test uses a `#!/bin/sh` stub that dies on SIGTERM, so this case is not covered.",
-        "suggestion": "Escalate to SIGKILL after a short grace period and/or signal the whole process group, and add a test using a TERM-ignoring/interactive-bash-like login shell."
+        "issue": "`verify_profile` ignores `BOUNDED_STATUS`. `bounded_run` sets it to 124 when the watchdog kills the shell, but if the captured output already contains `forgel-fresh-resolved=<launcher>`, `verify_profile` returns success. In addition, the watchdog only sends SIGTERM and the parent then blocks in `wait \"$child\"`, so a shell that ignores SIGTERM defeats the bounded time limit. The watchdog test only covers a shell that prints nothing and dies on TERM.",
+        "suggestion": "Treat `BOUNDED_STATUS=124` as a verification failure regardless of captured output, escalate from SIGTERM to SIGKILL after a grace period, and add a test where the detected shell prints the expected resolution and then hangs or ignores TERM."
+      },
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "Re-install idempotence is not preserved for a profile that already contains user content. `add_profile_block` appends a blank line before the block whenever the file is non-empty, while the unchanged `remove_profile_block` is documented to keep every other line. Each re-run therefore leaves an additional separator blank line, violating the requirement that the rest of the file stay byte-identical. The new idempotence tests only cover an initially empty profile.",
+        "suggestion": "Remove the installer-added separator along with the marked block, or avoid adding a new separator when the preceding content already ends with a blank line. Add a test that seeds the profile with user content, runs install twice, and asserts exact bytes."
       },
       {
         "severity": "minor",
         "repo_id": "code",
-        "issue": "The watchdog uses predictable paths under `${TMPDIR:-/tmp}` (`forgel-code-check.$$`, `.out`, `.done`, `.killed`) and truncates with `: >`. In a shared `/tmp`, another local user can pre-create a symlink for a guessed PID and cause the installer to truncate an arbitrary file writable by the installing user (local symlink race).",
-        "suggestion": "Create a private directory with `mktemp -d` (mode 0700) and keep the marker files inside it, rather than using predictable names under the shared temporary directory."
+        "issue": "`detect_login_shell` accepts `$SHELL` when its basename is handled, but `verify_profile` only starts it when `[ -x \"$shell\" ]`. A valid `SHELL=zsh` (a bare command name) is detected, the block is written, then verification is skipped and the install exits non-zero even though `zsh` is available on PATH.",
+        "suggestion": "Resolve the selected shell with `command -v` before the `-x` check, or return the resolved executable path from detection. Add a test with a bare `$SHELL` name."
       },
       {
         "severity": "minor",
         "repo_id": "code",
-        "issue": "`detect_login_shell` accepts a handled shell by basename, so a bare `$SHELL` such as `bash` is returned unchanged. `verify_profile` then evaluates `[ -x \"$shell\" ]` against the relative path and skips the check, producing a spurious verification failure even though the shell is available on PATH.",
-        "suggestion": "Resolve the detected shell with `command -v` (or require and validate an absolute executable path) before using it for verification."
-      },
-      {
-        "severity": "minor",
-        "repo_id": "code",
-        "issue": "`CHANGELOG.md` records only the `FORGEL_CODE_PROFILE` uninstall fix under `## [Unreleased]`; the release's headline change (login-shell detection, per-shell profile selection, guarded block and fresh-shell verification) has no changelog entry.",
-        "suggestion": "Add an `### Changed`/`### Fixed` entry under `## [Unreleased]` describing the installer PATH detection and fresh-shell verification change."
+        "issue": "`CHANGELOG.md` says `--uninstall` cleans the override profile in addition to the \"six standard profile files\", but `install.sh` and `README.md` now clean seven standard files including `~/.bashrc`.",
+        "suggestion": "Update the changelog entry to say seven standard profile files, or list the files explicitly."
       }
-    ]
+    ],
+    "errors": 0
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": "",
+  "detail": "The release audit for `code` returned verdict `fail` with one critical and two major findings that are real defects in `install.sh` itself, not in the specification: the request explicitly requires bounded verification that fails with a message naming the edited file and observed PATH, and requires that a re-install leave the rest of the profile byte-identical. The earlier attempt to route this back never queued a task, so the code is still unchanged and the release cannot be accepted or published as-is.",
   "next_at": ""
 }
