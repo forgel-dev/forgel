@@ -964,7 +964,7 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("proof", evidence)
         self.assertNotIn("not evidence", evidence)
 
-    def test_repeated_actions_fail_fast(self) -> None:
+    def test_repeated_actions_are_corrected_then_fail(self) -> None:
         task = self._task()
         repeated = json.dumps(
             {"action": "read_file", "path": "README.md"}
@@ -974,8 +974,10 @@ class CodingAgentTest(unittest.TestCase):
             self.settings, self.ledger, client
         ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "failed")
-        self.assertIn("repeated action loop", result.summary)
-        self.assertLessEqual(result.steps, 5)
+        self.assertIn(
+            "no progress after repeated actions", result.summary
+        )
+        self.assertLessEqual(result.steps, 10)
 
     def test_a_failed_run_reports_the_changed_files(self) -> None:
         task = self._task()

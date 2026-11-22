@@ -16,6 +16,7 @@ from forgel.model import ScriptedModelClient
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.task_review import (
+    MAX_REVIEW_RETRIES,
     _review_prompt,
     accept_parked_green_tasks,
     accept_task,
@@ -895,11 +896,7 @@ class TaskReviewTest(unittest.TestCase):
             self.project,
             task,
             ScriptedModelClient(
-                [
-                    PASS_PARTIAL,
-                    PASS_PARTIAL,
-                    PASS_PARTIAL,
-                ]
+                [PASS_PARTIAL] * (MAX_REVIEW_RETRIES + 1)
             ),
             log=lambda _m: None,
         )

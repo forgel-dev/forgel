@@ -60,8 +60,10 @@ MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
 MAX_INVALID_REPLIES = 8
+MAX_MARKUP_RETRIES = 10
 MAX_LIST_ENTRIES = 200
 MAX_REPEATED_ACTIONS = 5
+MAX_REPEAT_CORRECTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
     "read_file",
@@ -932,6 +934,7 @@ class CodingAgent:
         sessions = 0
         compactions = 0
         signatures: dict[str, int] = {}
+        repeat_corrections = 0
 
         def handoff(session: int) -> tuple[list[ModelMessage], str]:
             changed = sorted(
@@ -1022,7 +1025,7 @@ class CodingAgent:
                 if not batch:
                     if (
                         _looks_like_tool_markup(raw)
-                        and markup_retries < 2
+                        and markup_retries < MAX_MARKUP_RETRIES
                     ):
                         messages.append(
                             ModelMessage("assistant", raw)
@@ -1138,13 +1141,31 @@ class CodingAgent:
                         repeats = signatures.get(signature, 0) + 1
                         signatures[signature] = repeats
                         if repeats >= MAX_REPEATED_ACTIONS:
-                            status = "failed"
-                            failure_kind = "agent"
-                            summary = (
-                                f"repeated action loop: {signature}"
+                            repeat_corrections += 1
+                            if repeat_corrections > MAX_REPEAT_CORRECTIONS:
+                                status = "failed"
+                                failure_kind = "agent"
+                                summary = (
+                                    "no progress after repeated actions: "
+                                    f"{signature}"
+                                )
+                                terminal = True
+                                break
+                            messages.append(
+                                ModelMessage(
+                                    "user",
+                                    f"You have repeated `{signature}` "
+                                    f"{repeats} times and its result is "
+                                    "already above. Do not repeat it. "
+                                    "Choose a different action now: edit a "
+                                    "file, run the tests, or call done with "
+                                    "the result you have.",
+                                )
                             )
-                            terminal = True
-                            break
+                            recent.append(
+                                f"repeated action corrected: {signature}"
+                            )
+                            continue
                     observation, command = self._execute(
                         layout,
                         repo,

@@ -53,6 +53,7 @@ from .tasks import (
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
 MAX_QA_CHARS = 2_000
+MAX_REVIEW_RETRIES = 10
 REMOVAL_REASONS = {"removed", "replaced", "wrong"}
 PUSH_RETRY_SECONDS = 60
 TEST_PATH = re.compile(
@@ -846,7 +847,7 @@ def run_task_review(
             try:
                 parsed = _parse_review(json.dumps(finals[-1]))
             except (ValueError, json.JSONDecodeError) as exc:
-                if answer_retries < 2:
+                if answer_retries < MAX_REVIEW_RETRIES:
                     if not observations:
                         messages.append(
                             ModelMessage("assistant", raw.strip())
@@ -881,7 +882,7 @@ def run_task_review(
             if (
                 expected
                 and len(parsed["requirements"]) < expected
-                and coverage_retries < 2
+                and coverage_retries < MAX_REVIEW_RETRIES
             ):
                 coverage_retries += 1
                 messages.append(ModelMessage("assistant", raw.strip()))
@@ -898,7 +899,7 @@ def run_task_review(
                 continue
             break
         if not actions:
-            if answer_retries < 2:
+            if answer_retries < MAX_REVIEW_RETRIES:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(

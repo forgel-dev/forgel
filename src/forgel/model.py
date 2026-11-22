@@ -44,9 +44,9 @@ class ModelMessage:
 class ModelConfig:
     base_url: str
     api_key: str
-    timeout: float = 120.0
-    total_timeout: float = 300.0
-    retries: int = 3
+    timeout: float = 600.0
+    total_timeout: float = 1500.0
+    retries: int = 5
     retry_backoff: tuple[float, ...] = (1.0, 3.0, 9.0)
 
 
@@ -391,23 +391,23 @@ def build_model_client(
             log(f"[model] invalid base URL: {base_url!r}")
         return None
     try:
-        timeout = float(env.get("FORGEL_MODEL_TIMEOUT", "120"))
+        timeout = float(env.get("FORGEL_MODEL_TIMEOUT", "600"))
     except ValueError:
-        timeout = 120.0
+        timeout = 600.0
     if timeout <= 0:
-        timeout = 120.0
+        timeout = 600.0
     try:
-        retries = int(env.get("FORGEL_MODEL_RETRIES", "3"))
+        retries = int(env.get("FORGEL_MODEL_RETRIES", "5"))
     except ValueError:
-        retries = 3
+        retries = 5
     try:
         total_timeout = float(
-            env.get("FORGEL_MODEL_TOTAL_TIMEOUT", "300")
+            env.get("FORGEL_MODEL_TOTAL_TIMEOUT", "1500")
         )
     except ValueError:
-        total_timeout = 300.0
+        total_timeout = 1500.0
     if total_timeout <= 0:
-        total_timeout = 300.0
+        total_timeout = 1500.0
     retries = max(0, min(retries, 10))
     backoff: list[float] = []
     for item in env.get("FORGEL_MODEL_RETRY_BACKOFF", "1,3,9").split(","):
