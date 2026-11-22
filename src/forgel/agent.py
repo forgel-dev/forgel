@@ -65,6 +65,7 @@ OVERVIEW_TOTAL_CHARS = 14_000
 MAX_RESEARCH_STEPS = 20
 MAX_MARKUP_RETRIES = 3
 MAX_ANSWER_RETRIES = 3
+MAX_REQUEST_RETRIES = 3
 GENERIC_SKIP_DIRS = {
     ".git",
     ".forgel",
@@ -971,6 +972,27 @@ def parse_answer(raw: str) -> dict[str, Any]:
     }
 
 
+def _change_request_gaps(
+    answer: Mapping[str, Any], repos: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    """The fields a change request needs before it can become a task."""
+
+    gaps: list[str] = []
+    known = {str(entry["id"]) for entry in repos}
+    repo_id = str(answer.get("repo_id") or "").strip()
+    if not repo_id:
+        gaps.append("repo_id")
+    elif repo_id not in known:
+        gaps.append(
+            f"a known repo_id ({repo_id!r} is not a repository of this project)"
+        )
+    if not str(answer.get("title") or "").strip():
+        gaps.append("title")
+    if not (answer.get("requirements") or answer.get("acceptance")):
+        gaps.append("requirements or acceptance criteria")
+    return gaps
+
+
 def _turn_chars(turns: list[dict[str, Any]]) -> int:
     return sum(len(str(turn.get("text", ""))) for turn in turns)
 
@@ -1305,12 +1327,14 @@ class ProjectAgent:
         answer: dict[str, Any] | None = None
         markup_retries = 0
         answer_retries = 0
+        request_retries = 0
         research_steps = 0
         for step in range(
             MAX_RESEARCH_STEPS
             + 1
             + MAX_MARKUP_RETRIES
             + MAX_ANSWER_RETRIES
+            + MAX_REQUEST_RETRIES
         ):
             try:
                 raw = self.client.complete(messages, model=model)
@@ -1432,6 +1456,34 @@ class ProjectAgent:
                 )
                 answer_retries += 1
                 continue
+            gaps = (
+                _change_request_gaps(candidate, repos)
+                if candidate["kind"] == "change_request"
+                else []
+            )
+            if gaps and request_retries < MAX_REQUEST_RETRIES:
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "That change request cannot be queued: it is missing "
+                        + ", ".join(gaps)
+                        + ". Fill those fields from the project context. If a "
+                        "task or a stopped release already carries this work, "
+                        "use its action instead of a new change request.",
+                    )
+                )
+                request_retries += 1
+                continue
+            if gaps:
+                return AgentResult(
+                    text=(
+                        "The change was not queued: the request is missing "
+                        + ", ".join(gaps)
+                        + "."
+                    ),
+                    kind="error",
+                )
             answer = candidate
             break
         if answer is None:

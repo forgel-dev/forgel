@@ -419,15 +419,38 @@ class AgentTest(unittest.TestCase):
             "acceptance": ["The first install command uses pip"],
             "repo_id": "",
         }
-        client = ScriptedModelClient([json.dumps(response)])
+        corrected = dict(response, repo_id="code")
+        client = ScriptedModelClient(
+            [json.dumps(response), json.dumps(corrected)]
+        )
         agent = ProjectAgent(self.settings, self.ledger, client)
 
         result = agent.handle(project, "Поправь установку", "@tester")
 
-        self.assertIsNotNone(result.request)
-        self.assertIsNone(result.task_id)
+        self.assertIsNotNone(result.task_id)
+        assert result.task_id is not None
+        task = get_task(layout, result.task_id)
+        assert task is not None
+        self.assertEqual(task["repo_id"], "code")
+        self.assertIn("repo_id", client.requests[1][-1].content)
         self.assertNotIn("Which repository", result.text)
-        self.assertIn("No task was queued", result.text)
+
+    def test_an_empty_change_request_is_never_recorded(self) -> None:
+        project = self._project("Empty", "A brief.")
+        empty = json.dumps(
+            {"kind": "change_request", "reply": "I will do it."}
+        )
+        client = ScriptedModelClient([empty] * 4)
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        result = agent.handle(project, "Сделай что-нибудь", "@tester")
+
+        self.assertEqual(result.kind, "error")
+        self.assertIsNone(result.request)
+        layout = ProjectLayout.detect(project["workspace"])
+        requests = layout.artifact("docs/program/requests")
+        self.assertEqual(list(requests.glob("*.md")), [])
+        self.assertIn("repo_id", client.requests[1][-1].content)
 
     def test_a_long_answer_keeps_the_previous_message_in_context(
         self,
