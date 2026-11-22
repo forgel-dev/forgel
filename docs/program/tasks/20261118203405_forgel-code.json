@@ -230,12 +230,12 @@
     }
   ],
   "language": "ru",
-  "status": "done",
+  "status": "failed",
   "created_at": "2026-11-18T20:34:05+00:00",
   "started_at": "2026-11-22T04:12:06+00:00",
   "finished_at": "2026-11-22T04:19:11+00:00",
   "result": {
-    "summary": "No change was needed this attempt: the two QA checks reported as failing both pass on the current tree. Ran `python -m unittest tests.test_cli -v` (71 tests, OK), `python -m unittest tests.test_packaging -v` (14 tests, OK, including `test_sdist_is_pep625_shaped` asserting `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`, `test_wheel_carries_subpackages_and_package_data`, and `test_sdist_and_wheel_contents`), `python -m pytest -q tests/test_cli.py::ProjectPropagationTest tests/test_packaging.py` (17 tests + 28 subtests passed; covers R1 project-key propagation for status, tasks, task, say, plan, resume, pause, history, projects, session, accept, rework and the no-project case), and the full suite `python -m unittest discover -s tests` (180 tests, OK).",
+    "summary": "No change was needed this attempt: the two QA checks reported as failing both pass on the current tree. Ran `python -m unittest tests.test_cli -v` (71 tests, OK), `python -m unittest tests.test_packaging -v` (14 tests, OK, including `test_sdist_is_pep625_shaped` asserting `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`, `test_wheel_carries_subpackages_and_package_data`, and `test_sdist_and_wheel_contents`), `python -m pytest -q tests/test_cli.py::ProjectPropagationTest tests/test_packaging.py` (17 tests + 28 subtests passed; covers R1 project-key propagation for status, tasks, task, say, plan, resume, pause, history, projects, session, accept, rework and the no-project case), and the full suite `python -m unittest discover -s tests` (180 tests, OK).; task QA failed: environment test [environment project @ /Users/okalistratov/Documents/sites/metaharness]: … [truncated] ] running [qa] completed [acceptance] running [acceptance] completed [audit] running [audit] completed [approval] running [approval] awaiting staging approval (pending) [approval] running [approval] completed [done] running [done] completed [github] GitHub API is unreachable; the branch is pushed without pull-request checks [github] demo-946cbe8f: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request [scenario] user: hello [scenario] reply: sandbox answer ..................................................................................error: unknown project 'missing-project' ..error: unknown project 'missing-project' ........error: say needs text: --text \"...\" or a trailing argument ...........................................................................................................................................................................................................................................................................................F.F...F.......F...............................................................................................",
     "files_changed": [
       "README.md",
       "_build_backend.py",
@@ -397,70 +397,157 @@
       "commands": [
         {
           "command": "python -m unittest discover -s tests",
-          "exit_code": 0
+          "exit_code": 1,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
         },
         {
           "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
-          "exit_code": 0
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
         },
         {
           "command": "python -m unittest tests.test_cli",
-          "exit_code": 1
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
         },
         {
           "command": "python -m unittest tests.test_packaging",
-          "exit_code": 1
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
         },
         {
           "command": "python -m forgel_code --version",
-          "exit_code": 0
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
         }
       ],
       "checks": [
         {
           "criterion": "environment test",
           "command": "python -m unittest discover -s tests",
-          "exit_code": 0,
-          "verdict": "pass"
+          "exit_code": 1,
+          "verdict": "fail",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "… [truncated]\n] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[github] GitHub API is unreachable; the branch is pushed without pull-request checks\n[github] demo-946cbe8f: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request\n[scenario] user: hello\n[scenario] reply: sandbox answer\n..................................................................................error: unknown project 'missing-project'\n..error: unknown project 'missing-project'\n........error: say needs text: --text \"...\" or a trailing argument\n...........................................................................................................................................................................................................................................................................................F.F...F.......F.......................................................................................................................................................................................................................................................................................................\n======================================================================\nFAIL: test_a_plan_that_adds_an_interacting_repository_requires_e2e (test_planner.PlannerTest.test_a_plan_that_adds_an_interacting_repository_requires_e2e)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/okalistratov/Documents/sites/metaharness/tests/test_planner.py\", line 706, in test_a_plan_that_adds_an_interacting_repository_requires_e2e\n    with self.assertRaises(PlanningError) as caught:\n         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: PlanningError not raised\n\n======================================================================\nFAIL: test_a_spec_failure_reports_the_writer_log (test_planner.PlannerTest.test_a_spec_failure_reports_the_writer_log)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/okalistratov/Documents/sites/metaharness/tests/test_planner.py\", line 482, in test_a_spec_failure_reports_the_writer_log\n    self.assertIn(PLAN[\"tasks\"][0][\"title\"], text)\n    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'Add a health endpoint' not found in 'the plan review failed: scripted model client has no response left'\n\n======================================================================\nFAIL: test_an_unavailable_dependency_stops_the_plan (test_planner.PlannerTest.test_an_unavailable_dependency_stops_the_plan)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/okalistratov/Documents/sites/metaharness/tests/test_planner.py\", line 441, in test_an_unavailable_dependency_stops_the_plan\n    self.assertIn(\"weather\", str(ctx.exception))\n    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: 'weather' not found in 'the plan review failed: scripted model client has no response left'\n\n======================================================================\nFAIL: test_plan_review_rejects_an_insufficient_plan (test_planner.PlannerTest.test_plan_review_rejects_an_insufficient_plan)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/Users/okalistratov/Documents/sites/metaharness/tests/test_planner.py\", line 240, in test_plan_review_rejects_an_insufficient_plan\n    with self.assertRaises(PlanningError):\n         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^\nAssertionError: PlanningError not raised\n\n----------------------------------------------------------------------\nRan 685 tests in 105.015s\n\nFAILED (failures=4)",
+          "failure": "environment"
         },
         {
           "criterion": "environment e2e",
           "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
           "exit_code": 0,
-          "verdict": "pass"
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`.",
           "command": "python -m unittest tests.test_cli",
-          "exit_code": 1,
-          "verdict": "fail"
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both.",
           "command": "python -m unittest tests.test_packaging",
-          "exit_code": 1,
-          "verdict": "fail"
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "`forgel-code --version` prints the version from the single source and it equals the metadata of the built package.",
           "command": "python -m forgel_code --version",
           "exit_code": 0,
-          "verdict": "pass"
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The whole client test suite passes and the added tests fail on the original code.",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "The README offers no default-branch and no editable install and contains an install command with a pinned version plus an update instruction.",
           "command": "",
           "exit_code": null,
-          "verdict": "review"
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "The added tests fail on the original code (not verifiable by a single run of the new code).",
           "command": "",
           "exit_code": null,
-          "verdict": "review"
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
         }
       ],
-      "review_required": true
+      "review_required": true,
+      "failure_kind": "environment"
     },
     "rework_count": 0,
     "feedback": [
@@ -468,7 +555,11 @@
       "QA check failed: Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both. (exit 1)"
     ],
     "manual_retries": 1,
-    "failure": {}
+    "failure": {
+      "kind": "environment",
+      "message": "task QA failed: environment test [environment project @ /Users/okalistratov/Documents/sites/metaharness]: … [truncated] ] running [qa] completed [acceptance] running [acceptance] completed [audit] running [audit] completed [approval] running [approval] awaiting staging approval (pending) [approval] running [approval] completed [done] running [done] completed [github] GitHub API is unreachable; the branch is pushed without pull-request checks [github] demo-946cbe8f: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request [scenario] user: hello [scenario] reply: sandbox answer ..................................................................................error: unknown project 'missing-project' ..error: unknown project 'missing-project' ........error: say needs text: --text \"...\" or a trailing argument ...........................................................................................................................................................................................................................................................................................F.F...F.......F...............................................................................................",
+      "retryable": false
+    }
   },
   "request": "docs/program/requests/20261118203405113659_forgel-code.md"
 }
