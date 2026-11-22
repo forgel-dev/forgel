@@ -72,6 +72,9 @@ class Settings:
     model_input_price: float = default_profile().input_price
     model_cache_input_price: float = 0.0
     model_output_price: float = default_profile().output_price
+    # The bound for a repository command (a build, a test suite, a probe).
+    # It is a crash guard, not a step budget: a legitimate suite may run long.
+    command_timeout: float = 900.0
     # The runtime reads the policy from the environment (off-peak by default).
     # Direct construction defaults to "always" so library and test code does
     # not become time-dependent.
@@ -256,6 +259,9 @@ class Settings:
             model_output_price=_env_price(
                 "FORGEL_MODEL_OUTPUT_PRICE",
                 default_profile().output_price,
+            ),
+            command_timeout=_env_price(
+                "FORGEL_COMMAND_TIMEOUT", 900.0
             ),
             peak_policy=peak_policy,
             peak_hours=peak_hours,

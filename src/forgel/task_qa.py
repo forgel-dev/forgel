@@ -233,6 +233,7 @@ def _run_local(
     environment: Environment | None,
     repo_id: str,
     checks: Sequence[dict[str, Any]],
+    timeout: float = 900.0,
 ) -> list[tuple[dict[str, Any], int, str]]:
     fallback = _workdir(layout, environment, repo_id)
     env = {
@@ -262,7 +263,7 @@ def _run_local(
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=max(60.0, float(timeout)),
                 check=False,
             )
         except subprocess.TimeoutExpired as exc:
@@ -350,7 +351,13 @@ def _run_sandbox(
                     results.append((check, 2, output + "empty command\n"))
                     continue
                 try:
-                    code, text = session.run(argv, timeout=600)
+                    code, text = session.run(
+                        argv,
+                        timeout=max(
+                            60.0,
+                            float(settings.command_timeout or 900),
+                        ),
+                    )
                 except SandboxError as exc:
                     results.append(
                         (check, 1, output + f"sandbox error: {exc}")
@@ -820,7 +827,13 @@ def run_task_qa(
             ]
             runtime = "sandbox"
     else:
-        results = _run_local(layout, environment, repo_id, run_checks)
+        results = _run_local(
+            layout,
+            environment,
+            repo_id,
+            run_checks,
+            max(60.0, float(settings.command_timeout or 900)),
+        )
         runtime = "local"
         if environment is not None and (environment.test or environment.e2e):
             runtime += " + environment.yaml"

@@ -1370,7 +1370,9 @@ class CodingAgent:
                     layout,
                     repo,
                     test_command,
-                    timeout=120,
+                    timeout=max(
+                        60.0, float(self.settings.command_timeout or 900)
+                    ),
                     runner=runner,
                     extra_env=environment.env_map if environment else None,
                 )
@@ -1662,11 +1664,14 @@ Files:
                         "this command was not executed.",
                         None,
                     )
-                timeout = action.get("timeout", 60)
+                limit = max(
+                    60.0, float(self.settings.command_timeout or 900)
+                )
+                timeout = action.get("timeout", limit)
                 try:
-                    timeout_value = max(5, min(int(timeout), 120))
+                    timeout_value = max(5, min(int(timeout), int(limit)))
                 except (TypeError, ValueError):
-                    timeout_value = 60
+                    timeout_value = int(limit)
                 code, output = self._run_command(
                     layout,
                     repo,
