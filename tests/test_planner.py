@@ -213,8 +213,9 @@ class PlannerTest(unittest.TestCase):
         self,
     ) -> None:
         specs = [_spec_for(item) for item in PLAN["tasks"]]
-        revised = _spec_for(PLAN["tasks"][0])
-        revised["requirements"] = ["Deliver the revised outcome"]
+        ignored = dict(PLAN)
+        ignored["plan_decision"] = "ignore"
+        ignored["notes"] = "The finding is not a real gap."
         client = ScriptedModelClient(
             [
                 json.dumps(PLAN),
@@ -228,15 +229,7 @@ class PlannerTest(unittest.TestCase):
                         ],
                     }
                 ),
-                json.dumps(revised),
-                json.dumps(
-                    {
-                        "sufficient": False,
-                        "findings": [
-                            {"task": 0, "issue": "still missing"}
-                        ],
-                    }
-                ),
+                json.dumps(ignored),
             ]
         )
         result = plan_project(
@@ -248,7 +241,7 @@ class PlannerTest(unittest.TestCase):
             log=lambda _m: None,
         )
         self.assertFalse(result.blocked)
-        self.assertIn("still missing", result.notes)
+        self.assertIn("the result is missing", result.notes)
         tasks = list_tasks(self.layout)
         self.assertEqual(len(tasks), 2)
         self.assertFalse(
@@ -262,6 +255,8 @@ class PlannerTest(unittest.TestCase):
         specs = [_spec_for(item) for item in PLAN["tasks"]]
         revised = _spec_for(PLAN["tasks"][0])
         revised["requirements"] = ["Deliver the revised outcome"]
+        revised_plan = dict(PLAN)
+        revised_plan["plan_decision"] = "revise"
         client = ScriptedModelClient(
             [
                 json.dumps(PLAN),
@@ -275,7 +270,9 @@ class PlannerTest(unittest.TestCase):
                         ],
                     }
                 ),
+                json.dumps(revised_plan),
                 json.dumps(revised),
+                json.dumps(specs[1]),
                 json.dumps({"sufficient": True, "findings": []}),
             ]
         )

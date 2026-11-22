@@ -54,6 +54,7 @@ from .repo_tools import (
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
 MAX_RESEARCH_STEPS = 50
+MAX_PLAN_REVISIONS = 20
 
 
 class PlanningError(RuntimeError):
@@ -778,33 +779,12 @@ def plan_project(
         notes = notes + "\n\n## Integration deferred\n\n" + early_deferred
     for blocker in early_blockers:
         notes = notes + "\n\n## Blocked\n\n" + blocker
-    problem = integration_problem(layout, environment, repositories)
-    if problem:
-        notes = notes + "\n\n## Integration work\n\n" + problem
-        log(f"[plan] {project['id']}: {problem}")
-        items = [
-            _integration_intent(problem, [*repos, *repositories])
-        ] + items
     deferred = integration_warning(layout, environment, repositories)
     if deferred and deferred != early_deferred:
         notes = notes + "\n\n## Integration deferred\n\n" + deferred
         log(f"[plan] {project['id']}: {deferred}")
     plan_id = _plan_id(goal)
     task_language = language.detect(goal)
-    used: set[str] = set()
-    ids: list[str] = []
-    for item in items:
-        candidate = tasks.new_task_id(str(item["title"]))
-        suffix = 2
-        while candidate in used or tasks.task_path(
-            layout, candidate
-        ).exists():
-            candidate = (
-                f"{tasks.new_task_id(str(item['title']))}-{suffix}"
-            )
-            suffix += 1
-        used.add(candidate)
-        ids.append(candidate)
 
     if dry_run:
         preview: list[dict[str, Any]] = []
@@ -865,34 +845,52 @@ def plan_project(
             blockers.append(str(exc))
             notes = notes + "\n\n## Blocked\n\n" + str(exc)
             log(f"[plan] {project['id']}: {exc}")
+    applied = {
+        str(entry["id"]) for entry in manifest_entries(layout)
+    }
     task_specs: list[dict[str, Any]] = []
     blocked_tasks: set[int] = set()
-    for index, item in enumerate(items):
-        log(f"[spec] task {index + 1}/{len(items)}: writing")
-        try:
-            spec = _spec_call(specs.write_task_spec,
-                settings, layout, goal, notes, item, model_client, log
-            )
-            spec = _dependency_call(
-                layout, item, spec, model_client, log
-            )
-        except PlanningError as exc:
-            blockers.append(f"task {item.get('title')}: {exc}")
-            blocked_tasks.add(index)
-            blocked = _blocked_spec(item, exc)
-            blocked["blocked"] = str(exc)
-            task_specs.append(blocked)
-            notes = (
-                notes
-                + "\n\n## Blocked task\n\n"
-                + f"{item.get('title')}: {exc}"
-            )
-            log(f"[plan] {project['id']}: task blocked: {exc}")
-            continue
-        task_specs.append(spec)
-    if blockers or global_blocked or blocked_tasks:
-        review = None
-    else:
+    review = None
+    product_question = ""
+    revisions = 0
+    integrated = False
+    while True:
+        problem = integration_problem(layout, environment, repositories)
+        if problem and not integrated:
+            notes = notes + "\n\n## Integration work\n\n" + problem
+            log(f"[plan] {project['id']}: {problem}")
+            items = [
+                _integration_intent(problem, [*repos, *repositories])
+            ] + items
+            integrated = True
+        task_specs = []
+        blocked_tasks = set()
+        for index, item in enumerate(items):
+            log(f"[spec] task {index + 1}/{len(items)}: writing")
+            try:
+                spec = _spec_call(specs.write_task_spec,
+                    settings, layout, goal, notes, item, model_client, log
+                )
+                spec = _dependency_call(
+                    layout, item, spec, model_client, log
+                )
+            except PlanningError as exc:
+                blockers.append(f"task {item.get('title')}: {exc}")
+                blocked_tasks.add(index)
+                blocked = _blocked_spec(item, exc)
+                blocked["blocked"] = str(exc)
+                task_specs.append(blocked)
+                notes = (
+                    notes
+                    + "\n\n## Blocked task\n\n"
+                    + f"{item.get('title')}: {exc}"
+                )
+                log(f"[plan] {project['id']}: task blocked: {exc}")
+                continue
+            task_specs.append(spec)
+        if blockers or global_blocked or blocked_tasks:
+            review = None
+            break
         review = _spec_call(
             specs.review_plan,
             layout,
@@ -902,63 +900,123 @@ def plan_project(
             model_client,
             log,
         )
-    if review is not None and not review.sufficient:
-        log("[plan] review found gaps; revising the specifications")
-        for finding in review.findings:
-            position = int(finding.get("task", -1))
-            if position in blocked_tasks:
-                continue
-            if 0 <= position < len(items):
-                try:
-                    revised = _spec_call(specs.write_task_spec,
-                        settings,
-                        layout,
-                        goal,
-                        notes,
-                        items[position],
-                        model_client,
-                        log,
-                        review_issue=str(finding.get("issue") or ""),
-                    )
-                except PlanningError as exc:
-                    blockers.append(
-                        f"task {items[position].get('title')}: {exc}"
-                    )
-                    blocked_tasks.add(position)
-                    blocked = _blocked_spec(items[position], exc)
-                    blocked["blocked"] = str(exc)
-                    task_specs[position] = blocked
-                    notes = (
-                        notes
-                        + "\n\n## Blocked task\n\n"
-                        + f"{items[position].get('title')}: {exc}"
-                    )
-                    continue
-                task_specs[position] = _dependency_call(
-                    layout,
-                    items[position],
-                    revised,
-                    model_client,
-                    log,
-                )
-        if blockers or blocked_tasks or global_blocked:
-            review = None
-        else:
-            review = _spec_call(specs.review_plan,
-                layout, goal, notes, task_specs, model_client, log
-            )
-    if review is not None and not review.sufficient:
-        # The review is advisory: its gaps stay in the plan notes, and the
-        # tasks run so their own QA and review can judge the real result.
+        if review is None or review.sufficient:
+            break
+        if revisions >= MAX_PLAN_REVISIONS:
+            break
+        revisions += 1
         details = "; ".join(
             f"task {item.get('task')}: {item.get('issue')}"
             for item in review.findings
         ) or "no findings"
-        notes = (
-            notes
-            + "\n\n## Plan review findings\n\n"
-            + details
+        messages.append(
+            ModelMessage(
+                "assistant",
+                json.dumps(
+                    {
+                        "notes": notes,
+                        "repositories": repositories,
+                        "tasks": [
+                            {
+                                "title": item["title"],
+                                "summary": item.get("summary") or "",
+                                "repo_id": item["repo_id"],
+                                "depends_on": item["depends_on"],
+                            }
+                            for item in items
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+            )
         )
+        messages.append(
+            ModelMessage(
+                "user",
+                "The plan review found these gaps:\n"
+                + details
+                + "\n\nDecide for each finding whether it is a real gap, "
+                "and return the complete plan JSON with \"plan_decision\" "
+                "set to:\n"
+                "- \"revise\": real gaps exist; return the revised plan;\n"
+                "- \"ignore\": the findings are not real gaps; explain why "
+                "in notes and keep the plan;\n"
+                "- \"ask\": a gap can only be resolved by a product "
+                "decision from the owner; put the one question in "
+                "\"product_question\".",
+            )
+        )
+        try:
+            raw = model_client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError as exc:
+            blockers.append(f"plan revision failed: {exc}")
+            global_blocked = True
+            break
+        objects = json_objects(raw)
+        data = objects[-1] if objects else None
+        if not isinstance(data, dict):
+            blockers.append("plan revision returned no plan")
+            global_blocked = True
+            break
+        product_question = str(
+            data.get("product_question") or ""
+        ).strip()
+        decision = str(
+            data.get("plan_decision") or "revise"
+        ).strip().lower()
+        if decision == "ask" or product_question:
+            break
+        if decision == "ignore":
+            notes = (
+                notes
+                + "\n\n## Plan review findings\n\n"
+                + details
+            )
+            log("[plan] the planner kept the plan; findings recorded")
+            break
+        try:
+            notes, items, repositories = _parse_plan(
+                raw,
+                [*known, *sorted(applied - set(known))],
+                default_repo,
+                max_tasks,
+            )
+        except PlanningError as exc:
+            blockers.append(f"plan revision invalid: {exc}")
+            global_blocked = True
+            break
+        try:
+            _apply_repositories(
+                settings,
+                ledger,
+                project,
+                [
+                    entry
+                    for entry in repositories
+                    if str(entry["id"]) not in applied
+                ],
+            )
+        except PlanningError as exc:
+            global_blocked = True
+            blockers.append(str(exc))
+            notes = notes + "\n\n## Blocked\n\n" + str(exc)
+            break
+        applied.update(str(entry["id"]) for entry in repositories)
+    if product_question:
+        global_blocked = True
+        blockers.append(
+            "the plan needs a product decision: " + product_question
+        )
+        notes = notes + "\n\n## Product decision\n\n" + product_question
+        log("[plan] product decision required: " + product_question)
+    if review is not None and not review.sufficient and not global_blocked:
+        details = "; ".join(
+            f"task {item.get('task')}: {item.get('issue')}"
+            for item in review.findings
+        ) or "no findings"
+        notes = notes + "\n\n## Plan review findings\n\n" + details
         log("[plan] review gaps recorded; the plan proceeds")
     if review is not None:
         notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
@@ -968,6 +1026,21 @@ def plan_project(
             + "\n\n## Plan review\n\n"
             + "Skipped: the plan has blocked tasks that need a decision."
         )
+
+    used: set[str] = set()
+    ids: list[str] = []
+    for item in items:
+        candidate = tasks.new_task_id(str(item["title"]))
+        suffix = 2
+        while candidate in used or tasks.task_path(
+            layout, candidate
+        ).exists():
+            candidate = (
+                f"{tasks.new_task_id(str(item['title']))}-{suffix}"
+            )
+            suffix += 1
+        used.add(candidate)
+        ids.append(candidate)
 
     created: list[dict[str, Any]] = []
     task_records: list[dict[str, Any]] = []
