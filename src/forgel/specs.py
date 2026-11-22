@@ -71,6 +71,8 @@ Return exactly one JSON object:
 {
   "problem": "what problem this task solves",
   "outcome": "what is true when the task is done",
+  "product_intent": "the product intent this task serves, when stated",
+  "user_experience": "how the user experiences this task's result, when stated",
   "scope": ["in scope"],
   "non_goals": ["explicitly out of scope"],
   "requirements": ["explicit, testable requirement"],
@@ -253,6 +255,12 @@ def _normalize_spec(
         "depends_on": list(intent.get("depends_on") or []),
         "problem": str(data.get("problem") or "").strip(),
         "outcome": str(data.get("outcome") or "").strip(),
+        "product_intent": str(
+            data.get("product_intent") or ""
+        ).strip(),
+        "user_experience": str(
+            data.get("user_experience") or ""
+        ).strip(),
         "scope": _strings(data.get("scope")),
         "non_goals": _strings(data.get("non_goals")),
         "requirements": requirements,
@@ -671,6 +679,8 @@ def render_spec(
         "source": f"Plan `{plan_id}`",
         "author": "Forgel requirements writer",
         "overview": overview or "—",
+        "product_intent": spec.get("product_intent") or "—",
+        "user_experience": spec.get("user_experience") or "—",
         "goals": requirements_doc.bullets(spec.get("goals") or []),
         "non_goals": requirements_doc.bullets(spec.get("non_goals") or []),
         "user_decisions": requirements_doc.decisions_table(

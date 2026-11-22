@@ -530,12 +530,21 @@ def plan_project(
     log: Callable[[str], None] = print,
     release_id: str = "",
     release_class: str = "minor",
+    product_intent: str = "",
+    user_experience: str = "",
 ) -> PlanResult:
     """Ask the model for an ordered backlog and queue it as tasks."""
 
     goal = goal.strip()
     if not goal:
         raise PlanningError("a milestone goal is required")
+    product_intent = str(product_intent or "").strip()
+    user_experience = str(user_experience or "").strip()
+    intent_note = ""
+    if product_intent:
+        intent_note += f"Product intent:\n{product_intent}\n\n"
+    if user_experience:
+        intent_note += f"User experience:\n{user_experience}\n\n"
     release_class = str(release_class or "minor").strip().lower()
     if release_class not in {"patch", "minor", "major"}:
         release_class = "minor"
@@ -571,7 +580,8 @@ def plan_project(
         ModelMessage("system", _system_prompt(max_tasks)),
         ModelMessage(
             "user",
-            f"Milestone goal:\n{goal}\n\n" + _context(layout, project, ledger),
+            f"Milestone goal:\n{goal}\n\n"
+            f"{intent_note}" + _context(layout, project, ledger),
         ),
     ]
     raw = ""
@@ -683,6 +693,8 @@ def plan_project(
     if parsed is None:
         raise PlanningError("the planner did not return a plan")
     notes, items, repositories = parsed
+    if intent_note:
+        notes = intent_note + notes
     problem = integration_problem(layout, environment, repositories)
     if problem:
         raise PlanningError(problem)

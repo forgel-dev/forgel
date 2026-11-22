@@ -171,6 +171,20 @@ class PlannerTest(unittest.TestCase):
         ]
         self.assertIn("plan", stages)
 
+    def test_the_plan_carries_product_intent_and_experience(self) -> None:
+        result = self._plan(
+            product_intent="An interactive agent client.",
+            user_experience="A terminal chat that shows task progress.",
+        )
+
+        self.assertIn("Product intent:", result.notes)
+        self.assertIn("An interactive agent client.", result.notes)
+        self.assertIn("User experience:", result.notes)
+        artifact = (self.layout.root / result.artifact).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("A terminal chat that shows task progress.", artifact)
+
     def test_plan_writes_formal_specs(self) -> None:
         result = self._plan()
         created = list_tasks(self.layout)

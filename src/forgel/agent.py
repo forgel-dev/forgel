@@ -181,6 +181,8 @@ instructions say otherwise. Return exactly one JSON object:
   ],
   "title": "short title, change_request only",
   "summary": "one paragraph, change_request only",
+  "product_intent": "what the owner wants the product to become, in their terms; preserve a named reference product",
+  "user_experience": "how the owner will use it: the main flow, the surfaces, and what the change replaces",
   "requirements": ["explicit requirement", "..."],
   "acceptance": ["criterion", "..."],
   "constraints": ["constraint", "..."],
@@ -224,9 +226,10 @@ Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
 - adopt {url, brief?}: adopt a repository as a new project and select it;
   "this repository" means the working directory shown in the message.
-- plan {goal, release_class?, max_tasks?}: turn a milestone goal into an
-  ordered backlog and one release; release_class follows the same rule as a
-  change request.
+- plan {goal, product_intent?, user_experience?, release_class?, max_tasks?}:
+  turn a milestone goal into an ordered backlog and one release;
+  release_class follows the same rule as a change request. Pass the product
+  intent and the experience the owner described exactly as they stated them.
 - status {}: project, milestone and task state.
 - tasks {}: list the task queue.
 - accept {task_id?}: accept the task awaiting review (the runtime picks the
@@ -271,6 +274,10 @@ For a change request:
   Put every decision in "user_decisions"; never omit one and never ask the
   user to confirm a decision already made. A later decision overrides an
   earlier one.
+- Record the owner's product intent and the experience they described under
+  "product_intent" and "user_experience". Preserve a named reference product
+  and what the change replaces. If the intent is materially ambiguous between
+  different products, ask one consolidated question before queueing.
 - Write the change-request document in the artifact language required by the
   project and repository instructions even when the chat reply is in the
   the user's language. State the request as requirements and decisions; do
@@ -913,6 +920,8 @@ def parse_answer(raw: str) -> dict[str, Any]:
         "actions": actions,
         "title": str(data.get("title", "")).strip(),
         "summary": str(data.get("summary", "")).strip(),
+        "product_intent": str(data.get("product_intent", "")).strip(),
+        "user_experience": str(data.get("user_experience", "")).strip(),
         "requirements": [
             str(item) for item in requirements if str(item).strip()
         ],
@@ -1603,6 +1612,10 @@ class ProjectAgent:
             "source": f"Local console request ({actor})",
             "author": "Forgel project agent",
             "overview": answer.get("summary") or "—",
+            "product_intent": answer.get("product_intent") or "None stated.",
+            "user_experience": (
+                answer.get("user_experience") or "None stated."
+            ),
             "goals": requirements_doc.bullets(goals),
             "non_goals": requirements_doc.bullets(
                 non_goals, "None stated."

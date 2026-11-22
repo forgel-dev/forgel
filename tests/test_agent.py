@@ -532,6 +532,8 @@ class AgentTest(unittest.TestCase):
             "reply": "Queued.",
             "title": "Add dark mode",
             "summary": "Add a dark theme toggle.",
+            "product_intent": "A dark mode across the application.",
+            "user_experience": "The owner toggles the theme in settings.",
             "requirements": ["Add a dark theme toggle"],
             "acceptance": ["The toggle is visible"],
             "constraints": ["standard library only"],
@@ -572,6 +574,11 @@ class AgentTest(unittest.TestCase):
         )
         self.assertIn("## Assumptions", request_text)
         self.assertIn("main application", request_text)
+        self.assertIn("## Product Intent", request_text)
+        self.assertIn("A dark mode across the application.", request_text)
+        self.assertIn(
+            "The owner toggles the theme in settings.", request_text
+        )
 
     def test_a_control_action_is_parsed_and_returned(self) -> None:
         project = self._project("Actions", "A brief.")

@@ -20,6 +20,14 @@
 
 {{overview}}
 
+## Product Intent
+
+{{product_intent}}
+
+## User Experience
+
+{{user_experience}}
+
 ## Goals
 
 {{goals}}

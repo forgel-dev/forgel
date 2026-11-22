@@ -1476,6 +1476,8 @@ class CommandRouter:
         rest: str,
         _actor: str,
         release_class: str = "minor",
+        product_intent: str = "",
+        user_experience: str = "",
     ) -> Reply:
         project = self._selected(chat_id)
         if isinstance(project, Reply):
@@ -1541,6 +1543,8 @@ class CommandRouter:
                 goal,
                 dry_run=dry_run,
                 release_class=release_class,
+                product_intent=product_intent,
+                user_experience=user_experience,
             )
         except PlanningError as exc:
             return self._error(chat_id, "chat_error", error=exc)
@@ -1795,7 +1799,16 @@ class CommandRouter:
                 release_class = "minor"
             return combine(
                 self._plan(
-                    chat_id, goal, actor, release_class=release_class
+                    chat_id,
+                    goal,
+                    actor,
+                    release_class=release_class,
+                    product_intent=str(
+                        args.get("product_intent") or ""
+                    ).strip(),
+                    user_experience=str(
+                        args.get("user_experience") or ""
+                    ).strip(),
                 )
             )
         if action == "status":
