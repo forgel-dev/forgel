@@ -183,6 +183,7 @@ instructions say otherwise. Return exactly one JSON object:
   "summary": "one paragraph, change_request only",
   "product_intent": "what the owner wants the product to become, in their terms; preserve a named reference product",
   "user_experience": "how the owner will use it: the main flow, the surfaces, and what the change replaces",
+  "roadmap": ["ordered deliverable steps of the whole request, when it has more than one"],
   "requirements": ["explicit requirement", "..."],
   "acceptance": ["criterion", "..."],
   "constraints": ["constraint", "..."],
@@ -226,10 +227,10 @@ Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
 - adopt {url, brief?}: adopt a repository as a new project and select it;
   "this repository" means the working directory shown in the message.
-- plan {goal, product_intent?, user_experience?, release_class?, max_tasks?}:
-  turn a milestone goal into an ordered backlog and one release;
+- plan {goal, product_intent?, user_experience?, roadmap?, release_class?,
+  max_tasks?}: turn a milestone goal into an ordered backlog and one release;
   release_class follows the same rule as a change request. Pass the product
-  intent and the experience the owner described exactly as they stated them.
+  intent, the experience and the roadmap exactly as the owner stated them.
 - status {}: project, milestone and task state.
 - tasks {}: list the task queue.
 - accept {task_id?}: accept the task awaiting review (the runtime picks the
@@ -278,6 +279,9 @@ For a change request:
   "product_intent" and "user_experience". Preserve a named reference product
   and what the change replaces. If the intent is materially ambiguous between
   different products, ask one consolidated question before queueing.
+- Record the ordered roadmap of the whole request under "roadmap" when it has
+  more than one deliverable step. A change_request is one deliverable; a
+  multi-step request returns the plan action with its goal and roadmap.
 - Write the change-request document in the artifact language required by the
   project and repository instructions even when the chat reply is in the
   the user's language. State the request as requirements and decisions; do
@@ -922,6 +926,10 @@ def parse_answer(raw: str) -> dict[str, Any]:
         "summary": str(data.get("summary", "")).strip(),
         "product_intent": str(data.get("product_intent", "")).strip(),
         "user_experience": str(data.get("user_experience", "")).strip(),
+        "roadmap": [
+            str(item) for item in (data.get("roadmap") or [])
+            if str(item).strip()
+        ],
         "requirements": [
             str(item) for item in requirements if str(item).strip()
         ],
@@ -1615,6 +1623,9 @@ class ProjectAgent:
             "product_intent": answer.get("product_intent") or "None stated.",
             "user_experience": (
                 answer.get("user_experience") or "None stated."
+            ),
+            "roadmap": requirements_doc.bullets(
+                answer.get("roadmap") or [], "None stated."
             ),
             "goals": requirements_doc.bullets(goals),
             "non_goals": requirements_doc.bullets(

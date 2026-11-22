@@ -534,6 +534,7 @@ class AgentTest(unittest.TestCase):
             "summary": "Add a dark theme toggle.",
             "product_intent": "A dark mode across the application.",
             "user_experience": "The owner toggles the theme in settings.",
+            "roadmap": ["Add the toggle", "Persist the choice"],
             "requirements": ["Add a dark theme toggle"],
             "acceptance": ["The toggle is visible"],
             "constraints": ["standard library only"],
@@ -579,6 +580,8 @@ class AgentTest(unittest.TestCase):
         self.assertIn(
             "The owner toggles the theme in settings.", request_text
         )
+        self.assertIn("## Roadmap", request_text)
+        self.assertIn("Persist the choice", request_text)
 
     def test_a_control_action_is_parsed_and_returned(self) -> None:
         project = self._project("Actions", "A brief.")

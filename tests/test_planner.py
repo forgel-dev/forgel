@@ -175,11 +175,14 @@ class PlannerTest(unittest.TestCase):
         result = self._plan(
             product_intent="An interactive agent client.",
             user_experience="A terminal chat that shows task progress.",
+            roadmap=["Session stream", "Chat surface", "Release"],
         )
 
         self.assertIn("Product intent:", result.notes)
         self.assertIn("An interactive agent client.", result.notes)
         self.assertIn("User experience:", result.notes)
+        self.assertIn("Roadmap:", result.notes)
+        self.assertIn("Chat surface", result.notes)
         artifact = (self.layout.root / result.artifact).read_text(
             encoding="utf-8"
         )

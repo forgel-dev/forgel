@@ -532,6 +532,7 @@ def plan_project(
     release_class: str = "minor",
     product_intent: str = "",
     user_experience: str = "",
+    roadmap: Sequence[str] | None = None,
 ) -> PlanResult:
     """Ask the model for an ordered backlog and queue it as tasks."""
 
@@ -540,11 +541,20 @@ def plan_project(
         raise PlanningError("a milestone goal is required")
     product_intent = str(product_intent or "").strip()
     user_experience = str(user_experience or "").strip()
+    steps = [
+        str(item).strip()
+        for item in (roadmap or [])
+        if str(item).strip()
+    ]
     intent_note = ""
     if product_intent:
         intent_note += f"Product intent:\n{product_intent}\n\n"
     if user_experience:
         intent_note += f"User experience:\n{user_experience}\n\n"
+    if steps:
+        intent_note += "Roadmap:\n" + "\n".join(
+            f"- {step}" for step in steps
+        ) + "\n\n"
     release_class = str(release_class or "minor").strip().lower()
     if release_class not in {"patch", "minor", "major"}:
         release_class = "minor"

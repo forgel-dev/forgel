@@ -1478,6 +1478,7 @@ class CommandRouter:
         release_class: str = "minor",
         product_intent: str = "",
         user_experience: str = "",
+        roadmap: list[str] | None = None,
     ) -> Reply:
         project = self._selected(chat_id)
         if isinstance(project, Reply):
@@ -1545,6 +1546,7 @@ class CommandRouter:
                 release_class=release_class,
                 product_intent=product_intent,
                 user_experience=user_experience,
+                roadmap=roadmap or [],
             )
         except PlanningError as exc:
             return self._error(chat_id, "chat_error", error=exc)
@@ -1797,6 +1799,14 @@ class CommandRouter:
             ).strip().lower()
             if release_class not in {"patch", "minor", "major"}:
                 release_class = "minor"
+            roadmap_arg = args.get("roadmap") or []
+            if isinstance(roadmap_arg, str):
+                roadmap_arg = [roadmap_arg]
+            roadmap = [
+                str(item).strip()
+                for item in roadmap_arg
+                if str(item).strip()
+            ]
             return combine(
                 self._plan(
                     chat_id,
@@ -1809,6 +1819,7 @@ class CommandRouter:
                     user_experience=str(
                         args.get("user_experience") or ""
                     ).strip(),
+                    roadmap=roadmap,
                 )
             )
         if action == "status":

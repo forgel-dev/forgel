@@ -50,6 +50,18 @@ UI.
 - Scripted subcommands remain available for automation, but they are not the
   default product surface.
 
+## Roadmap
+
+1. Engine session/stream: send a message, return the reply and the action,
+   task and release events the client renders.
+2. Client chat surface: `forgel-code` with no arguments opens the REPL and
+   sends free text to the active engine session.
+3. Rendering and progress: show the reply, the actions taken, the active task
+   stage, its checks and the release outcome.
+4. Chat controls: status, tasks, accept, rework, pause, resume, project
+   selection and quit.
+5. Tests and the next client release.
+
 ## Goals
 
 - Add an interactive chat/REPL mode as the default `forgel-code` surface.

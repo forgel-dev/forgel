@@ -28,6 +28,10 @@
 
 {{user_experience}}
 
+## Roadmap
+
+{{roadmap}}
+
 ## Goals
 
 {{goals}}
