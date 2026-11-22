@@ -2,7 +2,7 @@ PYTHON ?= python3
 CLI_PIP ?= $(HOME)/.forgel-cli/bin/pip
 export PYTHONPATH := src
 
-.PHONY: test lint demo chat clean e2e-blog install-cli
+.PHONY: test lint demo chat clean e2e-blog install-cli scenario scenario-execute
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
@@ -21,6 +21,15 @@ chat:
 # tests/e2e/README.md and are run only on explicit instruction.
 e2e-blog:
 	$(PYTHON) tests/e2e/run_blog_e2e.py --mode script --strict
+
+# Real workflows in an isolated tree: temp home, local clones, no provider,
+# no push, no release on a real remote. See docs/scenarios.md.
+scenario:
+	$(PYTHON) -m forgel scenario --scenario tests/scenarios/forgel-code.json --keep
+
+# The same replay with the daemon running inside the sandbox.
+scenario-execute:
+	$(PYTHON) -m forgel scenario --scenario tests/scenarios/forgel-code.json --execute --keep
 
 clean:
 	rm -rf .forgel-demo .venv

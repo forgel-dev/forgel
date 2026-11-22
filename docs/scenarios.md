@@ -26,6 +26,8 @@ offline.
 
 ```bash
 forgel scenario --scenario tests/scenarios/forgel-code.json
+make scenario            # the same replay, keeping the sandbox
+make scenario-execute    # the replay with the daemon in the sandbox
 ```
 
 A scenario file is JSON:
