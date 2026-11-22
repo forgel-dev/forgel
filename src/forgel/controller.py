@@ -108,6 +108,53 @@ work. Do not ask the owner to choose between internal process options.
 """
 
 
+TASK_ACTIONS = {
+    "retry",
+    "rework",
+    "respec",
+    "accept",
+    "cancel",
+    "task_process",
+    "task_qa",
+    "task_review",
+    "block",
+    "ask_user",
+}
+RELEASE_ACTIONS = {"audit", "fix", "block", "ask_user"}
+# Any operation the model may choose is mapped to a stage action. Nothing
+# falls through: a tool that does not exist for the stage is its equivalent,
+# not a dead end.
+_TASK_ALIASES = {
+    "reject": "rework",
+    "release_fix": "rework",
+    "release_resume": "rework",
+    "release_audit": "rework",
+    "release_finalize": "rework",
+    "stop": "block",
+}
+
+
+def task_action(operation: str) -> str:
+    name = str(operation or "").strip().lower()
+    if name in {"retry", "run_task"}:
+        return "retry"
+    if name in TASK_ACTIONS:
+        return name
+    return _TASK_ALIASES.get(name, "rework")
+
+
+def release_action(operation: str) -> str:
+    name = str(operation or "").strip().lower()
+    if name in {"release_resume", "release_audit"}:
+        return "audit"
+    if name == "ask_user":
+        return "ask_user"
+    if name in {"block", "stop", "cancel"}:
+        return "block"
+    # Every other operation means the change set goes back for a fix.
+    return "fix"
+
+
 def _cap(text: Any, limit: int) -> str:
     value = str(text or "")
     if len(value) <= limit:

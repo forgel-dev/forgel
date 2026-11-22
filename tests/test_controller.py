@@ -6,7 +6,15 @@ import unittest
 from pathlib import Path
 
 from forgel.config import Settings
-from forgel.controller import ControllerError, decide
+from forgel.controller import (
+    OPERATIONS,
+    RELEASE_ACTIONS,
+    TASK_ACTIONS,
+    ControllerError,
+    decide,
+    release_action,
+    task_action,
+)
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
@@ -66,6 +74,11 @@ class ControllerTest(unittest.TestCase):
     def test_an_unknown_operation_is_rejected(self) -> None:
         with self.assertRaises(ControllerError):
             self._decide(json.dumps({"operation": "deploy"}))
+
+    def test_every_operation_maps_for_both_stages(self) -> None:
+        for operation in OPERATIONS:
+            self.assertIn(task_action(operation), TASK_ACTIONS)
+            self.assertIn(release_action(operation), RELEASE_ACTIONS)
 
     def test_a_non_json_answer_is_rejected(self) -> None:
         with self.assertRaises(ControllerError):

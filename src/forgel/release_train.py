@@ -975,21 +975,12 @@ def audit_release(
             save_release(layout, release)
             log(f"[release] {release['id']}: controller stopped")
             return False
-        if decision.operation in {
-            "release_fix",
-            "rework",
-            "reject",
-        } and _queue_fix_tasks(
-            layout, release, items, blocking, log
-        ):
+        action = controller.release_action(decision.operation)
+        if action == "audit":
             release["status"] = "running"
             save_release(layout, release)
             return False
-        if decision.operation in {"release_resume", "release_audit"}:
-            release["status"] = "running"
-            save_release(layout, release)
-            return False
-        if decision.operation == "ask_user":
+        if action == "ask_user":
             release["status"] = "blocked"
             release["detail"] = (
                 decision.question
@@ -1002,6 +993,12 @@ def audit_release(
                 f"[release] {release['id']}: needs the owner: "
                 f"{release['detail']}"
             )
+            return False
+        if action == "fix" and _queue_fix_tasks(
+            layout, release, items, blocking, log
+        ):
+            release["status"] = "running"
+            save_release(layout, release)
             return False
         release["status"] = "blocked"
         release["detail"] = (

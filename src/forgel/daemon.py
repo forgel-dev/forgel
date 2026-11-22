@@ -499,8 +499,11 @@ def _apply_controller_decision(
 ) -> bool:
     """Execute the controlling agent's next step for a failed task."""
 
+    from . import controller
+
     operation = str(decision.operation)
-    if operation in {"retry", "run_task"}:
+    action = controller.task_action(operation)
+    if action == "retry":
         data["attempts"] = attempts + 1
         data["last_failure"] = failure
         data.pop("failure", None)
@@ -518,9 +521,13 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: {operation}")
         return True
-    if operation == "rework":
+    if action == "rework":
         data["rework_count"] = int(data.get("rework_count", 0)) + 1
-        data["feedback"] = decision.feedback or _feedback_from(data)
+        data["feedback"] = (
+            decision.feedback
+            or ([decision.reason] if decision.reason else [])
+            or _feedback_from(data)
+        )
         data["last_failure"] = failure
         data.pop("failure", None)
         tasks.update_task(
@@ -533,7 +540,7 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: rework")
         return True
-    if operation == "respec":
+    if action == "respec":
         issue = str(decision.issue or failure.get("message") or "")
         if client is not None and _rewrite_spec_from_failure(
             settings,
@@ -546,8 +553,25 @@ def _apply_controller_decision(
             log,
         ):
             return True
-        return False
-    if operation in {"task_process", "task_qa", "task_review"}:
+        # The spec could not be rewritten; send the work back with the issue
+        # instead of stopping on an operation that did not run.
+        data["rework_count"] = int(data.get("rework_count", 0)) + 1
+        data["feedback"] = [
+            issue or "the specification could not be rewritten"
+        ]
+        data["last_failure"] = failure
+        data.pop("failure", None)
+        tasks.update_task(
+            layout,
+            task_id,
+            status="pending",
+            started_at="",
+            finished_at="",
+            result=data,
+        )
+        log(f"[controller] task {task_id}: respec failed; rework")
+        return True
+    if action in {"task_process", "task_qa", "task_review"}:
         from . import runtime_ops
 
         try:
@@ -555,7 +579,7 @@ def _apply_controller_decision(
                 settings,
                 ledger,
                 project,
-                operation,
+                action,
                 {"task_id": task_id},
                 client,
                 log,
@@ -563,9 +587,9 @@ def _apply_controller_decision(
         except ValueError as exc:
             log(f"[controller] task {task_id}: {operation}: {exc}")
             return False
-        log(f"[controller] task {task_id}: {operation}: {text}")
+        log(f"[controller] task {task_id}: {action}: {text}")
         return True
-    if operation == "accept":
+    if action == "accept":
         from .task_review import accept_task
 
         accept_task(
@@ -578,7 +602,7 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: accepted")
         return True
-    if operation == "reject":
+    if action == "reject":
         from .task_review import reject_task
 
         reject_task(
@@ -591,7 +615,7 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: rejected")
         return True
-    if operation == "cancel":
+    if action == "cancel":
         data["summary"] = "cancelled by the controller"
         tasks.update_task(
             layout,
@@ -602,7 +626,7 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: cancelled")
         return True
-    if operation == "ask_user":
+    if action == "ask_user":
         note = str(
             decision.question
             or decision.reason
@@ -615,7 +639,7 @@ def _apply_controller_decision(
         )
         log(f"[controller] task {task_id}: needs the owner: {note}")
         return True
-    if operation in {"block", "stop"}:
+    if action == "block":
         _quarantine(
             settings,
             ledger,
@@ -626,7 +650,7 @@ def _apply_controller_decision(
             attempts,
             log,
         )
-        log(f"[controller] task {task_id}: {operation}")
+        log(f"[controller] task {task_id}: {action}")
         return True
     return False
 
@@ -736,20 +760,26 @@ def handle_failure(
             log,
         )
         return
-    if _apply_controller_decision(
-        settings,
-        ledger,
-        project,
-        layout,
-        task,
-        task_id,
-        data,
-        failure,
-        attempts,
-        client,
-        decision,
-        log,
-    ):
+    try:
+        applied = _apply_controller_decision(
+            settings,
+            ledger,
+            project,
+            layout,
+            task,
+            task_id,
+            data,
+            failure,
+            attempts,
+            client,
+            decision,
+            log,
+        )
+        error = ""
+    except Exception as exc:  # noqa: BLE001 - the daemon must stay up
+        applied = False
+        error = str(exc)
+    if applied:
         return
     _controller_stopped(
         settings,
@@ -758,8 +788,8 @@ def handle_failure(
         layout,
         task_id,
         data,
-        "the controlling agent chose an operation that does not apply "
-        f"here: {decision.operation}; try again later",
+        "the chosen step failed "
+        f"({error or decision.operation}); try again later",
         log,
     )
 

@@ -708,6 +708,55 @@ class ReleaseTrainTest(unittest.TestCase):
         ]
         self.assertEqual(len(fix_tasks), 1)
 
+    def test_an_audit_decision_keeps_the_release_running(self) -> None:
+        release, _task = self._release()
+        client = ScriptedModelClient(
+            [
+                FAIL_AUDIT,
+                json.dumps(
+                    {"operation": "release_audit", "reason": "re-check"}
+                ),
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+
+    def test_a_stop_decision_blocks_the_release(self) -> None:
+        release, _task = self._release()
+        client = ScriptedModelClient(
+            [
+                FAIL_AUDIT,
+                json.dumps(
+                    {"operation": "stop", "reason": "no viable fix"}
+                ),
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(stored["detail"], "no viable fix")
+
     def test_the_controller_asks_the_owner_for_a_blocked_release(
         self,
     ) -> None:
