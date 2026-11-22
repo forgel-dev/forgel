@@ -863,6 +863,10 @@ class ReleaseTrainTest(unittest.TestCase):
                             "operation": operation,
                             "reason": "a reason",
                             "question": "a question",
+                            "args": {
+                                "name": "command_timeout",
+                                "seconds": 7200,
+                            },
                         }
                     ),
                 ]
@@ -910,6 +914,10 @@ class ReleaseTrainTest(unittest.TestCase):
                             "operation": operation,
                             "reason": "a reason",
                             "question": "a question",
+                            "args": {
+                                "name": "command_timeout",
+                                "seconds": 7200,
+                            },
                         }
                     )
                 ]

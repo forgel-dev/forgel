@@ -450,6 +450,10 @@ class DaemonTest(unittest.TestCase):
                     feedback=["a hint"],
                     issue="a spec issue",
                     question="a question",
+                    args={
+                        "name": "command_timeout",
+                        "seconds": 7200,
+                    },
                 )
                 with patch(
                     "forgel.runtime_ops.run_operation",
