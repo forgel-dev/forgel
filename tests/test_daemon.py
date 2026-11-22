@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from unittest.mock import patch
 
@@ -222,7 +223,7 @@ class DaemonTest(unittest.TestCase):
             run_once(settings, ledger, log=lambda _m: None, client=client)
             stored = get_task(layout, task["id"])
             assert stored is not None
-            self.assertEqual(stored["status"], "blocked")
+            self.assertEqual(stored["status"], "failed")
             self.assertIn(
                 "controlling agent stopped",
                 stored["result"]["summary"],
@@ -422,6 +423,49 @@ class DaemonTest(unittest.TestCase):
             self.assertIn(
                 "specification was rewritten",
                 " ".join(stored["result"]["feedback"]),
+            )
+
+    def test_an_ineffective_step_returns_to_the_controller(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, ledger, project, layout, task = (
+                self._failed_task(tmp)
+            )
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "operation": "task_qa",
+                            "reason": "check the failure",
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "operation": "rework",
+                            "reason": "the test is missing",
+                            "feedback": ["Add the test"],
+                        }
+                    ),
+                ]
+            )
+            with patch(
+                "forgel.runtime_ops.run_task_qa",
+                return_value=SimpleNamespace(status="pass"),
+            ):
+                handle_failure(
+                    settings,
+                    ledger,
+                    project,
+                    layout,
+                    task["id"],
+                    client,
+                    lambda _m: None,
+                )
+
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "pending")
+            self.assertEqual(
+                stored["result"]["feedback"], ["Add the test"]
             )
 
     def test_the_controller_asks_the_owner_as_the_last_resort(self) -> None:

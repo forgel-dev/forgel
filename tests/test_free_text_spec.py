@@ -196,7 +196,7 @@ class FreeTextSpecTest(unittest.TestCase):
             )
         stored = get_task(self.layout, "task-1")
         assert stored is not None
-        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(stored["status"], "failed")
         self.assertIn(
             "controlling agent stopped", stored["result"]["summary"]
         )

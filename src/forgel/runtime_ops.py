@@ -103,19 +103,25 @@ def run_operation(
             qa = run_task_qa(settings, ledger, dict(project), task, log)
             return f"Task {task_id}: QA {qa.status}."
         if name == "task_review":
-            if str(task.get("status") or "") != "review":
-                raise ValueError(
-                    "only a task awaiting a review decision can be reviewed "
-                    f"(status: {task.get('status') or 'unknown'})"
-                )
             if client is None:
                 raise ValueError("no model is configured for the reviewer")
-            updated = rerun_review(
-                settings, ledger, dict(project), task_id, client, log
+            if str(task.get("status") or "") == "review":
+                updated = rerun_review(
+                    settings, ledger, dict(project), task_id, client, log
+                )
+                return (
+                    f"Task {task_id}: QA and review re-ran; "
+                    f"status {updated.get('status') or 'unknown'}."
+                )
+            # A failed or blocked task can be reviewed too: run the same
+            # post-agent pipeline and let the controller see the outcome.
+            process_task_result(
+                settings, ledger, dict(project), task, client, log
             )
+            stored = get_task(layout, task_id) or task
             return (
-                f"Task {task_id}: QA and review re-ran; "
-                f"status {updated.get('status') or 'unknown'}."
+                f"Task {task_id}: QA and review ran; "
+                f"status {stored.get('status') or 'unknown'}."
             )
         process_task_result(
             settings, ledger, dict(project), task, client, log

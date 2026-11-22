@@ -483,6 +483,9 @@ def _rewrite_spec_from_failure(
     return True
 
 
+MAX_CONTROLLER_STEPS = 10
+
+
 def _apply_controller_decision(
     settings: Settings,
     ledger: Ledger,
@@ -590,16 +593,30 @@ def _apply_controller_decision(
         log(f"[controller] task {task_id}: {action}: {text}")
         return True
     if action == "accept":
-        from .task_review import accept_task
+        if str(task.get("status") or "") == "review":
+            from .task_review import accept_task
 
-        accept_task(
-            settings,
-            ledger,
-            project,
-            task,
-            actor="controller",
-            notes=str(decision.reason or decision.summary),
-        )
+            accept_task(
+                settings,
+                ledger,
+                project,
+                task,
+                actor="controller",
+                notes=str(decision.reason or decision.summary),
+            )
+        else:
+            # Accepting failed work means running the post-agent pipeline:
+            # QA and review decide, then acceptance takes it.
+            from .task_review import process_task_result
+
+            process_task_result(
+                settings,
+                ledger,
+                dict(project),
+                task,
+                client,
+                log,
+            )
         log(f"[controller] task {task_id}: accepted")
         return True
     if action == "reject":
@@ -640,6 +657,20 @@ def _apply_controller_decision(
         log(f"[controller] task {task_id}: needs the owner: {note}")
         return True
     if action == "block":
+        result = dict(data)
+        result.pop("failure", None)
+        result["summary"] = "stopped by the controller: " + (
+            decision.reason
+            or decision.summary
+            or "no reason"
+        )
+        tasks.update_task(
+            layout,
+            task_id,
+            status="blocked",
+            finished_at=_now(),
+            result=result,
+        )
         _quarantine(
             settings,
             ledger,
@@ -717,70 +748,99 @@ def handle_failure(
         return
     from . import controller
 
-    try:
-        decision = controller.decide(
-            settings,
-            ledger,
-            project,
-            layout,
-            "task_failure",
-            {
-                "task": {
-                    "id": task_id,
-                    "title": task.get("title"),
-                    "repo_id": task.get("repo_id"),
-                    "status": task.get("status"),
-                    "requirements": task.get("requirements") or [],
-                    "acceptance": task.get("acceptance") or [],
-                    "constraints": task.get("constraints") or [],
+    for _ in range(MAX_CONTROLLER_STEPS):
+        task = tasks.get_task(layout, task_id)
+        if task is None or task.get("status") != "failed":
+            return
+        data = dict(task.get("result") or {})
+        failure = dict(
+            data.get("failure")
+            or data.get("last_failure")
+            or _failure("external", "unknown failure", retryable=False)
+        )
+        attempts = int(data.get("attempts", 0))
+        try:
+            decision = controller.decide(
+                settings,
+                ledger,
+                project,
+                layout,
+                "task_failure",
+                {
+                    "task": {
+                        "id": task_id,
+                        "title": task.get("title"),
+                        "repo_id": task.get("repo_id"),
+                        "status": task.get("status"),
+                        "requirements": task.get("requirements") or [],
+                        "acceptance": task.get("acceptance") or [],
+                        "constraints": task.get("constraints") or [],
+                    },
+                    "failure": failure,
+                    "result": {
+                        "qa": data.get("qa"),
+                        "review": data.get("review"),
+                        "feedback": data.get("feedback") or [],
+                        "files_changed": data.get("files_changed") or [],
+                        "commands": data.get("commands") or [],
+                        "attempts": attempts,
+                        "rework_count": data.get("rework_count", 0),
+                    },
                 },
-                "failure": failure,
-                "result": {
-                    "qa": data.get("qa"),
-                    "review": data.get("review"),
-                    "feedback": data.get("feedback") or [],
-                    "files_changed": data.get("files_changed") or [],
-                    "commands": data.get("commands") or [],
-                    "attempts": attempts,
-                    "rework_count": data.get("rework_count", 0),
-                },
-            },
-            client,
-            log,
+                client,
+                log,
+            )
+        except Exception as exc:  # noqa: BLE001 - the daemon must stay up
+            _controller_stopped(
+                settings,
+                ledger,
+                project,
+                layout,
+                task_id,
+                data,
+                f"the model request failed ({exc}); try again later",
+                log,
+            )
+            return
+        try:
+            applied = _apply_controller_decision(
+                settings,
+                ledger,
+                project,
+                layout,
+                task,
+                task_id,
+                data,
+                failure,
+                attempts,
+                client,
+                decision,
+                log,
+            )
+            error = ""
+        except Exception as exc:  # noqa: BLE001 - the daemon must stay up
+            applied = False
+            error = str(exc)
+        if not applied:
+            _controller_stopped(
+                settings,
+                ledger,
+                project,
+                layout,
+                task_id,
+                data,
+                "the chosen step failed "
+                f"({error or decision.operation}); try again later",
+                log,
+            )
+            return
+        stored = tasks.get_task(layout, task_id)
+        if stored is None or stored.get("status") != "failed":
+            return
+        log(
+            f"[controller] task {task_id}: still failed after "
+            f"{decision.operation}; asking the controller again"
         )
-    except Exception as exc:  # noqa: BLE001 - the daemon must stay up
-        _controller_stopped(
-            settings,
-            ledger,
-            project,
-            layout,
-            task_id,
-            data,
-            f"the model request failed ({exc}); try again later",
-            log,
-        )
-        return
-    try:
-        applied = _apply_controller_decision(
-            settings,
-            ledger,
-            project,
-            layout,
-            task,
-            task_id,
-            data,
-            failure,
-            attempts,
-            client,
-            decision,
-            log,
-        )
-        error = ""
-    except Exception as exc:  # noqa: BLE001 - the daemon must stay up
-        applied = False
-        error = str(exc)
-    if applied:
-        return
     _controller_stopped(
         settings,
         ledger,
@@ -788,11 +848,10 @@ def handle_failure(
         layout,
         task_id,
         data,
-        "the chosen step failed "
-        f"({error or decision.operation}); try again later",
+        "the controller did not resolve the task after "
+        f"{MAX_CONTROLLER_STEPS} steps; try again later",
         log,
     )
-
 
 def _controller_stopped(
     settings: Settings,
@@ -811,20 +870,24 @@ def _controller_stopped(
     elif settings.plan_on_failure == "quarantine":
         tasks.block_dependents(layout, task_id, stop=False)
     result = dict(data)
-    result.pop("failure", None)
+    result.pop("blocked_by", None)
     result["summary"] = "the controlling agent stopped: " + str(reason)
-    result["blocked_by"] = "controller"
+    result["failure"] = {
+        "kind": "external",
+        "message": str(reason),
+        "retryable": True,
+    }
     tasks.update_task(
         layout,
         task_id,
-        status="blocked",
+        status="failed",
         finished_at=_now(),
         result=result,
     )
     ledger.append_event(
         str(project["id"]),
         "controller_stopped",
-        status="blocked",
+        status="failed",
         idempotency_key=(
             f"{project['id']}:controller_stopped:{task_id}:"
             f"{tasks.attempt_number(result)}"

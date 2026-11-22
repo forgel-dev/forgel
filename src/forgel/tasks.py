@@ -355,9 +355,10 @@ def retry_task(
     task = get_task(layout, task_id)
     if task is None:
         raise ValueError(f"unknown task {task_id!r}")
-    if task.get("status") != "failed":
+    if task.get("status") not in {"failed", "blocked"}:
         raise ValueError(
-            f"only failed tasks can be retried (status: {task.get('status')})"
+            "only a failed or blocked task can be retried "
+            f"(status: {task.get('status')})"
         )
     data = dict(task.get("result") or {})
     if data.get("failure"):

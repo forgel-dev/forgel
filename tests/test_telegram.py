@@ -547,7 +547,7 @@ class SelectionAndAgentTest(unittest.TestCase):
 
         reply = router.handle(7, "повтори", "@tester")
 
-        self.assertIn("only failed tasks can be retried", reply.text)
+        self.assertIn("only a failed or blocked task can be retried", reply.text)
         stored = get_task(layout, stale["id"])
         assert stored is not None
         self.assertEqual(stored["status"], "failed")
