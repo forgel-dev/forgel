@@ -663,6 +663,19 @@
       "actor": "auto",
       "at": "2026-11-22T03:41:44+00:00",
       "notes": ""
+    },
+    "push": {
+      "status": "pushed",
+      "repo": "code",
+      "branch": "main",
+      "detail": "",
+      "control": {
+        "status": "pushed",
+        "detail": "",
+        "branch": "main"
+      },
+      "attempts": 1,
+      "next_at": ""
     }
   },
   "request": "docs/program/requests/20261122025705940864_fix-install-sh-so-a-new-terminal-finds-forgel-code-on-path.md"
