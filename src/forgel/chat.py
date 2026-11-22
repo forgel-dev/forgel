@@ -49,6 +49,7 @@ from .artifacts import write_text
 from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
 from .release import ReleaseError, release_project
+from .release_train import resume_release
 from .task_review import accept_task, reject_task, rerun_review
 from .program_manifest import entries as manifest_entries
 from .program_manifest import repo_location
@@ -1850,19 +1851,7 @@ class CommandRouter:
             layout = ProjectLayout.detect(project["workspace"])
             task_id = str(args.get("task_id") or "").strip()
             if not task_id:
-                wanted = {
-                    "accept": "review",
-                    "reject": "review",
-                    "retry": "failed",
-                }[action]
-                task = next(
-                    (
-                        item
-                        for item in reversed(list_tasks(layout))
-                        if item.get("status") == wanted
-                    ),
-                    None,
-                )
+                task = latest_task(layout)
                 if task is None:
                     return self._error(
                         chat_id, "chat_action_no_decision"
@@ -1878,14 +1867,7 @@ class CommandRouter:
             layout = ProjectLayout.detect(project["workspace"])
             task_id = str(args.get("task_id") or "").strip()
             if not task_id:
-                task = next(
-                    (
-                        item
-                        for item in reversed(list_tasks(layout))
-                        if item.get("status") == "review"
-                    ),
-                    None,
-                )
+                task = latest_task(layout)
                 if task is None:
                     return self._error(
                         chat_id, "chat_action_no_review_task"
@@ -1977,6 +1959,25 @@ class CommandRouter:
                 parts.append(f"--notes {shlex.quote(notes)}")
             return combine(
                 self._release(chat_id, " ".join(parts), actor)
+            )
+        if action == "release_resume":
+            project = self._selected(chat_id)
+            if isinstance(project, Reply):
+                return project
+            layout = ProjectLayout.detect(project["workspace"])
+            release_id = str(args.get("release_id") or "").strip()
+            try:
+                release = resume_release(layout, release_id)
+            except ValueError as exc:
+                return self._error(chat_id, "chat_error", error=exc)
+            return combine(
+                Reply(
+                    self._text(
+                        chat_id,
+                        "chat_release_resumed",
+                        release=release["id"],
+                    )
+                )
             )
         if action == "peak":
             policy = str(args.get("policy") or "").strip()

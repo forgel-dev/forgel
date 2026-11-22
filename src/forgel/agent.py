@@ -92,6 +92,7 @@ AGENT_ACTIONS = {
     "repo_create",
     "repo_publish",
     "release",
+    "release_resume",
     "control_extract",
     "peak",
     "pause",
@@ -246,6 +247,8 @@ the action cannot run without it):
 - release {version, repo?}: publish the project's repositories now as a manual
   release; version is the tag the user asked for without the leading `v`
   (for example "0.1.0").
+- release_resume {release_id?}: put a stopped release back into the release
+  train so it is audited and published again.
 - control_extract {path?}: move the project state into a separate repository,
   for a project that started with one folder and grew.
 - peak {policy?}: show or set the model peak policy ("always" or "off_peak").
@@ -269,6 +272,10 @@ Autonomy (D-075):
   required access is missing. Ask one consolidated question, not a dialogue.
 
 For a change request:
+- Reconcile the request with the current state first. If an open task or a
+  stopped release already carries this work, act on that state (run, retry,
+  review or release_resume) instead of queueing another task. Queue a new
+  task only for work that no open task and no stopped release covers.
 - Treat the user's explicit product decisions as binding requirements. Scan
   the whole conversation — earlier messages, answers to clarifying questions,
   implementation remarks and later follow-ups — not only the last message.
@@ -730,10 +737,16 @@ def build_context(
                     release.get("repos") or {}
                 ).items()
             )
+            detail = str(release.get("detail") or "").strip()
+            if not detail:
+                audit = release.get("audit") or {}
+                if str(audit.get("verdict") or "") in {"error", "fail"}:
+                    detail = str(audit.get("summary") or "").strip()
             lines.append(
-                f"- {release.get('title') or release['id']}: "
+                f"- `{release['id']}` {release.get('title') or ''}: "
                 f"{release.get('status') or 'unknown'}"
                 + (f" ({repos_text})" if repos_text else "")
+                + (f" — {_cap(detail, 400)}" if detail else "")
             )
         parts.append("Releases:\n" + "\n".join(lines))
 

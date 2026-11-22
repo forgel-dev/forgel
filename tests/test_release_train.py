@@ -18,15 +18,19 @@ from forgel.program_manifest import set_entries, write_program
 from forgel.projects import create_project
 from forgel.providers.github import GithubProvider
 from forgel.release_train import (
+    AUDIT_TOTAL_TIMEOUT,
     INITIAL_VERSION,
+    _audit_client,
     attach_blocked_release,
     discover_base,
     eligible_pending_task,
     list_releases,
+    load_release,
     next_version,
     plan_release,
     process_releases,
     release_tasks,
+    resume_release,
     save_release,
 )
 from forgel.tasks import create_task, get_task, update_task
@@ -671,6 +675,57 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertEqual(actions, [])
         stored = list_releases(self.layout)[0]
         self.assertEqual(stored["status"], "planned")
+
+    def test_a_stopped_release_returns_to_the_train(self) -> None:
+        release, _task = self._release()
+        release["status"] = "blocked"
+        release["detail"] = "the audit could not run"
+        release["audit"] = {
+            "rounds": 2,
+            "verdict": "error",
+            "summary": "the audit could not run",
+        }
+        save_release(self.layout, release)
+
+        resumed = resume_release(
+            self.layout, str(release["id"])
+        )
+
+        self.assertEqual(resumed["status"], "running")
+        self.assertEqual(resumed["detail"], "")
+        self.assertEqual(resumed["audit"]["rounds"], 0)
+        self.assertEqual(resumed["audit"]["verdict"], "")
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+
+    def test_a_published_release_is_not_resumed(self) -> None:
+        release, _task = self._release()
+        release["status"] = "blocked"
+        for data in (release.get("repos") or {}).values():
+            data["status"] = "released"
+        save_release(self.layout, release)
+
+        with self.assertRaises(ValueError):
+            resume_release(self.layout, str(release["id"]))
+
+    def test_the_audit_gets_a_longer_deadline(self) -> None:
+        scripted = ScriptedModelClient([])
+        self.assertIs(_audit_client(scripted), scripted)
+
+        from forgel.model import ModelConfig, OpenAICompatibleClient
+
+        client = OpenAICompatibleClient(
+            ModelConfig(
+                base_url="http://example.test",
+                api_key="k",
+                total_timeout=300.0,
+            )
+        )
+        audited = _audit_client(client)
+        self.assertEqual(
+            audited.config.total_timeout, AUDIT_TOTAL_TIMEOUT
+        )
 
 
 if __name__ == "__main__":

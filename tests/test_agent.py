@@ -83,6 +83,31 @@ class AgentTest(unittest.TestCase):
         self.assertIn("published tag is immutable", user)
         self.assertTrue(conversation_path(ProjectLayout.detect(project["workspace"])).exists())
 
+    def test_context_names_a_stopped_release_and_its_blocker(self) -> None:
+        project = self._project("Release", "A brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        write_text(
+            layout.artifact(
+                "docs/program/releases/"
+                "20260101000000_widget/release.json"
+            ),
+            json.dumps(
+                {
+                    "id": "20260101000000_widget",
+                    "title": "Fix the widget",
+                    "status": "blocked",
+                    "repos": {"main": {"version": ""}},
+                    "detail": "the audit could not run",
+                }
+            ),
+        )
+
+        context = build_context(layout, project, self.ledger)
+
+        self.assertIn("`20260101000000_widget`", context)
+        self.assertIn("blocked", context)
+        self.assertIn("the audit could not run", context)
+
     def test_a_user_visible_report_keeps_its_producer(self) -> None:
         project = self._project("Reports", "A brief.")
         layout = ProjectLayout.detect(project["workspace"])

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -36,6 +37,7 @@ from .model import (
     ModelClient,
     ModelError,
     ModelMessage,
+    OpenAICompatibleClient,
     build_model_client,
     project_model_name,
 )
@@ -60,6 +62,7 @@ REPO_RELEASES_DIR = "releases"
 CHANGELOG = "CHANGELOG.md"
 INITIAL_VERSION = "0.1.0"
 MAX_AUDIT_ROUNDS = 2
+AUDIT_TOTAL_TIMEOUT = 900.0
 MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
 MAX_DIFF_CHARS = 60_000
@@ -614,6 +617,62 @@ def attach_blocked_release(
     return ""
 
 
+def resume_release(
+    layout: ProjectLayout, release_id: str = ""
+) -> dict[str, Any]:
+    """Put a stopped release back into the train so it is audited again."""
+
+    if release_id:
+        release = load_release(layout, release_id)
+        if release is None:
+            raise ValueError(f"unknown release {release_id!r}")
+    else:
+        releases = list_releases(layout)
+        if not releases:
+            raise ValueError("there is no release to resume")
+        release = releases[-1]
+    status = str(release.get("status") or "")
+    if status not in {"blocked", "failed"}:
+        raise ValueError(
+            "only a stopped release can be resumed "
+            f"(status: {status or 'unknown'})"
+        )
+    if any(
+        str(data.get("status") or "") in {"released", "tagged"}
+        for data in (release.get("repos") or {}).values()
+    ):
+        raise ValueError("the release is already published")
+    release["status"] = "running"
+    release["detail"] = ""
+    release["next_at"] = ""
+    audit = dict(release.get("audit") or {})
+    audit["rounds"] = 0
+    audit["verdict"] = ""
+    release["audit"] = audit
+    save_release(layout, release)
+    try:
+        tasks.commit_control(
+            layout, f"Resume release {release['id']}"
+        )
+    except Exception:  # noqa: BLE001 - a commit must not undo the resume
+        pass
+    return release
+
+
+def _audit_client(client: ModelClient) -> ModelClient:
+    """Give the whole-change-set audit a longer deadline than a turn."""
+
+    config = getattr(client, "config", None)
+    if config is None:
+        return client
+    total = float(getattr(config, "total_timeout", 0) or 0)
+    if total <= 0 or total >= AUDIT_TOTAL_TIMEOUT:
+        return client
+    return OpenAICompatibleClient(
+        replace(config, total_timeout=AUDIT_TOTAL_TIMEOUT)
+    )
+
+
 def _primary_repo(
     grouped: Mapping[str, list[dict[str, Any]]],
 ) -> str:
@@ -804,6 +863,7 @@ def audit_release(
         save_release(layout, release)
         log(f"[release] {release['id']}: audit requires a model")
         return False
+    client = _audit_client(client)
     messages = [
         ModelMessage("system", AUDIT_PROMPT),
         ModelMessage(

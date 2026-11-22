@@ -483,6 +483,7 @@
   "chat_release_usage": "Usage: /release [--version X] [--notes ...] [--repo ID] [--draft] [--generate-notes]",
   "chat_release_header": "Release {version}: {status}. Manifest: {manifest}",
   "chat_release_repo": "{repo}: {tag} at {sha} — {detail}",
+  "chat_release_resumed": "Release {release} is back in the release train; the audit and publication continue on their own.",
   "cli_release_header": "Release {version}: {status}. Manifest: {manifest}",
   "cli_release_repo": "{repo}: {tag} at {sha} — {detail}"
 }

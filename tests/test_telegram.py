@@ -511,6 +511,65 @@ class SelectionAndAgentTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "done")
 
+    def test_an_implicit_task_is_the_current_one_not_an_older_failure(
+        self,
+    ) -> None:
+        project = self._project("Current", "A brief.")
+        self.ledger.set_session(7, project)
+        layout = ProjectLayout.detect(
+            self.ledger.get_project(project)["workspace"]
+        )
+        stale = create_task(
+            layout,
+            "Old failure",
+            ["A"],
+            ["B"],
+            repo_id="api",
+            task_id="20260101000000_old-failure",
+        )
+        update_task(layout, stale["id"], status="failed")
+        current = create_task(
+            layout,
+            "Current work",
+            ["A"],
+            ["B"],
+            repo_id="api",
+            task_id="20260101000001_current-work",
+        )
+        update_task(layout, current["id"], status="done")
+        response = {
+            "kind": "action",
+            "reply": "Retrying.",
+            "action": "retry",
+            "action_args": {},
+        }
+        router = self._router([json.dumps(response)])
+
+        reply = router.handle(7, "повтори", "@tester")
+
+        self.assertIn("only failed tasks can be retried", reply.text)
+        stored = get_task(layout, stale["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "failed")
+
+    def test_plain_language_release_resume_action(self) -> None:
+        response = {
+            "kind": "action",
+            "reply": "",
+            "action": "release_resume",
+            "action_args": {"release_id": "20260101000000_widget"},
+        }
+        router = self._router([json.dumps(response)])
+        project = self._project("Resume", "A brief.")
+        self.ledger.set_session(7, project)
+        with patch(
+            "forgel.chat.resume_release",
+            return_value={"id": "20260101000000_widget"},
+        ) as resume:
+            reply = router.handle(7, "возобнови релиз", "@tester")
+        resume.assert_called_once()
+        self.assertIn("20260101000000_widget", reply.text)
+
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()
         project = self._project("Plan", "A brief.")

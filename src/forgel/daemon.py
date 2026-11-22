@@ -547,6 +547,12 @@ def handle_failure(
     if kind == "environment":
         # A project-level environment gate or a broken contract is not the
         # code under test. Keep the coder out of it and show the evidence.
+        # Hints from an earlier code failure would send a retry back into
+        # already finished work, so they do not survive this failure.
+        if data.pop("feedback", None) is not None or data.pop(
+            "spec_feedback", None
+        ) is not None:
+            tasks.update_task(layout, task_id, result=data)
         _quarantine(
             settings, ledger, project, layout, task_id, failure, attempts, log
         )
