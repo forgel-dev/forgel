@@ -72,7 +72,6 @@ class DaemonTest(unittest.TestCase):
             templates_path=base.templates_path,
             jurisdiction_path=base.jurisdiction_path,
             qa_runtime="local",
-            controller=True,
         )
         ledger = Ledger(settings.db_path)
         self.addCleanup(ledger.close)
@@ -143,7 +142,7 @@ class DaemonTest(unittest.TestCase):
                 (workspace / "docs/program/iterations/1/close.md").exists()
             )
 
-    def test_infrastructure_failure_is_retried_then_quarantined(
+    def test_infrastructure_failure_is_retried_then_stopped(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,9 +222,10 @@ class DaemonTest(unittest.TestCase):
             run_once(settings, ledger, log=lambda _m: None, client=client)
             stored = get_task(layout, task["id"])
             assert stored is not None
-            self.assertEqual(stored["status"], "failed")
-            self.assertEqual(
-                stored["result"]["failure"]["kind"], "infrastructure"
+            self.assertEqual(stored["status"], "blocked")
+            self.assertIn(
+                "controlling agent stopped",
+                stored["result"]["summary"],
             )
 
     def test_an_incomplete_read_is_an_infrastructure_failure(self) -> None:
@@ -324,7 +324,18 @@ class DaemonTest(unittest.TestCase):
                     },
                 },
             )
-            client = ScriptedModelClient([json.dumps(SPEC)])
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "operation": "respec",
+                            "issue": "the check references another repository",
+                            "reason": "the specification is the defect",
+                        }
+                    ),
+                    json.dumps(SPEC),
+                ]
+            )
             handle_failure(
                 settings,
                 ledger,
@@ -409,68 +420,6 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(stored["status"], "blocked")
             self.assertIn("needs the owner", stored["result"]["summary"])
             self.assertIn(question, stored["result"]["summary"])
-
-    def test_an_environment_failure_drops_stale_rework_feedback(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            settings = self._settings(tmp)
-            ledger = Ledger(settings.db_path)
-            self.addCleanup(ledger.close)
-            project_id = create_project(
-                settings,
-                ledger,
-                "Env gate",
-                "A demo brief.",
-                mode="brownfield",
-            )
-            project = ledger.get_project(project_id)
-            assert project is not None
-            layout = ProjectLayout.detect(project["workspace"])
-            set_entries(
-                layout,
-                [
-                    {
-                        "id": "main",
-                        "role": "application",
-                        "provider": "local",
-                        "url": "",
-                        "depends_on": [],
-                    }
-                ],
-            )
-            task = create_task(
-                layout, "Do work", ["A"], ["B"], repo_id="main"
-            )
-            tasks.update_task(
-                layout,
-                task["id"],
-                status="failed",
-                result={
-                    "summary": "task QA failed: environment test",
-                    "feedback": ["QA check failed: stale code check"],
-                    "failure": {
-                        "kind": "environment",
-                        "message": "task QA failed: environment test",
-                        "retryable": False,
-                    },
-                },
-            )
-
-            handle_failure(
-                settings,
-                ledger,
-                project,
-                layout,
-                task["id"],
-                None,
-                lambda _m: None,
-            )
-
-            stored = get_task(layout, task["id"])
-            assert stored is not None
-            self.assertEqual(stored["status"], "failed")
-            self.assertNotIn("feedback", stored["result"])
 
     def test_peak_hours_defer_model_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

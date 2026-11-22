@@ -85,10 +85,6 @@ class Settings:
     task_accept: str = "auto"  # auto | human
     task_retries: int = 0
     task_reworks: int = 0
-    task_arbiter: bool = False
-    # The controlling agent owns recovery in the runtime. Direct construction
-    # keeps the deterministic path so library and test code stays predictable.
-    controller: bool = False
     retry_backoff: tuple[int, ...] = (1, 5, 15, 30, 60)
     plan_on_failure: str = "quarantine"  # quarantine | stop | continue
 
@@ -266,8 +262,6 @@ class Settings:
             task_accept=task_accept,
             task_retries=int(retries_raw),
             task_reworks=int(reworks_raw),
-            task_arbiter=_env_bool("FORGEL_TASK_ARBITER", True),
-            controller=_env_bool("FORGEL_CONTROLLER", True),
             retry_backoff=tuple(backoff),
             plan_on_failure=plan_on_failure,
         )

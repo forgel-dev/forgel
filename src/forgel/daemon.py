@@ -656,259 +656,134 @@ def handle_failure(
             f"in {delay}m (at {retry_at})"
         )
         return
-    if settings.controller and client is not None:
-        from . import controller
-
-        try:
-            decision = controller.decide(
-                settings,
-                ledger,
-                project,
-                layout,
-                "task_failure",
-                {
-                    "task": {
-                        "id": task_id,
-                        "title": task.get("title"),
-                        "repo_id": task.get("repo_id"),
-                        "status": task.get("status"),
-                        "requirements": task.get("requirements") or [],
-                        "acceptance": task.get("acceptance") or [],
-                        "constraints": task.get("constraints") or [],
-                    },
-                    "failure": failure,
-                    "result": {
-                        "qa": data.get("qa"),
-                        "review": data.get("review"),
-                        "feedback": data.get("feedback") or [],
-                        "files_changed": data.get("files_changed") or [],
-                        "commands": data.get("commands") or [],
-                        "attempts": attempts,
-                        "rework_count": data.get("rework_count", 0),
-                    },
-                },
-                client,
-                log,
-            )
-        except Exception as exc:  # noqa: BLE001 - the controller must not crash the daemon
-            log(f"[controller] task failure decision failed: {exc}")
-            decision = None
-        if decision is not None and _apply_controller_decision(
+    if client is None:
+        _controller_stopped(
             settings,
             ledger,
             project,
             layout,
-            task,
             task_id,
             data,
-            failure,
-            attempts,
-            client,
-            decision,
+            "no model is configured for the controlling agent; "
+            "try again later",
             log,
-        ):
-            return
-    spec_feedback = [
-        str(item) for item in (data.get("spec_feedback") or [])
-    ]
-    if kind == "spec" and not spec_feedback:
-        # An invalid check or criterion is the planner's defect. Rewrite the
-        # spec; never spend a coder rework on a check that cannot pass.
-        if client is not None and _rewrite_spec_from_failure(
-            settings, ledger, project, layout, task, client, failure, log
-        ):
-            return
-        _quarantine(
-            settings, ledger, project, layout, task_id, failure, attempts, log
         )
         return
-    if kind == "environment":
-        # A project-level environment gate or a broken contract is not the
-        # code under test. Keep the coder out of it and show the evidence.
-        # Hints from an earlier code failure would send a retry back into
-        # already finished work, so they do not survive this failure.
-        if data.pop("feedback", None) is not None or data.pop(
-            "spec_feedback", None
-        ) is not None:
-            tasks.update_task(layout, task_id, result=data)
-        _quarantine(
-            settings, ledger, project, layout, task_id, failure, attempts, log
+    from . import controller
+
+    try:
+        decision = controller.decide(
+            settings,
+            ledger,
+            project,
+            layout,
+            "task_failure",
+            {
+                "task": {
+                    "id": task_id,
+                    "title": task.get("title"),
+                    "repo_id": task.get("repo_id"),
+                    "status": task.get("status"),
+                    "requirements": task.get("requirements") or [],
+                    "acceptance": task.get("acceptance") or [],
+                    "constraints": task.get("constraints") or [],
+                },
+                "failure": failure,
+                "result": {
+                    "qa": data.get("qa"),
+                    "review": data.get("review"),
+                    "feedback": data.get("feedback") or [],
+                    "files_changed": data.get("files_changed") or [],
+                    "commands": data.get("commands") or [],
+                    "attempts": attempts,
+                    "rework_count": data.get("rework_count", 0),
+                },
+            },
+            client,
+            log,
+        )
+    except Exception as exc:  # noqa: BLE001 - the daemon must stay up
+        _controller_stopped(
+            settings,
+            ledger,
+            project,
+            layout,
+            task_id,
+            data,
+            f"the model request failed ({exc}); try again later",
+            log,
         )
         return
-    filtered_feedback: list[str] | None = None
-    if kind == "review" and client is not None:
-        findings = _review_findings(data)
-        if findings:
-            from . import protocol
-
-            try:
-                decisions = protocol.filter_review_findings(
-                    ledger, project, layout, task, findings, client, log
-                )
-            except Exception as exc:  # noqa: BLE001
-                log(
-                    f"[planner] {project['id']}: task {task_id}: "
-                    f"review filter failed: {exc}"
-                )
-                decisions = None
-            if decisions is not None:
-                valid = [item for item in decisions if item.valid]
-                data["review_filter"] = {
-                    "decisions": [
-                        {
-                            "finding": item.finding,
-                            "valid": item.valid,
-                            "scope": item.scope,
-                            "reason": item.reason,
-                        }
-                        for item in decisions
-                    ],
-                }
-                if not valid:
-                    _dismiss_review(
-                        settings,
-                        ledger,
-                        project,
-                        layout,
-                        task_id,
-                        data,
-                        log,
-                    )
-                    return
-                spec_findings = [
-                    item for item in valid if item.scope == "spec"
-                ]
-                if spec_findings:
-                    issue = "\n".join(
-                        f"- {item.finding}: {item.reason}"
-                        for item in spec_findings
-                    )
-                    try:
-                        protocol.rewrite_task_spec(
-                            settings,
-                            ledger,
-                            project,
-                            layout,
-                            tasks.get_task(layout, task_id) or task,
-                            client,
-                            issue,
-                            log,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        log(
-                            f"[planner] {project['id']}: task {task_id}: "
-                            f"specification rewrite failed: {exc}"
-                        )
-                        data.pop("review_filter", None)
-                    else:
-                        filtered_feedback = [
-                            f"{item.finding} — {item.reason}"
-                            for item in valid
-                        ] + [
-                            "The planner rewrote the specification; "
-                            "implement the new version."
-                        ]
-                if filtered_feedback is None:
-                    filtered_feedback = [
-                        f"{item.finding} — {item.reason}"
-                        for item in valid
-                    ]
-    if kind in {"qa", "review"} or (kind == "spec" and spec_feedback):
-        reworks = int(data.get("rework_count", 0))
-        if reworks < settings.task_reworks:
-            data["rework_count"] = reworks + 1
-            if kind == "spec":
-                data["feedback"] = list(
-                    data.get("spec_feedback") or []
-                ) or _feedback_from(data)
-                data.pop("spec_feedback", None)
-            else:
-                data["feedback"] = filtered_feedback or _feedback_from(data)
-            data["last_failure"] = failure
-            data.pop("failure", None)
-            tasks.update_task(
-                layout,
-                task_id,
-                status="pending",
-                started_at="",
-                finished_at="",
-                result=data,
-            )
-            log(
-                f"[rework] {project['id']}: task {task_id} sent back "
-                f"({kind}); rework {reworks + 1}/{settings.task_reworks}"
-            )
-            return
-        if settings.task_arbiter and client is not None:
-            from .arbiter import run_task_arbiter
-            from .task_review import accept_task, await_acceptance
-
-            arbitration = run_task_arbiter(
-                settings, ledger, project, task, client, log
-            )
-            if arbitration.verdict == "accept":
-                if settings.task_accept == "auto":
-                    accept_task(
-                        settings,
-                        ledger,
-                        project,
-                        task,
-                        actor="arbiter",
-                        notes=arbitration.summary,
-                    )
-                else:
-                    await_acceptance(
-                        layout,
-                        task,
-                        "arbiter accepted; human acceptance required",
-                    )
-                return
-            if arbitration.verdict == "criteria":
-                data = dict(
-                    (tasks.get_task(layout, task_id) or task).get("result")
-                    or data
-                )
-                data["summary"] = (
-                    str(data.get("summary") or "").strip()
-                    + "; acceptance criteria need revision"
-                ).strip("; ")
-                data["failure"] = {
-                    "kind": "criteria",
-                    "message": arbitration.summary,
-                    "retryable": False,
-                }
-                tasks.update_task(
-                    layout, task_id, status="failed", result=data
-                )
-                _quarantine(
-                    settings,
-                    ledger,
-                    project,
-                    layout,
-                    task_id,
-                    data["failure"],
-                    attempts,
-                    log,
-                )
-                return
-            if arbitration.verdict == "fix":
-                data = dict(
-                    (tasks.get_task(layout, task_id) or task).get("result")
-                    or data
-                )
-                data["failure"] = {
-                    "kind": "review",
-                    "message": arbitration.summary
-                    or "the arbiter confirmed the review rejection",
-                    "retryable": False,
-                }
-                tasks.update_task(
-                    layout, task_id, status="failed", result=data
-                )
-                failure = data["failure"]
-    _quarantine(
-        settings, ledger, project, layout, task_id, failure, attempts, log
+    if _apply_controller_decision(
+        settings,
+        ledger,
+        project,
+        layout,
+        task,
+        task_id,
+        data,
+        failure,
+        attempts,
+        client,
+        decision,
+        log,
+    ):
+        return
+    _controller_stopped(
+        settings,
+        ledger,
+        project,
+        layout,
+        task_id,
+        data,
+        "the controlling agent chose an operation that does not apply "
+        f"here: {decision.operation}; try again later",
+        log,
     )
+
+
+def _controller_stopped(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task_id: str,
+    data: dict[str, Any],
+    reason: str,
+    log: Callable[[str], None],
+) -> None:
+    """Stop the task with a description the owner can act on."""
+
+    if settings.plan_on_failure == "stop":
+        tasks.block_dependents(layout, task_id, stop=True)
+    elif settings.plan_on_failure == "quarantine":
+        tasks.block_dependents(layout, task_id, stop=False)
+    result = dict(data)
+    result.pop("failure", None)
+    result["summary"] = "the controlling agent stopped: " + str(reason)
+    result["blocked_by"] = "controller"
+    tasks.update_task(
+        layout,
+        task_id,
+        status="blocked",
+        finished_at=_now(),
+        result=result,
+    )
+    ledger.append_event(
+        str(project["id"]),
+        "controller_stopped",
+        status="blocked",
+        idempotency_key=(
+            f"{project['id']}:controller_stopped:{task_id}:"
+            f"{tasks.attempt_number(result)}"
+        ),
+        payload={
+            "task": task_id,
+            "reason": str(reason),
+        },
+        generation=ledger.current_generation(str(project["id"])),
+    )
+    log(f"[controller] task {task_id}: stopped: {reason}")
 
 
 def _ensure_formal_spec(

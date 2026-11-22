@@ -25,7 +25,6 @@ class ControllerTest(unittest.TestCase):
             templates_path=REPO_ROOT / "src" / "forgel" / "templates",
             jurisdiction_path=REPO_ROOT / "jurisdiction",
             qa_runtime="local",
-            controller=True,
         )
         self.ledger = Ledger(self.settings.db_path)
         self.addCleanup(self.ledger.close)

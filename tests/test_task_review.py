@@ -748,9 +748,9 @@ class TaskReviewTest(unittest.TestCase):
         )
         stored = get_task(self.layout, first["id"])
         assert stored is not None
-        self.assertEqual(stored["status"], "failed")
-        self.assertEqual(
-            stored["result"]["failure"]["kind"], "environment"
+        self.assertEqual(stored["status"], "blocked")
+        self.assertIn(
+            "controlling agent stopped", stored["result"]["summary"]
         )
         dependent = get_task(self.layout, second["id"])
         assert dependent is not None
@@ -940,99 +940,6 @@ class TaskReviewTest(unittest.TestCase):
         )
         self.assertEqual(
             final["result"]["acceptance"]["actor"], "auto"
-        )
-
-    def test_a_rejected_review_goes_back_for_rework(self) -> None:
-        settings = Settings(
-            home=self.home,
-            registry_path=REPO_ROOT / "registry" / "recipes.json",
-            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
-            jurisdiction_path=REPO_ROOT / "jurisdiction",
-            qa_runtime="local",
-            task_qa=True,
-            task_review=True,
-            task_accept="human",
-            task_reworks=1,
-            task_arbiter=False,
-        )
-        task = create_task(
-            self.layout,
-            "Add a note",
-            ["Create note.md"],
-            ["The file exists"],
-            repo_id="main",
-            test_command=["python", "-c", "print('task')"],
-        )
-        responses = [
-            json.dumps(
-                {
-                    "action": "write_file",
-                    "path": "note.md",
-                    "content": "# Note\n",
-                }
-            ),
-            json.dumps(
-                {"action": "done", "summary": "added the note"}
-            ),
-            FAIL,
-            json.dumps(
-                {
-                    "decisions": [
-                        {
-                            "index": 0,
-                            "valid": True,
-                            "scope": "code",
-                            "reason": "the change does nothing",
-                        },
-                        {
-                            "index": 1,
-                            "valid": True,
-                            "scope": "code",
-                            "reason": "the requirement is missing",
-                        },
-                    ]
-                }
-            ),
-            json.dumps(
-                {
-                    "action": "write_file",
-                    "path": "note.md",
-                    "content": "# Note\n\nFixed.\n",
-                }
-            ),
-            json.dumps(
-                {"action": "done", "summary": "addressed the review"}
-            ),
-            PASS,
-        ]
-        client = ScriptedModelClient(responses)
-        run_once(
-            settings, self.ledger, log=lambda _m: None, client=client
-        )
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(stored["status"], "pending")
-        self.assertEqual(stored["result"]["rework_count"], 1)
-        self.assertTrue(stored["result"]["feedback"])
-        run_once(
-            settings, self.ledger, log=lambda _m: None, client=client
-        )
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(stored["status"], "review", stored["result"])
-        self.assertEqual(
-            stored["result"]["review"]["status"], "pass"
-        )
-        prompts = [
-            request[1].content
-            for request in client.requests
-            if len(request) > 1
-        ]
-        self.assertTrue(
-            any(
-                "Previous attempt feedback" in prompt
-                for prompt in prompts
-            )
         )
 
     def test_acceptance_pushes_the_commit_to_the_remote(self) -> None:

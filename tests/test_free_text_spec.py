@@ -196,9 +196,10 @@ class FreeTextSpecTest(unittest.TestCase):
             )
         stored = get_task(self.layout, "task-1")
         assert stored is not None
-        self.assertEqual(stored["status"], "failed")
-        self.assertEqual(stored["result"]["failure"]["kind"], "external")
-        self.assertIn("weather", stored["result"]["failure"]["message"])
+        self.assertEqual(stored["status"], "blocked")
+        self.assertIn(
+            "controlling agent stopped", stored["result"]["summary"]
+        )
         self.assertFalse((self.repo / "feature.py").exists())
 
 

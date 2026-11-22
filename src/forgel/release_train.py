@@ -61,7 +61,6 @@ RELEASES_DIR = "docs/program/releases"
 REPO_RELEASES_DIR = "releases"
 CHANGELOG = "CHANGELOG.md"
 INITIAL_VERSION = "0.1.0"
-MAX_AUDIT_ROUNDS = 10
 MAX_AUDIT_ERRORS = 15
 AUDIT_TOTAL_TIMEOUT = 900.0
 MAX_FIX_FINDINGS = 3
@@ -915,9 +914,21 @@ def audit_release(
         save_release(layout, release)
         log(f"[release] {release['id']}: audit passed")
         return True
-    if blocking and settings.controller and ledger is not None and client is not None:
+    if blocking:
+        if ledger is None or client is None:
+            release["status"] = "blocked"
+            release["detail"] = (
+                "no model is configured for the controlling agent; "
+                "try again later"
+            )
+            save_release(layout, release)
+            log(
+                f"[release] {release['id']}: audit blocked without a controller"
+            )
+            return False
         from . import controller
 
+        error = ""
         try:
             decision = controller.decide(
                 settings,
@@ -952,51 +963,49 @@ def audit_release(
                 log,
             )
         except Exception as exc:  # noqa: BLE001 - the train keeps going
-            log(
-                f"[controller] release audit decision failed: {exc}"
-            )
             decision = None
-        if decision is not None:
-            if decision.operation == "release_fix" and _queue_fix_tasks(
-                layout, release, items, blocking, log
-            ):
-                release["status"] = "running"
-                save_release(layout, release)
-                return False
-            if decision.operation in {"release_resume", "release_audit"}:
-                release["status"] = "running"
-                save_release(layout, release)
-                return False
-            if decision.operation == "ask_user":
-                release["status"] = "blocked"
-                release["detail"] = (
-                    decision.question
-                    or decision.reason
-                    or audit.get("summary")
-                    or "the audit failed"
-                )
-                save_release(layout, release)
-                log(
-                    f"[release] {release['id']}: needs the owner: "
-                    f"{release['detail']}"
-                )
-                return False
-            if decision.operation in {"block", "stop"}:
-                release["status"] = "blocked"
-                release["detail"] = (
-                    decision.reason
-                    or decision.summary
-                    or audit.get("summary")
-                    or "the audit failed"
-                )
-                save_release(layout, release)
-                return False
-    if (
-        audit["rounds"] < MAX_AUDIT_ROUNDS
-        and blocking
-        and _queue_fix_tasks(layout, release, items, blocking, log)
-    ):
-        release["status"] = "running"
+            error = str(exc)
+            log(f"[controller] release audit decision failed: {exc}")
+        if decision is None:
+            release["status"] = "blocked"
+            release["detail"] = (
+                "the controlling agent stopped: the model request failed "
+                f"({error or 'no decision'}); try again later"
+            )
+            save_release(layout, release)
+            log(f"[release] {release['id']}: controller stopped")
+            return False
+        if decision.operation == "release_fix" and _queue_fix_tasks(
+            layout, release, items, blocking, log
+        ):
+            release["status"] = "running"
+            save_release(layout, release)
+            return False
+        if decision.operation in {"release_resume", "release_audit"}:
+            release["status"] = "running"
+            save_release(layout, release)
+            return False
+        if decision.operation == "ask_user":
+            release["status"] = "blocked"
+            release["detail"] = (
+                decision.question
+                or decision.reason
+                or audit.get("summary")
+                or "the audit failed"
+            )
+            save_release(layout, release)
+            log(
+                f"[release] {release['id']}: needs the owner: "
+                f"{release['detail']}"
+            )
+            return False
+        release["status"] = "blocked"
+        release["detail"] = (
+            decision.reason
+            or decision.summary
+            or audit.get("summary")
+            or "the audit failed"
+        )
         save_release(layout, release)
         return False
     release["status"] = "blocked"
@@ -1004,7 +1013,6 @@ def audit_release(
     save_release(layout, release)
     log(f"[release] {release['id']}: audit blocked the release")
     return False
-
 
 def _queue_fix_tasks(
     layout: ProjectLayout,

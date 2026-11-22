@@ -630,33 +630,6 @@ class ReleaseTrainTest(unittest.TestCase):
         )
         self.assertEqual(release["id"], stored["id"])
 
-    def test_a_failing_audit_queues_a_fix_task(self) -> None:
-        release, _task = self._release()
-
-        process_releases(
-            self.settings,
-            self.ledger,
-            self.project,
-            self.layout,
-            ScriptedModelClient([FAIL_AUDIT]),
-            log=lambda _m: None,
-        )
-
-        stored = list_releases(self.layout)[0]
-        self.assertEqual(stored["status"], "running")
-        fix_tasks = [
-            task
-            for task in release_tasks(self.layout, str(release["id"]))
-            if task.get("status") == "pending"
-            and str(task.get("title") or "").startswith("Release audit:")
-        ]
-        self.assertEqual(len(fix_tasks), 1)
-        self.assertEqual(fix_tasks[0]["repo_id"], "web")
-        self.assertIn(
-            "widget has no test",
-            " ".join(fix_tasks[0]["requirements"]),
-        )
-
     def _controller_settings(self) -> Settings:
         return Settings(
             home=self.settings.home,
@@ -664,7 +637,6 @@ class ReleaseTrainTest(unittest.TestCase):
             templates_path=self.settings.templates_path,
             jurisdiction_path=self.settings.jurisdiction_path,
             qa_runtime="local",
-            controller=True,
         )
 
     def test_the_controller_queues_a_fix_task_for_audit_findings(
@@ -684,7 +656,7 @@ class ReleaseTrainTest(unittest.TestCase):
         )
 
         process_releases(
-            self._controller_settings(),
+            self.settings,
             self.ledger,
             self.project,
             self.layout,
@@ -720,7 +692,7 @@ class ReleaseTrainTest(unittest.TestCase):
         )
 
         process_releases(
-            self._controller_settings(),
+            self.settings,
             self.ledger,
             self.project,
             self.layout,

@@ -317,7 +317,9 @@ Project context:
 
 
 def _parse_repositories(
-    data: Mapping[str, Any], known: Sequence[str]
+    data: Mapping[str, Any],
+    known: Sequence[str],
+    allow_existing: bool = False,
 ) -> list[dict[str, Any]]:
     raw = data.get("repositories", [])
     if raw is None:
@@ -335,6 +337,10 @@ def _parse_repositories(
         if not repo_id:
             raise PlanningError(f"repository {index} has no id")
         if repo_id in seen:
+            if allow_existing and repo_id in set(known):
+                # A revised plan may restate a repository the first plan
+                # already created; it is already part of the project.
+                continue
             raise PlanningError(
                 f"repository {index} duplicates or already exists: {repo_id}"
             )
@@ -383,6 +389,7 @@ def _parse_plan(
     known_repos: Sequence[str],
     default_repo: str,
     max_tasks: int,
+    allow_existing: bool = False,
 ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
     text = raw.strip()
     if text.startswith("```"):
@@ -400,7 +407,9 @@ def _parse_plan(
         raise PlanningError(f"invalid plan JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise PlanningError("the plan must be a JSON object")
-    repositories = _parse_repositories(data, known_repos)
+    repositories = _parse_repositories(
+        data, known_repos, allow_existing
+    )
     allowed_repos = list(known_repos) + [
         str(item["id"]) for item in repositories
     ]
@@ -982,6 +991,7 @@ def plan_project(
                 [*known, *sorted(applied - set(known))],
                 default_repo,
                 max_tasks,
+                allow_existing=True,
             )
         except PlanningError as exc:
             blockers.append(f"plan revision invalid: {exc}")

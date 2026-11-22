@@ -141,16 +141,15 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.task_retries, 1)
         self.assertEqual(settings.plan_on_failure, "stop")
 
-    def test_rework_and_arbiter_defaults(self) -> None:
+    def test_rework_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
                 os.environ,
-                {"FORGEL_TASK_REWORKS": "", "FORGEL_TASK_ARBITER": ""},
+                {"FORGEL_TASK_REWORKS": ""},
                 clear=False,
             ):
                 settings = Settings.from_env(tmp)
         self.assertEqual(settings.task_reworks, 8)
-        self.assertTrue(settings.task_arbiter)
         direct = Settings(
             home=Path(tmp),
             registry_path=Path("/x"),
@@ -158,7 +157,6 @@ class SettingsTest(unittest.TestCase):
             jurisdiction_path=Path("/x"),
         )
         self.assertEqual(direct.task_reworks, 0)
-        self.assertFalse(direct.task_arbiter)
 
     def test_free_text_spec_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
