@@ -55,6 +55,24 @@ A scenario file is JSON:
 }
 ```
 
+A scenario may seed the project state it starts from:
+
+```json
+{
+  "seed": {
+    "release": {
+      "id": "20260101000000_installer",
+      "title": "Fix the installer",
+      "status": "blocked",
+      "detail": "the audit found a defect"
+    }
+  }
+}
+```
+
+The release record is written before the messages run. Its audit defaults to
+a failed second round unless the scenario supplies `audit`.
+
 Options:
 
 | Option | Effect |

@@ -403,6 +403,47 @@ def _without_github_env() -> Iterator[None]:
         os.environ.update(saved)
 
 
+def apply_seed(
+    sandbox: Sandbox, seed: Mapping[str, Any] | None
+) -> None:
+    """Create the project state a scenario starts from."""
+
+    if not isinstance(seed, Mapping):
+        return
+    release = seed.get("release")
+    if not isinstance(release, Mapping):
+        return
+    from .release_train import save_release
+
+    detail = str(release.get("detail") or "").strip()
+    audit = release.get("audit")
+    if not isinstance(audit, Mapping):
+        audit = {
+            "rounds": 2,
+            "verdict": "fail",
+            "summary": detail or "the audit did not pass",
+        }
+    save_release(
+        sandbox.layout,
+        {
+            "id": str(
+                release.get("id") or "20260101000000_seeded"
+            ),
+            "title": str(release.get("title") or "Seeded release"),
+            "request": str(release.get("request") or ""),
+            "release_class": str(
+                release.get("release_class") or "patch"
+            ),
+            "status": str(release.get("status") or "blocked"),
+            "detail": detail,
+            "repos": release.get("repos")
+            or {"main": {"version": "", "status": "pending"}},
+            "tasks": list(release.get("tasks") or []),
+            "audit": dict(audit),
+        },
+    )
+
+
 def load_scenario(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))

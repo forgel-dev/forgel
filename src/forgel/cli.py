@@ -1884,6 +1884,7 @@ def cmd_scenario(args: argparse.Namespace) -> int:
         print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
     try:
+        scenario.apply_seed(sandbox, data.get("seed"))
         client = build_model_client(sandbox.settings.home)
         if client is None:
             print(

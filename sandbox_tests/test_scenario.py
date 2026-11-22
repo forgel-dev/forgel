@@ -7,7 +7,9 @@ import unittest
 from pathlib import Path
 
 from forgel.model import ScriptedModelClient
+from forgel.release_train import load_release
 from forgel.scenario import (
+    apply_seed,
     create_sandbox,
     sandbox_create_repository,
 )
@@ -95,6 +97,34 @@ class ScenarioTest(unittest.TestCase):
         text = history.read_text(encoding="utf-8")
         self.assertIn("hello", text)
         self.assertIn("sandbox answer", text)
+
+    def test_a_scenario_can_seed_a_blocked_release(self) -> None:
+        sandbox = create_sandbox(
+            self.fixture, root=self.base / "sandbox"
+        )
+        self.addCleanup(sandbox.ledger.close)
+
+        apply_seed(
+            sandbox,
+            {
+                "release": {
+                    "id": "20260101000000_seeded",
+                    "title": "Fix the installer",
+                    "status": "blocked",
+                    "detail": "the audit found a defect",
+                }
+            },
+        )
+
+        stored = load_release(
+            sandbox.layout, "20260101000000_seeded"
+        )
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(
+            stored["detail"], "the audit found a defect"
+        )
+        self.assertEqual(stored["audit"]["verdict"], "fail")
 
 
 if __name__ == "__main__":

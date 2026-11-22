@@ -1,0 +1,19 @@
+{
+  "name": "Session case: finish a blocked release",
+  "fixture": ".",
+  "snapshot": "fd3685a169f44001bef11ae18dcd46000b17c6da",
+  "seed": {
+    "release": {
+      "id": "20260101000000_installer",
+      "title": "Fix install.sh so a new terminal finds forgel-code on PATH",
+      "status": "blocked",
+      "detail": "the audit found defects in the installer's fresh-shell check",
+      "audit": {
+        "rounds": 2,
+        "verdict": "fail",
+        "summary": "the audit found defects in the installer's fresh-shell check"
+      }
+    }
+  },
+  "messages": ["Завершаем релиз Forgel Code"]
+}
