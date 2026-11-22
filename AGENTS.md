@@ -70,6 +70,16 @@ and conversation compaction.
 
 The same rule, in longer form, is in [docs/prompts.md](docs/prompts.md).
 
+## Release Rules
+
+- A published tag is immutable. A change after a release is a new version,
+  never a rewrite of the released tag.
+- The runtime release train computes the next version from the repository's
+  tags and `CHANGELOG.md` and publishes it; it never moves an existing tag.
+- Agents do not assign, promise or rewrite release versions or tags. The
+  release report is the source of truth for the version and publication.
+- A release without its audit is not published.
+
 ## Change Workflow
 
 1. Read the relevant decision and feature documents.

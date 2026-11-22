@@ -61,7 +61,8 @@
         {"path": "VERSION", "kind": "text"},
         {"path": "*/__init__.py", "kind": "regex", "pattern": "(?m)^__version__\\s*=\\s*[\"']([^\"']+)[\"']", "replacement": "__version__ = \"{version}\""},
         {"path": "src/*/__init__.py", "kind": "regex", "pattern": "(?m)^__version__\\s*=\\s*[\"']([^\"']+)[\"']", "replacement": "__version__ = \"{version}\""}
-      ]
+      ],
+      "tag_refs": ["install.sh", "README.md"]
     },
     {
       "id": "node",
@@ -74,7 +75,8 @@
       "write": [
         {"path": "package.json", "kind": "json", "key": "version"},
         {"path": "apps/*/package.json", "kind": "json", "key": "version"}
-      ]
+      ],
+      "tag_refs": ["README.md"]
     },
     {
       "id": "rails",
@@ -85,7 +87,8 @@
       ],
       "write": [
         {"path": "config/initializers/version.rb", "kind": "ruby", "key": "API_VERSION"}
-      ]
+      ],
+      "tag_refs": ["README.md"]
     }
   ]
 }

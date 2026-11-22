@@ -30,6 +30,8 @@ from .program_manifest import entries as manifest_entries
 from .providers.github_auth import GithubAuth, GithubAuthError
 from .release_train import (
     attach_blocked_release,
+    discover_base,
+    list_releases,
     new_release_id,
     plan_release,
 )
@@ -289,6 +291,9 @@ For a change request:
   1.0.0, for a change that breaks a published contract;
 - set test_command only when the project's test command is evident from the
   context, otherwise leave it empty;
+- the runtime release train owns release versions, tags and publication. Do
+  not state, promise or choose a version or tag yourself; report the queued
+  change and let the release report carry the version;
 - the daemon will run the task with a separate coding agent; you cannot edit
   code yourself.
 """
@@ -661,7 +666,7 @@ def build_context(
         f"Brief: {_plain_brief(project.get('brief', ''))}",
     ]
     repos = manifest_entries(layout)
-    parts.append("Repositories:\n" + _repo_map(repos))
+    parts.append("Repositories:\n" + _repo_map(layout, repos))
     instructions = instruction_context(layout)
     if instructions:
         parts.append(instructions)
@@ -684,6 +689,24 @@ def build_context(
         )
     else:
         parts.append("Current work: no tasks planned yet.")
+
+    releases = list_releases(layout)
+    if releases:
+        lines: list[str] = []
+        for release in releases[-3:]:
+            repos_text = ", ".join(
+                f"{repo_id} "
+                f"{data.get('version') or data.get('planned_version') or '—'}"
+                for repo_id, data in (
+                    release.get("repos") or {}
+                ).items()
+            )
+            lines.append(
+                f"- {release.get('title') or release['id']}: "
+                f"{release.get('status') or 'unknown'}"
+                + (f" ({repos_text})" if repos_text else "")
+            )
+        parts.append("Releases:\n" + "\n".join(lines))
 
     plans_dir = layout.artifact("docs/program/plans")
     plans = sorted(plans_dir.glob("*.md")) if plans_dir.is_dir() else []
@@ -719,8 +742,10 @@ def _slug(title: str) -> str:
     return slug[:60] or "request"
 
 
-def _repo_map(repos: Sequence[Mapping[str, Any]]) -> str:
-    """Ids, roles and locations; the model reads the contents itself."""
+def _repo_map(
+    layout: ProjectLayout, repos: Sequence[Mapping[str, Any]]
+) -> str:
+    """Ids, roles, locations and the released version the model can rely on."""
 
     lines: list[str] = []
     for entry in repos:
@@ -732,6 +757,12 @@ def _repo_map(repos: Sequence[Mapping[str, Any]]) -> str:
         )
         if location:
             line += f" — {location}"
+        base, _source = discover_base(
+            layout.repo_path(str(entry["id"]))
+        )
+        line += (
+            f"\n  released: v{base}" if base else "\n  no release yet"
+        )
         lines.append(line)
     return "\n".join(lines) or "- none"
 

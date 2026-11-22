@@ -14,6 +14,8 @@ from forgel.presets import (
     find_preset,
     load_presets,
     read_versions,
+    tag_ref_paths,
+    update_tag_refs,
     write_version,
 )
 from forgel.program_manifest import entries, set_entries, write_program
@@ -172,6 +174,44 @@ class PresetTest(unittest.TestCase):
         chosen = find_preset(self.presets, self.repo, {"preset": "node"})
         assert chosen is not None
         self.assertEqual(chosen.id, "node")
+
+    def test_release_tag_refs_move_to_the_new_version(self) -> None:
+        write_text(self.repo / "pyproject.toml", "[project]\n")
+        write_text(
+            self.repo / "install.sh",
+            'TAG=${FORGEL_CODE_TAG:-v0.1.0}\n',
+        )
+        write_text(
+            self.repo / "README.md",
+            "curl -fsSL https://example/v0.1.0/install.sh | sh\n",
+        )
+        write_text(
+            self.repo / "CHANGELOG.md",
+            "## [0.1.0] - 2026-01-01\n",
+        )
+
+        paths = tag_ref_paths(
+            self.presets, self.repo, {}, "0.1.0", "0.1.1"
+        )
+
+        self.assertEqual(paths, ["README.md", "install.sh"])
+        preset_id, changed = update_tag_refs(
+            self.presets, self.repo, {}, "0.1.0", "0.1.1"
+        )
+        self.assertEqual(preset_id, "python")
+        self.assertEqual(changed, ["README.md", "install.sh"])
+        self.assertIn(
+            "v0.1.1",
+            (self.repo / "install.sh").read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "v0.1.1",
+            (self.repo / "README.md").read_text(encoding="utf-8"),
+        )
+        changelog = (self.repo / "CHANGELOG.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## [0.1.0] - 2026-01-01", changelog)
 
     def test_an_unknown_preset_is_an_error(self) -> None:
         with self.assertRaises(PresetError):

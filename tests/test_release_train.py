@@ -569,7 +569,11 @@ class ReleaseTrainTest(unittest.TestCase):
             api / "package.json",
             json.dumps({"name": "api", "version": "1.2.3"}) + "\n",
         )
-        _run(api, "add", "package.json")
+        write_text(
+            api / "README.md",
+            "curl https://example/v1.2.3/install.sh | sh\n",
+        )
+        _run(api, "add", "package.json", "README.md")
         _run(
             api,
             "-c",
@@ -584,6 +588,7 @@ class ReleaseTrainTest(unittest.TestCase):
         _run(api, "push", "origin", "main")
         _run(api, "tag", "-a", "v1.2.3", "-m", "v1.2.3")
         _run(api, "push", "origin", "--tags")
+        old_tag = _run(api, "rev-parse", "v1.2.3").stdout.strip()
         release, _task = self._release(
             repo_id="api",
             release_id="20261120140000_api",
@@ -612,6 +617,12 @@ class ReleaseTrainTest(unittest.TestCase):
             "main:package.json",
         ).stdout
         self.assertIn('"version": "1.3.0"', remote)
+        self.assertEqual(
+            _run(api, "rev-parse", "v1.2.3").stdout.strip(), old_tag
+        )
+        self.assertIn(
+            "v1.3.0", (api / "README.md").read_text(encoding="utf-8")
+        )
         self.assertEqual(release["id"], stored["id"])
 
     def test_a_failing_audit_queues_a_fix_task(self) -> None:

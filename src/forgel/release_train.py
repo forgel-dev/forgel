@@ -45,6 +45,8 @@ from .presets import (
     PresetError,
     find_preset,
     load_presets,
+    tag_ref_paths,
+    update_tag_refs,
     write_paths,
     write_version,
 )
@@ -1201,6 +1203,9 @@ def _finalize_repo(
         preset_paths = write_paths(
             preset_list, repo, entry, version
         )
+        tag_paths = tag_ref_paths(
+            preset_list, repo, entry, base_version or "", version
+        )
     except PresetError as exc:
         result.update(
             {"status": "failed", "detail": f"preset: {exc}"}
@@ -1212,6 +1217,7 @@ def _finalize_repo(
         f"{REPO_RELEASES_DIR}/{version}/plan.md",
         f"{REPO_RELEASES_DIR}/{version}/release.md",
         *preset_paths,
+        *tag_paths,
     }
     dirty = [
         path
@@ -1230,6 +1236,13 @@ def _finalize_repo(
         preset_id, version_files = write_version(
             preset_list, repo, entry, version
         )
+        _, release_refs = update_tag_refs(
+            preset_list,
+            repo,
+            entry,
+            base_version or "",
+            version,
+        )
     except PresetError as exc:
         result.update(
             {"status": "failed", "detail": f"preset: {exc}"}
@@ -1237,6 +1250,7 @@ def _finalize_repo(
         return result
     result["preset"] = preset_id
     result["version_files"] = version_files
+    result["release_refs"] = release_refs
     section, entries, subsection = _changelog_parts(
         release, version, items
     )

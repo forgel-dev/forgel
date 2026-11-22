@@ -46,6 +46,7 @@ class Preset:
     detect: tuple[str, ...]
     read: tuple[VersionTarget, ...]
     write: tuple[VersionTarget, ...]
+    tag_refs: tuple[str, ...] = ()
 
 
 def _target(item: Any, preset_id: str) -> VersionTarget:
@@ -127,6 +128,11 @@ def load_presets(path: Path) -> list[Preset]:
             raise PresetError(
                 f"preset {preset_id}: read and write must be lists"
             )
+        tag_refs = item.get("tag_refs") or []
+        if not isinstance(tag_refs, list):
+            raise PresetError(
+                f"preset {preset_id}: tag_refs must be a list"
+            )
         presets.append(
             Preset(
                 id=preset_id,
@@ -138,6 +144,11 @@ def load_presets(path: Path) -> list[Preset]:
                 ),
                 read=tuple(_target(value, preset_id) for value in read),
                 write=tuple(_target(value, preset_id) for value in write),
+                tag_refs=tuple(
+                    str(value).strip()
+                    for value in tag_refs
+                    if str(value).strip()
+                ),
             )
         )
     return presets
@@ -455,3 +466,83 @@ def write_version(
                 relative = str(path)
             changed.append(relative)
     return preset.id, sorted(set(changed))
+
+
+def _tag_ref_paths(preset: Preset, repo: Path) -> list[Path]:
+    paths: list[Path] = []
+    for pattern in preset.tag_refs:
+        if any(char in pattern for char in WILDCARD_CHARS):
+            paths.extend(
+                item for item in repo.glob(pattern) if item.is_file()
+            )
+        else:
+            path = repo / pattern
+            if path.is_file():
+                paths.append(path)
+    return sorted(set(paths))
+
+
+def tag_ref_paths(
+    presets: list[Preset],
+    repo: Path,
+    entry: Mapping[str, Any],
+    previous: str,
+    version: str,
+) -> list[str]:
+    """Files that name the previous release tag and will be updated."""
+
+    if not previous or previous == version:
+        return []
+    preset = find_preset(presets, repo, entry)
+    if preset is None:
+        return []
+    pattern = re.compile(rf"v{re.escape(previous)}(?![\d.])")
+    paths: list[str] = []
+    for path in _tag_ref_paths(preset, repo):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if not pattern.search(text):
+            continue
+        try:
+            paths.append(path.relative_to(repo).as_posix())
+        except ValueError:
+            continue
+    return sorted(set(paths))
+
+
+def update_tag_refs(
+    presets: list[Preset],
+    repo: Path,
+    entry: Mapping[str, Any],
+    previous: str,
+    version: str,
+) -> tuple[str, list[str]]:
+    """Move the documented install tag from the previous release to the new one."""
+
+    if not previous or previous == version:
+        return "", []
+    preset = find_preset(presets, repo, entry)
+    if preset is None:
+        return "", []
+    pattern = re.compile(rf"v{re.escape(previous)}(?![\d.])")
+    changed: list[str] = []
+    for path in _tag_ref_paths(preset, repo):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        updated = pattern.sub(f"v{version}", text)
+        if updated == text:
+            continue
+        try:
+            path.write_text(updated, encoding="utf-8")
+        except OSError:
+            continue
+        try:
+            changed.append(path.relative_to(repo).as_posix())
+        except ValueError:
+            continue
+    return preset.id, sorted(set(changed))
+

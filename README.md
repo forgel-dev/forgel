@@ -492,7 +492,8 @@ yet; the config field is reserved.
 Every accepted change request is a release. The agent turns the request into a
 release train, the planner splits it into tasks, and when every task is
 accepted the runtime audits the whole change set and publishes one version in
-each repository the request touched. A request that depends on several
+each repository the request touched. A published tag is never moved: a change
+after a release is a new version. A request that depends on several
 repositories releases them together; versions still differ per repository.
 Before publication the runtime writes the release plan and the audit under
 `docs/program/releases/<release_id>/`, the repository gets `CHANGELOG.md` and
