@@ -53,6 +53,7 @@ from .layout import ProjectLayout
 from .ledger import Ledger
 from .local_env import LocalEnvError, init_local_env, load_local_env
 from .model import build_model_client
+from . import scenario
 from .planner import PlanningError, plan_project, plan_status
 from .release import ReleaseError, release_project
 from .project_config import (
@@ -1854,6 +1855,57 @@ def cmd_chat(args: argparse.Namespace) -> int:
         ledger.close()
 
 
+def cmd_scenario(args: argparse.Namespace) -> int:
+    _settings(args)  # load the local env; the sandbox has its own home
+    data = (
+        scenario.load_scenario(Path(args.scenario))
+        if str(args.scenario or "").strip()
+        else {}
+    )
+    messages = list(args.message or data.get("messages") or [])
+    if not messages:
+        print(
+            _say("cli_error", error="a scenario needs at least one message"),
+            file=sys.stderr,
+        )
+        return 2
+    fixture = Path(
+        str(args.fixture or data.get("fixture") or ".")
+    ).expanduser()
+    snapshot = str(args.snapshot or data.get("snapshot") or "")
+    try:
+        sandbox = scenario.create_sandbox(
+            fixture,
+            snapshot,
+            root=Path(args.root).expanduser() if args.root else None,
+            keep=bool(args.keep),
+        )
+    except scenario.ScenarioError as exc:
+        print(_say("cli_error", error=exc), file=sys.stderr)
+        return 1
+    try:
+        client = build_model_client(sandbox.settings.home)
+        if client is None:
+            print(
+                _say(
+                    "cli_error",
+                    error="no model is configured for the scenario",
+                ),
+                file=sys.stderr,
+            )
+            return 1
+        print("Sandbox: %s" % sandbox.root)
+        sandbox.run(
+            messages,
+            client=client,
+            execute=bool(args.execute),
+            log=print,
+        )
+        return 0
+    finally:
+        sandbox.close()
+
+
 def cmd_telegram(args: argparse.Namespace) -> int:
     settings = _settings(args)
     try:
@@ -2077,6 +2129,23 @@ def build_parser() -> argparse.ArgumentParser:
     chat.add_argument("--actor", default="local")
     chat.add_argument("--home", default=None)
     chat.set_defaults(func=cmd_chat)
+
+    sandbox = subparsers.add_parser(
+        "scenario",
+        help=(
+            "Run a real scenario in an isolated sandbox: no provider, no "
+            "push, no release on a real remote"
+        ),
+    )
+    sandbox.add_argument("--fixture", default="")
+    sandbox.add_argument("--snapshot", default="")
+    sandbox.add_argument("--scenario", default="")
+    sandbox.add_argument("--message", action="append", default=[])
+    sandbox.add_argument("--execute", action="store_true")
+    sandbox.add_argument("--keep", action="store_true")
+    sandbox.add_argument("--root", default="")
+    sandbox.add_argument("--home", default=None)
+    sandbox.set_defaults(func=cmd_scenario)
 
     telegram = subparsers.add_parser(
         "telegram", help="Run the Telegram gateway and the daemon"

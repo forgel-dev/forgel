@@ -772,6 +772,9 @@ Core, plugin SDK, official plugins and templates: Apache-2.0. Generated project 
   `src/forgel/runtime_model.py` on every prompt: pipeline, stage owners, gates,
   release policy and current releases. A main-chat prompt without it is
   incomplete.
+- [docs/scenarios.md](docs/scenarios.md) — the permanent scenario sandbox:
+  real workflows, isolated home and repos, no provider, no push, no release on
+  a real remote (`forgel scenario`).
 
 ## Contributing
 
