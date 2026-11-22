@@ -151,12 +151,12 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "blocked",
   "created_at": "2026-11-22T17:44:53+00:00",
   "started_at": "2026-11-22T18:34:39+00:00",
-  "finished_at": "2026-11-22T18:39:04+00:00",
+  "finished_at": "2026-11-22T18:39:10+00:00",
   "result": {
-    "summary": "This retry only removed the scratch artifacts the review blocked; the installer fix from the previous attempt is unchanged. err.txt, out.txt and tests/test_zz_probe.py were deleted from the repository, so the attributed diff now touches only install.sh and tests/test_install.py. The probe module held no assertion that was missing from the real suite: the coverage it explored already lives in tests/test_install.py as InstallerWatchdogTest.test_hanging_login_shell_is_killed_and_reported, InstallerBoundedCheckTest (owner-only temporary directory, cleanup after success and failure, bounded stop of a shell that ignores the graceful signal) and InstallerBoundedToolsTest (POSIX check without GNU timeout, and an install that succeeds with a failing `timeout` first on PATH). install.sh and the existing additions in tests/test_install.py were left untouched. Verified with the full suite: `python -m pytest -q` -> 197 passed, 137 subtests passed. The standalone `sh -n install.sh` invocation is refused by the sandbox command guard (\"only project shell scripts are allowed\"), so the POSIX parse requirement is covered by the in-suite test InstallerTest.test_script_is_executable_and_parses_with_sh, which passed in that run, together with InstallerBoundedToolsTest.test_install_sh_never_invokes_gnu_timeout for the no-GNU-timeout requirement.; final test command exited 124",
+    "summary": "the controlling agent stopped: the chosen step failed (task_review); try again later",
     "files_changed": [
       "err.txt",
       "install.sh",
@@ -448,10 +448,7 @@
       "message": "The install.sh work itself looks sound: the fresh-shell check is bounded by a watchdog implemented with POSIX sh primitives only (sleep + background job + `kill -TERM`, grace, `kill -KILL` on the process group/tree), the timeout is recorded before signalling so it deterministically wins the success decision (CHECK_STATUS=124), the bound is configurable through FORGEL_CODE_TIMEOUT with a ten-second default, the temporary directory is created with umask 077 under a random token and removed by cleanup_check, and the block append/removal pair was reworked with a separator comment plus trailing-newline detection so install/install and install/uninstall are byte-stable. All QA gates pass, including the hang test and `sh -n install.sh`. What blocks the change is repository hygiene: the attributed commit also adds `err.txt`, `out.txt` and `tests/test_zz_probe.py`, which are not in the specification's affected files (`install.sh`, `tests/test_install.py`, `tests/test_readme_install.py`) and are debug output / probe leftovers rather than product artifacts; `test_zz_probe.py` in particular is collected by the suite and adds a scratch module with a sort-order name next to the real installer tests.",
       "retryable": false
     },
-    "failure": {
-      "kind": "qa",
-      "message": "This retry only removed the scratch artifacts the review blocked; the installer fix from the previous attempt is unchanged. err.txt, out.txt and tests/test_zz_probe.py were deleted from the repository, so the attributed diff now touches only install.sh and tests/test_install.py. The probe module held no assertion that was missing from the real suite: the coverage it explored already lives in tests/test_install.py as InstallerWatchdogTest.test_hanging_login_shell_is_killed_and_reported, InstallerBoundedCheckTest (owner-only temporary directory, cleanup after success and failure, bounded stop of a shell that ignores the graceful signal) and InstallerBoundedToolsTest (POSIX check without GNU timeout, and an install that succeeds with a failing `timeout` first on PATH). install.sh and the existing additions in tests/test_install.py were left untouched. Verified with the full suite: `python -m pytest -q` -> 197 passed, 137 subtests passed. The standalone `sh -n install.sh` invocation is refused by the sandbox command guard (\"only project shell scripts are allowed\"), so the POSIX parse requirement is covered by the in-suite test InstallerTest.test_script_is_executable_and_parses_with_sh, which passed in that run, together with InstallerBoundedToolsTest.test_install_sh_never_invokes_gnu_timeout for the no-GNU-timeout requirement.; final test command exited 124"
-    }
+    "blocked_by": "controller"
   },
   "request": "docs/program/requests/20261122174453437402_make-the-install-sh-path-check-strictly-bounded-and-keep-the.md"
 }
