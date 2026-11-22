@@ -5,7 +5,7 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-22T18:33:54+00:00
+- Finished: 2026-11-22T19:16:01+00:00
 
 ## Checks
 
@@ -21,7 +21,7 @@
 ```
 $ python -m unittest discover -s tests
 # cwd: /Users/okalistratov/Documents/sites/metaharness
-[agent] 20261122182909_inspect-and-finish: context handoff to session 2 (~5973/3072 tokens)
+[agent] 20261122190959_inspect-and-finish: context handoff to session 2 (~5973/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -449,20 +449,20 @@ $ python -m unittest discover -s tests
 [done] running
 [done] completed
 [github] GitHub API is unreachable; the branch is pushed without pull-request checks
-[github] demo-8aba5bf2: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
+[github] demo-940b869b: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
 ..............................................................................error: unknown project 'missing-project'
 ..error: unknown project 'missing-project'
 ........error: say needs text: --text "..." or a trailing argument
-......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+..............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 702 tests in 107.265s
+Ran 710 tests in 157.432s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-a3bbb952']]
+PASS the daemon ran the task [['selfhost-eaa9281a']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -473,30 +473,30 @@ PASS self-hosting gate is green and parked for human approval
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === CLIENT E2E ===
-PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-1d1ed77c  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-1d1ed77c", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
+PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-a84ab140  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-a84ab140", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
 ]
-PASS the client selects the project [{"command": "use", "project": "client-e2e-1d1ed77c", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-1d1ed77c) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-1d1ed77c", "name": "client e2e"}}}
+PASS the client selects the project [{"command": "use", "project": "client-e2e-a84ab140", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-a84ab140) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-a84ab140", "name": "client e2e"}}}
 ]
-PASS status carries the selected project [{"command": "status", "project": "client-e2e-1d1ed77c", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-1d1ed77c: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-1d1ed77c", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
+PASS status carries the selected project [{"command": "status", "project": "client-e2e-a84ab140", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-a84ab140: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-a84ab140", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
 ]
-PASS the engine session points to the project [{"command": "session", "project": "client-e2e-1d1ed77c", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-1d1ed77c).", "error": "", "session": "local", "project": {"id": "client-e2e-1d1ed77c", "name": "client e2e"}}}
+PASS the engine session points to the project [{"command": "session", "project": "client-e2e-a84ab140", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-a84ab140).", "error": "", "session": "local", "project": {"id": "client-e2e-a84ab140", "name": "client e2e"}}}
 ]
-PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-1d1ed77c", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
+PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-a84ab140", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
 ]
-PASS the engine receives --project on status [status --project client-e2e-1d1ed77c --json]
-PASS say sends --text and --project [say --text hello integration --project client-e2e-1d1ed77c --json]
+PASS the engine receives --project on status [status --project client-e2e-a84ab140 --json]
+PASS say sends --text and --project [say --text hello integration --project client-e2e-a84ab140 --json]
 PASS client e2e is green
 $ python -m pytest -q tests/test_install.py
 # cwd: /Users/okalistratov/Documents/sites/code
 .................................................                        [100%]
-49 passed in 78.86s (0:01:18)
+49 passed in 79.04s (0:01:19)
 $ python -m pytest -q
 # cwd: /Users/okalistratov/Documents/sites/code
 ...................................................... [ 27%]
 ................................................. [ 52%]
 ........................................................................ [ 88%]
 ......................                           [100%]
-197 passed, 137 subtests passed in 110.82s (0:01:50)
+197 passed, 137 subtests passed in 137.39s (0:02:17)
 $ sh -n install.sh
 # cwd: /Users/okalistratov/Documents/sites/code
 

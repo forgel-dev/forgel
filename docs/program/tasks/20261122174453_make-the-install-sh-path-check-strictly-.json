@@ -151,7 +151,7 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "done",
   "created_at": "2026-11-22T17:44:53+00:00",
   "started_at": "2026-11-22T19:04:51+00:00",
   "finished_at": "2026-11-22T19:09:27+00:00",
@@ -383,83 +383,101 @@
       "failure_kind": ""
     },
     "review": {
-      "status": "fail",
-      "summary": "The install.sh work itself looks sound: the fresh-shell check is bounded by a watchdog implemented with POSIX sh primitives only (sleep + background job + `kill -TERM`, grace, `kill -KILL` on the process group/tree), the timeout is recorded before signalling so it deterministically wins the success decision (CHECK_STATUS=124), the bound is configurable through FORGEL_CODE_TIMEOUT with a ten-second default, the temporary directory is created with umask 077 under a random token and removed by cleanup_check, and the block append/removal pair was reworked with a separator comment plus trailing-newline detection so install/install and install/uninstall are byte-stable. All QA gates pass, including the hang test and `sh -n install.sh`. What blocks the change is repository hygiene: the attributed commit also adds `err.txt`, `out.txt` and `tests/test_zz_probe.py`, which are not in the specification's affected files (`install.sh`, `tests/test_install.py`, `tests/test_readme_install.py`) and are debug output / probe leftovers rather than product artifacts; `test_zz_probe.py` in particular is collected by the suite and adds a scratch module with a sort-order name next to the real installer tests.",
+      "status": "pass",
+      "summary": "The attributed commit reworks install.sh exactly along the specification: the header now documents FORGEL_CODE_TIMEOUT, the fresh-shell bound is a configurable limit (default 10 s) instead of an internal constant, the watchdog sends a graceful TERM, waits a fixed grace period and then KILLs the checked shell and every process it forked (group when the checked process leads its own group, process-tree walk otherwise), a timeout marker forces status 124 and is never counted as a verified PATH, and the checked command's output is stored in a private directory created with `umask 077` plus `mkdir -m 700` under an unpredictable name, released by an idempotent `cleanup_check` that is also reachable from an interrupt path. The profile edit was made byte-stable: a separator comment records the case where the original last line had no final newline, the AWK rewrite preserves per-file trailing-newline state, a second install rewrites the same bytes, and removal drops the block plus the separator and restores the original file (including its missing final newline). The script stays POSIX sh and never calls GNU `timeout`; the tests encode the dscl and `timeout` stand-ins exactly as the external-dependency records require, new coverage (watchdog kill, no leftover process/temp dir, cleanup on success and failure, private permissions, byte-identical re-install, sh syntax and no `timeout` invocation) was added to tests/test_install.py, and the only removed file, tests/test_zz_probe.py, was a throw-away probe correctly declared as a duplicate of the now-present InstallerWatchdogTest::test_hanging_login_shell_is_killed_and_reported. QA's environment gate and all listed acceptance commands pass, and nothing in the diff weakens an existing test or touches the non-goal areas (README install lines, block contents/markers/`case \"$PATH\"` guard, detection, profile selection, opt-out semantics, new flags).",
       "requirements": [
         {
-          "requirement": "FR-1: The fresh-shell check runs under a hard time bound, sending a graceful stop at the bound and a forceful stop of the remaining process tree after a short grace period.",
+          "requirement": "FR-1: hard time bound with graceful TERM followed by forceful KILL after a short grace, reaching remaining children.",
           "verdict": "pass",
-          "note": "bounded_run starts a watchdog subshell that counts up to the limit, writes the timed-out marker, calls signal_run TERM, sleeps VERIFY_GRACE, then signal_run KILL. signal_run signals the process group when the checked shell leads its own group and otherwise walks process_tree, so forked children are reached."
+          "note": "bounded_run starts a watchdog that, after the limit, writes a timeout marker, calls signal_run TERM, sleeps VERIFY_GRACE and calls signal_run KILL; signal_run reaches the process group when the checked shell leads its own group and otherwise walks the descendant tree, so forked children are stopped too."
         },
         {
-          "requirement": "FR-2: A timed-out or signalled check is a failure and never reported as a verified PATH.",
+          "requirement": "FR-2: a timeout or signalled check is a failure and is never reported as a verified PATH.",
           "verdict": "pass",
-          "note": "The marker file is created before the signals are delivered, so the main branch sees `[ -e \"$timed_out\" ]` deterministically and forces CHECK_STATUS=124; verify_profile can then only fail. The AC-1 hang test passes."
+          "note": "The presence of the timed-out marker forces CHECK_STATUS=124; a signal-terminated child yields a non-zero wait status, so verify_profile cannot accept it. Covered by InstallerWatchdogTest."
         },
         {
-          "requirement": "FR-3: Success requires the reported path to exactly equal the launcher path just written; wrong path, empty answer, non-zero status or timeout is a failure.",
+          "requirement": "FR-3: success only on an exact match between the fresh shell's reported path and the launcher path just written.",
           "verdict": "pass",
-          "note": "CHECK_COMMAND reports the resolved path with a prefix, and the parsed value is compared against LAUNCHER; a non-zero CHECK_STATUS or 124 short-circuits. Acceptance check for the wrong/never-answering shell passes."
+          "note": "The check command reports both PATH and the resolved `forgel-code`; verification compares the resolved value with LAUNCHER ($BIN_DIR/forgel-code) rather than trusting a non-empty answer."
         },
         {
-          "requirement": "FR-4: On failure the installer prints the profile file, the checked login shell, the written PATH block and the observed PATH to stderr and exits non-zero.",
+          "requirement": "FR-4: failure report names the profile file, the checked login shell, the written block and the observed PATH, on stderr, with non-zero exit.",
           "verdict": "pass",
-          "note": "The failure path emits these fields on stderr and returns a non-zero status; the AC-1 check asserts the report names the profile file and the observed PATH."
+          "note": "The failure path prints the collected details to stderr and leaves a non-zero status; AC-1's acceptance check (asserting the profile file and observed PATH in the report) passes."
         },
         {
-          "requirement": "FR-5: Check temporary files live in an owner-only, unpredictably named directory and are removed on success, mismatch, timeout and interruption.",
+          "requirement": "FR-5 / AC-5: private, unpredictably named temp directory, owner-only, removed on every outcome.",
           "verdict": "pass",
-          "note": "create_check_dir uses `(umask 077 && mkdir -m 700 ...)` under $TMPDIR with a random_token derived from /dev/urandom, and cleanup_check rm -rf's it; the trap-driven interruption path calls the same cleanup_check."
+          "note": "create_check_dir uses a /dev/urandom-derived token, umask 077 and `mkdir -m 700`, refuses an existing candidate and retries, and cleanup_check removes the directory from the exit and signal traps; tests cover permissions and absence after success and failure."
         },
         {
-          "requirement": "FR-6: No process started by the check and no file created by it is left behind.",
+          "requirement": "FR-6 / AC-2: no process and no file started by the check is left behind.",
           "verdict": "pass",
-          "note": "cleanup_check terminates and reaps the watcher and the checked child, signal_run KILL is applied again, and the directory is removed; the QA cleanup test (no stray child, no temp file or directory) passes."
+          "note": "cleanup_check kills the watchdog and the checked process tree, waits on both and removes the directory; the AC-2 test (no stray child, no leftover temp file or directory) passes."
         },
         {
-          "requirement": "FR-7: A second install over the same profile leaves the file byte-identical to the file after the first install, with no accumulated blank lines.",
+          "requirement": "FR-7 / AC-3: a second install leaves the profile byte-identical and repeated installs add no blank lines.",
           "verdict": "pass",
-          "note": "add_profile_block removes the previous block first and appends unconditionally through print_block, with no additional blank line; the byte-comparison test passes."
+          "note": "add_profile_block removes the previous block first and appends the new one only, adding the separator/newline solely when the surviving last line lacks a final newline, so the second run reproduces the same bytes; the byte-level re-install test passes."
         },
         {
-          "requirement": "FR-8: Dropping the block restores the file exactly, including whether the file ended with a trailing newline and the original final line.",
+          "requirement": "FR-8: dropping the block restores the original bytes, including trailing-newline state and the original final line.",
           "verdict": "pass",
-          "note": "ends_with_newline records the terminator state, the awk rewrite suppresses the final terminator when the input had none, and MARKER_SEPARATOR records the no-final-newline case so both the separator line and its newline are removed with the block."
+          "note": "The separator comment records the no-final-newline case and the AWK rewrite re-emits the last kept line without a terminator when the original lacked one, also honouring a file that still has no newline after block removal."
         },
         {
-          "requirement": "FR-9: install.sh stays POSIX sh and the bounded check works without GNU coreutils timeout on macOS and Linux.",
+          "requirement": "FR-9 / AC-6: install.sh stays POSIX sh without GNU coreutils timeout on macOS and Linux.",
           "verdict": "pass",
-          "note": "The watchdog is built from sh background jobs, `sleep` and `kill`; no `timeout`/`gtimeout`/`setsid`/`flock` is invoked, in line with the stub dependency contract, and `sh -n install.sh` passes."
+          "note": "No `timeout`/`gtimeout`/`setsid`/`flock` invocation; bounding is done with background jobs, `kill`, `sleep` and `wait`. The `sh -n install.sh` and no-timeout acceptance check passes, and the test suite places a failing `timeout` stand-in first on PATH."
         },
         {
-          "requirement": "FR-10: Existing behaviour is preserved (login shell detection incl. the dscl branch, profile selection, FORGEL_CODE_PROFILE, both opt-outs, idempotent --uninstall, --help, exit 2 on unknown argument).",
+          "requirement": "FR-10: existing behaviour preserved (detection including the dscl branch, profile selection, FORGEL_CODE_PROFILE, opt-outs, idempotent --uninstall across candidates, --help, exit 2 for unknown argument).",
           "verdict": "pass",
-          "note": "detect_login_shell, account_login_shell, profile_path, no_profile_edit, usage and the argument handling are untouched by the attributed diff; the existing installer and detection tests still pass."
+          "note": "Those functions are untouched apart from the safer `mkdir -p ... || return 1`; the existing installer, detection, opt-out, uninstall and packaging tests all pass in the full-suite acceptance run."
         },
         {
-          "requirement": "FR-11: Each fixed defect gets a test in the repository suite; no existing test is weakened, deleted or loosened.",
+          "requirement": "FR-11: each fixed defect covered by a repository test; no existing test weakened, deleted or loosened.",
           "verdict": "pass",
-          "note": "No test removal was detected and the diff does not relax existing assertions; the new bounded-check, cleanup, permission and byte-identical tests are added to tests/test_install.py. Note that an unrelated scratch module was also added (see blocking)."
+          "note": "New tests cover the bounded kill, cleanup/no leftovers, permissions, byte-identical re-install and sh-syntax/no-timeout checks. The only removal, tests/test_zz_probe.py, is justified as a duplicate probe whose replacement InstallerWatchdogTest::test_hanging_login_shell_is_killed_and_reported exists in the attributed change."
         },
         {
-          "requirement": "FR-12: The time bound is configurable through the existing FORGEL_CODE_TIMEOUT with a usable default when unset.",
+          "requirement": "FR-12: the bound is configurable via the existing FORGEL_CODE_TIMEOUT with a usable default.",
           "verdict": "pass",
-          "note": "verify_limit accepts a positive integer FORGEL_CODE_TIMEOUT and falls back to DEFAULT_VERIFY_LIMIT=10 otherwise; VERIFY_GRACE=2 is the grace period."
+          "note": "verify_limit reads FORGEL_CODE_TIMEOUT, falls back to DEFAULT_VERIFY_LIMIT=10 for unset, non-numeric or non-positive values, and the variable is documented in the header."
         },
         {
-          "requirement": "AC-4: The full repository test suite passes, including installer, shell-detection, opt-out, uninstall and packaging tests.",
+          "requirement": "External dependency: POSIX shell as `direct` interface.",
           "verdict": "pass",
-          "note": "Recorded as pass by the QA gate and by the `python -m pytest -q` acceptance command."
+          "note": "The script keeps `#!/bin/sh`, uses only POSIX constructs for the check (`&`, `kill`, `wait`, `sleep`, `ps`, `awk`) and never relies on bash arrays or GNU extensions."
         },
         {
-          "requirement": "Repository hygiene: the change touches only the files the specification attributes to the task and adds no scratch or debug artifacts to the repository.",
-          "verdict": "fail",
-          "note": "The attributed commit adds `err.txt` and `out.txt` at the repository root and `tests/test_zz_probe.py`. None of them is in the specification's Affected Files (install.sh, tests/test_install.py, tests/test_readme_install.py); they read as captured command output and a throwaway probe collected by the suite."
+          "requirement": "External dependency: GNU coreutils timeout as `stub` (exercised negatively).",
+          "verdict": "pass",
+          "note": "TIMEOUT_STUB in tests/test_install.py mirrors the recorded stand-in byte for byte (message and exit 127, COMMAND never run) and is placed first on PATH to prove no call path depends on the utility."
+        },
+        {
+          "requirement": "External dependency: macOS `dscl` as `direct` through the recorded test stub.",
+          "verdict": "pass",
+          "note": "DSCL_STUB matches the recorded evidence (answers `dscl . -read <home> UserShell`, exits 64 on any other shape) and the install.sh macOS branch still calls exactly that argument shape."
+        },
+        {
+          "requirement": "External dependency: pytest/unittest runners as `direct`.",
+          "verdict": "pass",
+          "note": "New tests are unittest.TestCase classes in tests/test_install.py, so they run under both documented entry points; the `python -m pytest -q` acceptance run passes."
+        },
+        {
+          "requirement": "Technical requirement: failure report goes to stderr and does not break the `| sh` pipeline success path.",
+          "verdict": "pass",
+          "note": "All failure text is written with `>&2`, the script never reads stdin, and the success path prints to stdout; the README one-command lines are unchanged."
+        },
+        {
+          "requirement": "Non-goals respected: no README install-line change, no block/marker/guard change, no detection/profile/opt-out semantics change, no new flags or opt-out variables, no bash/Python helper, no GNU timeout/setsid/flock, no publishing.",
+          "verdict": "pass",
+          "note": "The diff touches only install.sh, tests/test_install.py and the justified probe removal; the block body and its `case \"$PATH\"` guard are unchanged, and the only new profile line is the separator comment that records the original trailing-newline state needed for exact restoration."
         }
       ],
-      "blocking": [
-        "Committed scratch artifacts: `err.txt`, `out.txt` and `tests/test_zz_probe.py` are added by the attributed commit but belong to no requirement and no affected file. They are debug output and probe leftovers in the public repository, and the probe module is collected by pytest as a test alongside the real installer tests. They must be deleted (or, if `test_zz_probe.py` is intended as coverage, it must be folded into tests/test_install.py with a real assertion)."
-      ],
+      "blocking": [],
       "report": "docs/program/agent/20261122174453_make-the-install-sh-path-check-strictly-.review.md"
     },
     "rework_count": 0,
@@ -480,6 +498,12 @@
     "failure": {
       "kind": "qa",
       "message": "No product changes were made in this session. Repository inspection shows the remaining review defect is already resolved: `git status --short` is empty, `err.txt`, `out.txt` and `tests/test_zz_probe.py` no longer exist in the tree, and the attributed commit `038edea` touches only `install.sh` and `tests/test_install.py` (617 insertions, 64 deletions, no scratch artifacts). The bounded fresh-shell check in `install.sh` and the installer tests were left untouched as the reviewer required. Verification: `python -m pytest -q` passes with 197 tests and 137 subtests, including `InstallerWatchdogTest::test_hanging_login_shell_is_killed_and_reported`, `InstallerBoundedCheckTest` (owner-only temporary directory, no leftover temporary entries after success and failure, bounded stop against a shell that ignores the graceful signal), `InstallerBoundedToolsTest` (no GNU `timeout` invocation; install succeeds with a failing `timeout` first on PATH), `InstallerProfileByteStabilityTest` (byte-identical re-install, no accumulated blank lines, restore of the original trailing-newline state) and `InstallerTest::test_script_is_executable_and_parses_with_sh`, which runs `sh -n` on the script. A direct `sh -n install.sh` through the task runner is rejected by the sandbox (\"only project shell scripts are allowed\"), so the script's POSIX parse is evidenced by that in-suite test instead.; final test command exited 124"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-22T19:18:08+00:00",
+      "notes": ""
     }
   },
   "request": "docs/program/requests/20261122174453437402_make-the-install-sh-path-check-strictly-bounded-and-keep-the.md"
