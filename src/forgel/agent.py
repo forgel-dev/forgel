@@ -23,6 +23,7 @@ from typing import Any, Mapping, Sequence
 from . import i18n, language, requirements as requirements_doc, tasks
 from .artifacts import write_text
 from .config import Settings
+from .documents import created_after, initialized_at, is_current
 from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -644,6 +645,7 @@ def _repository_overview(
         str(repos[0]["id"]),
     )
     root = layout.repo_path(main_id)
+    initialized = initialized_at(layout)
     documents = []
     for relative in sorted(_repo_files(root)):
         if not relative.endswith(".md"):
@@ -656,7 +658,7 @@ def _repository_overview(
         if relative in {"FORGEL.md", "AGENTS.md"}:
             continue
         path = root / relative
-        if path.is_file():
+        if path.is_file() and is_current(path, initialized):
             documents.append(path)
     parts: list[str] = []
     budget = OVERVIEW_TOTAL_CHARS
@@ -724,11 +726,16 @@ def build_context(
     ]
     repos = manifest_entries(layout)
     parts.append("Repositories:\n" + _repo_map(layout, repos))
+    initialized = initialized_at(layout, project)
     instructions = instruction_context(layout)
     if instructions:
         parts.append(instructions)
 
-    task_items = tasks.list_tasks(layout)
+    task_items = [
+        item
+        for item in tasks.list_tasks(layout)
+        if created_after(item.get("created_at"), initialized)
+    ]
     if task_items:
         counts: dict[str, int] = {}
         for item in task_items:
@@ -747,7 +754,11 @@ def build_context(
     else:
         parts.append("Current work: no tasks planned yet.")
 
-    releases = list_releases(layout)
+    releases = [
+        release
+        for release in list_releases(layout)
+        if created_after(release.get("created_at"), initialized)
+    ]
     if releases:
         lines: list[str] = []
         for release in releases[-3:]:
@@ -772,7 +783,15 @@ def build_context(
         parts.append("Releases:\n" + "\n".join(lines))
 
     plans_dir = layout.artifact("docs/program/plans")
-    plans = sorted(plans_dir.glob("*.md")) if plans_dir.is_dir() else []
+    plans = (
+        [
+            path
+            for path in sorted(plans_dir.glob("*.md"))
+            if is_current(path, initialized)
+        ]
+        if plans_dir.is_dir()
+        else []
+    )
     if plans:
         first = plans[-1].read_text(encoding="utf-8").splitlines()
         goal = first[0][len("# Plan: ") :] if first else ""
@@ -783,7 +802,7 @@ def build_context(
         parts.append("Project documents:\n" + overview)
 
     decisions_path = layout.artifact("docs/program/decisions.md")
-    if decisions_path.is_file():
+    if decisions_path.is_file() and is_current(decisions_path, initialized):
         decisions = decisions_path.read_text(encoding="utf-8")
         parts.append("User decisions (binding):\n" + _cap(decisions, 6000))
 
