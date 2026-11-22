@@ -705,19 +705,18 @@ class CodingAgent:
                         and not contract.in_scope(path, affected)
                     )
                     if outside:
-                        git_ops.discard_paths(repo, outside)
                         changed = [
                             path
                             for path in changed
                             if contract.in_scope(path, affected)
                         ]
                         summary += (
-                            "; discarded out-of-scope changes: "
+                            "; uncommitted files outside the contract: "
                             + ", ".join(outside[:10])
                         )
                         log(
-                            f"[agent] {task['id']}: discarded "
-                            "out-of-scope changes: "
+                            f"[agent] {task['id']}: uncommitted files "
+                            "outside the contract: "
                             + ", ".join(outside[:10])
                         )
                 try:
@@ -952,6 +951,7 @@ class CodingAgent:
                 "user",
                 f"Task: {task.get('title') or task.get('id')}\n"
                 f"Summary: {task.get('summary') or ''}\n\n"
+                f"{contract.digest(layout, task)}\n\n"
                 f"Requirements:\n{requirements}\n\n"
                 f"Acceptance:\n{acceptance}\n\n"
                 f"Files already attributed to the task:\n{attributed}\n\n"
