@@ -1,10 +1,10 @@
 # Agent Run: Release audit: `remove_profile_block` and `uninstall_profile` remove a block whenever `# >>> fo
 
 - Task: `20261122192217_release-audit-remove-profile-block-and-u`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 23
-- Finished: 2026-11-22T19:36:03+00:00
+- Steps: 108
+- Finished: 2026-11-22T21:02:43+00:00
 
 ## Requirements
 
@@ -20,10 +20,9 @@
 
 ## Assumptions
 
-- An unterminated start marker is treated as a non-block: the file is left untouched and a diagnostic is written, matching the specification's fail-safe choice rather than guessing the block extent.
-- `remove_profile_block` returns non-zero on an unterminated start marker, so `install.sh --uninstall` exits non-zero in that case; the profile is nevertheless unmodified, which the specification permits.
-- The marker lines are compared as whole lines, exactly as the existing filter already did; the marker strings themselves are untouched.
-- Only `install.sh` and `tests/test_install.py` were in scope; the client Python code, packaging, CLI and CHANGELOG were left alone.
+- An unterminated start marker is treated as fail-safe: the file is left unchanged, a diagnostic is written and the removal returns non-zero, rather than guessing where the block would have ended.
+- The tests exercise the real removal path by running `sh install.sh --uninstall` against a temporary HOME and profile, not by re-implementing the AWK filter.
+- Sub-second watchdog polling is used only when the test environment supplies `FORGEL_CODE_POLL_MS`; the shipped default stays one second.
 
 ## Test Removals
 
@@ -32,14 +31,14 @@
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 1
-- Handoffs: 0
-- Model calls: 23
-- Estimated input tokens (all calls): 1446487
-- Provider input/output tokens: 1548868 / 64090
-- Provider cache hit/miss tokens: 1464192 / 84676
-- Estimated prompt at the end: 81711 tokens
-- State: not needed
+- Sessions: 4
+- Handoffs: 3
+- Model calls: 108
+- Estimated input tokens (all calls): 4524239
+- Provider input/output tokens: 4781109 / 402849
+- Provider cache hit/miss tokens: 4513792 / 267317
+- Estimated prompt at the end: 45173 tokens
+- State: `docs/program/agent/20261122192217_release-audit-remove-profile-block-and-u.state.md`
 
 ## Specification (`docs/program/specs/20261122192217_release-audit-remove-profile-block-and-u.md`)
 
@@ -203,59 +202,138 @@ A user installs `forgel-code`, re-runs `install.sh`, and later uninstalls. Their
 
 ## Summary
 
-Fixed the release-audit defect in the profile block removal logic of `install.sh` and added the regression tests required by the specification.
+Fixed the release-audit defect in `install.sh` and added the specified regression tests, then made the full suite fit the review time budget.
 
-Product change (`install.sh`): added `has_unclosed_block`, a small AWK pre-scan that reports whether a `# >>> forgel-code >>>` line is left open without a following `# <<< forgel-code <<<` line. `remove_profile_block` now runs that scan before it rewrites anything: on an open marker it writes a diagnostic naming the file and the missing end marker to stderr, leaves the profile byte-for-byte unchanged, and returns non-zero; on a well-formed or marker-free file it proceeds with the existing AWK filter, which still drops only the lines from a start marker through its matching end marker, keeps every other line in order and byte-identical, and handles the recorded separator comment for a last line without a final newline. Because `uninstall_profile` delegates to it, `--uninstall` inherits the same fail-safe behaviour. No new runtime dependency was introduced: only the existing POSIX shell, awk and grep are used, and the marker strings are unchanged.
+Product (`install.sh`): `remove_profile_block` now pre-scans the profile with `has_unclosed_block`. If a `# >>> forgel-code >>>` line has no following `# <<< forgel-code <<<` line, it writes a diagnostic to stderr naming the file and the missing end marker, leaves the profile byte-for-byte unchanged and returns non-zero, so the trailing content is never swallowed. For a well-formed block the existing AWK filter drops exactly the marker lines and the lines between them and re-emits every other line in order and byte-identical (including blank lines and a last line without a final newline, handled through the recorded separator comment). A lone end marker stays ordinary content, and a marker-free profile is untouched, so removal is idempotent. `uninstall_profile`, and therefore `--uninstall`, delegate to the same function and inherit the behaviour. Only POSIX shell, awk and grep are used; the marker strings are unchanged.
 
-Tests (`tests/test_install.py`): added `InstallerBlockRemovalTest` with `test_remove_profile_block_unmatched_start_marker_leaves_file_unchanged`, `test_remove_profile_block_removes_only_wellformed_block`, `test_remove_profile_block_preserves_orphan_end_marker`, `test_remove_profile_block_is_idempotent`, and added `test_install_rerun_then_uninstall_preserves_profile` to `InstallerProfileByteStabilityTest`. The new tests drive the real `install.sh` in a temporary HOME (install/uninstall subprocess invocations), not a re-implementation, and assert on exact file bytes, stderr diagnostics and absence of markers. No existing test was changed, weakened or deleted.
+Tests (`tests/test_install.py`): `InstallerBlockRemovalTest` covers the unmatched start marker (byte-for-byte unchanged plus stderr diagnostic naming file and end marker), the well-formed block surrounded by unrelated lines, the orphan end marker, idempotent double removal, and `test_install_rerun_then_uninstall_preserves_profile` covers install twice then uninstall restoring the original bytes with no markers left. The suite was kept inside the review budget by construction rather than by loosening it: the bounded check's poll interval and grace period are injected through the existing `FORGEL_CODE_POLL_MS` / `FORGEL_CODE_VERIFY_GRACE` knobs (real defaults unchanged), one checkout copy and one module-wide real install are shared, and per-class installer scenarios run in a thread pool. No test was deleted, skipped, marked slow or weakened.
 
-Verification: the whole `tests/test_install.py` module passes. Because the 120 s sandbox limit cut off one single `python -m pytest -q tests` invocation at 50%, I ran the suite in complete subsets instead and every subset exited 0: `tests/test_install.py -k 'remove_profile_block or install_rerun_then_uninstall'` (5 passed), `-k 'InstallerBlockRemovalTest or InstallerProfileByteStabilityTest'` (8 passed), `-k 'InstallerTest or InstallerOptOutTest'` (18 passed), `-k 'InstallerShellDetectionTest or InstallerWatchdogTest'` (6 passed), `-k 'InstallerBoundedCheckTest or InstallerUninstallTest or InstallerProfileOverrideUninstallTest'` (16 passed), `-k 'PlainPipInstallTest'` (4 passed), and `pytest -q tests --ignore=tests/test_install.py` (148 passed, 137 subtests passed). That is the full suite with no failures and no skips beyond the pre-existing zsh/bash availability skip guards.; final test command exited 124
+Measured evidence: the single final command `python -m pytest -q tests` exits 0 with 202 passed, 137 subtests passed, 69.08s wall clock (repeat run 67.81s; with `--durations` 81.05s), well inside the 120 s limit.
 
 ## Files Changed
 
 - `install.sh`
 - `tests/test_install.py`
+- `tests/test_zz_probe2.py`
+- `tests/test_zz_timing_probe.py`
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "remove_profile_block or install_rerun_then_uninstall"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests"]` → exit 124
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "InstallerBlockRemovalTest or InstallerProfileByteStabilityTest"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests", "--ignore=tests/test_install.py"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "InstallerShellDetectionTest or InstallerWatchdogTest"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "InstallerTest or InstallerOptOutTest"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "InstallerBoundedCheckTest or InstallerUninstallTest or InstallerProfileOverrideUninstallTest"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "PlainPipInstallTest"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests"]` → exit 124
+- `["python", "-m", "pytest", "-q", "tests", "--durations=20"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--durations=10"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests", "--durations=25"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests", "--durations=0"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests", "--durations=25"]` → exit 1
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_timing_probe.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_zz_probe2.py", "-s"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests", "--durations=15"]` → exit 1
+- `["python", "-m", "pytest", "-q", "tests", "-x", "--durations=15"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only", "-q"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only", "-q", "-k", "remove_profile_block"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests", "-rs", "--timeout=0"]` → exit 4
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only", "-q", "-k", "unmatched_start_marker or removes_only_wellformed_block or orphan_end_marker or install_rerun_then_uninstall or is_idempotent"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only", "-q", "-k", "test_remove_profile_block_unmatched_start_marker_leaves_file_unchanged or test_remove_profile_block_removes_only_wellformed_block or test_remove_profile_block_preserves_orphan_end_marker or test_install_rerun_then_uninstall_preserves_profile or test_remove_profile_block_is_idempotent"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests", "--durations=40"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-timed out after 120s
 ...................................................... [ 26%]
 ................................................. [ 50%]
-...................................
+........................................................................ [ 86%]
+...........................                      [100%]
+202 passed, 137 subtests passed in 74.11s (0:01:14)
+
 ```
 
 ## Actions
 
 - read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
 - read_file: tests/test_install.py
 - read_file: tests/test_install.py
 - read_file: tests/test_install.py
-- write_file: install.sh
+- read_file: tests/test_install.py
+- read_file: tests/test_zz_timing_probe.py
+- recall
+- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=20']
+- run: ['sh', '-c', 'T=$(mktemp -d); mkdir -p $T/src; cp -R forgel_code pyproject.toml _build_backend.py README.md LICENSE $T/src/; for i in 1 2 3; do python3 -c \'import time,subprocess,sys;t=time.time();r=subprocess.run([sys.executable,"-m","pip","install","--target","\'$T\'/p\'$i\'","--upgrade","--no-deps","--no-index","--no-cache-dir","--no-build-isolation","--no-compile","--disable-pip-version-check","--no-warn-script-location","\'$T\'/src"],capture_output=True);print("nocache",round(time.time()-t,2),r.returncode)\'; done; for i in 1 2 3; do python3 -c \'import time,subprocess,sys;t=time.time();r=subprocess.run([sys.executable,"-m","pip","install","--target","\'$T\'/q\'$i\'","--upgrade","--no-deps","--no-index","--no-build-isolation","--no-compile","--disable-pip-version-check","--no-warn-script-location","\'$T\'/src"],capture_output=True);print("cached",round(time.time()-t,2),r.returncode)\'; done; python3 -c \'import time,subprocess,sys;t=time.time();subprocess.run([sys.executable,"-m","pip","--version"],capture_output=True);print("pipstart",round(time.time()-t,2))\'; rm -rf $T']
+- write_file: tests/test_zz_timing_probe.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- write_file: tests/test_zz_timing_probe.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- recall
+- recall
+- write_file: tests/test_zz_timing_probe.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
 - read_file: tests/test_install.py
 - write_file: tests/test_install.py
-- run: ['sh', '-n', 'install.sh']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'remove_profile_block or install_rerun_then_uninstall']
-- run: ['python', '-m', 'pytest', '-q', 'tests']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'InstallerBlockRemovalTest or InstallerProfileByteStabilityTest']
-- run: ['python', '-m', 'pytest', '-q', 'tests', '--ignore=tests/test_install.py']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'InstallerShellDetectionTest or InstallerWatchdogTest']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'InstallerTest or InstallerOptOutTest']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'InstallerBoundedCheckTest or InstallerUninstallTest or InstallerProfileOverrideUninstallTest']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'PlainPipInstallTest']
+- write_file: tests/test_install.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--durations=10']
+- recall
+- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=25']
+- read_file: install.sh
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- run: ['python3', '-c', "import os,shutil,subprocess,sys,tempfile,time,pathlib\nroot=pathlib.Path('.').resolve()\nt=pathlib.Path(tempfile.mkdtemp())\nsrc=t/'src'\nshutil.copytree(root,src,ignore=shutil.ignore_patterns('.git','__pycache__','*.egg-info','build','dist','.pytest_cache'))\nhome=t/'home'; home.mkdir()\nenv=dict(os.environ)\nenv.update(HOME=str(home),SHELL='/bin/sh',FORGEL_CODE_SOURCE=str(src),FORGEL_CODE_HOME=str(t/'prefix'),FORGEL_CODE_BIN=str(t/'bin'),FORGEL_CODE_PROFILE=str(home/'.profile'),FORGEL_CODE_POLL_MS='100',FORGEL_CODE_VERIFY_GRACE='0')\nenv.pop('PYTHONPATH',None)\nfor i in range(2):\n    s=time.time(); r=subprocess.run(['sh','install.sh'],cwd=str(root),env=env,capture_output=True,text=True); print('install',i,round(time.time()-s,2),r.returncode)\ns=time.time(); r=subprocess.run(['sh','install.sh','--uninstall'],cwd=str(root),env=env,capture_output=True,text=True); print('uninstall',round(time.time()-s,2),r.returncode)\ns=time.time(); r=subprocess.run(['/bin/sh','-l','-i','-c','printf x'],env={'HOME':str(home),'SHELL':'/bin/sh','TERM':'dumb','PATH':'/usr/bin:/bin'},capture_output=True,text=True); print('loginshell',round(time.time()-s,2),r.returncode)\nfor i in range(2):\n    s=time.time(); r=subprocess.run([sys.executable,'-m','pip','install','--target',str(t/('pt'+str(i))),'--no-index','--no-deps','--no-build-isolation','--no-compile','--no-cache-dir','--disable-pip-version-check','--no-warn-script-location',str(src)],env=env,capture_output=True,text=True); print('pip',i,round(time.time()-s,2),r.returncode)\nshutil.rmtree(str(t),True)"]
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- recall
+- write_file: tests/test_zz_timing_probe.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=0']
+- read_file: pyproject.toml
+- read_file: tests/test_readme_install.py
+- write_file: tests/test_install.py
+- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=25']
+- read_file: tests/test_install.py
+- read_file: tests/test_zz_timing_probe.py
+- read_file: tests/test_install.py
+- run: ['sh', '-c', "cd /Users/okalistratov/Documents/sites/code && python -m pytest -q tests/test_install.py -k 'InstallerShellDetectionTest' -x 2>&1 | tail -60"]
 - read_file: tests/test_install.py
 - read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- write_file: tests/test_zz_timing_probe.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
+- write_file: tests/test_zz_probe2.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_probe2.py', '-s']
+- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=15']
+- read_file: tests/test_install.py
+- write_file: tests/test_install.py
+- read_file: install.sh
+- run: ['python', '-m', 'pytest', '-q', 'tests', '-x', '--durations=15']
+- delete_file: tests/test_zz_probe2.py
+- delete_file: tests/test_zz_timing_probe.py
+- run: ['python', '-m', 'pytest', '-q', 'tests']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only', '-q']
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only', '-q', '-k', 'remove_profile_block']
+- run: ['python', '-m', 'pytest', '-q', 'tests', '-rs', '--timeout=0']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only', '-q', '-k', 'unmatched_start_marker or removes_only_wellformed_block or orphan_end_marker or install_rerun_then_uninstall or is_idempotent']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only', '-q', '-k', 'test_remove_profile_block_unmatched_start_marker_leaves_file_unchanged or test_remove_profile_block_removes_only_wellformed_block or test_remove_profile_block_preserves_orphan_end_marker or test_install_rerun_then_uninstall_preserves_profile or test_remove_profile_block_is_idempotent']
+- run: ['python', '-m', 'pytest', '-q', 'tests']
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- list_files
+- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=40']
+- read_file: tests/test_install.py
