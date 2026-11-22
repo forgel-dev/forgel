@@ -261,10 +261,10 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-22T06:29:11+00:00",
-  "started_at": "2026-11-22T06:29:12+00:00",
-  "finished_at": "2026-11-22T06:45:09+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "Rewrote install.sh so it resolves the login shell without assuming bash, writes a duplicate-safe guarded PATH block into the profile an interactive login session actually reads, verifies it in a clean login shell under a portable watchdog, and reports a defined failure; extended tests/test_install.py with the required cases and aligned README.md. `python -m pytest -q tests/test_install.py` passed (36 passed) and `python -m pytest -q` passed (184 passed, 137 subtests) after the installer and test changes.; final test command exited 124",
     "files_changed": [
@@ -355,11 +355,15 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261122062911_make-install-sh-put-forgel-code-on-path-.md",
+    "rework_count": 1,
+    "feedback": [
+      "Rewrote install.sh so it resolves the login shell without assuming bash, writes a duplicate-safe guarded PATH block into the profile an interactive login session actually reads, verifies it in a clean login shell under a portable watchdog, and reports a defined failure; extended tests/test_install.py with the required cases and aligned README.md. `python -m pytest -q tests/test_install.py` passed (36 passed) and `python -m pytest -q` passed (184 passed, 137 subtests) after the installer and test changes.; final test command exited 124"
+    ],
+    "last_failure": {
       "kind": "qa",
       "message": "Rewrote install.sh so it resolves the login shell without assuming bash, writes a duplicate-safe guarded PATH block into the profile an interactive login session actually reads, verifies it in a clean login shell under a portable watchdog, and reports a defined failure; extended tests/test_install.py with the required cases and aligned README.md. `python -m pytest -q tests/test_install.py` passed (36 passed) and `python -m pytest -q` passed (184 passed, 137 subtests) after the installer and test changes.; final test command exited 124"
-    },
-    "report": "docs/program/agent/20261122062911_make-install-sh-put-forgel-code-on-path-.md"
+    }
   },
   "request": "docs/program/requests/20261122062911831737_make-install-sh-put-forgel-code-on-path-for-a-new-terminal.md"
 }
