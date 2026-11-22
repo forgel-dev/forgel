@@ -6,7 +6,7 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "running",
+  "status": "blocked",
   "tasks": [
     "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
     "20261122034544_release-audit-uninstall-no-longer-honors",
@@ -28,14 +28,16 @@
     }
   },
   "audit": {
-    "rounds": 1,
-    "verdict": "fail",
-    "summary": "The install/profile-selection and fresh-shell verification changes match the main requirements and the recorded suite passes, but --uninstall is incomplete. It only cleans six hard-coded files, so blocks written through the documented FORGEL_CODE_PROFILE override and legacy ~/.bashrc blocks from the previous installer are left behind. That breaks the uninstall contract and is a regression from the previous uninstall.",
+    "rounds": 2,
+    "verdict": "error",
+    "summary": "the audit could not run: model call exceeded the 300s deadline",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
-      "20261122025705_fix-install-sh-so-a-new-terminal-finds-f"
+      "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
+      "20261122034544_release-audit-uninstall-no-longer-honors",
+      "20261122034544_release-audit-uninstall-omits-bashrc-alt"
     ],
-    "at": "2026-11-22T03:45:44+00:00",
+    "at": "2026-11-22T04:04:29+00:00",
     "findings": [
       {
         "severity": "major",
@@ -53,5 +55,5 @@
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": ""
+  "detail": "the audit could not run: model call exceeded the 300s deadline"
 }

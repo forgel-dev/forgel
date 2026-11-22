@@ -230,10 +230,10 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-18T20:34:05+00:00",
-  "started_at": "2026-11-18T21:59:57+00:00",
-  "finished_at": "2026-11-18T22:00:28+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "repeated action loop: read_file:tests/test_cli.py::",
     "files_changed": [
@@ -328,12 +328,10 @@
       ]
     },
     "report": "docs/program/agent/20261118203405_forgel-code.md",
-    "attempts": 1,
-    "retry_after": "2026-11-18T20:47:31+00:00",
+    "attempts": 0,
     "last_failure": {
-      "kind": "qa",
-      "message": "task QA failed (exit 1)",
-      "retryable": false
+      "kind": "agent",
+      "message": "repeated action loop: read_file:tests/test_cli.py::"
     },
     "qa": {
       "status": "fail",
@@ -407,15 +405,12 @@
       ],
       "review_required": true
     },
-    "rework_count": 3,
+    "rework_count": 0,
     "feedback": [
       "QA check failed: A fake-engine test shows that after `forgel-code use <key>` each of status, tasks, task, say, plan, resume, pause, history, projects, session passes the project key to the engine, and that without `use` none of them passes `--project`. (exit 1)",
       "QA check failed: Building the sdist yields `forgel_code-<version>.tar.gz` with `forgel_code-<version>/PKG-INFO`; the wheel contains every package module and package data file; a packaging test asserts both. (exit 1)"
     ],
-    "failure": {
-      "kind": "agent",
-      "message": "repeated action loop: read_file:tests/test_cli.py::"
-    }
+    "manual_retries": 1
   },
   "request": "docs/program/requests/20261118203405113659_forgel-code.md"
 }
