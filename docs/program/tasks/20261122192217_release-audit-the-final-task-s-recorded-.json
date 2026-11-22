@@ -1,18 +1,41 @@
 {
   "id": "20261122192217_release-audit-the-final-task-s-recorded-",
   "title": "Release audit: The final task's recorded test run shows only `timed out after 120s` and partial",
-  "spec": "",
+  "spec": "docs/program/specs/20261122192217_release-audit-the-final-task-s-recorded-.md",
   "summary": "Run the complete suite with an adequate timeout, fix or shorten any slow/hanging bounded-check tests (for example by setting a short `FORGEL_CODE_TIMEOUT` in those tests), and record the completed passing output.",
   "requirements": [
-    "The final task's recorded test run shows only `timed out after 120s` and partial progress, with no completed passing suite. The acceptance criterion that the full repository test suite passes is therefore not evidenced, so a required check is left unverified."
+    "R1. From the repository root, `python -m unittest discover -s tests` exits 0 and reports `OK` with 0 failures and 0 errors.",
+    "R2. That run completes in less than 120 seconds of wall clock, verified by running it under `timeout 120`.",
+    "R3. No test method, assertion, fixture check or scenario is removed, skipped or relaxed: the number of executed test methods is not lower than at the parent commit and the number of skips is not higher.",
+    "R4. Every installer scenario still runs the real `install.sh` with a real pip install into a temporary HOME and a real detected login shell: install, re-install (exactly one marked block), `--uninstall`, the `FORGEL_CODE_NO_MODIFY_PATH` opt-out, profile byte stability, and the fresh-login-shell check that resolves `forgel-code` to the written launcher.",
+    "R5. Wall time is recovered only by removing duplication: one client install per scenario group instead of one per test, shared read-only build artefacts, and bounded-wait tests configured below the product default instead of waiting the full default limit per case.",
+    "R6. Tests stay independent of each other: each test module passes when run on its own, and no test observes installation or profile state left by another test.",
+    "R7. The default command runs the whole suite; no environment variable, marker or default option excludes any test from `unittest discover` or `pytest -q`.",
+    "R8. The README `## Tests` section states the suite's runtime bound and that the documented command runs the whole suite.",
+    "R9. CHANGELOG.md records the change under `[Unreleased]`.",
+    "R10. Before changing code, the measured per-module or per-test durations that identify where the wall time goes are recorded, so the reduction is a diagnosis and not a guess."
   ],
   "acceptance": [
-    "The release audit finding is resolved: The final task's recorded test run shows only `timed out after 120s` and partial progress, with no completed passing suite. The acceptance criterion that the full repository test suite passes is therefore not evidenced, so a required check is left unverified.",
-    "Existing tests pass"
+    "AC1. `python -m unittest discover -s tests` finishes with exit code 0 and `OK`, without failures or errors.",
+    "AC2. The same command still exits 0 when wrapped in `timeout 120`, i.e. the complete suite fits the bound the release audit applies.",
+    "AC3. The diff removes no test method, assertion or scenario and adds no skip, xfail or default opt-out: the executed-test count does not drop and the skipped count does not rise compared with the parent commit (reviewed on the diff together with the run output).",
+    "AC4. The real installer scenarios still pass one by one: `python -m unittest tests.test_install -v` exits 0 and its output shows the install, re-install, uninstall, opt-out, byte-stability and fresh-login-shell cases running.",
+    "AC5. Test modules remain independently runnable: `python -m unittest tests.test_cli -v` and the other modules each exit 0 on their own.",
+    "AC6. The README `## Tests` section states the runtime bound of the default suite.",
+    "AC7. CHANGELOG.md `[Unreleased]` records the change.",
+    "AC8. The task report carries the measured before/after durations that justify the bound is met (review).",
+    "AC9. The next recorded release audit run of this repository shows a completed, passing suite instead of `timed out after 120s` (verified on the audit output, not in this repository)."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
@@ -20,12 +43,106 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "AC1 and AC2: the full suite exits 0 and fits the 120 s bound",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "timeout 120 python -m unittest discover -s tests"
+      ]
+    },
+    {
+      "criterion": "AC4: the real installer scenarios still run and pass individually",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "AC5: test modules remain independently runnable",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "AC6: the README Tests section states the runtime bound",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "sed -n '/^## Tests/,/^## /p' README.md | grep -Eiq 'minute|120'"
+      ]
+    },
+    {
+      "criterion": "AC7: CHANGELOG [Unreleased] records the change",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "sed -n '/## \\[Unreleased\\]/,/## \\[0.1.0\\]/p' CHANGELOG.md | grep -Eiq 'suite|tests'"
+      ]
+    },
+    {
+      "criterion": "AC3: no test method, assertion, scenario or skip was weakened",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "AC8: measured before/after durations justify that the bound is met",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "Forgel release audit runner (runtime tool that records the test run)",
+      "interface": "Owned by the Forgel runtime, not by repository code: the runtime's release-audit stage executes the repository's declared test command, captures stdout/stderr as the release evidence, and terminates the run when its per-run time bound (observed: 120 s) elapses. Deterministic use from the repository side is therefore indirect: expose exactly one declared, fast, deterministic test entry point (AGENTS.md 'Change Workflow' step 4: `make test`) that exits 0 well inside the bound and produces progress output as it goes; unit tests must never invoke or depend on the runner itself, and any simulated runner belongs in a test fixture, never in product code.",
+      "docs": "FORGEL.md (Releases; Runtime Process Model), AGENTS.md (Release Rules; Change Workflow)",
+      "mode": "direct",
+      "evidence": "FORGEL.md 'Releases': 'A release without its audit is not published'; AGENTS.md 'Release Rules' repeats it, and 'Change Workflow' step 4 declares the repository test command as `make test` (with `make lint`). The runner's existence and its 120 s per-run bound are recorded in this task's release-audit output: the final recorded test run shows only `timed out after 120s` with partial progress and no completed passing suite.",
+      "stub": ""
+    },
+    {
+      "name": "pip (Python packaging)",
+      "interface": "`python -m pip install --no-index --target <dir> <checkout>` executed offline by the repository's `install.sh`, followed by assertions in the unittest suite on the installed distribution: entry-point metadata (`Requires-Dist`, `Provides-Extra`) and the console script `forgel-code` written into the target's bin directory, which must be executable and importable from the target.",
+      "docs": "https://pip.pypa.io/en/stable/",
+      "mode": "direct",
+      "evidence": "The repository's `install.sh` is the offline installation entry point (`python -m pip install --no-index --target`-style installation of the checkout) and the test suite invokes the same pip path and asserts the resulting metadata and the `forgel-code` console script; project AGENTS.md 'Layout' declares `tests/` as the `unittest` suite and `environment.yaml` as the environment contract covering build, commands and env.",
+      "stub": ""
+    },
+    {
+      "name": "POSIX login shell (sh, zsh, bash)",
+      "interface": "Each shell in the supported set is started as `<shell> -l -i -c 'command -v forgel-code'` from a cleared environment (inherited PATH removed) so that only the profile block written by `install.sh` can resolve the launcher; exit status 0 with an absolute path on stdout is the pass condition, non-zero or empty stdout is a failure. Shells absent from the image are skipped by the test matrix rather than failing it.",
+      "docs": "https://pubs.opengroup.org/onlinepubs/9699919799/utilities/sh.html ; https://www.gnu.org/software/bash/manual/ ; https://zsh.sourceforge.io/Doc/",
+      "mode": "direct",
+      "evidence": "`install.sh` writes the PATH/profile block for the launcher, and the test invokes `<shell> -l -i -c 'command -v forgel-code'` from a cleared environment to prove the block puts the launcher on PATH; the project AGENTS.md 'Change Workflow' requires the suite to run against the installed checkout, and `environment/` plus `environment.yaml` define the shells available in the sandbox image.",
+      "stub": ""
+    },
+    {
+      "name": "GNU coreutils timeout",
+      "interface": "`timeout [OPTION] DURATION COMMAND [ARG]...`, used as `timeout 120 <repository test command>` in the acceptance check to prove the full suite exits 0 within the 120 s bound. Exit status 0 means the suite finished in time; exit status 124 means the bound elapsed and the check must be treated as a failure, with the partial output kept as evidence.",
+      "docs": "https://www.gnu.org/software/coreutils/manual/html_node/timeout-invocation.html",
+      "mode": "direct",
+      "evidence": "The acceptance criterion 'the full repository test suite passes' is checked by wrapping the declared test command (`make test`, AGENTS.md 'Change Workflow' step 4) in `timeout 120`; the current recorded run shows the suite reaching the bound and being cut off (`timed out after 120s` with partial progress), which is exactly the exit-124 case the command distinguishes.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-22T19:22:17+00:00",
-  "started_at": "",
+  "started_at": "2026-11-22T21:24:59+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
