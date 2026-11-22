@@ -193,6 +193,8 @@
   "chat_plan_checks": " ({count} checks)",
   "chat_plan_dry_run": "(dry run; no tasks created)",
   "chat_plan_queued": "The daemon runs them in order; a task waits for its dependencies.",
+  "chat_plan_blocked": "The plan is recorded, but these items need your decision before work can continue:\n{blockers}\nTell me for each whether to do it, at which stage, and with what scope.",
+  "chat_plan_blocked_task": " — needs your decision",
   "chat_sole": "sole",
   "chat_peak_usage": "Usage: /peak [always|off_peak]",
   "chat_config_secrets_header": "Secrets:",

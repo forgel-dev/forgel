@@ -1569,6 +1569,10 @@ class CommandRouter:
                 if checks
                 else ""
             )
+            if item.get("blocked"):
+                suffix += self._text(
+                    chat_id, "chat_plan_blocked_task"
+                )
             lines.append(
                 self._text(
                     chat_id,
@@ -1581,7 +1585,18 @@ class CommandRouter:
                     suffix=suffix,
                 )
             )
-        if dry_run:
+        blockers = list(getattr(result, "blockers", []) or [])
+        if blockers:
+            lines.append(
+                self._text(
+                    chat_id,
+                    "chat_plan_blocked",
+                    blockers="\n".join(
+                        f"- {item}" for item in blockers
+                    ),
+                )
+            )
+        elif dry_run:
             lines.append(self._text(chat_id, "chat_plan_dry_run"))
         else:
             lines.append(self._text(chat_id, "chat_plan_queued"))

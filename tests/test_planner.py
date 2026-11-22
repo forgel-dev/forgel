@@ -209,7 +209,7 @@ class PlannerTest(unittest.TestCase):
         )
         self.assertIn("spec:", artifact)
 
-    def test_plan_review_rejects_an_insufficient_plan(self) -> None:
+    def test_plan_review_records_an_insufficient_plan_as_blocked(self) -> None:
         specs = [_spec_for(item) for item in PLAN["tasks"]]
         revised = _spec_for(PLAN["tasks"][0])
         revised["requirements"] = ["Deliver the revised outcome"]
@@ -237,16 +237,24 @@ class PlannerTest(unittest.TestCase):
                 ),
             ]
         )
-        with self.assertRaises(PlanningError):
-            plan_project(
-                self.settings,
-                self.ledger,
-                self.project,
-                "Bring the project to M1",
-                client=client,
-                log=lambda _m: None,
-            )
-        self.assertEqual(list_tasks(self.layout), [])
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        self.assertTrue(result.blocked)
+        self.assertIn("still missing", " ".join(result.blockers))
+        tasks = list_tasks(self.layout)
+        self.assertEqual(len(tasks), 2)
+        self.assertTrue(
+            all(task["status"] == "blocked" for task in tasks)
+        )
+        self.assertTrue(
+            (self.layout.root / result.artifact).exists()
+        )
 
     def test_plan_review_can_be_revised(self) -> None:
         specs = [_spec_for(item) for item in PLAN["tasks"]]
@@ -429,16 +437,16 @@ class PlannerTest(unittest.TestCase):
         client = ScriptedModelClient(
             [json.dumps(PLAN), json.dumps(first), json.dumps(scout)]
         )
-        with self.assertRaises(PlanningError) as ctx:
-            plan_project(
-                self.settings,
-                self.ledger,
-                self.project,
-                "Bring the project to M1",
-                client=client,
-                log=lambda _m: None,
-            )
-        self.assertIn("weather", str(ctx.exception))
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        self.assertTrue(result.blocked)
+        self.assertIn("weather", " ".join(result.blockers))
 
     def test_spec_writer_recovers_from_tool_call_markup(self) -> None:
         markup = "<｜｜DSML｜｜ calls>"
@@ -463,22 +471,22 @@ class PlannerTest(unittest.TestCase):
         )
         self.assertEqual(len(result.tasks), 2)
 
-    def test_a_spec_failure_reports_the_writer_log(self) -> None:
+    def test_a_spec_failure_is_recorded_as_a_blocked_task(self) -> None:
         markup = "<｜｜DSML｜｜ calls>"
         client = ScriptedModelClient(
             [json.dumps(PLAN)] + [markup] * 5
         )
-        with self.assertRaises(PlanningError) as ctx:
-            plan_project(
-                self.settings,
-                self.ledger,
-                self.project,
-                "Bring the project to M1",
-                client=client,
-                dry_run=True,
-                log=lambda _m: None,
-            )
-        text = str(ctx.exception)
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            dry_run=True,
+            log=lambda _m: None,
+        )
+        text = " ".join(result.blockers) + " " + result.notes
+        self.assertTrue(result.blocked)
         self.assertIn(PLAN["tasks"][0]["title"], text)
         self.assertIn("model calls:", text)
         self.assertIn("last model output:", text)
@@ -538,7 +546,7 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(result.artifact, "")
         self.assertEqual(list_tasks(self.layout), [])
 
-    def test_a_task_without_checks_is_rejected(self) -> None:
+    def test_a_task_without_checks_is_recorded_as_blocked(self) -> None:
         payload = {
             "tasks": [
                 {
@@ -549,17 +557,21 @@ class PlannerTest(unittest.TestCase):
                 }
             ]
         }
-        with self.assertRaises(PlanningError):
-            self._plan(
-                payload,
-                specs=[
-                    {
-                        "requirements": ["x"],
-                        "acceptance": ["y"],
-                        "checks": [],
-                    }
-                ],
-            )
+        result = self._plan(
+            payload,
+            specs=[
+                {
+                    "requirements": ["x"],
+                    "acceptance": ["y"],
+                    "checks": [],
+                }
+            ],
+        )
+        self.assertTrue(result.blocked)
+        self.assertTrue(result.blockers)
+        tasks = list_tasks(self.layout)
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["status"], "blocked")
 
     def test_a_review_only_check_is_accepted(self) -> None:
         payload = {
@@ -703,9 +715,9 @@ class PlannerTest(unittest.TestCase):
                 }
             ],
         }
-        with self.assertRaises(PlanningError) as caught:
-            self._plan(payload)
-        self.assertIn("needs a program e2e", str(caught.exception))
+        result = self._plan(payload)
+        self.assertTrue(result.blocked)
+        self.assertIn("needs a program e2e", " ".join(result.blockers))
 
     def test_an_existing_interacting_project_requires_e2e(self) -> None:
         set_entries(
@@ -727,9 +739,9 @@ class PlannerTest(unittest.TestCase):
                 },
             ],
         )
-        with self.assertRaises(PlanningError) as caught:
-            self._plan()
-        self.assertIn("needs a program e2e", str(caught.exception))
+        result = self._plan()
+        self.assertTrue(result.blocked)
+        self.assertIn("needs a program e2e", " ".join(result.blockers))
 
     def test_a_mobile_project_defers_e2e_instead_of_blocking(self) -> None:
         set_entries(

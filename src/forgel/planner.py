@@ -70,6 +70,8 @@ class PlanResult:
     artifact: str = ""
     release_id: str = ""
     dry_run: bool = False
+    blocked: bool = False
+    blockers: list[str] = field(default_factory=list)
 
 
 def _now() -> str:
@@ -491,6 +493,48 @@ def _spec_call(func, *args, **kwargs):
         raise PlanningError(str(exc)) from exc
 
 
+def _blocked_spec(
+    intent: Mapping[str, Any], error: Exception
+) -> dict[str, Any]:
+    """A specification placeholder for a task that needs a decision."""
+
+    title = str(intent.get("title") or "Task")
+    reason = str(error)
+    summary = str(intent.get("summary") or "").strip()
+    return {
+        "title": title,
+        "summary": summary,
+        "repo_id": str(intent.get("repo_id") or ""),
+        "depends_on": list(intent.get("depends_on") or []),
+        "problem": summary or title,
+        "outcome": (
+            "The owner decides this task's scope before it can be "
+            "implemented."
+        ),
+        "product_intent": "",
+        "user_experience": "",
+        "scope": [],
+        "non_goals": [],
+        "requirements": [],
+        "acceptance": [],
+        "constraints": ["Blocked on a product decision"],
+        "assumptions": [],
+        "external_dependencies": [],
+        "risks": [reason],
+        "goals": [],
+        "user_decisions": [],
+        "user_stories": [],
+        "open_questions": [reason],
+        "affected_files": [],
+        "related_documents": [],
+        "revision_history": [
+            "1.0.0 — blocked: the specification needs a decision"
+        ],
+        "checks": [],
+        "test_command": [],
+    }
+
+
 def _task_error(
     item: Mapping[str, Any], index: int, exc: PlanningError
 ) -> PlanningError:
@@ -566,9 +610,12 @@ def plan_project(
     except Exception as exc:  # noqa: BLE001 - the contract is project data
         raise PlanningError(f"environment contract: {exc}") from exc
     problem = integration_problem(layout, environment)
+    early_blockers: list[str] = []
     if problem:
-        raise PlanningError(problem)
+        early_blockers.append(problem)
+        log(f"[plan] {project['id']}: {problem}")
     deferred = integration_warning(layout, environment)
+    early_deferred = deferred
     if deferred:
         log(f"[plan] {project['id']}: {deferred}")
     policy = peak.project_policy(settings, layout.control)
@@ -705,11 +752,20 @@ def plan_project(
     notes, items, repositories = parsed
     if intent_note:
         notes = intent_note + notes
+    blockers: list[str] = list(early_blockers)
+    global_blocked = bool(early_blockers)
+    if early_deferred:
+        notes = notes + "\n\n## Integration deferred\n\n" + early_deferred
+    for blocker in early_blockers:
+        notes = notes + "\n\n## Blocked\n\n" + blocker
     problem = integration_problem(layout, environment, repositories)
-    if problem:
-        raise PlanningError(problem)
+    if problem and problem not in blockers:
+        global_blocked = True
+        blockers.append(problem)
+        notes = notes + "\n\n## Blocked\n\n" + problem
+        log(f"[plan] {project['id']}: {problem}")
     deferred = integration_warning(layout, environment, repositories)
-    if deferred:
+    if deferred and deferred != early_deferred:
         notes = notes + "\n\n## Integration deferred\n\n" + deferred
         log(f"[plan] {project['id']}: {deferred}")
     plan_id = _plan_id(goal)
@@ -736,13 +792,35 @@ def plan_project(
                 spec = _spec_call(specs.write_task_spec,
                     settings, layout, goal, notes, item, model_client, log
                 )
+                spec = _dependency_call(
+                    layout, item, spec, model_client, log
+                )
             except PlanningError as exc:
-                raise _task_error(item, index + 1, exc) from exc
-            spec = _dependency_call(
-                layout, item, spec, model_client, log
-            )
+                blocked = _blocked_spec(item, exc)
+                blocked["blocked"] = str(exc)
+                preview.append(blocked)
+                global_blocked = True
+                blockers.append(f"task {item.get('title')}: {exc}")
+                continue
             preview.append(dict(spec))
-        review = _spec_call(specs.review_plan, 
+        if blockers or global_blocked:
+            notes = (
+                notes
+                + "\n\n## Plan review\n\n"
+                + "Skipped: the plan has blocked tasks that need a decision."
+            )
+            return PlanResult(
+                plan_id=plan_id,
+                goal=goal,
+                notes=notes,
+                tasks=preview,
+                repositories=repositories,
+                release_id=release_id,
+                dry_run=True,
+                blocked=True,
+                blockers=blockers,
+            )
+        review = _spec_call(specs.review_plan,
             layout, goal, notes, preview, model_client, log
         )
         notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
@@ -754,32 +832,61 @@ def plan_project(
             repositories=repositories,
             release_id=release_id,
             dry_run=True,
+            blocked=bool(blockers),
+            blockers=blockers,
         )
 
-    _apply_repositories(settings, ledger, project, repositories)
+    if not global_blocked:
+        try:
+            _apply_repositories(settings, ledger, project, repositories)
+        except PlanningError as exc:
+            global_blocked = True
+            blockers.append(str(exc))
+            notes = notes + "\n\n## Blocked\n\n" + str(exc)
+            log(f"[plan] {project['id']}: {exc}")
     task_specs: list[dict[str, Any]] = []
+    blocked_tasks: set[int] = set()
     for index, item in enumerate(items):
         log(f"[spec] task {index + 1}/{len(items)}: writing")
         try:
             spec = _spec_call(specs.write_task_spec,
                 settings, layout, goal, notes, item, model_client, log
             )
-        except PlanningError as exc:
-            raise PlanningError(
-                f"task {item.get('title') or index + 1}: {exc}"
-            ) from exc
-        task_specs.append(
-            _dependency_call(
+            spec = _dependency_call(
                 layout, item, spec, model_client, log
             )
+        except PlanningError as exc:
+            blockers.append(f"task {item.get('title')}: {exc}")
+            blocked_tasks.add(index)
+            blocked = _blocked_spec(item, exc)
+            blocked["blocked"] = str(exc)
+            task_specs.append(blocked)
+            notes = (
+                notes
+                + "\n\n## Blocked task\n\n"
+                + f"{item.get('title')}: {exc}"
+            )
+            log(f"[plan] {project['id']}: task blocked: {exc}")
+            continue
+        task_specs.append(spec)
+    if blockers or global_blocked or blocked_tasks:
+        review = None
+    else:
+        review = _spec_call(
+            specs.review_plan,
+            layout,
+            goal,
+            notes,
+            task_specs,
+            model_client,
+            log,
         )
-    review = _spec_call(specs.review_plan, 
-        layout, goal, notes, task_specs, model_client, log
-    )
-    if not review.sufficient:
+    if review is not None and not review.sufficient:
         log("[plan] review found gaps; revising the specifications")
         for finding in review.findings:
             position = int(finding.get("task", -1))
+            if position in blocked_tasks:
+                continue
             if 0 <= position < len(items):
                 try:
                     revised = _spec_call(specs.write_task_spec,
@@ -793,9 +900,19 @@ def plan_project(
                         review_issue=str(finding.get("issue") or ""),
                     )
                 except PlanningError as exc:
-                    raise _task_error(
-                        items[position], position + 1, exc
-                    ) from exc
+                    blockers.append(
+                        f"task {items[position].get('title')}: {exc}"
+                    )
+                    blocked_tasks.add(position)
+                    blocked = _blocked_spec(items[position], exc)
+                    blocked["blocked"] = str(exc)
+                    task_specs[position] = blocked
+                    notes = (
+                        notes
+                        + "\n\n## Blocked task\n\n"
+                        + f"{items[position].get('title')}: {exc}"
+                    )
+                    continue
                 task_specs[position] = _dependency_call(
                     layout,
                     items[position],
@@ -803,18 +920,35 @@ def plan_project(
                     model_client,
                     log,
                 )
-        review = _spec_call(specs.review_plan, 
-            layout, goal, notes, task_specs, model_client, log
-        )
-    if not review.sufficient:
+        if blockers or blocked_tasks or global_blocked:
+            review = None
+        else:
+            review = _spec_call(specs.review_plan,
+                layout, goal, notes, task_specs, model_client, log
+            )
+    if review is not None and not review.sufficient:
+        global_blocked = True
         details = "; ".join(
             f"task {item.get('task')}: {item.get('issue')}"
             for item in review.findings
         ) or "no findings"
-        raise PlanningError(
-            "the plan does not solve the stated problem: " + details
+        blockers.append(
+            "the plan review found gaps: " + details
         )
-    notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
+        notes = (
+            notes
+            + "\n\n## Plan review findings\n\n"
+            + details
+        )
+        log("[plan] review gaps recorded; the plan is written as blocked")
+    if review is not None:
+        notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
+    else:
+        notes = (
+            notes
+            + "\n\n## Plan review\n\n"
+            + "Skipped: the plan has blocked tasks that need a decision."
+        )
 
     created: list[dict[str, Any]] = []
     task_records: list[dict[str, Any]] = []
@@ -843,6 +977,21 @@ def plan_project(
             release_class=release_class,
             summary=str(item.get("summary") or ""),
         )
+        blocked_reason = str(spec.get("blocked") or "")
+        if not blocked_reason and global_blocked:
+            blocked_reason = (
+                "; ".join(blockers) or "the plan needs a decision"
+            )
+        if blocked_reason:
+            task = tasks.update_task(
+                layout,
+                ids[index],
+                status="blocked",
+                result={
+                    "summary": "blocked: " + blocked_reason,
+                    "blocked_by": "decision",
+                },
+            )
         write_text(
             layout.artifact(spec_ref),
             specs.render_spec(
@@ -860,6 +1009,7 @@ def plan_project(
                 "task_id": ids[index],
                 "spec": spec_ref,
                 "depends_on": dependencies,
+                "blocked": blocked_reason,
             }
         )
         task_records.append(task)
@@ -881,6 +1031,11 @@ def plan_project(
                 )
                 for check in item["checks"]
             )
+        )
+        + (
+            f"\n   - blocked: {item['blocked']}"
+            if item.get("blocked")
+            else ""
         )
         for index, item in enumerate(created, 1)
     )
@@ -942,7 +1097,10 @@ def plan_project(
         },
         generation=ledger.current_generation(str(project["id"])),
     )
-    log(f"[plan] {project['id']}: {len(created)} task(s) queued")
+    log(
+        f"[plan] {project['id']}: {len(created)} task(s) recorded"
+        + ("; plan blocked" if blockers else " and queued")
+    )
     return PlanResult(
         plan_id=plan_id,
         goal=goal,
@@ -951,4 +1109,6 @@ def plan_project(
         repositories=repositories,
         artifact=str(path.relative_to(layout.root)),
         release_id=release_id,
+        blocked=bool(blockers),
+        blockers=blockers,
     )
