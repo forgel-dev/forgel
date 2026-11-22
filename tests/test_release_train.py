@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from forgel.artifacts import write_text
 from forgel.config import Settings
+from forgel.controller import OPERATIONS
 from forgel.daemon import run_once
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
@@ -787,6 +788,156 @@ class ReleaseTrainTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "blocked")
         self.assertEqual(stored["detail"], question)
+
+    def test_the_release_state_tree(self) -> None:
+        defined = {
+            "planned",
+            "running",
+            "failed",
+            "partial",
+            "ready",
+            "finalizing",
+            "tagged",
+            "released",
+            "blocked",
+            "cancelled",
+        }
+        for release_status in (
+            "planned",
+            "running",
+            "failed",
+            "blocked",
+            "released",
+            "tagged",
+        ):
+            for task_state in ("pending", "review", "failed", "done"):
+                self.setUp()
+                release, task = self._release()
+                release["status"] = release_status
+                save_release(self.layout, release)
+                if task_state != "done":
+                    update_task(
+                        self.layout,
+                        str(task["id"]),
+                        status=task_state,
+                    )
+                client = ScriptedModelClient(
+                    [
+                        PASS_AUDIT,
+                        json.dumps(
+                            {"operation": "rework", "reason": "again"}
+                        ),
+                    ]
+                )
+
+                process_releases(
+                    self.settings,
+                    self.ledger,
+                    self.project,
+                    self.layout,
+                    client,
+                    log=lambda _m: None,
+                )
+
+                stored = load_release(
+                    self.layout, str(release["id"])
+                )
+                assert stored is not None
+                self.assertIn(
+                    stored["status"],
+                    defined,
+                    f"{release_status}/{task_state}",
+                )
+
+    def test_every_operation_leaves_a_valid_release_on_audit_findings(
+        self,
+    ) -> None:
+        for operation in OPERATIONS:
+            self.setUp()
+            release, _task = self._release()
+            client = ScriptedModelClient(
+                [
+                    FAIL_AUDIT,
+                    json.dumps(
+                        {
+                            "operation": operation,
+                            "reason": "a reason",
+                            "question": "a question",
+                        }
+                    ),
+                ]
+            )
+
+            process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                client,
+                log=lambda _m: None,
+            )
+
+            stored = load_release(self.layout, str(release["id"]))
+            assert stored is not None
+            self.assertIn(
+                stored["status"],
+                {"running", "blocked"},
+                operation,
+            )
+
+    def test_every_operation_leaves_a_valid_release_on_a_failed_task(
+        self,
+    ) -> None:
+        for operation in OPERATIONS:
+            self.setUp()
+            release, task = self._release()
+            update_task(
+                self.layout,
+                str(task["id"]),
+                status="failed",
+                result={
+                    "summary": "broken",
+                    "failure": {
+                        "kind": "qa",
+                        "message": "the test failed",
+                    },
+                },
+            )
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "operation": operation,
+                            "reason": "a reason",
+                            "question": "a question",
+                        }
+                    )
+                ]
+            )
+
+            process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                client,
+                log=lambda _m: None,
+            )
+
+            stored = load_release(self.layout, str(release["id"]))
+            assert stored is not None
+            self.assertIn(
+                stored["status"],
+                {"running", "blocked"},
+                operation,
+            )
+            again = get_task(self.layout, str(task["id"]))
+            assert again is not None
+            self.assertIn(
+                again["status"],
+                {"pending", "failed", "blocked"},
+                operation,
+            )
 
     def test_a_failed_release_task_goes_back_to_work(self) -> None:
         release, task = self._release()

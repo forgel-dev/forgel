@@ -13,7 +13,9 @@ from unittest.mock import patch
 from forgel import tasks
 from forgel.approvals import awaits_approval, record_approval
 from forgel.config import Settings
+from forgel.controller import OPERATIONS
 from forgel.daemon import (
+    _apply_controller_decision,
     _classify_crash,
     _feedback_from,
     handle_failure,
@@ -425,6 +427,65 @@ class DaemonTest(unittest.TestCase):
                 " ".join(stored["result"]["feedback"]),
             )
 
+    def test_every_operation_leaves_a_valid_task_state(self) -> None:
+        valid = {
+            "pending",
+            "blocked",
+            "cancelled",
+            "done",
+            "review",
+            "failed",
+        }
+        for operation in OPERATIONS:
+            with tempfile.TemporaryDirectory() as tmp:
+                settings, ledger, project, layout, task = (
+                    self._failed_task(tmp)
+                )
+                data = dict(task.get("result") or {})
+                failure = dict(data.get("failure") or {})
+                decision = SimpleNamespace(
+                    operation=operation,
+                    reason="a reason",
+                    summary="a summary",
+                    feedback=["a hint"],
+                    issue="a spec issue",
+                    question="a question",
+                )
+                with patch(
+                    "forgel.runtime_ops.run_operation",
+                    return_value="ran",
+                ), patch(
+                    "forgel.task_review.process_task_result"
+                ), patch(
+                    "forgel.daemon._rewrite_spec_from_failure",
+                    return_value=False,
+                ):
+                    applied = _apply_controller_decision(
+                        settings,
+                        ledger,
+                        project,
+                        layout,
+                        task,
+                        str(task["id"]),
+                        data,
+                        failure,
+                        0,
+                        ScriptedModelClient([]),
+                        decision,
+                        lambda _m: None,
+                    )
+                stored = get_task(layout, str(task["id"]))
+                assert stored is not None
+                self.assertTrue(
+                    applied,
+                    f"{operation} did not apply",
+                )
+                self.assertIn(
+                    stored["status"],
+                    valid,
+                    f"{operation} left {stored['status']}",
+                )
+
     def test_an_ineffective_step_returns_to_the_controller(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings, ledger, project, layout, task = (
@@ -466,6 +527,40 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(stored["status"], "pending")
             self.assertEqual(
                 stored["result"]["feedback"], ["Add the test"]
+            )
+
+    def test_the_controller_loop_has_a_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, ledger, project, layout, task = (
+                self._failed_task(tmp)
+            )
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {"operation": "task_qa", "reason": "again"}
+                    )
+                ]
+                * 11
+            )
+            with patch(
+                "forgel.runtime_ops.run_task_qa",
+                return_value=SimpleNamespace(status="pass"),
+            ):
+                handle_failure(
+                    settings,
+                    ledger,
+                    project,
+                    layout,
+                    task["id"],
+                    client,
+                    lambda _m: None,
+                )
+
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "failed")
+            self.assertIn(
+                "did not resolve", stored["result"]["summary"]
             )
 
     def test_the_controller_asks_the_owner_as_the_last_resort(self) -> None:
