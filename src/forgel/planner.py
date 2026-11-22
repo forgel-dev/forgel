@@ -171,6 +171,25 @@ def _slug(value: str) -> str:
     return slug[:40] or "goal"
 
 
+def _integration_intent(
+    problem: str, repositories: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """The plan task that turns a missing program e2e into real work."""
+
+    known = [
+        str(entry.get("id") or "")
+        for entry in repositories
+        if str(entry.get("id") or "").strip()
+    ]
+    repo_id = "main" if "main" in known else (known[0] if known else "")
+    return {
+        "title": "Declare the program e2e for the interacting repositories",
+        "summary": problem,
+        "repo_id": repo_id,
+        "depends_on": [],
+    }
+
+
 def _plan_id(goal: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     return f"{stamp}_{_slug(goal)}"
@@ -612,7 +631,8 @@ def plan_project(
     problem = integration_problem(layout, environment)
     early_blockers: list[str] = []
     if problem:
-        early_blockers.append(problem)
+        # A missing e2e declaration is work in this plan, not a question for
+        # the owner. The plan carries a task for it below.
         log(f"[plan] {project['id']}: {problem}")
     deferred = integration_warning(layout, environment)
     early_deferred = deferred
@@ -759,11 +779,12 @@ def plan_project(
     for blocker in early_blockers:
         notes = notes + "\n\n## Blocked\n\n" + blocker
     problem = integration_problem(layout, environment, repositories)
-    if problem and problem not in blockers:
-        global_blocked = True
-        blockers.append(problem)
-        notes = notes + "\n\n## Blocked\n\n" + problem
+    if problem:
+        notes = notes + "\n\n## Integration work\n\n" + problem
         log(f"[plan] {project['id']}: {problem}")
+        items = [
+            _integration_intent(problem, [*repos, *repositories])
+        ] + items
     deferred = integration_warning(layout, environment, repositories)
     if deferred and deferred != early_deferred:
         notes = notes + "\n\n## Integration deferred\n\n" + deferred

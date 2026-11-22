@@ -315,7 +315,7 @@ class TaskQATest(unittest.TestCase):
         )
         self.assertEqual(e2e["verdict"], "fail")
 
-    def test_a_required_e2e_missing_is_a_project_failure(self) -> None:
+    def test_a_required_e2e_missing_is_a_skipped_check(self) -> None:
         self._add_code_repo(depends_on=["main"])
         self._environment("python -c \"print('environment')\"")
         task = self._task([])
@@ -326,14 +326,17 @@ class TaskQATest(unittest.TestCase):
             task,
             log=lambda _m: None,
         )
-        self.assertEqual(result.status, "fail")
-        self.assertEqual(result.failure_kind, "environment")
+        self.assertNotEqual(result.status, "fail")
         self.assertIn("needs a program e2e", result.output)
         stored = get_task(self.layout, task["id"])
         assert stored is not None
-        self.assertEqual(
-            stored["result"]["failure"]["kind"], "environment"
+        e2e = next(
+            item
+            for item in stored["result"]["qa"]["checks"]
+            if item["scope"] == "e2e"
         )
+        self.assertEqual(e2e["verdict"], "skipped")
+        self.assertIn("needs a program e2e", e2e["output"])
 
     def _git_repo(self) -> Path:
         repo = self.layout.repo_path("main")

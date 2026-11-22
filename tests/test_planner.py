@@ -715,9 +715,27 @@ class PlannerTest(unittest.TestCase):
                 }
             ],
         }
-        result = self._plan(payload)
-        self.assertTrue(result.blocked)
-        self.assertIn("needs a program e2e", " ".join(result.blockers))
+        client = self._client(
+            payload,
+            specs=[_spec_for(payload["tasks"][0])] * 2,
+        )
+        with patch("forgel.planner.add_repository"), patch(
+            "forgel.planner.create_repository"
+        ):
+            result = plan_project(
+                self.settings,
+                self.ledger,
+                self.project,
+                "Bring the project to M1",
+                client=client,
+                log=lambda _m: None,
+            )
+        self.assertFalse(result.blocked)
+        self.assertIn("needs a program e2e", result.notes)
+        titles = " ".join(
+            str(item.get("title") or "") for item in result.tasks
+        )
+        self.assertIn("Declare the program e2e", titles)
 
     def test_an_existing_interacting_project_requires_e2e(self) -> None:
         set_entries(
@@ -739,9 +757,15 @@ class PlannerTest(unittest.TestCase):
                 },
             ],
         )
-        result = self._plan()
-        self.assertTrue(result.blocked)
-        self.assertIn("needs a program e2e", " ".join(result.blockers))
+        result = self._plan(
+            specs=[_spec_for(PLAN["tasks"][0])] * 3
+        )
+        self.assertFalse(result.blocked)
+        self.assertIn("needs a program e2e", result.notes)
+        titles = " ".join(
+            str(item.get("title") or "") for item in result.tasks
+        )
+        self.assertIn("Declare the program e2e", titles)
 
     def test_a_mobile_project_defers_e2e_instead_of_blocking(self) -> None:
         set_entries(

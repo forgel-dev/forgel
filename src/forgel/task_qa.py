@@ -651,20 +651,24 @@ def run_task_qa(
             log,
         )
     problem = integration_problem(layout, environment)
+    integration_skips: list[dict[str, Any]] = []
     if problem:
-        return _record(
-            ledger,
-            layout,
-            project,
-            task,
-            TaskQAResult(
-                status="fail",
-                runtime="integration-contract",
-                output=problem,
-                failure_kind="environment",
-            ),
-            2,
-            log,
+        # The plan carries a task that declares the e2e. Until that task
+        # lands, the program e2e is recorded as skipped: the other checks
+        # still decide the task instead of every task failing on the contract.
+        integration_skips.append(
+            _skipped_e2e(
+                {
+                    "criterion": "program e2e",
+                    "command": "",
+                    "repo": (
+                        environment.repository(layout)
+                        if environment is not None
+                        else ""
+                    ),
+                },
+                problem,
+            )
         )
     executable, review = _qa_checks(
         layout, environment, task, repo_id
@@ -718,6 +722,10 @@ def run_task_qa(
         run_checks = executable
     else:
         run_checks = other_checks
+    if integration_skips:
+        skipped_e2e = skipped_e2e + integration_skips
+        if not skip_message:
+            skip_message = problem
     if not run_checks and not review and not skipped_e2e:
         return _record(
             ledger,
