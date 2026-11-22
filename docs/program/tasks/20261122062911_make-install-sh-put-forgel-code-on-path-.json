@@ -41,7 +41,7 @@
   ],
   "plan_id": "",
   "plan_goal": "",
-  "release_id": "20261122062911837496_make-install-sh-put-forgel-code-on-path-for-a-ne",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
   "release_class": "patch",
   "order": 0,
   "depends_on": [],

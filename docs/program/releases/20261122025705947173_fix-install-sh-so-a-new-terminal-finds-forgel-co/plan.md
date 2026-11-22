@@ -3,7 +3,7 @@
 - Project: `forgel-1d2bf685`
 - Request: Fix install.sh so a new terminal finds forgel-code on PATH
 - Class: patch
-- Status: blocked
+- Status: running
 - Created: 2026-11-22T02:57:06+00:00
 
 
@@ -23,6 +23,6 @@ The installer currently completes while the launcher directory never reaches PAT
 
 ## Audit
 
-- Rounds: 2
-- Verdict: error
+- Rounds: 0
+- Verdict: not run
 - Report: `docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md`
