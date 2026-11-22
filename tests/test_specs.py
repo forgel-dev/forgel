@@ -11,7 +11,7 @@ from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
-from forgel.specs import SpecError, write_task_spec
+from forgel.specs import MAX_SPEC_RETRIES, SpecError, write_task_spec
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -181,7 +181,7 @@ class SpecCheckValidationTest(unittest.TestCase):
             }
         ]
         client = ScriptedModelClient(
-            [json.dumps(invalid), json.dumps(invalid)]
+            [json.dumps(invalid)] * (MAX_SPEC_RETRIES + 1)
         )
         with self.assertRaises(SpecError) as caught:
             write_task_spec(

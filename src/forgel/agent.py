@@ -837,7 +837,10 @@ def _looks_like_tool_markup(text: str) -> bool:
             "<｜｜dsml｜｜",
             "<|",
             "<tool_call",
+            "<tool_result",
             "<function_call",
+            "<parameter",
+            "</invoke>",
             "<system_warning",
         )
     )

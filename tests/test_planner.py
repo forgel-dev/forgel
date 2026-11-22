@@ -474,7 +474,7 @@ class PlannerTest(unittest.TestCase):
     def test_a_spec_failure_is_recorded_as_a_blocked_task(self) -> None:
         markup = "<｜｜DSML｜｜ calls>"
         client = ScriptedModelClient(
-            [json.dumps(PLAN)] + [markup] * 5
+            [json.dumps(PLAN)] + [markup] * 12
         )
         result = plan_project(
             self.settings,

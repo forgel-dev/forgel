@@ -30,6 +30,18 @@ from .repo_tools import RESEARCH_ACTIONS, RepoActionError, execute_repo_action
 
 MAX_SPEC_STEPS = 50
 MAX_SPEC_CHARS = 12_000
+MAX_SPEC_RETRIES = 5
+SPEC_KEYS = {
+    "problem",
+    "outcome",
+    "scope",
+    "non_goals",
+    "requirements",
+    "acceptance",
+    "constraints",
+    "checks",
+    "external_dependencies",
+}
 SPEC_DIR = "docs/program/specs"
 
 
@@ -314,10 +326,21 @@ def _looks_like_tool_markup(text: str) -> bool:
             "<｜｜dsml｜｜",
             "<|",
             "<tool_call",
+            "<tool_result",
             "<function_call",
+            "<parameter",
+            "</invoke>",
             "<system_warning",
         )
     )
+
+
+def _looks_like_spec(data: Mapping[str, Any]) -> bool:
+    """A candidate final answer must carry spec fields, not tool results."""
+
+    if str(data.get("kind") or "").strip().lower() == "spec":
+        return True
+    return bool(SPEC_KEYS & set(data))
 
 
 def _diagnostics(
@@ -402,7 +425,7 @@ def write_task_spec(
     markup_retries = 0
     research_paths: list[str] = []
     last_observation = ""
-    for _ in range(MAX_SPEC_STEPS + 4):
+    for _ in range(MAX_SPEC_STEPS + MAX_SPEC_RETRIES + 6):
         attempts += 1
         try:
             raw = client.complete(messages, model=model)
@@ -422,6 +445,7 @@ def write_task_spec(
             item
             for item in objects
             if str(item.get("action", "")) not in RESEARCH_ACTIONS
+            and _looks_like_spec(item)
         ]
         observations: list[str] = []
         for data in actions:
@@ -469,7 +493,7 @@ def write_task_spec(
                     raise SpecError("; ".join(problems))
                 break
             except SpecError as exc:
-                if retries >= 1:
+                if retries >= MAX_SPEC_RETRIES:
                     keys = sorted(finals[-1].keys())
                     raise SpecError(
                         _diagnostics(
@@ -498,20 +522,21 @@ def write_task_spec(
                 )
                 retries += 1
                 continue
-        if _looks_like_tool_markup(raw) and markup_retries < 2:
+        if _looks_like_tool_markup(raw) and markup_retries < MAX_SPEC_RETRIES:
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
                     "user",
                     "Return exactly one JSON specification object, not "
-                    "tool-call markup or XML. Do not emit "
-                    "<｜｜DSML｜｜>, <tool_call> or provider-specific calls.",
+                    "tool-call markup, tool results or XML. Do not emit "
+                    "<｜｜DSML｜｜>, <tool_call>, <tool_result>, "
+                    "<invoke>/<parameter> or provider-specific calls.",
                 )
             )
             markup_retries += 1
             continue
         if not actions:
-            if retries >= 1:
+            if retries >= MAX_SPEC_RETRIES:
                 raise SpecError(
                     _diagnostics(
                         intent,

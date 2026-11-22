@@ -1,0 +1,9 @@
+{
+  "name": "Session cases: release vocabulary and a concrete change",
+  "fixture": ".",
+  "snapshot": "14d8c6db63c55c89d7ac9f3ab555905af28406b0",
+  "messages": [
+    "Завершаем релиз Forgel Code",
+    "Добавь в проект файл CHANGELOG.md с описанием изменений"
+  ]
+}
