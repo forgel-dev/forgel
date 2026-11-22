@@ -200,13 +200,252 @@
     }
   ],
   "language": "ru",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-22T02:57:05+00:00",
   "started_at": "2026-11-22T03:16:51+00:00",
-  "finished_at": "",
+  "finished_at": "2026-11-22T03:36:29+00:00",
   "result": {
     "resume_count": 1,
-    "resumed_at": "2026-11-22T03:16:51+00:00"
+    "resumed_at": "2026-11-22T03:16:51+00:00",
+    "summary": "Reworked install.sh so the PATH block lands in the profile the login shell actually reads and is proven active in a fresh shell; documented the behaviour in README.md and covered it in tests/test_install.py. install.sh now: (1) keeps the FORGEL_CODE_PROFILE override first; (2) detects the login shell from $SHELL only when that names a shell the installer handles, otherwise from the account login shell (dscl . -read \"$HOME\" UserShell, then getent passwd / /etc/passwd), falling back to /bin/sh; (3) picks ~/.zshrc for zsh, the first existing of ~/.bash_profile, ~/.bash_login, ~/.profile for bash (creating ~/.bash_profile) and never ~/.bashrc alone, ~/.profile otherwise, creating the file when missing; (4) writes the single marked block with the unchanged markers and the exact export PATH=\"<bin>:$PATH\" line; (5) verifies by starting the detected shell with env -i (HOME, SHELL, TERM, PATH=/usr/bin:/bin) as `-l -i` and requiring `command -v forgel-code` to equal the launcher just written; on failure it exits non-zero and prints the login shell, the edited profile file, the block written, the fresh PATH and the resolved path; on success it prints the detected shell, the profile file and the fresh-shell result; (6) --uninstall removes the marked block from .zshrc, .zprofile, .zshenv, .bash_profile, .bash_login and .profile plus the prefix and launcher, leaving the rest of each file unchanged. The opt-out variables still leave every profile untouched, print the exact export line and exit 0, and a piped `sh` install still works (the script never reads stdin). README now documents the per-shell profile table, the account-login-shell fallback, the fresh-shell verification and its failure report, the exact opt-out line and what --uninstall removes. Added tests: shell detection from the account login shell through the recorded dscl stub with a fresh `env -i` zsh resolving the launcher, bash profile placement with and without an existing ~/.bash_profile (and no ~/.bashrc), installer reporting of shell/profile/fresh-check, non-zero exit naming the edited file when the shell ignores it, and --uninstall clearing the block from every candidate file. Verified with `python -m unittest tests.test_install -v` (23 tests OK), `python -m unittest tests.test_readme_install -v` (26 tests OK, including the `sh -n install.sh` guard) and the full suite `python -m unittest discover -s tests` (171 tests OK).",
+    "files_changed": [
+      "README.md",
+      "install.sh",
+      "tests/test_diag_tmp.py",
+      "tests/test_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install.InstallerTest.test_profile_gets_one_marked_path_block",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install.InstallerShellDetectionTest.test_unset_shell_puts_the_block_in_zshrc",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_diag_tmp",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_readme_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "...........................................................................................................................................................................\n----------------------------------------------------------------------\nRan 171 tests in 75.170s\n\nOK\n",
+    "assumptions": [
+      "The fix belongs to the `code` repository, which holds install.sh, the launcher and the installer tests.",
+      "The earlier install run used the opt-out switch, so no profile was edited at all; that path works as designed and the change focuses on the silent-ineffective-profile case.",
+      "The default tag v0.1.0 stays; the release is published after this change is accepted so the tag contains the fixed script.",
+      "$SHELL counts as unusable when it is empty or names a shell the installer does not handle; because a POSIX shell re-exports SHELL from the passwd entry, the detection tests set SHELL to the empty string to exercise the account login-shell lookup, which behaves exactly like an unset value inside the script.",
+      "The account login-shell lookup tries `dscl . -read \"$HOME\" UserShell` whenever dscl is on PATH (the recorded stub interface), then getent/passwd, then falls back to /bin/sh, which reads ~/.profile.",
+      "Verification runs only the real `-l -i` startup of the detected shell under `env -i`; when that shell's login mode reads no file (a POSIX sh with no login file), the block is unverifiable, so the installer fails and names the file rather than reporting a false success.",
+      "The --uninstall candidate list is exactly .zshrc, .zprofile, .zshenv, .bash_profile, .bash_login and .profile, matching the recorded assumption.",
+      "README's opt-out example uses the default $HOME/.local/bin so the shown line is character-identical to what the installer prints for a default install.",
+      "No CHANGELOG entry was added because the specification lists only install.sh, tests/test_install.py and README.md as affected files and no decision changed."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 62,
+      "estimated_input_tokens": 4473866,
+      "provider_input_tokens": 4832452,
+      "provider_output_tokens": 167957,
+      "estimated_tokens": 99205,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "71d835aaf19c5478af1bf6a841435572806e38f9",
+      "head": "00448c577ff4aab7a5842b3ae4e5eeb3c28e41c6",
+      "commit": "00448c577ff4aab7a5842b3ae4e5eeb3c28e41c6",
+      "commits": [
+        "00448c577ff4aab7a5842b3ae4e5eeb3c28e41c6"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261122025705_fix-install-sh-so-a-new-terminal-finds-f.md"
   },
   "request": "docs/program/requests/20261122025705940864_fix-install-sh-so-a-new-terminal-finds-forgel-code-on-path.md"
 }
