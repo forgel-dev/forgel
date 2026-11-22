@@ -367,8 +367,10 @@ Rules:
 - If the push status is "failed", say that the work is accepted locally but
   could not be published yet, and that the runtime will retry automatically.
   If it is "pushed" or "skipped", no publication detail is needed.
-- If the task is not accepted, state the blocker and the one concrete decision
-  or action the user must take.
+- If the task is not accepted, state the blocker and what happens next.
+  Never ask the user to choose between internal process options: the runtime
+  owns that choice. Ask only for what only the owner can decide: a production
+  approval, missing access or a product change.
 - Do not describe intermediate failed checks, rewrites, retries, QA or review
   steps, attempts, commits, ledger events or any other internal process. The
   user sees their request and the result; everything between them is not
@@ -386,8 +388,10 @@ Rules:
 - Say whether the release is published: the tag exists and a provider release
   exists, or the tag exists without a provider release.
 - If a repository failed to publish, say which one and that the runtime will
-  retry automatically. If the release is blocked, state the one concrete
-  blocker and what the user must decide.
+  retry automatically. If the release is blocked, state what stopped it and
+  what happens next. Never ask the user to choose between internal process
+  options: the runtime owns that choice. Ask only for what only the owner can
+  decide: a production approval, missing access or a product change.
 - Do not describe tasks, audits, intermediate checks, retries, commits, ledger
   events or any other internal process. The user sees the request and the
   released result.
