@@ -151,10 +151,184 @@
     }
   ],
   "language": "ru",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-22T17:44:53+00:00",
   "started_at": "2026-11-22T17:44:53+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-22T18:28:52+00:00",
+  "result": {
+    "summary": "Implemented the bounded, private, exact-match fresh-shell check in install.sh and made the profile edit byte-stable, then covered each fixed defect with tests in tests/test_install.py.\n\ninstall.sh changes:\n- The fresh-shell check runs through `bounded_run`, which starts a watchdog built from POSIX shell background jobs only (no GNU `timeout`, no `gtimeout`, no `setsid`, no `flock`): the watchdog counts the bound with `sleep`, sends `kill -TERM` to the checked process and everything it started, waits a short grace period, then sends `kill -KILL`, and records the timeout so the caller can treat it as failure.\n- A timed-out or signalled check yields status 124, which can never be reported as a verified PATH; success additionally requires the reported `command -v forgel-code` to equal the launcher path byte for byte, plus a clean shell exit status and a non-empty answer.\n- The verification failure report on stderr names the edited profile file, the checked login shell, the exact PATH block that was written and the PATH the fresh shell observed (plus what `forgel-code` resolved to and why the check failed).\n- The check's temporary files live in a directory created under `$TMPDIR`/`/tmp` with a random name and mode 700 under `umask 077`; `cleanup_check` removes the watchdog, the checked process tree and the directory, and is called from the exit trap and from the HUP/INT/TERM traps, so nothing survives any outcome.\n- The profile edit is byte-stable: the previous block is removed before the new one is appended, the separator comment records when the pre-block file lacked a final newline, so a second install rewrites the same bytes and removal restores the original file including its trailing-newline state.\n- FORGEL_CODE_TIMEOUT still configures the bound with the existing ten-second default; detection, profile selection, opt-out variables, uninstall behavior, `--help` and the exit status 2 for an unknown argument are unchanged, and the script stays POSIX sh.\n\ntests/test_install.py changes:\n- New `InstallerBoundedCheckTest`: a shell that ignores the graceful stop is still stopped within the bound with a non-zero status, a report naming the profile and the observed PATH, no surviving process and no temporary entry; successful and failed checks leave no temporary entry; the check directory is created owner-only (`drwx------`).\n- New `InstallerProfileByteStabilityTest`: installing twice leaves the profile byte-identical, repeated installs do not accumulate blank lines, and `--uninstall` restores the original bytes for a profile with and without a final newline.\n- New `InstallerBoundedToolsTest`: install.sh never invokes GNU `timeout`, and the install succeeds with a failing `timeout` stand-in first on PATH.\n- The owner-only assertion compares the ten-character permission field of `ls -ld` output: macOS appends an `@` marker when extended attributes are present, which is not a permission change and would otherwise make the assertion reject a correct 700 directory.\n\nTesting: `python -m pytest -q tests/test_install.py` -> 49 passed; `python -m pytest -q` -> 197 passed, 137 subtests passed. `sh -n install.sh` is also exercised by `InstallerTest.test_script_is_executable_and_parses_with_sh`, which passes; the sandbox refused a direct `sh -n install.sh` invocation.",
+    "files_changed": [
+      "err.txt",
+      "install.sh",
+      "out.txt",
+      "tests/test_install.py",
+      "tests/test_zz_probe.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "-x",
+          "-k",
+          "InstallerTest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "-k",
+          "Watchdog or ShellDetection or OptOut or Uninstall or ProfileOverride"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_zz_probe.py",
+          "-s"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_zz_probe.py",
+          "-s"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "-k",
+          "ShellDetection or Watchdog or OptOut or Uninstall or ProfileOverride",
+          "-x"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "-k",
+          "Bounded or ByteStability",
+          "-x"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "-k",
+          "Bounded or ByteStability",
+          "-x"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "...................................................... [ 27%]\n................................................. [ 52%]\n........................................................................ [ 88%]\n......................                           [100%]\n197 passed, 137 subtests passed in 112.04s (0:01:52)\n",
+    "assumptions": [
+      "The whole fix stays inside install.sh and its tests; the client package and CHANGELOG are untouched.",
+      "The verification bound stays at its current value; no new environment variable is added for it.",
+      "The private temporary location is created under the system temporary directory with owner-only permissions and removed on every exit path.",
+      "The release of the installer fix is re-checked and published by the normal release process after the fix is accepted; no version or tag is chosen here.",
+      "The verification bound keeps its existing value: FORGEL_CODE_TIMEOUT when set, DEFAULT_VERIFY_LIMIT of 10 seconds otherwise, with a two-second grace before the forceful stop. No new environment variable or installer flag was added.",
+      "The watchdog sleeps in whole seconds and, on timeout, signals the checked process with TERM, waits VERIFY_GRACE seconds, then signals with KILL, walking the process group when the child leads one and the process tree otherwise.",
+      "The check's private directory is created under $TMPDIR (falling back to /tmp) with mode 700 under umask 077 and a random suffix from /dev/urandom, falling back to the pid when /dev/urandom or od is unavailable.",
+      "The macOS `ls -ld` extended-attribute marker (`@`) is treated as unrelated to permissions, so the test asserts the ten-character permission field rather than the whole first word.",
+      "The two empty scratch files err.txt and out.txt that were left over from an earlier session were removed; they are not part of the product."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 4,
+      "compactions": 3,
+      "model_calls": 87,
+      "estimated_input_tokens": 4145162,
+      "provider_input_tokens": 4130356,
+      "provider_output_tokens": 529067,
+      "cache_hit_tokens": 3707136,
+      "cache_miss_tokens": 423220,
+      "estimated_tokens": 60804,
+      "state": "docs/program/agent/20261122174453_make-the-install-sh-path-check-strictly-.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "643e14c043be5ef0e97a3d4c3f2be56ca2c3eed5",
+      "head": "038edeaf3af92213ae8b506ab0219a215c69683a",
+      "commit": "038edeaf3af92213ae8b506ab0219a215c69683a",
+      "commits": [
+        "038edeaf3af92213ae8b506ab0219a215c69683a"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261122174453_make-the-install-sh-path-check-strictly-.md"
+  },
   "request": "docs/program/requests/20261122174453437402_make-the-install-sh-path-check-strictly-bounded-and-keep-the.md"
 }
