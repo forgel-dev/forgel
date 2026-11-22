@@ -17,7 +17,6 @@ from .daemon import handle_failure, run_once
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import ModelClient
-from .orchestrator import Orchestrator
 from .release_train import (
     audit_release,
     finalize_release,
@@ -38,7 +37,6 @@ OPERATIONS = (
     "task_review",
     "release_audit",
     "release_finalize",
-    "orchestrate",
     "set_limit",
 )
 
@@ -102,10 +100,6 @@ def run_operation(
         if not processed:
             return "The runtime had nothing runnable."
         return "The runtime advanced: " + ", ".join(processed) + "."
-
-    if name == "orchestrate":
-        Orchestrator(settings, ledger).run(str(project["id"]))
-        return "The project pipeline ran to the next gate."
 
     if name in {"task_process", "task_qa", "task_review"}:
         task = _task(layout, str(args.get("task_id") or ""))

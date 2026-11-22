@@ -64,6 +64,13 @@ class RuntimeOpsTest(unittest.TestCase):
                 self.settings, self.ledger, self.project, "secret"
             )
 
+    def test_the_template_pipeline_is_not_a_chat_operation(self) -> None:
+        self.assertNotIn("orchestrate", OPERATIONS)
+        with self.assertRaises(ValueError):
+            run_operation(
+                self.settings, self.ledger, self.project, "orchestrate"
+            )
+
     def test_drive_advances_the_runtime(self) -> None:
         with patch(
             "forgel.runtime_ops.run_once", return_value=["p1"]
