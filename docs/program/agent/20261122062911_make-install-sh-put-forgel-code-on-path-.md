@@ -3,8 +3,8 @@
 - Task: `20261122062911_make-install-sh-put-forgel-code-on-path-`
 - Status: `done`
 - Repository: `code`
-- Steps: 83
-- Finished: 2026-11-22T07:12:33+00:00
+- Steps: 15
+- Finished: 2026-11-22T07:25:28+00:00
 
 ## Requirements
 
@@ -23,9 +23,9 @@
 - The installer keeps the same prefix directory and the marked-block convention; only the target files and the block shape change.
 - Verification uses a bounded, non-interactive login shell invocation so it cannot hang the installer.
 - Tests isolate HOME into a temporary directory instead of touching the real profile files.
-- The verification bound stays an internal constant (5 seconds) rather than a documented variable, per the spec.
-- Only the installer's verified behaviour changed in this session; the test file and README wording came from the previous attempt and were left intact except for the README install/uninstall text aligned to the final installer.
-- No CHANGELOG release entry was added; the scope excludes version, tag and release notes.
+- The restored tests keep their original names and intent but were adapted to the guarded block, the exact block helper _marked_block and the defined stderr failure report, as the specification requires.
+- The unset-$SHELL case cannot run under a shell that assigns SHELL from the account database at startup, so it picks an interpreter that keeps SHELL unset and skips with an explicit diagnostic when the host has none; this keeps the case honest instead of asserting a bash decision.
+- install.sh and README.md needed no further change: they already contain the shell detection, guarded block, bounded verification, failure report and uninstall profile list the specification requires, so this attempt only restored the deleted tests.
 
 ## Test Removals
 
@@ -36,10 +36,10 @@
 - Window limit: 1000000 tokens (usable 991808)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 83
-- Estimated input tokens (all calls): 4923396
-- Provider input/output tokens: 5231384 / 144889
-- Estimated prompt at the end: 90752 tokens
+- Model calls: 15
+- Estimated input tokens (all calls): 659901
+- Provider input/output tokens: 705495 / 53115
+- Estimated prompt at the end: 58872 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261122062911_make-install-sh-put-forgel-code-on-path-.md`)
@@ -280,124 +280,44 @@ The user pastes the one-line `curl ... | sh` command, opens a new terminal, and 
 
 ## Summary
 
-Continued the retry from the previous attempt's tree and fixed the remaining failure: the suite's final command (`python -m pytest -q`) exceeded the run's time budget. Profiling showed the installer tests dominated and that most of that time came from two places inside a single install run: the nested `report=$(fresh_shell_report ...)` command substitution, which stayed open because the watchdog subshell kept the caller's stdout, and an unnecessarily long watchdog bound. install.sh was reworked so `verify_profile` calls `bounded_run` directly and reads `BOUNDED_OUTPUT` (no nested substitution), the watcher closes its standard streams and uses an interruptible `sleep`, stops as soon as the guarded command is gone, and `VERIFY_LIMIT` is 5 seconds; the pip step also passes `--no-compile`. README.md was kept aligned with that behaviour (shell table, warning for an unrecognised shell, guarded block, bounded fresh-shell verification with its failure report, full uninstall profile list). tests/test_install.py already contained the required cases from the previous attempt and was not weakened. Verified with `python -m pytest -q tests/test_install.py` (36 passed, 45s) and the full `python -m pytest -q` (184 passed, 137 subtests, 85s), plus `tests/test_readme_install.py` (26 passed).
+Restored the four installer tests the review flagged as unjustifiably deleted, so tests/test_install.py again carries the originally present install-path cases in addition to the new ones, and left install.sh and README.md untouched because they already implement the specification (login-shell resolution, guarded marked block, bounded fresh-shell verification with its failure report, full --uninstall cleanup). test_profile_the_login_shell_ignores_fails_verification puts the block in ~/.bashrc, which a login /bin/sh never reads, and asserts a non-zero exit with the file, block, shell and PATH on stderr; test_second_run_is_idempotent runs the installer twice and asserts the profile is byte-identical with one marker and no unguarded export; test_piped_install_does_not_read_the_script_from_stdin feeds install.sh plus a trailing line to `sh` on stdin and asserts the trailing line still runs; test_unset_shell_puts_the_block_in_zshrc runs the installer without SHELL through an interpreter that does not re-assign SHELL and asserts the block lands in ~/.zshrc via the account login shell. The unset-SHELL case needed a host-independent launcher: a shell that assigns SHELL at startup (bash on this host) hid the unset state, so the test selects an interpreter that keeps SHELL unset and skips with an explicit reason when none is installed. Verified with `python -m pytest -q tests/test_install.py` (40 passed, 51s), the four targeted cases alone (4 passed), and the full suite `python -m pytest -q` (188 passed, 137 subtests passed, 89s). No test was weakened or deleted.
 
 ## Files Changed
 
-- `README.md`
-- `install.sh`
-- `tests/_timing_probe.py`
 - `tests/test_install.py`
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--durations=15"]` → exit 0
-- `["python", "-m", "pytest", "-q", "--durations=20"]` → exit 124
-- `["python", "-m", "pytest", "-q", "--ignore=tests/test_install.py", "--durations=15"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "install_creates_the_launcher or install_exits_zero or profile_gets_one", "--durations=10"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--durations=0", "-k", "not PlainPip"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "script_is_executable_or_missing_interpreter_or_tolerates_a_missing", "--durations=0", "-vv"]` → exit 5
-- `["python", "-m", "pytest", "-q", "tests/test_install.py::InstallerTest::test_install_exits_zero_and_prints_the_version", "-vv", "--durations=5"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "InstallerTest and not repeated and not guard", "--durations=0", "-o", "durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/_timing_probe.py", "-s", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "hanging or failed_verification or login_shell_resolves", "--durations=0"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--durations=5"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "profile_the_login_shell_ignores or second_run_is_idempotent or piped_install_does_not_read or unset_shell_puts"]` → exit 1
+- `["python", "-m", "pytest", "-q", "tests/test_install.py", "-k", "profile_the_login_shell_ignores or second_run_is_idempotent or piped_install_does_not_read or unset_shell_puts"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_readme_install.py", "--durations=3"]` → exit 0
-- `["python", "-m", "pytest", "-q"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only", "-q", "-k", "zsh or bash_profile or unknown_shell"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
 
 ## Final Test Output
 
 ```
-...................................................... [ 29%]
-................................................. [ 55%]
-........................................................................ [ 95%]
-.........                                        [100%]
-184 passed, 137 subtests passed in 87.45s (0:01:27)
+...................................................... [ 28%]
+................................................. [ 54%]
+........................................................................ [ 93%]
+.............                                    [100%]
+188 passed, 137 subtests passed in 91.22s (0:01:31)
 
 ```
 
 ## Actions
 
-- read_file: install.sh
-- read_file: install.sh
+- list_files
 - read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--durations=15']
-- run: ['python', '-m', 'pytest', '-q', '--durations=20']
-- run: ['python', '-m', 'pytest', '-q', '--ignore=tests/test_install.py', '--durations=15']
-- read_file: README.md
-- read_file: pyproject.toml
-- read_file: CHANGELOG.md
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'install_creates_the_launcher or install_exits_zero or profile_gets_one', '--durations=10']
-- read_file: install.sh
-- run: ['sh', '-c', 'T=$(mktemp -d); echo pip; time python3 -m pip install --target "$T/p" --upgrade --no-deps --no-index --no-cache-dir --no-build-isolation --disable-pip-version-check --no-warn-script-location . >/dev/null 2>&1; echo copy; time cp -R forgel_code tests pyproject.toml _build_backend.py README.md "$T/c"; echo shell; time env -i HOME=$T SHELL=/bin/sh TERM=dumb PATH=/usr/bin:/bin /bin/sh -l -i -c true >/dev/null 2>&1; rm -rf "$T"']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--durations=0', '-k', 'not PlainPip']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'script_is_executable_or_missing_interpreter_or_tolerates_a_missing', '--durations=0', '-vv']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py::InstallerTest::test_install_exits_zero_and_prints_the_version', '-vv', '--durations=5']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'InstallerTest and not repeated and not guard', '--durations=0', '-o', 'durations=0']
-- write_file: install.sh
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- read_file: install.sh
-- write_file: install.sh
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- read_file: install.sh
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
 - read_file: tests/_timing_probe.py
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- write_file: install.sh
-- run: ['python', '-m', 'pytest', '-q', 'tests/_timing_probe.py', '-s', '--durations=0']
-- delete_file: tests/_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'hanging or failed_verification or login_shell_resolves', '--durations=0']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--durations=5']
-- run: ['python', '-m', 'pytest', '-q']
-- read_file: README.md
-- read_file: README.md
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_readme_install.py
-- write_file: README.md
-- read_file: README.md
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_readme_install.py', '--durations=3']
-- run: ['python', '-m', 'pytest', '-q']
-- run: ['sh', '-n', 'install.sh']
 - read_file: install.sh
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only', '-q', '-k', 'zsh or bash_profile or unknown_shell']
+- read_file: install.sh
+- write_file: tests/test_install.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'profile_the_login_shell_ignores or second_run_is_idempotent or piped_install_does_not_read or unset_shell_puts']
+- write_file: tests/test_install.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '-k', 'profile_the_login_shell_ignores or second_run_is_idempotent or piped_install_does_not_read or unset_shell_puts']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py']
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: README.md
+- run: ['git', 'status', '--porcelain']

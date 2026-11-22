@@ -261,12 +261,12 @@
     }
   ],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-22T06:29:11+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-22T07:17:12+00:00",
+  "finished_at": "2026-11-22T07:25:28+00:00",
   "result": {
-    "summary": "Continued the retry from the previous attempt's tree and fixed the remaining failure: the suite's final command (`python -m pytest -q`) exceeded the run's time budget. Profiling showed the installer tests dominated and that most of that time came from two places inside a single install run: the nested `report=$(fresh_shell_report ...)` command substitution, which stayed open because the watchdog subshell kept the caller's stdout, and an unnecessarily long watchdog bound. install.sh was reworked so `verify_profile` calls `bounded_run` directly and reads `BOUNDED_OUTPUT` (no nested substitution), the watcher closes its standard streams and uses an interruptible `sleep`, stops as soon as the guarded command is gone, and `VERIFY_LIMIT` is 5 seconds; the pip step also passes `--no-compile`. README.md was kept aligned with that behaviour (shell table, warning for an unrecognised shell, guarded block, bounded fresh-shell verification with its failure report, full uninstall profile list). tests/test_install.py already contained the required cases from the previous attempt and was not weakened. Verified with `python -m pytest -q tests/test_install.py` (36 passed, 45s) and the full `python -m pytest -q` (184 passed, 137 subtests, 85s), plus `tests/test_readme_install.py` (26 passed).; task review failed",
+    "summary": "Restored the four installer tests the review flagged as unjustifiably deleted, so tests/test_install.py again carries the originally present install-path cases in addition to the new ones, and left install.sh and README.md untouched because they already implement the specification (login-shell resolution, guarded marked block, bounded fresh-shell verification with its failure report, full --uninstall cleanup). test_profile_the_login_shell_ignores_fails_verification puts the block in ~/.bashrc, which a login /bin/sh never reads, and asserts a non-zero exit with the file, block, shell and PATH on stderr; test_second_run_is_idempotent runs the installer twice and asserts the profile is byte-identical with one marker and no unguarded export; test_piped_install_does_not_read_the_script_from_stdin feeds install.sh plus a trailing line to `sh` on stdin and asserts the trailing line still runs; test_unset_shell_puts_the_block_in_zshrc runs the installer without SHELL through an interpreter that does not re-assign SHELL and asserts the block lands in ~/.zshrc via the account login shell. The unset-SHELL case needed a host-independent launcher: a shell that assigns SHELL at startup (bash on this host) hid the unset state, so the test selects an interpreter that keeps SHELL unset and skips with an explicit reason when none is installed. Verified with `python -m pytest -q tests/test_install.py` (40 passed, 51s), the four targeted cases alone (4 passed), and the full suite `python -m pytest -q` (188 passed, 137 subtests passed, 89s). No test was weakened or deleted.",
     "files_changed": [
       "README.md",
       "install.sh",
@@ -281,30 +281,10 @@
           "pytest",
           "-q",
           "tests/test_install.py",
-          "--durations=15"
+          "-k",
+          "profile_the_login_shell_ignores or second_run_is_idempotent or piped_install_does_not_read or unset_shell_puts"
         ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "--durations=20"
-        ],
-        "exit_code": 124
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "--ignore=tests/test_install.py",
-          "--durations=15"
-        ],
-        "exit_code": 0
+        "exit_code": 1
       },
       {
         "command": [
@@ -314,8 +294,7 @@
           "-q",
           "tests/test_install.py",
           "-k",
-          "install_creates_the_launcher or install_exits_zero or profile_gets_one",
-          "--durations=10"
+          "profile_the_login_shell_ignores or second_run_is_idempotent or piped_install_does_not_read or unset_shell_puts"
         ],
         "exit_code": 0
       },
@@ -325,266 +304,7 @@
           "-m",
           "pytest",
           "-q",
-          "tests/test_install.py",
-          "--durations=0",
-          "-k",
-          "not PlainPip"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "-k",
-          "script_is_executable_or_missing_interpreter_or_tolerates_a_missing",
-          "--durations=0",
-          "-vv"
-        ],
-        "exit_code": 5
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py::InstallerTest::test_install_exits_zero_and_prints_the_version",
-          "-vv",
-          "--durations=5"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "-k",
-          "InstallerTest and not repeated and not guard",
-          "--durations=0",
-          "-o",
-          "durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/_timing_probe.py",
-          "-s",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "-k",
-          "hanging or failed_verification or login_shell_resolves",
-          "--durations=0"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "--durations=5"
+          "tests/test_install.py"
         ],
         "exit_code": 0
       },
@@ -599,35 +319,9 @@
       },
       {
         "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_readme_install.py",
-          "--durations=3"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "--collect-only",
-          "-q",
-          "-k",
-          "zsh or bash_profile or unknown_shell"
+          "git",
+          "status",
+          "--porcelain"
         ],
         "exit_code": 0
       },
@@ -642,35 +336,36 @@
         "final_test": true
       }
     ],
-    "test_output": "...................................................... [ 29%]\n................................................. [ 55%]\n........................................................................ [ 95%]\n.........                                        [100%]\n184 passed, 137 subtests passed in 87.45s (0:01:27)\n",
+    "test_output": "...................................................... [ 28%]\n................................................. [ 54%]\n........................................................................ [ 93%]\n.............                                    [100%]\n188 passed, 137 subtests passed in 91.22s (0:01:31)\n",
     "assumptions": [
       "The installer keeps the same prefix directory and the marked-block convention; only the target files and the block shape change.",
       "Verification uses a bounded, non-interactive login shell invocation so it cannot hang the installer.",
       "Tests isolate HOME into a temporary directory instead of touching the real profile files.",
-      "The verification bound stays an internal constant (5 seconds) rather than a documented variable, per the spec.",
-      "Only the installer's verified behaviour changed in this session; the test file and README wording came from the previous attempt and were left intact except for the README install/uninstall text aligned to the final installer.",
-      "No CHANGELOG release entry was added; the scope excludes version, tag and release notes."
+      "The restored tests keep their original names and intent but were adapted to the guarded block, the exact block helper _marked_block and the defined stderr failure report, as the specification requires.",
+      "The unset-$SHELL case cannot run under a shell that assigns SHELL from the account database at startup, so it picks an interpreter that keeps SHELL unset and skips with an explicit diagnostic when the host has none; this keeps the case honest instead of asserting a bash decision.",
+      "install.sh and README.md needed no further change: they already contain the shell detection, guarded block, bounded verification, failure report and uninstall profile list the specification requires, so this attempt only restored the deleted tests."
     ],
     "context": {
       "window": 1000000,
       "usable": 991808,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 83,
-      "estimated_input_tokens": 4923396,
-      "provider_input_tokens": 5231384,
-      "provider_output_tokens": 144889,
-      "estimated_tokens": 90752,
+      "model_calls": 15,
+      "estimated_input_tokens": 659901,
+      "provider_input_tokens": 705495,
+      "provider_output_tokens": 53115,
+      "estimated_tokens": 58872,
       "state": ""
     },
     "test_removals": [],
     "spec_issues": [],
     "git": {
-      "base": "bba852f100f91b6890d05c0483dfa75233b2623e",
-      "head": "d0fa0da440045f1b256603f7b09a311019e22a8c",
-      "commit": "d0fa0da440045f1b256603f7b09a311019e22a8c",
+      "base": "d0fa0da440045f1b256603f7b09a311019e22a8c",
+      "head": "643e14c043be5ef0e97a3d4c3f2be56ca2c3eed5",
+      "commit": "643e14c043be5ef0e97a3d4c3f2be56ca2c3eed5",
       "commits": [
-        "d0fa0da440045f1b256603f7b09a311019e22a8c"
+        "d0fa0da440045f1b256603f7b09a311019e22a8c",
+        "643e14c043be5ef0e97a3d4c3f2be56ca2c3eed5"
       ]
     },
     "report": "docs/program/agent/20261122062911_make-install-sh-put-forgel-code-on-path-.md",
@@ -1010,7 +705,8 @@
           "reason": "The specification explicitly requires that a zsh login shell with $SHELL unset receives the block in ~/.zshrc (AC-6, FR-2) and that existing tests are not deleted (FR-18). Removing test_unset_shell_puts_the_block_in_zshrc is therefore a real violation; the coder can restore or update it to the guarded block without changing the spec."
         }
       ]
-    }
+    },
+    "failure": {}
   },
   "request": "docs/program/requests/20261122062911831737_make-install-sh-put-forgel-code-on-path-for-a-new-terminal.md"
 }
