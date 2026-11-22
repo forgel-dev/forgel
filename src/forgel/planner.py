@@ -35,6 +35,7 @@ from .model import (
     ModelClient,
     ModelError,
     ModelMessage,
+    UsageCounter,
     build_model_client,
     project_model_name,
 )
@@ -587,9 +588,53 @@ def _dependency_call(
         spec["external_dependencies"] = dependencies.investigate(
             layout, intent, spec, client, log
         )
+    except dependencies.DependencyBlocked:
+        raise
     except dependencies.DependencyError as exc:
         raise PlanningError(str(exc)) from exc
     return spec
+
+
+def _dependency_decision(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    layout: ProjectLayout,
+    item: Mapping[str, Any],
+    spec: Mapping[str, Any],
+    error: Exception,
+    client: ModelClient,
+    log: Callable[[str], None],
+) -> tuple[Any, str]:
+    """Ask the controlling agent what to do with a blocked dependency."""
+
+    from . import controller
+
+    try:
+        decision = controller.decide(
+            settings,
+            ledger,
+            project,
+            layout,
+            "dependency_blocked",
+            {
+                "task": item,
+                "spec": {
+                    "requirements": spec.get("requirements") or [],
+                    "acceptance": spec.get("acceptance") or [],
+                    "external_dependencies": (
+                        spec.get("external_dependencies") or []
+                    ),
+                },
+                "failure": str(error),
+            },
+            client,
+            log,
+        )
+    except Exception as exc:  # noqa: BLE001 - the plan must not crash
+        log(f"[controller] dependency decision failed: {exc}")
+        return None, str(exc)
+    return decision, ""
 
 
 def plan_project(
@@ -660,6 +705,8 @@ def plan_project(
         raise PlanningError(
             "no model configured; set FORGEL_MODEL_API_KEY or a secret"
         )
+    usage = UsageCounter(model_client)
+    model_client = usage
     repos = manifest_entries(layout)
     known = [str(entry["id"]) for entry in repos]
     default_repo = known[0] if len(known) == 1 else ""
@@ -883,6 +930,73 @@ def plan_project(
                 spec = _dependency_call(
                     layout, item, spec, model_client, log
                 )
+            except dependencies.DependencyBlocked as exc:
+                decision, controller_error = _dependency_decision(
+                    settings,
+                    ledger,
+                    project,
+                    layout,
+                    item,
+                    spec,
+                    exc,
+                    model_client,
+                    log,
+                )
+                if (
+                    decision is not None
+                    and decision.operation == "respec"
+                ):
+                    try:
+                        revised = _spec_call(specs.write_task_spec,
+                            settings,
+                            layout,
+                            goal,
+                            notes,
+                            item,
+                            model_client,
+                            log,
+                            review_issue=str(exc),
+                        )
+                        revised = _dependency_call(
+                            layout, item, revised, model_client, log
+                        )
+                    except (
+                        PlanningError,
+                        dependencies.DependencyBlocked,
+                    ) as retry_exc:
+                        exc = retry_exc
+                    else:
+                        task_specs.append(revised)
+                        continue
+                if decision is not None and decision.operation == "ask_user":
+                    note = str(
+                        decision.question
+                        or decision.reason
+                        or exc
+                    )
+                    detail = "needs the owner: " + note
+                elif decision is not None:
+                    detail = str(
+                        decision.reason or decision.summary or exc
+                    )
+                else:
+                    detail = (
+                        "the controlling agent stopped: the model "
+                        f"request failed ({controller_error}); "
+                        "try again later"
+                    )
+                blockers.append(f"task {item.get('title')}: {detail}")
+                blocked_tasks.add(index)
+                blocked = _blocked_spec(item, exc)
+                blocked["blocked"] = detail
+                task_specs.append(blocked)
+                notes = (
+                    notes
+                    + "\n\n## Blocked task\n\n"
+                    + f"{item.get('title')}: {detail}"
+                )
+                log(f"[plan] {project['id']}: task blocked: {detail}")
+                continue
             except PlanningError as exc:
                 blockers.append(f"task {item.get('title')}: {exc}")
                 blocked_tasks.add(index)
@@ -1055,7 +1169,7 @@ def plan_project(
     created: list[dict[str, Any]] = []
     task_records: list[dict[str, Any]] = []
     for index, (item, spec) in enumerate(zip(items, task_specs)):
-        dependencies = [ids[position] for position in item["depends_on"]]
+        depends = [ids[position] for position in item["depends_on"]]
         spec_ref = specs.spec_path(ids[index])
         task = tasks.create_task(
             layout,
@@ -1067,7 +1181,7 @@ def plan_project(
             plan_id=plan_id,
             plan_goal=goal,
             order=index + 1,
-            depends_on=dependencies,
+            depends_on=depends,
             checks=list(spec["checks"]),
             language=task_language,
             spec=spec_ref,
@@ -1101,7 +1215,7 @@ def plan_project(
                 ids[index],
                 plan_id,
                 str(item["repo_id"]),
-                dependencies,
+                depends,
             ),
         )
         created.append(
@@ -1110,7 +1224,7 @@ def plan_project(
                 **spec,
                 "task_id": ids[index],
                 "spec": spec_ref,
-                "depends_on": dependencies,
+                "depends_on": depends,
                 "blocked": blocked_reason,
             }
         )
@@ -1196,6 +1310,11 @@ def plan_project(
             "goal": goal,
             "tasks": ids,
             "plan": plan_id,
+            "usage": {
+                "model_calls": usage.calls,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+            },
         },
         generation=ledger.current_generation(str(project["id"])),
     )

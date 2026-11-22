@@ -15,6 +15,7 @@ must make.
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -209,6 +210,27 @@ def decide(
         question=str(data.get("question") or "").strip(),
         release_id=str(data.get("release_id") or "").strip(),
         args=args,
+    )
+    usage = getattr(client, "last_usage", None)
+    if not isinstance(usage, dict):
+        usage = {}
+    ledger.append_event(
+        str(project["id"]),
+        "controller",
+        status=decision.operation,
+        idempotency_key=(
+            f"{project['id']}:controller:{stage}:{uuid.uuid4().hex}"
+        ),
+        payload={
+            "stage": stage,
+            "operation": decision.operation,
+            "model_calls": 1,
+            "input_tokens": int(usage.get("prompt_tokens") or 0),
+            "output_tokens": int(
+                usage.get("completion_tokens") or 0
+            ),
+        },
+        generation=ledger.current_generation(str(project["id"])),
     )
     log(
         f"[controller] {stage}: {decision.operation}"

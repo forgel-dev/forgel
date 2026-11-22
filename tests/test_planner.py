@@ -434,7 +434,19 @@ class PlannerTest(unittest.TestCase):
             ]
         }
         client = ScriptedModelClient(
-            [json.dumps(PLAN), json.dumps(first), json.dumps(scout)]
+            [
+                json.dumps(PLAN),
+                json.dumps(first),
+                json.dumps(scout),
+                json.dumps(
+                    {
+                        "operation": "ask_user",
+                        "question": (
+                            "Where can the weather API contract be found?"
+                        ),
+                    }
+                ),
+            ]
         )
         result = plan_project(
             self.settings,
@@ -445,7 +457,9 @@ class PlannerTest(unittest.TestCase):
             log=lambda _m: None,
         )
         self.assertTrue(result.blocked)
-        self.assertIn("weather", " ".join(result.blockers))
+        blockers = " ".join(result.blockers)
+        self.assertIn("needs the owner", blockers)
+        self.assertIn("weather", blockers)
 
     def test_spec_writer_recovers_from_tool_call_markup(self) -> None:
         markup = "<｜｜DSML｜｜ calls>"

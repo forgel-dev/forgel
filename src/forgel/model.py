@@ -306,6 +306,31 @@ def unix_now() -> float:
     return time.time()
 
 
+class UsageCounter:
+    """Wrap a client and total the provider usage of every call."""
+
+    def __init__(self, client: ModelClient) -> None:
+        self.client = client
+        self.calls = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
+
+    def complete(
+        self,
+        messages: Sequence[ModelMessage],
+        model: str | None = None,
+    ) -> str:
+        text = self.client.complete(messages, model=model)
+        self.calls += 1
+        usage = getattr(self.client, "last_usage", None)
+        if isinstance(usage, dict):
+            self.input_tokens += int(usage.get("prompt_tokens") or 0)
+            self.output_tokens += int(
+                usage.get("completion_tokens") or 0
+            )
+        return text
+
+
 class ScriptedModelClient:
     """Return canned responses and record the prompts for inspection."""
 
