@@ -1,0 +1,26 @@
+# Release plan 20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co
+
+- Project: `forgel-1d2bf685`
+- Request: Fix install.sh so a new terminal finds forgel-code on PATH
+- Class: patch
+- Status: planned
+- Created: 2026-11-22T02:57:06+00:00
+
+
+## Request
+
+The installer currently completes while the launcher directory never reaches PATH in a freshly opened terminal. It picks the profile file from $SHELL alone: on macOS a bash login shell never reads ~/.bashrc, and under `curl … | sh` $SHELL can be empty, sending the block to ~/.profile while the terminal reads ~/.zshrc. It also never checks that its own change took effect. This change makes the installer detect the real login shell, write the block into a profile file a new terminal actually reads, start a clean login shell afterwards and verify that `forgel-code` resolves, and fail with a message naming the edited file and the observed PATH when it does not. --uninstall removes the block from every profile file the installer can have written.
+
+## Repositories
+
+- `code` — pending, preset python, base 0.1.0, planned 0.1.1
+
+## Tasks
+
+- `20261122025705_fix-install-sh-so-a-new-terminal-finds-f` — Fix install.sh so a new terminal finds forgel-code on PATH (code, pending)
+
+## Audit
+
+- Rounds: 0
+- Verdict: not run
+- Report: `—`
