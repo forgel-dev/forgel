@@ -1,10 +1,10 @@
 # Agent Run: Release audit: `remove_profile_block` and `uninstall_profile` remove a block whenever `# >>> fo
 
 - Task: `20261122192217_release-audit-remove-profile-block-and-u`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
 - Steps: 12
-- Finished: 2026-11-22T21:24:59+00:00
+- Finished: 2026-11-22T22:03:15+00:00
 
 ## Requirements
 
@@ -20,9 +20,9 @@
 
 ## Assumptions
 
-- The unbalanced-marker case is fail-safe: the file is not modified at all and the function returns non-zero, as the specification's intent only forbids deleting unrelated content and never asks to guess where an unterminated block would end.
-- The five named regression tests exercise the real script through its `--uninstall` entry point in a subprocess with a temporary HOME/profile, matching how `tests/test_install.py` already tests install.sh, rather than re-implementing the awk filter in the test.
-- `test_remove_profile_block_removes_only_wellformed_block`, `test_remove_profile_block_preserves_orphan_end_marker` and `test_remove_profile_block_is_idempotent` live in a new `InstallerBlockRemovalTest` class, and `test_install_rerun_then_uninstall_preserves_profile` lives in the existing `InstallerProfileByteStabilityTest` so it can reuse that class's install-twice-and-uninstall round trip.
+- A malformed (unbalanced) start marker is treated as 'not a block': the file is left untouched and the diagnostic is the only change, per the specification's fail-safe assumption and risk note.
+- The uninstall path driven by the regression tests is the real entry point (`sh install.sh --uninstall` with `FORGEL_CODE_PROFILE` set to the fixture), matching how `tests/test_install.py` already exercises the script, rather than sourcing helper functions.
+- `test_install_rerun_then_uninstall_preserves_profile` lives in `InstallerProfileByteStabilityTest` next to the other install-then-uninstall byte-stability tests; the four removal tests live in `InstallerBlockRemovalTest`.
 
 ## Test Removals
 
@@ -34,10 +34,10 @@
 - Sessions: 1
 - Handoffs: 0
 - Model calls: 12
-- Estimated input tokens (all calls): 383567
-- Provider input/output tokens: 404035 / 4761
-- Provider cache hit/miss tokens: 362752 / 41283
-- Estimated prompt at the end: 45823 tokens
+- Estimated input tokens (all calls): 366749
+- Provider input/output tokens: 385973 / 3847
+- Provider cache hit/miss tokens: 340352 / 45621
+- Estimated prompt at the end: 46686 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261122192217_release-audit-remove-profile-block-and-u.md`)
@@ -202,11 +202,7 @@ A user installs `forgel-code`, re-runs `install.sh`, and later uninstalls. Their
 
 ## Summary
 
-The release-audit defect in `install.sh` is fixed and covered. `remove_profile_block` now pre-scans the profile with a new `has_unclosed_block` helper (POSIX awk over the existing `MARKER_START`/`MARKER_END` strings, unchanged); when a start marker has no following end marker it writes a diagnostic on stderr naming the profile file and `$MARKER_END`, returns non-zero and leaves the profile byte-for-byte untouched, before any temporary copy is made, so trailing unrelated content is never swallowed. A well-formed block is still removed with the pre-existing awk rewrite (only the two marker lines and the lines between them; every other line re-emitted in order and byte-identical, including the recorded no-final-newline separator case), so removal is idempotent and `uninstall_profile`/`add_profile_block` inherit the corrected behaviour. An orphan end marker remains ordinary content. The change is limited to the removal logic: the installer's dependency check (`import pip`), its `bounded_run` watchdog loop and its `VERIFY_GRACE` default are back to their original form, no new installer environment variable or interface is introduced, and the temporary probe test modules from earlier attempts are gone. `tests/test_install.py` keeps its prior harness and independent per-test temp state; the new `InstallerBlockRemovalTest` class adds `test_remove_profile_block_unmatched_start_marker_leaves_file_unchanged`, `test_remove_profile_block_removes_only_wellformed_block`, `test_remove_profile_block_preserves_orphan_end_marker` and `test_remove_profile_block_is_idempotent`, and `test_install_rerun_then_uninstall_preserves_profile` in the byte-stability class covers install-rerun-then-uninstall. All assertions are byte-for-byte profile comparisons plus strict stderr/stdout checks; no existing test was deleted, skipped, marked slow or weakened. Verified with `sh -n install.sh` and `python -m pytest -q tests`, which exits 0: 202 passed, 137 subtests passed in 108.07s.; commit failed: commit failed: На ветке main
-Ваша ветка опережает «origin/main» на 2 коммита.
-  (используйте «git push», чтобы опубликовать ваши локальные коммиты)
-
-нечего коммитить, нет изменений в рабочем каталоге
+The release-audit defect is fixed and the review feedback is addressed. `install.sh` now contains only the removal-logic change: a new `has_unclosed_block` helper (POSIX awk over the unchanged `MARKER_START`/`MARKER_END` strings) pre-scans the profile, and `remove_profile_block` emits a stderr diagnostic naming the profile path and `$MARKER_END`, returns non-zero and leaves the file byte-for-byte untouched *before* any temporary copy is made when a `# >>> forgel-code >>>` line has no following `# <<< forgel-code <<<`. The pre-existing awk removal program is unchanged, so a well-formed block and its two markers are dropped while every other line is re-emitted byte-identically (including the recorded no-final-newline separator case); `uninstall_profile` inherits the corrected behaviour. The earlier out-of-scope installer edits are gone: `FORGEL_CODE_VERIFY_GRACE`/`FORGEL_CODE_POLL_MS`, `verify_grace`/`verify_poll`, the millisecond `bounded_run` watchdog and the rewritten pip detection were reverted, leaving the original pip check (`import pip`), the original `bounded_run` second-granularity watchdog loop and the original `VERIFY_GRACE` default. The temporary probe modules `tests/test_zz_probe2.py` and `tests/test_zz_timing_probe.py` are deleted. `tests/test_install.py` keeps its prior independent-temp-state harness (no thread pool, no `lru_cache`, no shared install singleton) and gains exactly the five contract tests: `test_remove_profile_block_unmatched_start_marker_leaves_file_unchanged`, `test_remove_profile_block_removes_only_wellformed_block`, `test_remove_profile_block_preserves_orphan_end_marker`, `test_install_rerun_then_uninstall_preserves_profile` and `test_remove_profile_block_is_idempotent`; they drive the same `--uninstall` path `install.sh` uses and assert byte-for-byte profile content plus stderr diagnostics. Tested with `python -m pytest -q tests`: 202 passed, 137 subtests passed, exit code 0.
 
 ## Files Changed
 
@@ -225,16 +221,17 @@ The release-audit defect in `install.sh` is fixed and covered. `remove_profile_b
 ................................................. [ 50%]
 ........................................................................ [ 86%]
 ...........................                      [100%]
-202 passed, 137 subtests passed in 106.30s (0:01:46)
+202 passed, 137 subtests passed in 102.55s (0:01:42)
 
 ```
 
 ## Actions
 
-- read_file: install.sh
-- read_file: install.sh
 - list_files
-- run: ['grep', '-n', 'ThreadPoolExecutor\\|lru_cache\\|^def \\|^class \\|^    def ', 'tests/test_install.py']
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- run: ['sh', '-c', "grep -n 'ThreadPoolExecutor\\|lru_cache\\|^def \\|^class \\|^    def ' tests/test_install.py; wc -l tests/test_install.py"]
 - read_file: tests/test_install.py
 - read_file: tests/test_install.py
 - read_file: tests/test_install.py
