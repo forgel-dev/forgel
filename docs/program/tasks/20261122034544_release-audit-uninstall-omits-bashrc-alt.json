@@ -119,10 +119,79 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-22T03:45:44+00:00",
   "started_at": "2026-11-22T03:56:02+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-22T04:00:22+00:00",
+  "result": {
+    "summary": "Fixed the release-audit defect whereby `install.sh --uninstall` ignored `~/.bashrc`. `PROFILE_NAMES` in install.sh now includes `.bashrc`, so the uninstall path strips the installer's marked PATH block from `~/.bashrc` in addition to the files it already cleaned (`.zshrc`, `.zprofile`, `.zshenv`, `.bash_profile`, `.bash_login`, `.profile`), while the install path, marker text and CLI stay unchanged. The existing tolerant/byte-preserving `remove_profile_block` path is reused, so missing or marker-free files are no-ops and repeated runs do not modify anything. In tests/test_install.py the uninstall candidate list gained `.bashrc`, a `_marked_block` helper builds the exact install block, `test_uninstall_removes_the_marked_block_from_bashrc` covers the bash/`~/.bashrc` regression (block gone, `# keep-before`/`export EDITOR=vi`/`# keep-after` preserved), and `test_repeated_uninstall_of_bashrc_is_idempotent` runs `--uninstall` twice over all candidate files and asserts each file is unchanged the second time and free of markers. All work runs against a temporary HOME. Tested with `python -m pytest -q tests/test_install.py -k 'bashrc or idempotent'` (3 passed) and the full suite `python -m pytest -q` (180 passed, 137 subtests), which also runs `sh -n install.sh`.",
+    "files_changed": [
+      "install.sh",
+      "tests/test_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "-k",
+          "bashrc or idempotent"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "...................................................... [ 30%]\n................................................. [ 57%]\n........................................................................ [ 97%]\n.....                                            [100%]\n180 passed, 137 subtests passed in 66.02s (0:01:06)\n",
+    "assumptions": [
+      "The uninstall candidate list, not the install selection logic, was the defect; the install path was left untouched.",
+      "The regression and idempotence tests write the marked block directly (via a `_marked_block` helper matching the installer's block format) instead of running a full offline pip install, because the current install path selects `~/.bash_profile`/`.profile` for bash and never `~/.bashrc`; this reproduces the upgrade-leftover state described by the audit while keeping the tests fast and hermetic.",
+      "`.bashrc` was appended to the test module's `CANDIDATE_PROFILES` so the pre-existing every-candidate-profile test also covers it."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 10,
+      "estimated_input_tokens": 282985,
+      "provider_input_tokens": 301701,
+      "provider_output_tokens": 20498,
+      "estimated_tokens": 36520,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "cf763ff9dbe77b7a9a33935cfeecc393ae6aaca0",
+      "head": "a441e6bda77a4cf1d44345467714a6af4832010f",
+      "commit": "a441e6bda77a4cf1d44345467714a6af4832010f",
+      "commits": [
+        "a441e6bda77a4cf1d44345467714a6af4832010f"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261122034544_release-audit-uninstall-omits-bashrc-alt.md"
+  },
   "request": ""
 }
