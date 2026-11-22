@@ -6,9 +6,11 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "planned",
+  "status": "running",
   "tasks": [
-    "20261122025705_fix-install-sh-so-a-new-terminal-finds-f"
+    "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
+    "20261122034544_release-audit-uninstall-no-longer-honors",
+    "20261122034544_release-audit-uninstall-omits-bashrc-alt"
   ],
   "repos": {
     "code": {
@@ -26,11 +28,28 @@
     }
   },
   "audit": {
-    "rounds": 0,
-    "verdict": "",
-    "summary": "",
-    "report": "",
-    "task_ids": []
+    "rounds": 1,
+    "verdict": "fail",
+    "summary": "The install/profile-selection and fresh-shell verification changes match the main requirements and the recorded suite passes, but --uninstall is incomplete. It only cleans six hard-coded files, so blocks written through the documented FORGEL_CODE_PROFILE override and legacy ~/.bashrc blocks from the previous installer are left behind. That breaks the uninstall contract and is a regression from the previous uninstall.",
+    "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
+    "task_ids": [
+      "20261122025705_fix-install-sh-so-a-new-terminal-finds-f"
+    ],
+    "at": "2026-11-22T03:45:44+00:00",
+    "findings": [
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "--uninstall no longer honors FORGEL_CODE_PROFILE. The old code removed the block from the overridden profile; the new loop only visits PROFILE_NAMES, so a custom profile edited by a successful or failed install keeps the marked PATH block after uninstall.",
+        "suggestion": "Add ${FORGEL_CODE_PROFILE:-} to the uninstall candidate set when it is set (deduplicate against PROFILE_NAMES), and add a test that installs and uninstalls with a custom profile path."
+      },
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "--uninstall omits ~/.bashrc, although the previous installer wrote the marked block there for bash when ~/.bashrc existed or when no ~/.bash_profile existed. Upgrading and uninstalling therefore leaves the old PATH block behind.",
+        "suggestion": "Include ~/.bashrc in the legacy cleanup set for uninstall, update the README list, and extend CANDIDATE_PROFILES/test_uninstall_clears_every_candidate_profile to cover it."
+      }
+    ]
   },
   "control_push": {},
   "finalized_at": "",

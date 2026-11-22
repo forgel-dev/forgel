@@ -1,0 +1,159 @@
+{
+  "id": "20261122034544_release-audit-uninstall-no-longer-honors",
+  "title": "Release audit: --uninstall no longer honors FORGEL_CODE_PROFILE. The old code removed the block",
+  "spec": "docs/program/specs/20261122034544_release-audit-uninstall-no-longer-honors.md",
+  "summary": "Add ${FORGEL_CODE_PROFILE:-} to the uninstall candidate set when it is set (deduplicate against PROFILE_NAMES), and add a test that installs and uninstalls with a custom profile path.",
+  "requirements": [
+    "R1: When `FORGEL_CODE_PROFILE` is set and non-empty, `--uninstall` removes the marked block from that exact path in addition to the files in `PROFILE_NAMES`.",
+    "R2: Removal from the override file is byte-exact between `MARKER_START='# >>> forgel-code >>>'` and `MARKER_END='# <<< forgel-code <<<'`; every line outside the block is preserved in order and no new line is appended by an uninstall.",
+    "R3: When `FORGEL_CODE_PROFILE` is unset or empty, `--uninstall` behaves exactly as before: the six standard profile files under `$HOME` are cleaned and the exit status and output are unchanged.",
+    "R4: When the override path does not exist, or exists without the start marker, `--uninstall` still exits 0, prints no error for it and creates no file at that path.",
+    "R5: When the override path is the same file as one of the standard profile names under `$HOME` (for example `$HOME/.profile`), the file is cleaned exactly once, loses no non-block content, and the run still exits 0.",
+    "R6: A block written into the override profile by a completed install is removed by `--uninstall`; a block left behind by an install that wrote the profile but failed its fresh-shell verification and exited non-zero is removed by the same `--uninstall` invocation.",
+    "R7: `tests/test_install.py` gains tests, using the real script and a temporary `$HOME`, that cover: override block removed after a successful install, override block removed after a failed install, override-free run unchanged, and missing override file tolerated.",
+    "R8: `README.md` states that the uninstall also removes the marked block from the profile named by `FORGEL_CODE_PROFILE`; the documentation stays valid under the existing README guard tests (exactly one install command, one update line, one uninstall line, no extra installation path).",
+    "R9: `CHANGELOG.md` carries the fix under an `## [Unreleased]` heading with a `### Fixed` entry, keeping the existing `[0.1.0]` section intact.",
+    "R10: The whole repository suite passes: `python -m unittest discover -s tests`."
+  ],
+  "acceptance": [
+    "AC1: With `FORGEL_CODE_PROFILE` pointing at a file in the temporary `$HOME` that holds the exact marked block plus surrounding lines, `sh install.sh --uninstall` exits 0, the block is gone and the other lines are unchanged (R1, R2).",
+    "AC2: With `FORGEL_CODE_PROFILE` unset, a marked block in `$HOME/.profile` is still removed and `--uninstall` exits 0 (R3).",
+    "AC3: With `FORGEL_CODE_PROFILE` pointing at a nonexistent file, `--uninstall` exits 0 and that file is still absent afterwards; a marker-free existing file keeps its content (R4).",
+    "AC4: With `FORGEL_CODE_PROFILE` set to `$HOME/.profile`, the uninstall leaves `.profile` free of the block and of any other change, exit 0 (R5).",
+    "AC5: The new suite tests show the override profile cleaned after both a successful and a failed install (R6, R7).",
+    "AC6: `README.md` documents the override-profile cleanup and the README guard tests still pass (R8).",
+    "AC7: `CHANGELOG.md` records the fix under `## [Unreleased]` / `### Fixed` (R9).",
+    "AC8: The full suite `python -m unittest discover -s tests` passes (R10)."
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
+  ],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [
+    {
+      "criterion": "AC1",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; mkdir -p \"$d/home\"; p=\"$d/home/custom_profile\"; printf '# keep-before\\n# >>> forgel-code >>>\\nexport PATH=\"%s/bin:$PATH\"\\n# <<< forgel-code <<<\\n# keep-after\\n' \"$d\" > \"$p\"; HOME=\"$d/home\" FORGEL_CODE_PROFILE=\"$p\" FORGEL_CODE_HOME=\"$d/prefix\" FORGEL_CODE_BIN=\"$d/bin\" sh install.sh --uninstall; test \"$(cat \"$p\")\" = \"$(printf '# keep-before\\n# keep-after')\"; ! grep -q 'forgel-code >>>' \"$p\""
+      ]
+    },
+    {
+      "criterion": "AC2",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; mkdir -p \"$d/home\"; printf '# keep\\n# >>> forgel-code >>>\\nexport PATH=\"%s/bin:$PATH\"\\n# <<< forgel-code <<<\\n' \"$d\" > \"$d/home/.profile\"; HOME=\"$d/home\" SHELL=/bin/sh FORGEL_CODE_HOME=\"$d/prefix\" FORGEL_CODE_BIN=\"$d/bin\" sh install.sh --uninstall; test \"$(cat \"$d/home/.profile\")\" = \"# keep\""
+      ]
+    },
+    {
+      "criterion": "AC3",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; mkdir -p \"$d/home\"; printf 'no markers here\\n' > \"$d/home/plain_profile\"; HOME=\"$d/home\" FORGEL_CODE_PROFILE=\"$d/home/absent_profile\" FORGEL_CODE_HOME=\"$d/prefix\" FORGEL_CODE_BIN=\"$d/bin\" sh install.sh --uninstall; test ! -e \"$d/home/absent_profile\"; test \"$(cat \"$d/home/plain_profile\")\" = \"no markers here\""
+      ]
+    },
+    {
+      "criterion": "AC4",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; mkdir -p \"$d/home\"; printf '# keep\\n# >>> forgel-code >>>\\nexport PATH=\"%s/bin:$PATH\"\\n# <<< forgel-code <<<\\n# tail\\n' \"$d\" > \"$d/home/.profile\"; HOME=\"$d/home\" SHELL=/bin/sh FORGEL_CODE_PROFILE=\"$d/home/.profile\" FORGEL_CODE_HOME=\"$d/prefix\" FORGEL_CODE_BIN=\"$d/bin\" sh install.sh --uninstall; test \"$(cat \"$d/home/.profile\")\" = \"$(printf '# keep\\n# tail')\""
+      ]
+    },
+    {
+      "criterion": "AC5",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "AC6",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "AC7",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "AC8",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "Shell syntax of the edited script",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX shell (`sh`, `dash`, `bash`)",
+      "interface": "`install.sh` is run as `sh install.sh [--uninstall]`, syntax-checked with `sh -n`, and the fresh-shell check invokes the detected login shell as `-l -i -c`.",
+      "docs": "POSIX.1-2017 Shell Command Language, https://pubs.opengroup.org/onlinepubs/9699919799/utilities/sh.html",
+      "mode": "direct",
+      "evidence": "The repository dependency contract for `code` declares the concrete shell interface above, and `AGENTS.md` identifies `tests/` as the unittest suite covering the install/uninstall path. The shell is a locally installed executable, so no stub is needed.",
+      "stub": ""
+    },
+    {
+      "name": "pip / Python 3.9+",
+      "interface": "The uninstall test path installs the client from the local checkout with pip's `--target`/offline mode; the tests select the Python interpreter from the environment.",
+      "docs": "pip install documentation, https://pip.pypa.io/en/stable/cli/pip_install/",
+      "mode": "direct",
+      "evidence": "The repository dependency contract for `code` specifies the local-checkout, offline `--target` install path and test-selected Python 3.9+ interpreter; `AGENTS.md` lists `tests/` as the unittest suite. This is a locally installed toolchain, so no stub is needed.",
+      "stub": ""
+    },
+    {
+      "name": "Keep a Changelog format",
+      "interface": "Edit the repository `CHANGELOG.md` as a local fixture: add or maintain an `## [Unreleased]` heading with a `### Fixed` entry above the existing `[0.1.0]` section.",
+      "docs": "Keep a Changelog 1.1.0, https://keepachangelog.com/en/1.1.0/",
+      "mode": "direct",
+      "evidence": "The dependency contract for `code` states the exact `CHANGELOG.md` structure, and the release rules in `AGENTS.md`/`FORGEL.md` make `CHANGELOG.md` the release input. The file is local, so no stub is needed.",
+      "stub": ""
+    }
+  ],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-22T03:45:44+00:00",
+  "started_at": "2026-11-22T03:45:44+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}

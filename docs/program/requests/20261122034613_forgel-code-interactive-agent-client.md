@@ -12,7 +12,7 @@
 | Depends on | — |
 | Status | New |
 | Version | 1.0.0 |
-| Created | 2026-11-22T00:00:00+00:00 |
+| Created | 2026-11-22T03:46:13+00:00 |
 | Source | Local console request (local) |
 | Author | Forgel project agent |
 
@@ -166,6 +166,9 @@ UI.
 - `docs/program/decisions.md` (D-001, D-002, D-003, D-103)
 - `docs/program/commands.md`
 - `PLAN.md` §7.18
+- Supersedes `docs/program/requests/20261117053640843031_forgel-code-code.md`
+  as the product definition for Forgel Code; that request specified the
+  transport only.
 
 ## Revision History
 

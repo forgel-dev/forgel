@@ -3,7 +3,7 @@
 - Project: `forgel-1d2bf685`
 - Request: Fix install.sh so a new terminal finds forgel-code on PATH
 - Class: patch
-- Status: planned
+- Status: running
 - Created: 2026-11-22T02:57:06+00:00
 
 
@@ -17,10 +17,12 @@ The installer currently completes while the launcher directory never reaches PAT
 
 ## Tasks
 
-- `20261122025705_fix-install-sh-so-a-new-terminal-finds-f` — Fix install.sh so a new terminal finds forgel-code on PATH (code, pending)
+- `20261122025705_fix-install-sh-so-a-new-terminal-finds-f` — Fix install.sh so a new terminal finds forgel-code on PATH (code, done)
+- `20261122034544_release-audit-uninstall-no-longer-honors` — Release audit: --uninstall no longer honors FORGEL_CODE_PROFILE. The old code removed the block (code, pending)
+- `20261122034544_release-audit-uninstall-omits-bashrc-alt` — Release audit: --uninstall omits ~/.bashrc, although the previous installer wrote the marked bl (code, pending)
 
 ## Audit
 
-- Rounds: 0
-- Verdict: not run
-- Report: `—`
+- Rounds: 1
+- Verdict: fail
+- Report: `docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md`

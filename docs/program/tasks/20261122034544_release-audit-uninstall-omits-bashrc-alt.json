@@ -1,0 +1,31 @@
+{
+  "id": "20261122034544_release-audit-uninstall-omits-bashrc-alt",
+  "title": "Release audit: --uninstall omits ~/.bashrc, although the previous installer wrote the marked bl",
+  "spec": "",
+  "summary": "Include ~/.bashrc in the legacy cleanup set for uninstall, update the README list, and extend CANDIDATE_PROFILES/test_uninstall_clears_every_candidate_profile to cover it.",
+  "requirements": [
+    "--uninstall omits ~/.bashrc, although the previous installer wrote the marked block there for bash when ~/.bashrc existed or when no ~/.bash_profile existed. Upgrading and uninstalling therefore leaves the old PATH block behind."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: --uninstall omits ~/.bashrc, although the previous installer wrote the marked block there for bash when ~/.bashrc existed or when no ~/.bash_profile existed. Upgrading and uninstalling therefore leaves the old PATH block behind.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-22T03:45:44+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
