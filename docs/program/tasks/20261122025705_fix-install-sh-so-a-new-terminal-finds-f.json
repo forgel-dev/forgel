@@ -1,7 +1,7 @@
 {
   "id": "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
   "title": "Fix install.sh so a new terminal finds forgel-code on PATH",
-  "spec": "docs/program/requests/20261122025705940864_fix-install-sh-so-a-new-terminal-finds-forgel-code-on-path.md",
+  "spec": "docs/program/specs/20261122025705_fix-install-sh-so-a-new-terminal-finds-f.md",
   "summary": "The installer currently completes while the launcher directory never reaches PATH in a freshly opened terminal. It picks the profile file from $SHELL alone: on macOS a bash login shell never reads ~/.bashrc, and under `curl … | sh` $SHELL can be empty, sending the block to ~/.profile while the terminal reads ~/.zshrc. It also never checks that its own change took effect. This change makes the installer detect the real login shell, write the block into a profile file a new terminal actually reads, start a clean login shell afterwards and verify that `forgel-code` resolves, and fail with a message naming the edited file and the observed PATH when it does not. --uninstall removes the block from every profile file the installer can have written.",
   "requirements": [
     "install.sh must not derive the profile file from $SHELL alone: when $SHELL is unset, empty or names an unhandled shell, it reads the account login shell (macOS `dscl . -read \"$HOME\" UserShell`, otherwise the passwd entry) and only then falls back to $HOME/.profile.",
@@ -36,10 +36,12 @@
   ],
   "repo_id": "code",
   "test_command": [
-    "python3",
+    "python",
     "-m",
-    "pytest",
-    "-q"
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
   ],
   "assumptions": [
     "The fix belongs to the `code` repository, which holds install.sh, the launcher and the installer tests.",
@@ -52,12 +54,159 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "With SHELL unset and a zsh login shell the block lands in $HOME/.zshrc and a fresh `env -i` zsh resolves forgel-code to the installed launcher.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "With SHELL=/bin/bash and an existing ~/.bash_profile the block lands there and ~/.bashrc is neither created nor modified.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "With SHELL=/bin/bash and no bash profile file the installer creates ~/.bash_profile with the block.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "When the edited file is not read by the detected shell (for example FORGEL_CODE_PROFILE points at an ignored file) the installer exits non-zero and the message names that file.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "With FORGEL_CODE_NO_MODIFY_PATH=1 no profile file in the temporary HOME is created or modified, the export line is printed, the exit code is 0.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "Running the installer twice leaves exactly one marked block and identical content.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "--uninstall removes the block from every candidate file holding it and leaves unrelated lines unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "A piped `sh` install with the script on stdin still installs and verifies.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "`sh -n install.sh` exits 0.",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    },
+    {
+      "criterion": "The full test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "macOS Directory Service command `dscl`",
+      "interface": "Used only for macOS login-shell detection: `dscl . -read \"$HOME\" UserShell` prints `UserShell: <path>`. A test stub is placed first on PATH so macOS behavior is deterministic on Linux.",
+      "docs": "`install.sh` macOS login-shell branch; `environment.yaml` / `environment/Dockerfile`",
+      "mode": "stub",
+      "evidence": "`install.sh` requires the macOS lookup `dscl . -read \"$HOME\" UserShell`; the repository Linux environment does not provide `dscl`, so tests need a deterministic stand-in.",
+      "stub": "#!/bin/sh\n# Deterministic test stub for the macOS Directory Service call:\n#   dscl . -read \"$HOME\" UserShell\n# The shell is selected by FORGEL_STUB_USER_SHELL (default /bin/zsh).\nif [ \"$#\" -ne 4 ] || [ \"$1\" != \".\" ] || [ \"$2\" != \"-read\" ] || [ \"$4\" != \"UserShell\" ]; then\n    printf '%s\\n' 'dscl stub: supports only: dscl . -read <home> UserShell' >&2\n    exit 64\nfi\nshell=${FORGEL_STUB_USER_SHELL:-/bin/zsh}\nprintf 'UserShell: %s\\n' \"$shell\""
+    },
+    {
+      "name": "passwd database (getent / /etc/passwd)",
+      "interface": "Fallback login-shell lookup: `getent passwd \"$(id -u)\" | cut -d: -f7`, with an `/etc/passwd` fallback such as `awk -F: -v u=\"$(id -u)\" '$3 == u { print $7 }' /etc/passwd`. Tests may inject a fake `getent` first on PATH for controlled output.",
+      "docs": "`environment/Dockerfile`; Linux passwd database at `/etc/passwd`",
+      "mode": "direct",
+      "evidence": "The environment is a Linux base with the account database available locally; `install.sh` uses the account login shell when `$SHELL` is unset, empty or unhandled.",
+      "stub": ""
+    },
+    {
+      "name": "zsh",
+      "interface": "Verification shell: `env -i HOME=\"$HOME\" SHELL=/bin/zsh TERM=dumb PATH=\"/usr/bin:/bin\" /bin/zsh -l -i -c 'command -v forgel-code'`. Profile writes target `$HOME/.zshrc` for zsh.",
+      "docs": "`environment/Dockerfile`; install verification tests",
+      "mode": "direct",
+      "evidence": "The environment contract provides zsh, and the required fresh-shell test invokes zsh as a login interactive shell under `env -i` to resolve `forgel-code` from the written `.zshrc`.",
+      "stub": ""
+    },
+    {
+      "name": "bash",
+      "interface": "Verification shell: `env -i HOME=\"$HOME\" SHELL=/bin/bash TERM=dumb PATH=\"/usr/bin:/bin\" /bin/bash -l -i -c 'command -v forgel-code'`. Login profile writes target the first existing of `$HOME/.bash_profile`, `$HOME/.bash_login`, `$HOME/.profile`, creating `.bash_profile` when none exists.",
+      "docs": "`environment/Dockerfile`; install verification tests",
+      "mode": "direct",
+      "evidence": "Bash is provided by the environment and is required by the fresh-shell verification and login-profile behavior described in the task.",
+      "stub": ""
+    }
+  ],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-22T02:57:05+00:00",
-  "started_at": "",
+  "started_at": "2026-11-22T03:16:51+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {
+    "resume_count": 1,
+    "resumed_at": "2026-11-22T03:16:51+00:00"
+  },
+  "request": "docs/program/requests/20261122025705940864_fix-install-sh-so-a-new-terminal-finds-forgel-code-on-path.md"
 }
