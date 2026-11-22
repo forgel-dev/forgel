@@ -1,25 +1,38 @@
 {
   "id": "20261122062911_make-install-sh-put-forgel-code-on-path-",
   "title": "Make install.sh put forgel-code on PATH for a new terminal",
-  "spec": "docs/program/requests/20261122062911831737_make-install-sh-put-forgel-code-on-path-for-a-new-terminal.md",
+  "spec": "docs/program/specs/20261122062911_make-install-sh-put-forgel-code-on-path-.md",
   "summary": "The installer reports success while a new terminal cannot find forgel-code: the PATH block lands in a profile file the user's shell does not read on login and nothing verifies it. The change detects the real login shell, writes a duplicate-safe block into the files that shell reads, verifies the result in a fresh login shell with a loud failure message, and removes the block from every profile file on --uninstall.",
   "requirements": [
-    "Determine the login shell of the invoking user; when $SHELL is empty (for example in curl | sh) fall back to the shell of the parent/login process instead of assuming bash.",
-    "For zsh write the PATH block into ~/.zshrc; for bash on macOS use ~/.bash_profile (creating it when absent) and never rely on ~/.bashrc alone, which login bash does not read. For an unknown shell write ~/.profile and print an explicit warning naming the edited file.",
-    "The written block must be self-guarding against duplicates so that sourcing several profile files leaves exactly one occurrence of the prefix bin directory in PATH; use a POSIX-compatible case guard around the export.",
-    "After writing, run the user's login shell as a clean non-interactive login shell with a bounded timeout and check that forgel-code resolves there. On failure exit non-zero and print the edited file, the exact block written, the shell checked and the PATH that shell sees.",
-    "--uninstall must remove the marked block from every profile file the installer can write and must not alter other lines of those files.",
-    "Preserve existing behaviour: offline installation of a local tree, no virtualenv, the opt-out environment variables, and idempotency on repeated install and uninstall.",
-    "Tests must cover zsh without $SHELL, bash with an existing and a missing ~/.bash_profile, unknown shell, the duplicate-safe guard when several profiles are sourced, a failing verification, repeated install, --uninstall cleanup and installation through curl piped to sh.",
-    "README installation instructions must match the resulting behaviour and must not describe steps the installer no longer needs."
+    "Shell resolution never assumes bash. The detected login shell is, in order: $SHELL when it names a shell the installer handles (zsh, bash, sh, dash, ksh, ksh93, mksh, pdksh, ash, yash); otherwise the shell of the invoking process ancestry (the parent process, read with ps) when that names a handled shell; otherwise the account login shell (macOS `dscl . -read \"$HOME\" UserShell` first, then `getent passwd <uid>` or the /etc/passwd entry); otherwise /bin/sh. An empty or unset $SHELL must never by itself produce a bash decision.",
+    "When the detected shell is zsh, the block is written to ~/.zshrc, created when it does not exist.",
+    "When the detected shell is bash, the block is written to a file an interactive login bash reads: ~/.bash_profile when it exists; otherwise the first existing of ~/.bash_login and ~/.profile; when none of the three exists, ~/.bash_profile is created. The block is never written to ~/.bashrc alone.",
+    "When the detected shell is not zsh and not bash (the POSIX family, including the /bin/sh fallback and a shell the installer does not recognise), the block is written to ~/.profile and the installer prints a warning on stderr that names the edited file and the detected shell.",
+    "FORGEL_CODE_PROFILE, when set, replaces the selected profile file for both install and uninstall.",
+    "The written block is delimited by the marker lines `# >>> forgel-code >>>` and `# <<< forgel-code <<<`, compared byte for byte, and its body is a POSIX `case \"$PATH:\" in` guard that prepends the launcher directory to PATH only when that directory is not already present. No unguarded `export PATH=...` line is written.",
+    "Sourcing several profile files that each carry the block leaves exactly one occurrence of the launcher directory in PATH.",
+    "Unless the profile edit is opted out, after writing the block the installer starts the detected shell as a login shell from a cleared environment (`env -i` carrying only HOME, SHELL, TERM=dumb and PATH=/usr/bin:/bin, stdin from /dev/null), under a bounded time limit, and requires `command -v forgel-code` in that shell to resolve to the launcher path the installer wrote.",
+    "The bounded time limit must work on a host without GNU coreutils, so it cannot depend on the `timeout` binary alone; a portable watchdog that kills the shell and treats the result as a verification failure is required.",
+    "On verification failure the installer exits non-zero and prints, on stderr, the edited profile file, the exact block it wrote, the shell it checked and the PATH that shell reported.",
+    "On verification success the installer exits zero and prints the detected shell, the edited profile file and the path the fresh shell resolved.",
+    "When FORGEL_CODE_NO_MODIFY_PATH or FORGEL_CODE_NO_PROFILE_EDIT is set to an opt-out value, no profile file is opened for writing, no verification runs, the exact `export PATH=\"<bin dir>:$PATH\"` line is printed and the installer exits zero.",
+    "--uninstall removes the marked block from every profile file the installer can write — ~/.zshrc, ~/.zprofile, ~/.zshenv, ~/.bash_profile, ~/.bash_login, ~/.profile, ~/.bashrc — and from FORGEL_CODE_PROFILE when it is set. It changes no other line of those files, creates no missing file, and exits zero when a file is absent or carries no marker.",
+    "Running the installer twice leaves exactly one marked block in the selected profile file and exactly one occurrence of the launcher directory in PATH.",
+    "The script stays POSIX sh: `sh -n install.sh` succeeds under dash, and the script never reads stdin, so `curl ... | sh` and `sh < install.sh` work.",
+    "Existing behaviour is preserved: installation from a local checkout with FORGEL_CODE_SOURCE and without network, installation into FORGEL_CODE_HOME and the launcher into FORGEL_CODE_BIN, no virtualenv, `forgel-code --version` printing `forgel-code <version>`, and the opt-out variables.",
+    "tests/test_install.py gains passing cases named (or selected by a -k expression matching) zsh without $SHELL, bash with an existing ~/.bash_profile, bash with a missing ~/.bash_profile, unknown shell, the duplicate-safe guard when several profiles are sourced, failing verification, repeated install, --uninstall cleanup, and installation through a shell reading install.sh from stdin.",
+    "No existing test in tests/ is deleted or loosened; tests that assert the exact block text are updated to the guarded block.",
+    "README.md's Install, Options, Update and Uninstall text matches the resulting behaviour (guarded block, warning for an unrecognised shell, the verification and its failure report, the profile list) and names no step the installer no longer requires; tests/test_readme_install.py still passes."
   ],
   "acceptance": [
-    "After a successful install a new login shell of the user's shell resolves forgel-code without any manual PATH edit.",
-    "An install that cannot make forgel-code resolvable exits non-zero and reports the edited file, the written block and the PATH seen by the checked shell.",
-    "Running the installer twice leaves exactly one marked block and one occurrence of the prefix bin directory in PATH.",
-    "--uninstall removes the marked block from every profile file the installer could have written and preserves unrelated lines.",
-    "tests/test_install.py passes with new cases for zsh without $SHELL, bash with and without ~/.bash_profile, unknown shell, failed verification, idempotent re-run and --uninstall.",
-    "The full test suite of the repository passes and no existing installer test is weakened."
+    "After a successful install a login shell of the detected shell, started from a cleared environment, resolves forgel-code to the installed launcher without any manual PATH edit.",
+    "An install that cannot make forgel-code resolvable in that shell exits non-zero and prints the edited file, the written block, the shell checked and the PATH that shell sees.",
+    "Running the installer twice leaves exactly one marked block in the selected profile file and exactly one occurrence of the launcher directory in PATH.",
+    "Sourcing several profile files that carry the block yields exactly one occurrence of the launcher directory in PATH.",
+    "--uninstall removes the marked block from every profile file the installer can have written, keeps every unrelated line byte-identical and creates no file.",
+    "A zsh login shell with $SHELL unset receives the block in ~/.zshrc; a bash login shell with an existing ~/.bash_profile receives it there; a bash login shell with no bash startup file gets ~/.bash_profile created; an unrecognised shell receives it in ~/.profile with a warning naming that file.",
+    "tests/test_install.py passes with the new cases, and the full repository test suite passes with no existing installer test weakened.",
+    "README.md describes the behaviour the installer now implements and no step the installer no longer needs."
   ],
   "constraints": [
     "Work only in the code repository; the engine repository is not modified by this task.",
@@ -29,7 +42,7 @@
   ],
   "repo_id": "code",
   "test_command": [
-    "python3",
+    "python",
     "-m",
     "pytest",
     "-q"
@@ -45,12 +58,213 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "After a successful install a login shell of the detected shell, started from a cleared environment, resolves forgel-code to the installed launcher without any manual PATH edit.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "login_shell_resolves"
+      ]
+    },
+    {
+      "criterion": "An install that cannot make forgel-code resolvable exits non-zero and prints the edited file, the written block, the shell checked and the PATH that shell sees.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "failed_verification"
+      ]
+    },
+    {
+      "criterion": "Running the installer twice leaves exactly one marked block and exactly one occurrence of the launcher directory in PATH.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "repeated_install"
+      ]
+    },
+    {
+      "criterion": "Sourcing several profile files that carry the block yields exactly one occurrence of the launcher directory in PATH.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "guard"
+      ]
+    },
+    {
+      "criterion": "--uninstall removes the marked block from every profile file the installer can have written, keeps every unrelated line byte-identical and creates no file.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "uninstall"
+      ]
+    },
+    {
+      "criterion": "A zsh login shell with $SHELL unset receives the block in ~/.zshrc; a bash login shell with an existing ~/.bash_profile receives it there; a bash login shell with no bash startup file gets ~/.bash_profile created; an unrecognised shell receives it in ~/.profile with a warning naming that file.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "zsh or bash_profile or unknown_shell"
+      ]
+    },
+    {
+      "criterion": "tests/test_install.py passes with the new cases, and the full repository test suite passes with no existing installer test weakened.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py"
+      ]
+    },
+    {
+      "criterion": "The full repository test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Installation through a shell reading install.sh from stdin still works and the script never consumes stdin.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py",
+        "-k",
+        "piped or stdin"
+      ]
+    },
+    {
+      "criterion": "The script is POSIX sh and parses under dash.",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    },
+    {
+      "criterion": "No existing installer test was weakened or deleted, only adapted to the guarded block and the new stderr warning.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "README.md describes the behaviour the installer now implements and no step the installer no longer needs.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The README install-section guards still hold (one install command, no alternative main path, one update and one uninstall line).",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_readme_install.py"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX sh (dash, ash, ksh)",
+      "interface": "install.sh is executed as a POSIX sh script: `sh install.sh` (including the `curl ... | sh` path) and `sh install.sh --uninstall`; the script must stay POSIX-compatible (no bashisms) and is exercised by the suite through the system /bin/sh.",
+      "docs": "POSIX.1 Shell Command Language; sh(1), dash(1)",
+      "mode": "direct",
+      "evidence": "Repository instruction files (FORGEL.md/AGENTS.md) define the repository as a plain POSIX shell installer project; the specification's dependency entry records the installer is a POSIX sh script whose login session reads ~/.profile; the system provides /bin/sh as a local executable.",
+      "stub": ""
+    },
+    {
+      "name": "zsh",
+      "interface": "Verification shell: `zsh -l -i -c '<command>'`; the interactive flag is required so that ~/.zshrc is sourced in the login session, which is where the installer writes the PATH block. Used by tests for the \"zsh without $SHELL\" case.",
+      "docs": "zsh(1), section STARTUP/SHUTDOWN FILES",
+      "mode": "direct",
+      "evidence": "Specification dependency entry: zsh started as `zsh -l -i -c '<command>'`; an interactive login zsh reads /etc/zshenv, ~/.zshenv, /etc/zprofile, ~/.zprofile, /etc/zshrc, ~/.zshrc in that order. The suite must cover a zsh login shell, so zsh is a locally installed executable used directly by tests.",
+      "stub": ""
+    },
+    {
+      "name": "bash",
+      "interface": "Verification shell: `bash -l -i -c '<command>'`; login bash reads /etc/profile then the first existing of ~/.bash_profile, ~/.bash_login, ~/.profile, so the installer writes ~/.bash_profile on macOS. Used by tests for bash with an existing and a missing ~/.bash_profile.",
+      "docs": "bash(1), section INVOCATION",
+      "mode": "direct",
+      "evidence": "Specification dependency entry: bash started as `bash -l -i -c '<command>'`; login bash reads /etc/profile then the first existing of ~/.bash_profile, ~/.bash_login, ~/.profile, while ~/.bashrc is read by non-login interactive shells. bash is a locally installed executable used directly by tests.",
+      "stub": ""
+    },
+    {
+      "name": "macOS Directory Service `dscl`",
+      "interface": "On macOS the real `dscl . -read \"$HOME\" UserShell` prints `UserShell: <path>` and the installer parses the path. It is not present on Linux CI, so the suite substitutes a deterministic stub selected through FORGEL_STUB_USER_SHELL (tests/test_install.py DSCL_STUB contract); the installer code path is unchanged, only the executable is replaced by the stub on PATH.",
+      "docs": "dscl(1); stub contract recorded in tests/test_install.py (DSCL_STUB)",
+      "mode": "stub",
+      "evidence": "Specification dependency entry: 'dscl . -read \"$HOME\" UserShell' prints 'UserShell: <path>'; the rest of the suite may stub it through FORGEL_STUB_USER_SHELL as tests/test_install.py already records (DSCL_STUB). dscl exists only on macOS and is therefore not callable directly in this environment.",
+      "stub": "#!/bin/sh\n# Deterministic dscl stub (DSCL_STUB contract).\n# Emulates: dscl . -read \"$HOME\" UserShell  ->  \"UserShell: <path>\"\n# The login shell is supplied by FORGEL_STUB_USER_SHELL.\n\nif [ \"$1\" != \".\" ] || [ \"$2\" != \"-read\" ] || [ -z \"$3\" ]; then\n    echo \"dscl stub: unsupported invocation: $*\" >&2\n    exit 64\nfi\n\ncase \"$4\" in\n    UserShell|'') ;;\n    *)\n        echo \"dscl stub: unsupported attribute: $4\" >&2\n        exit 64\n        ;;\nesac\n\nif [ -z \"${FORGEL_STUB_USER_SHELL:-}\" ]; then\n    echo \"dscl stub: FORGEL_STUB_USER_SHELL is not set\" >&2\n    exit 1\nfi\n\nprintf 'UserShell: %s\\n' \"$FORGEL_STUB_USER_SHELL\"\nexit 0"
+    },
+    {
+      "name": "passwd database (`getent`, /etc/passwd)",
+      "interface": "Login-shell lookup when $SHELL is empty and dscl is unavailable: `getent passwd <uid>` and, as fallback, the /etc/passwd line for the uid; field 7 is the login shell.",
+      "docs": "getent(1), passwd(5)",
+      "mode": "direct",
+      "evidence": "Specification dependency entry: `getent passwd <uid>` or the /etc/passwd line for the uid, field 7 is the login shell. `getent` and /etc/passwd are local facilities present in the environment contract for a Linux sandbox (environment/Dockerfile, environment.yaml).",
+      "stub": ""
+    },
+    {
+      "name": "ps",
+      "interface": "Parent/login process fallback for the invoking user's shell: `ps -p <pid> -o comm=` (BSD and GNU both accept -o comm=), with basename normalisation so `/bin/sh` maps to sh; used when $SHELL is empty and no account database entry is usable.",
+      "docs": "ps(1)",
+      "mode": "direct",
+      "evidence": "Specification dependency entry: `ps -p <pid> -o comm=` (BSD and GNU both accept -o comm=) to read the parent process command for the parent-shell fallback; the output may need basename normalisation. ps is a locally installed executable (procps/BSD base).",
+      "stub": ""
+    },
+    {
+      "name": "GNU coreutils `timeout` (optional)",
+      "interface": "Optional bound on the verification shell: `timeout <seconds> <shell> -l -i -c '<command>'` when `timeout` is on PATH; when absent the installer must use a portable background-and-kill watchdog instead, so `timeout` is never a hard requirement.",
+      "docs": "timeout(1)",
+      "mode": "direct",
+      "evidence": "Specification dependency entry: used when present to bound the verification shell; when absent the installer must fall back to a portable background-and-kill watchdog. Must not be a hard requirement. GNU coreutils timeout is the local executable used when available.",
+      "stub": ""
+    }
+  ],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-22T06:29:11+00:00",
-  "started_at": "",
+  "started_at": "2026-11-22T06:29:12+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": "docs/program/requests/20261122062911831737_make-install-sh-put-forgel-code-on-path-for-a-new-terminal.md"
 }
