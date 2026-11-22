@@ -34,6 +34,12 @@ make test
 make lint
 ```
 
+`make test` runs unit tests only. Scenario replays are a separate category:
+`make scenario` and `make scenario-execute` use the configured real model,
+spend tokens and run only on an explicit request; `make scenario-test` runs
+the sandbox core with a scripted model and spends nothing. See
+[docs/scenarios.md](docs/scenarios.md).
+
 Run the M0 end-to-end skeleton:
 
 ```bash

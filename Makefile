@@ -2,7 +2,7 @@ PYTHON ?= python3
 CLI_PIP ?= $(HOME)/.forgel-cli/bin/pip
 export PYTHONPATH := src
 
-.PHONY: test lint demo chat clean e2e-blog install-cli scenario scenario-execute
+.PHONY: test lint demo chat clean e2e-blog install-cli scenario scenario-execute scenario-test
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
@@ -24,6 +24,12 @@ e2e-blog:
 
 # Real workflows in an isolated tree: temp home, local clones, no provider,
 # no push, no release on a real remote. See docs/scenarios.md.
+# Scenario runs are outside the default suite: they are a separate category,
+# explicit only. scenario-test uses a scripted model and spends no tokens;
+# scenario/scenario-execute use the configured real model.
+scenario-test:
+	$(PYTHON) -m unittest discover -s sandbox_tests -v
+
 scenario:
 	$(PYTHON) -m forgel scenario --scenario tests/scenarios/forgel-code.json --keep
 

@@ -28,7 +28,22 @@ offline.
 forgel scenario --scenario tests/scenarios/forgel-code.json
 make scenario            # the same replay, keeping the sandbox
 make scenario-execute    # the replay with the daemon in the sandbox
+make scenario-test       # sandbox unit tests, scripted model, no tokens
 ```
+
+Scenario runs are a separate category and are executed only on explicit
+request. They are **not** part of `make test`:
+
+| Target | Model | Tokens | Purpose |
+| --- | --- | --- | --- |
+| `make test` | none | none | the normal unit suite |
+| `make scenario-test` | scripted | none | the sandbox core: local repositories, router, recording |
+| `make scenario` | configured real model | yes | the product intake/plan replay |
+| `make scenario-execute` | configured real model | yes | the full replay with the daemon in the sandbox |
+
+`make test` discovers only `tests/`; the sandbox tests live in
+`sandbox_tests/` and the scenario fixture in `tests/scenarios/` is not a test
+module.
 
 A scenario file is JSON:
 

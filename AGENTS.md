@@ -123,5 +123,9 @@ A main-chat prompt without this block is incomplete.
 
 - Never commit secrets, private project names, customer data or internal docs.
 - Do not start external services or cloud resources in tests.
+- Scenario replays (`make scenario`, `make scenario-execute`, `forgel
+  scenario`) use the configured real model and spend tokens. They are outside
+  `make test` and run only on an explicit request. `make scenario-test` is the
+  scripted, token-free sandbox suite.
 - Do not weaken a test to make it pass; fix the product or the test's premise.
 - Do not claim a state you did not verify in this session.
