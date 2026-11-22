@@ -6,12 +6,13 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "blocked",
+  "status": "running",
   "tasks": [
     "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
     "20261122034544_release-audit-uninstall-no-longer-honors",
     "20261122034544_release-audit-uninstall-omits-bashrc-alt",
-    "20261122062911_make-install-sh-put-forgel-code-on-path-"
+    "20261122062911_make-install-sh-put-forgel-code-on-path-",
+    "20261122174453_make-the-install-sh-path-check-strictly-"
   ],
   "repos": {
     "code": {
@@ -29,8 +30,8 @@
     }
   },
   "audit": {
-    "rounds": 1,
-    "verdict": "fail",
+    "rounds": 0,
+    "verdict": "",
     "summary": "The release implements most of the PATH detection, guarded block, fresh-shell verification and uninstall work, and the suite passes, but blocking defects remain. The fresh-shell watchdog creates predictable world-readable files under /tmp, ignores its timeout status when deciding success, and can still hang on a shell that ignores SIGTERM. Re-installing over a pre-existing profile also accumulates the separator blank line, so the profile is not byte-identical across runs.",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
@@ -76,6 +77,6 @@
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": "The release audit for `code` returned verdict `fail` with one critical and two major findings that are real defects in `install.sh` itself, not in the specification: the request explicitly requires bounded verification that fails with a message naming the edited file and observed PATH, and requires that a re-install leave the rest of the profile byte-identical. The earlier attempt to route this back never queued a task, so the code is still unchanged and the release cannot be accepted or published as-is.",
+  "detail": "",
   "next_at": ""
 }

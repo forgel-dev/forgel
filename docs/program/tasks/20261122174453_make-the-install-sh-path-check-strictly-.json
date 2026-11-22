@@ -37,7 +37,7 @@
   ],
   "plan_id": "",
   "plan_goal": "",
-  "release_id": "20261122174453490970_make-the-install-sh-path-check-strictly-bounded-",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
