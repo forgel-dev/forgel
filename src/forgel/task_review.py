@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from .artifacts import write_text
-from . import git_ops
+from . import contract, git_ops
 from .config import Settings
 from .instructions import instruction_context
 from .layout import ProjectLayout
@@ -417,6 +417,7 @@ def _review_prompt(
 {instructions or "- none"}
 
 TASK: {task.get('title', task.get('id'))}
+{contract.digest(layout, task)}
 {spec_section}
 Requirements:
 {requirements}

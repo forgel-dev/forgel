@@ -7,6 +7,8 @@ URL, argv or ``.git/config``.
 
 from __future__ import annotations
 
+import shutil
+
 import base64
 import os
 import subprocess
@@ -324,6 +326,23 @@ def _known_path(repo: Path, path: str) -> bool:
         return True
     result = _run(repo, "ls-files", "--error-unmatch", "--", path)
     return result.returncode == 0
+
+
+def discard_paths(repo: Path, paths: Sequence[str]) -> None:
+    """Restore tracked files and remove untracked ones, best effort."""
+
+    for path in paths:
+        result = _run(repo, "checkout", "--", path)
+        if result.returncode == 0:
+            continue
+        target = repo / path
+        try:
+            if target.is_dir() and not target.is_symlink():
+                shutil.rmtree(target)
+            elif target.exists() or target.is_symlink():
+                target.unlink()
+        except OSError:
+            continue
 
 
 def commit_paths(repo: Path, paths: list[str], message: str) -> str:

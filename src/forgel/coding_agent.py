@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import git_ops, language, limits, tasks
+from . import contract, git_ops, language, limits, tasks
 from .artifacts import write_text
 from .config import Settings
 from .instructions import instruction_context
@@ -696,6 +696,30 @@ class CodingAgent:
                 else:
                     changed = sorted(set(changed) | set(selected))
             if status == "done" and changed:
+                affected = contract.affected_files(layout, task)
+                if affected:
+                    outside = sorted(
+                        path
+                        for path in set(changed) | set(dirty_product)
+                        if _task_path(path)
+                        and not contract.in_scope(path, affected)
+                    )
+                    if outside:
+                        git_ops.discard_paths(repo, outside)
+                        changed = [
+                            path
+                            for path in changed
+                            if contract.in_scope(path, affected)
+                        ]
+                        summary += (
+                            "; discarded out-of-scope changes: "
+                            + ", ".join(outside[:10])
+                        )
+                        log(
+                            f"[agent] {task['id']}: discarded "
+                            "out-of-scope changes: "
+                            + ", ".join(outside[:10])
+                        )
                 try:
                     commit_sha = git_ops.commit_paths(
                         repo, changed, f"Agent: {task['title']}"
@@ -1582,6 +1606,7 @@ class CodingAgent:
 {instructions or "- none"}
 
 TASK: {task['title']}
+{contract.digest(layout, task)}
 {spec_section}
 Requirements:
 {requirements}
