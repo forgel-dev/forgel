@@ -948,20 +948,18 @@ def plan_project(
                 layout, goal, notes, task_specs, model_client, log
             )
     if review is not None and not review.sufficient:
-        global_blocked = True
+        # The review is advisory: its gaps stay in the plan notes, and the
+        # tasks run so their own QA and review can judge the real result.
         details = "; ".join(
             f"task {item.get('task')}: {item.get('issue')}"
             for item in review.findings
         ) or "no findings"
-        blockers.append(
-            "the plan review found gaps: " + details
-        )
         notes = (
             notes
             + "\n\n## Plan review findings\n\n"
             + details
         )
-        log("[plan] review gaps recorded; the plan is written as blocked")
+        log("[plan] review gaps recorded; the plan proceeds")
     if review is not None:
         notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
     else:

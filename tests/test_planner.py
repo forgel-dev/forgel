@@ -209,7 +209,9 @@ class PlannerTest(unittest.TestCase):
         )
         self.assertIn("spec:", artifact)
 
-    def test_plan_review_records_an_insufficient_plan_as_blocked(self) -> None:
+    def test_plan_review_records_an_insufficient_plan_and_proceeds(
+        self,
+    ) -> None:
         specs = [_spec_for(item) for item in PLAN["tasks"]]
         revised = _spec_for(PLAN["tasks"][0])
         revised["requirements"] = ["Deliver the revised outcome"]
@@ -245,11 +247,11 @@ class PlannerTest(unittest.TestCase):
             client=client,
             log=lambda _m: None,
         )
-        self.assertTrue(result.blocked)
-        self.assertIn("still missing", " ".join(result.blockers))
+        self.assertFalse(result.blocked)
+        self.assertIn("still missing", result.notes)
         tasks = list_tasks(self.layout)
         self.assertEqual(len(tasks), 2)
-        self.assertTrue(
+        self.assertFalse(
             all(task["status"] == "blocked" for task in tasks)
         )
         self.assertTrue(
