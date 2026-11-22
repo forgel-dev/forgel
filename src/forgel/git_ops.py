@@ -341,6 +341,11 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> str:
             + ", ".join(suspicious)
         )
     _ok(repo, "add", "--", *existing)
+    if not staged_files(repo):
+        # Nothing new to record: the work is already in HEAD (a previous
+        # attempt committed it). This is a success, not a commit failure,
+        # and it does not depend on the git message locale.
+        return head_sha(repo)
     result = _run(
         repo,
         "-c",

@@ -105,6 +105,17 @@ class GitOpsTest(unittest.TestCase):
         ).stdout
         self.assertIn("gone.txt", files)
 
+    def test_committing_unchanged_paths_is_not_an_error(self) -> None:
+        (self.repo / "same.txt").write_text("same\n", encoding="utf-8")
+        first = git_ops.commit_paths(
+            self.repo, ["same.txt"], "add"
+        )
+        second = git_ops.commit_paths(
+            self.repo, ["same.txt"], "again"
+        )
+        self.assertEqual(second, first)
+        self.assertEqual(second, git_ops.head_sha(self.repo))
+
     def test_auth_env_does_not_contain_the_raw_token(self) -> None:
         env = git_ops.auth_env("super-secret-token")
         assert env is not None
