@@ -6,7 +6,7 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "blocked",
+  "status": "running",
   "tasks": [
     "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
     "20261122034544_release-audit-uninstall-no-longer-honors",
@@ -29,8 +29,8 @@
     }
   },
   "audit": {
-    "rounds": 2,
-    "verdict": "fail",
+    "rounds": 0,
+    "verdict": "",
     "summary": "The change set implements the requested shell detection, per-shell profile selection, guarded PATH block, fresh-shell verification and multi-file uninstall cleanup, and the recorded suites pass. However, the mandatory bounded fresh-shell check is not actually enforced: `verify_profile` ignores the watchdog's kill status, and the watchdog only sends SIGTERM, which an interactive bash ignores. A hanging login shell can therefore be reported as verified or hang the installer indefinitely instead of producing the required failure report. A predictable temporary path also introduces a local symlink race. These are blocking defects in the verification path the release claims to add.",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
@@ -75,6 +75,6 @@
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": "The change set implements the requested shell detection, per-shell profile selection, guarded PATH block, fresh-shell verification and multi-file uninstall cleanup, and the recorded suites pass. However, the mandatory bounded fresh-shell check is not actually enforced: `verify_profile` ignores the watchdog's kill status, and the watchdog only sends SIGTERM, which an interactive bash ignores. A hanging login shell can therefore be reported as verified or hang the installer indefinitely instead of producing the required failure report. A predictable temporary path also introduces a local symlink race. These are blocking defects in the verification path the release claims to add.",
+  "detail": "",
   "next_at": ""
 }
