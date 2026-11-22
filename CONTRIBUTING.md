@@ -65,6 +65,26 @@ closed to every other chat.
 | `PLAN.md` | Product and architecture plan |
 | `INTERNAL.md` | Internal notes — gitignored, never committed |
 
+## Prompts
+
+Prompts are code and are reviewed like code. A prompt carries only role,
+state, task, constraints and the provenance of its context.
+
+- Never add a concrete scenario: no failure example, incident, named provider,
+  tool, credential, environment or step-by-step script.
+- Never encode a fix for one observed case as prompt prose. Fix the context
+  construction, the role boundary or the runtime instead.
+- Capabilities are structured per-agent state, not text inferred from another
+  agent's report.
+- Context is scoped by producer. The conversation stores the user's dialogue,
+  this agent's own turns and user-visible reports, each labeled by producer.
+- If a rule needs an example to be understood, it is not a rule yet; design
+  the data and the boundary.
+
+This applies to every prompt in the engine and to every generated project
+instruction file. The canonical text is in [AGENTS.md](AGENTS.md) **Prompt
+Rules**, [FORGEL.md](FORGEL.md) and [docs/prompts.md](docs/prompts.md).
+
 ## Pull Requests
 
 1. Open an issue or RFC first for a significant change.
@@ -72,6 +92,9 @@ closed to every other chat.
 3. Add a test for behavior; update docs for user-facing changes.
 4. Run `make test` and `make lint`.
 5. In the PR description, state: what changed, why, how it was tested, and any risks.
+6. If a prompt changed, confirm no concrete scenario, incident, named
+   provider/tool/credential/environment or step-by-step script was added, and
+   that context is scoped by producer.
 
 Small fixes (typos, broken links) can go straight to a PR.
 

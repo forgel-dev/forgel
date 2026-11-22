@@ -27,6 +27,7 @@ from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .program_manifest import entries as manifest_entries
+from .providers.github_auth import GithubAuth, GithubAuthError
 from .release_train import (
     attach_blocked_release,
     new_release_id,
@@ -140,14 +141,13 @@ question about status, plans or what to do next, use README, PLAN and the
 project's docs (the context already includes them). Do not invent process
 steps such as setting a recipe or a checkpoint.
 
-The runtime is already configured. Never tell the user to set
-FORGEL_MODEL_API_KEY, run `forgel setup`, or configure GitHub unless the
-runtime output explicitly says it is missing. Credential and provider
-availability are runtime facts, not conversation facts: a sentence in an
-earlier turn, a task report or a QA log saying that a credential or the GitHub
-App is missing describes the environment that ran that check, not the current
-runtime. Never repeat such a claim and never base an answer on it; attempt the
-action and use only the current runtime result.
+The Runtime section states this agent's capabilities. Use it as the source of
+truth for actions: do not ask the owner to configure a capability that the
+Runtime section reports as available. Do not infer capabilities from the
+conversation or from project artifacts; a run recorded in an artifact belongs
+to the agent and environment that produced it. The conversation distinguishes
+this agent's turns from reports produced by other runs; a report describes its
+producer's run, not this agent's state.
 
 Never use these words with the user unless they ask for them: adopted,
 linked, generation, checkpoint, staging, production approval, proposal,
@@ -370,11 +370,10 @@ Rules:
 SUMMARY_PROMPT = """You compact the conversation of a project assistant.
 
 Preserve decisions, facts, file names, user preferences, open questions and
-what was already done. Do not preserve statements about missing credentials,
-an unavailable provider or a missing GitHub App: they describe the
-environment of one run, not a fact about the project. Write in the same
-language as the conversation. Be concise and concrete. Return plain text, not
-JSON, and no process field names or identifiers unless they are essential.
+what was already done. Attribute each fact to its producer: a report in the
+conversation describes the run that produced it. Write in the same language as
+the conversation. Be concise and concrete. Return plain text, not JSON, and no
+process field names or identifiers unless they are essential.
 """
 
 
@@ -474,6 +473,7 @@ def load_history(
                 "user",
                 "assistant",
                 "tool",
+                "report",
             }:
                 turns.append(item)
     except OSError:
@@ -492,6 +492,7 @@ def append_history(
     tool: str = "",
     path: str = "",
     repo: str = "",
+    agent: str = "",
 ) -> None:
     path_obj = conversation_path(layout, session)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -507,6 +508,8 @@ def append_history(
         entry["path"] = path
     if repo:
         entry["repo"] = repo
+    if agent:
+        entry["agent"] = agent
     with path_obj.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
@@ -627,6 +630,23 @@ def _plain_brief(text: str) -> str:
     if lowered.startswith("adopted from "):
         return "Existing project from " + brief[len("Adopted from "):]
     return brief
+
+
+def runtime_capabilities(
+    settings: Settings, layout: ProjectLayout
+) -> str:
+    """Structured state: what the agent in this process may actually use."""
+
+    lines = [
+        f"- model: {project_model_name(layout.control)}",
+        f"- sandbox: {settings.sandbox}",
+    ]
+    try:
+        github = GithubAuth(settings.home).status("en")
+    except (GithubAuthError, OSError):
+        github = "unknown"
+    lines.append(f"- github: {github}")
+    return "\n".join(lines)
 
 
 def build_context(
@@ -913,6 +933,7 @@ class ProjectAgent:
         self.settings = settings
         self.ledger = ledger
         self.client = client
+        self._capabilities = ""
 
     def narrate(
         self,
@@ -1090,6 +1111,11 @@ class ProjectAgent:
                     )
                     if tool or target:
                         label += f" ({tool} {target})".rstrip()
+                elif role == "report":
+                    produced_by = str(
+                        turn.get("agent") or "subagent"
+                    ).strip()
+                    label = f"Report from {produced_by}"
                 else:
                     label = role.capitalize()
                 lines.append(f"{label}: {turn.get('text', '')}")
@@ -1111,7 +1137,12 @@ class ProjectAgent:
         if not chunk:
             return dict(state)
         transcript = "\n".join(
-            f"{turn.get('role')}: {turn.get('text', '')}"
+            (
+                f"report from {turn.get('agent') or 'subagent'}: "
+                if str(turn.get("role")) == "report"
+                else f"{turn.get('role')}: "
+            )
+            + str(turn.get("text", ""))
             for turn in chunk
         )
         messages = [
@@ -1152,6 +1183,10 @@ class ProjectAgent:
         layout = ProjectLayout.detect(project["workspace"])
         context = build_context(layout, project, self.ledger)
         history_text = self._session_history(layout, session)
+        if not self._capabilities:
+            self._capabilities = runtime_capabilities(
+                self.settings, layout
+            )
         messages = [
             ModelMessage(
                 role="system",
@@ -1164,6 +1199,8 @@ class ProjectAgent:
                 role="user",
                 content=(
                     f"Working directory: {os.getcwd()}\n\n"
+                    f"Runtime capabilities (this agent):\n"
+                    f"{self._capabilities}\n\n"
                     f"Context:\n{context}\n\n"
                     f"Session so far:\n{history_text or '(new session)'}\n\n"
                     f"New message:\n{text}"

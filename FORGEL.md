@@ -22,6 +22,22 @@ review reports, documentation and commit messages. Chat replies and
 clarifying questions follow the user's language. Repository instruction files
 may add conventions, but the artifact language stays English.
 
+## Prompts
+
+A prompt is role, state, task, constraints and context provenance. It never
+carries a concrete scenario: no failure example, incident, named provider,
+tool, credential, environment or step sequence. A fix for one observed case
+belongs in the context builder, the role boundary or the runtime, never in
+prompt prose.
+
+Each agent receives its own capabilities as structured state. Another run's
+report is not this agent's state. The conversation stores the user's dialogue,
+this agent's own turns and the user-visible reports, each labeled by producer.
+
+This applies to every prompt: project agent, planner, spec writer, coder,
+reviewer, QA, release audit, outcome explainer and conversation compaction.
+See [AGENTS.md](AGENTS.md) **Prompt Rules** and [docs/prompts.md](docs/prompts.md).
+
 ## Native Rules
 
 - The source of truth for agent instructions is `AGENTS.md`. This file adds

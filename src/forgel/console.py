@@ -682,6 +682,7 @@ def _drain(
             output(_t(lang, "daemon_error", error=exc))
             return
         if layout is not None:
+            produced_by = "release"
             explanation = _explain_release_outcome(
                 agent,
                 project,
@@ -692,6 +693,7 @@ def _drain(
                 session=session,
             )
             if not explanation:
+                produced_by = "task"
                 explanation = _explain_outcomes(
                     agent,
                     project,
@@ -702,13 +704,17 @@ def _drain(
                     session=session,
                 )
             if explanation:
+                # The user sees this text, so it belongs to the conversation;
+                # it is stored as a report from the run that produced it, not
+                # as one of the project agent's own turns.
                 output(explanation)
                 append_history(
                     layout,
-                    "assistant",
+                    "report",
                     explanation,
                     actor,
                     session=session,
+                    agent=produced_by,
                 )
         if processed:
             continue

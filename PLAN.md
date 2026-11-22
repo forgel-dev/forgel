@@ -199,6 +199,7 @@ Brand assets, the palette and the GitHub field texts live in `brand/`.
 | **D-098** | The coding agent may install dependencies and test tools with the project's package manager; there is no blanket package-install ban | An autonomous software studio cannot build a stack whose test or tooling dependencies are absent; the ban produced a fake `pytest` module instead of a real dependency | Package-manager commands (`python -m pip`, `pip`, `uv`, `poetry`, `npm`, `yarn`, `pnpm`, `bundle`, `composer`, …) are allowed; dependency changes belong in the manifest or lockfile; the task or specification may restrict dependencies and wins; sandbox egress remains configurable (`FORGEL_SANDBOX_NETWORK`, `bridge` when installs are needed); the agent must never fake a missing package |
 | **D-099** | Conventions such as the artifact language are plain text in `FORGEL.md`/`AGENTS.md`, not engine settings. Project-level rules apply to every repository; repository-level rules are more specific and take precedence | The engine must not grow a setting for every convention; text files are readable by people and agents, and a project can override them per repository | Every model role receives the project-level and task-repository instruction files in its prompt; repository rules win on conflict; the language policy is text: public artifacts English, chat replies in the user's language |
 | **D-100** | Every accepted user request is a release, and a release lives at the repository level: the request becomes one release train, the planner splits it into tasks, and when all tasks are accepted the runtime audits the whole change set and publishes one version in each repository the request touched. Versions are independent per repository; a request across dependent repositories releases them together in one train. The version comes from the repository's release tags or `CHANGELOG.md`, or starts at `0.1.0`; a patch release increments the patch number, a minor release (new functionality or changed behaviour) the minor number, and a major release is only meaningful from `1.0.0` onward — before that a breaking change is still minor, and `1.0.0` is the first product release. Publication writes the release plan, `CHANGELOG.md`, `releases/<version>/{plan,release}.md`, an annotated `v<version>` tag, a provider release and the program release record | The user's unit is the request and its result, not an internal task; a repository is the unit of versioning because independent repositories ship independently, while a cross-repository request must still be audited and released as one change set | Release trains are created by the agent for a change request and by the planner for a plan; tasks carry `release_id` and `release_class`; releases are serialised per repository so a later train cannot publish on top of an unfinished one in the same repository, while independent repositories release independently; the audit runs after every task is accepted and may queue fix tasks for up to two rounds; publication is automatic and retries failed pushes and provider releases; version manifests are written by the repository's runtime preset (`preset:` in `program.yaml` or detection from the repository files), so Python, Node and Rails version files are a preset concern rather than release-train logic; the explicit `forgel release` command (D-095) remains for a manual release outside the request flow |
+| **D-101** | A prompt carries role, state, task, constraints and context provenance — never a concrete scenario. Capabilities are structured per-agent state. The conversation stores the user's dialogue, this agent's own turns and user-visible reports, each labeled by producer; another run's report is evidence about that run only | A prompt patched for one observed case fails on the next; roles run with different permission sets and environments, and shared history let one run's report be read as the current agent's state. Structural fixes belong in the context builder, the role boundary and the runtime capability provider | `AGENTS.md` Prompt Rules and `docs/prompts.md` are binding; every prompt change is reviewed for scenario prose; the project agent receives a Runtime capabilities block; task and release reports are stored with role `report`, their producer and their run, and rendered as reports; compaction attributes facts to their producer; a prompt that cannot be stated without an example is redesigned as data and a boundary |
 
 Business-model and jurisdiction decisions are not part of this public document. Numbering is continuous: D-014 is an internal business decision.
 
@@ -593,6 +594,7 @@ Practices proven in production; Forgel inherits them as role, document and gate 
 | Incident runbook: honest state, no versions/hosts/stack traces/PII/ETAs; review afterwards | Generated runbook |
 | "AI writes the spec, not the code": declarative spec + deterministic engine | D-021 |
 | Context: source read once → derivative; retrieval instead of dumping; conversation window; stable prefix; narrow typed tools | Agent runtime |
+| Prompts carry role, state, task, constraints and context provenance; no scenario, incident, provider, tool, credential, environment or step sequence | All prompt templates; review rejects scenario prose (`AGENTS.md` Prompt Rules, `docs/prompts.md`) |
 | No claim about state without in-session evidence; a document is evidence as of its revision date | Evidence discipline |
 | Global settings only via env, not chat commands | Chat changes one project only |
 
@@ -609,6 +611,7 @@ In single-repo practice, "we only write what we do here" and "never wait for the
 | A tracker task is for a UX change | One change set produces tasks in several repos | Program acceptance task + repo implementation tasks |
 | Documents live in the repo | Some decisions are above the repo | Program docs are the source of truth; repo docs are derived |
 | The model is inherited | Routing by role and cost is required | Core policy; the agent does not choose its model (D-022) |
+| The prompt is patched for every incident | The same incident has different permission sets and environments per role | Fixes go into the context builder, the role boundary and the runtime capability provider; prompts carry structure only (D-101) |
 | The owner starts local services | A sandbox exists | The sandbox starts and stops everything itself |
 
 ### 7.3 Artifact Hierarchy
@@ -1282,6 +1285,30 @@ The written contract for the future client repository is
 `docs/program/commands.md`.
 
 ---
+
+### 7.19 Prompt Discipline
+
+A prompt carries role, state, task, constraints and the provenance of its
+context. It never carries a concrete scenario. This is a non-negotiable
+project rule, not a style preference.
+
+- No failure example, incident, bug, named provider, tool, credential,
+  environment or sequence of steps in a prompt.
+- Never encode a fix for one observed case as prompt prose. Fix the context
+  builder, the role boundary or the runtime capability provider.
+- Capabilities are structured per-agent state. An agent does not infer them
+  from another agent's report, an artifact or earlier conversation.
+- Context is scoped by producer. A run, report or artifact describes the agent
+  and environment that produced it, not the current agent.
+- The conversation stores the user's dialogue, this agent's own turns and the
+  user-visible reports, each labeled by producer. A report is never relabeled
+  as this agent's own state.
+- If a rule cannot be stated without an example, it is not a rule yet: design
+  the data and the boundary.
+- A prompt change that adds scenario prose is rejected in review.
+
+Binding text: [AGENTS.md](AGENTS.md) **Prompt Rules**,
+[FORGEL.md](FORGEL.md) **Prompts**, [docs/prompts.md](docs/prompts.md).
 
 ## 8. Gates
 

@@ -76,7 +76,36 @@ class AgentTest(unittest.TestCase):
         self.assertIn("Alph", system)
         self.assertIn(project["id"], system)
         self.assertIn("An alpha brief.", user)
+        self.assertIn("Runtime capabilities (this agent):", user)
+        self.assertIn("github:", user)
         self.assertTrue(conversation_path(ProjectLayout.detect(project["workspace"])).exists())
+
+    def test_a_user_visible_report_keeps_its_producer(self) -> None:
+        project = self._project("Reports", "A brief.")
+        layout = ProjectLayout.detect(project["workspace"])
+        append_history(
+            layout,
+            "report",
+            "REPORT-MARKER: published 1.2.3",
+            "runtime",
+            session="0",
+            agent="release",
+        )
+        client = ScriptedModelClient(
+            [json.dumps({"kind": "answer", "reply": "ok"})]
+        )
+        agent = ProjectAgent(self.settings, self.ledger, client)
+
+        agent.handle(project, "next", "@tester", session="0")
+
+        prompt = client.requests[0][1].content
+        self.assertIn(
+            "Report from release: REPORT-MARKER: published 1.2.3",
+            prompt,
+        )
+        self.assertNotIn(
+            "Assistant: REPORT-MARKER: published 1.2.3", prompt
+        )
 
     def test_context_uses_documents_not_internal_bookkeeping(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

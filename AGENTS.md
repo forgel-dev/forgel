@@ -26,9 +26,11 @@ shim and is not part of the public repository.
 - Roles have clean context: spec writer, developer, reviewer, QA, acceptor.
 - Artifacts in git are the source of truth; memory is an index.
 - Process prohibitions live in code (gates, ledger, runners), not only in prose.
-- Prompts describe the state, the task and the constraints. Never embed
-  concrete scenarios, expected failures or step-by-step scripts; pass the
-  evidence and let the model reason from it.
+- Prompts describe the role, the state, the task, the constraints and the
+  provenance of the context. Never embed concrete scenarios, expected
+  failures, incidents, named providers/tools/credentials/environments or
+  step-by-step scripts; pass structured evidence and let the model reason
+  from it. See **Prompt Rules** below; they are non-negotiable.
 - Work autonomously (D-075). Pre-release work proceeds without confirmation;
   record every assumption in the task and report. Ask only for a material
   fork, an irreversible or production action, or missing access. Finish the
@@ -40,6 +42,33 @@ shim and is not part of the public repository.
   responsible. The production gate requires the compliance acknowledgement.
 - Do not add tool attribution lines or session references to commits, pull
   requests or issues. Keep public history about the product.
+
+## Prompt Rules (Non-Negotiable)
+
+A prompt carries only: role, state, task, constraints and the provenance of
+its context. Nothing else. This applies to every prompt: project agent,
+planner, spec writer, coder, reviewer, QA, release audit, outcome explainer
+and conversation compaction.
+
+1. Never put a concrete scenario in a prompt: no failure example, incident,
+   bug, named provider, tool, credential, environment or sequence of steps.
+2. Never turn one observed case into prompt prose. Fix the context
+   construction, the role boundary or the runtime instead. A prompt is not a
+   patch surface.
+3. Capabilities are structured state passed to that agent, not text inferred
+   from another agent's report.
+4. Context is scoped by producer: a run, report or artifact describes the
+   agent and environment that produced it, not the current agent.
+5. The conversation stores the user's dialogue, this agent's own turns and
+   the user-visible reports, each labeled by producer. A report is never
+   relabeled as this agent's own state.
+6. If a rule cannot be stated without an example, it is not a rule yet.
+   Design the data and the boundary.
+7. A prompt change that adds a scenario, incident, named
+   provider/tool/credential/environment or step-by-step script is rejected in
+   review.
+
+The same rule, in longer form, is in [docs/prompts.md](docs/prompts.md).
 
 ## Change Workflow
 

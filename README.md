@@ -763,8 +763,10 @@ Core, plugin SDK, official plugins and templates: Apache-2.0. Generated project 
 
 ## Agent Instructions
 
-- [AGENTS.md](AGENTS.md) — cross-harness canon.
+- [AGENTS.md](AGENTS.md) — cross-harness canon; **Prompt Rules** are binding.
 - [FORGEL.md](FORGEL.md) — native Forgel instructions, read first.
+- [docs/prompts.md](docs/prompts.md) — prompt discipline: role, state, task,
+  constraints and context provenance only; never a concrete scenario.
 
 ## Contributing
 

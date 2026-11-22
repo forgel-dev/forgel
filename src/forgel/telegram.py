@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from . import daemon_config
-from .agent import ProjectAgent
+from .agent import ProjectAgent, append_history
 from .artifacts import read_json
 from .chat import HELP, CommandRouter, Reply  # noqa: F401 - HELP is re-exported
 from .config import Settings
@@ -449,6 +449,14 @@ class TelegramGateway:
                     )
                     if text:
                         self._send(chat_id, Reply(text))
+                        append_history(
+                            layout,
+                            "report",
+                            text,
+                            "runtime",
+                            session=str(chat_id),
+                            agent="release",
+                        )
 
     # --------------------------------------------------------- notifications
 
@@ -485,6 +493,7 @@ class TelegramGateway:
             project = self.ledger.get_project(project_id)
             if project is None:
                 continue
+            layout = ProjectLayout.detect(project["workspace"])
             for chat_id in sorted(self.config.allowed_chat_ids):
                 message = self._transition_message(
                     project,
@@ -493,6 +502,14 @@ class TelegramGateway:
                 )
                 if message:
                     self._send(chat_id, Reply(message))
+                    append_history(
+                        layout,
+                        "report",
+                        message,
+                        "runtime",
+                        session=str(chat_id),
+                        agent="runtime",
+                    )
         self._states = current
 
     def _transition_message(
