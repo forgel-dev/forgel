@@ -142,7 +142,9 @@ def create_sandbox(
     repo.parent.mkdir(parents=True, exist_ok=True)
     _git(base, "clone", "--no-tags", "--no-hardlinks", str(fixture), str(repo))
     if snapshot:
-        _git(repo, "checkout", "-q", snapshot)
+        # A branch, not a detached HEAD: the coding agent commits its work on
+        # the branch it finds.
+        _git(repo, "checkout", "-q", "-B", "scenario-snapshot", snapshot)
     _git(repo, "remote", "remove", "origin")
     set_entries(
         layout,

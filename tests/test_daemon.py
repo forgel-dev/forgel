@@ -64,6 +64,55 @@ class DaemonTest(unittest.TestCase):
             qa_runtime="local",
         )
 
+    def _failed_task(self, tmp: str):
+        base = self._settings(tmp)
+        settings = Settings(
+            home=base.home,
+            registry_path=base.registry_path,
+            templates_path=base.templates_path,
+            jurisdiction_path=base.jurisdiction_path,
+            qa_runtime="local",
+            controller=True,
+        )
+        ledger = Ledger(settings.db_path)
+        self.addCleanup(ledger.close)
+        project_id = create_project(
+            settings, ledger, "Controller", "A brief.", mode="brownfield"
+        )
+        project = ledger.get_project(project_id)
+        assert project is not None
+        layout = ProjectLayout.detect(project["workspace"])
+        set_entries(
+            layout,
+            [
+                {
+                    "id": "main",
+                    "role": "application",
+                    "provider": "local",
+                    "url": "",
+                    "depends_on": [],
+                }
+            ],
+        )
+        task = create_task(
+            layout, "Do work", ["A"], ["B"], repo_id="main"
+        )
+        tasks.update_task(
+            layout,
+            task["id"],
+            status="failed",
+            result={
+                "summary": "task QA failed",
+                "qa": {"status": "fail"},
+                "failure": {
+                    "kind": "code",
+                    "message": "the test failed",
+                    "retryable": False,
+                },
+            },
+        )
+        return settings, ledger, project, layout, task
+
     def test_once_processes_a_pending_project(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self._settings(tmp)
@@ -293,6 +342,73 @@ class DaemonTest(unittest.TestCase):
             self.assertTrue(
                 layout.artifact(stored["spec"]).exists()
             )
+
+    def test_the_controller_reworks_a_failed_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, ledger, project, layout, task = (
+                self._failed_task(tmp)
+            )
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "operation": "rework",
+                            "reason": "the test is missing",
+                            "feedback": ["Add the test"],
+                        }
+                    )
+                ]
+            )
+
+            handle_failure(
+                settings,
+                ledger,
+                project,
+                layout,
+                task["id"],
+                client,
+                lambda _m: None,
+            )
+
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "pending")
+            self.assertEqual(
+                stored["result"]["feedback"], ["Add the test"]
+            )
+
+    def test_the_controller_asks_the_owner_as_the_last_resort(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings, ledger, project, layout, task = (
+                self._failed_task(tmp)
+            )
+            question = "Which behavior is wanted when the profile is unreadable?"
+            client = ScriptedModelClient(
+                [
+                    json.dumps(
+                        {
+                            "operation": "ask_user",
+                            "question": question,
+                        }
+                    )
+                ]
+            )
+
+            handle_failure(
+                settings,
+                ledger,
+                project,
+                layout,
+                task["id"],
+                client,
+                lambda _m: None,
+            )
+
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "blocked")
+            self.assertIn("needs the owner", stored["result"]["summary"])
+            self.assertIn(question, stored["result"]["summary"])
 
     def test_an_environment_failure_drops_stale_rework_feedback(
         self,

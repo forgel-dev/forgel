@@ -144,7 +144,14 @@ def run_operation(
             raise ValueError("no model is configured for the release audit")
         items = release_tasks(layout, release_id)
         passed = audit_release(
-            settings, layout, dict(project), release, items, client, log
+            settings,
+            layout,
+            dict(project),
+            release,
+            items,
+            client,
+            log,
+            ledger=ledger,
         )
         updated = load_release(layout, release_id) or release
         audit = dict(updated.get("audit") or {})

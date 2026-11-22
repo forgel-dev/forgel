@@ -483,6 +483,132 @@ def _rewrite_spec_from_failure(
     return True
 
 
+def _apply_controller_decision(
+    settings: Settings,
+    ledger: Ledger,
+    project: dict[str, Any],
+    layout: ProjectLayout,
+    task: dict[str, Any],
+    task_id: str,
+    data: dict[str, Any],
+    failure: dict[str, Any],
+    attempts: int,
+    client: ModelClient | None,
+    decision: Any,
+    log: Callable[[str], None],
+) -> bool:
+    """Execute the controlling agent's next step for a failed task."""
+
+    operation = str(decision.operation)
+    if operation == "retry":
+        data["attempts"] = attempts + 1
+        data["last_failure"] = failure
+        data.pop("failure", None)
+        tasks.update_task(
+            layout,
+            task_id,
+            status="pending",
+            started_at="",
+            finished_at="",
+            result=data,
+        )
+        log(f"[controller] task {task_id}: retry")
+        return True
+    if operation == "rework":
+        data["rework_count"] = int(data.get("rework_count", 0)) + 1
+        data["feedback"] = decision.feedback or _feedback_from(data)
+        data["last_failure"] = failure
+        data.pop("failure", None)
+        tasks.update_task(
+            layout,
+            task_id,
+            status="pending",
+            started_at="",
+            finished_at="",
+            result=data,
+        )
+        log(f"[controller] task {task_id}: rework")
+        return True
+    if operation == "respec":
+        issue = str(decision.issue or failure.get("message") or "")
+        if client is not None and _rewrite_spec_from_failure(
+            settings,
+            ledger,
+            project,
+            layout,
+            task,
+            client,
+            dict(failure, message=issue),
+            log,
+        ):
+            return True
+        return False
+    if operation == "accept":
+        from .task_review import accept_task
+
+        accept_task(
+            settings,
+            ledger,
+            project,
+            task,
+            actor="controller",
+            notes=str(decision.reason or decision.summary),
+        )
+        log(f"[controller] task {task_id}: accepted")
+        return True
+    if operation == "reject":
+        from .task_review import reject_task
+
+        reject_task(
+            settings,
+            ledger,
+            project,
+            task,
+            actor="controller",
+            notes=str(decision.reason or decision.summary),
+        )
+        log(f"[controller] task {task_id}: rejected")
+        return True
+    if operation == "cancel":
+        data["summary"] = "cancelled by the controller"
+        tasks.update_task(
+            layout,
+            task_id,
+            status="cancelled",
+            finished_at=_now(),
+            result=data,
+        )
+        log(f"[controller] task {task_id}: cancelled")
+        return True
+    if operation == "ask_user":
+        note = str(
+            decision.question
+            or decision.reason
+            or "the controller needs the owner"
+        )
+        data["summary"] = "needs the owner: " + note
+        data["blocked_by"] = "owner"
+        tasks.update_task(
+            layout, task_id, status="blocked", result=data
+        )
+        log(f"[controller] task {task_id}: needs the owner: {note}")
+        return True
+    if operation in {"block", "stop"}:
+        _quarantine(
+            settings,
+            ledger,
+            project,
+            layout,
+            task_id,
+            failure,
+            attempts,
+            log,
+        )
+        log(f"[controller] task {task_id}: {operation}")
+        return True
+    return False
+
+
 def handle_failure(
     settings: Settings,
     ledger: Ledger,
@@ -530,6 +656,58 @@ def handle_failure(
             f"in {delay}m (at {retry_at})"
         )
         return
+    if settings.controller and client is not None:
+        from . import controller
+
+        try:
+            decision = controller.decide(
+                settings,
+                ledger,
+                project,
+                layout,
+                "task_failure",
+                {
+                    "task": {
+                        "id": task_id,
+                        "title": task.get("title"),
+                        "repo_id": task.get("repo_id"),
+                        "status": task.get("status"),
+                        "requirements": task.get("requirements") or [],
+                        "acceptance": task.get("acceptance") or [],
+                        "constraints": task.get("constraints") or [],
+                    },
+                    "failure": failure,
+                    "result": {
+                        "qa": data.get("qa"),
+                        "review": data.get("review"),
+                        "feedback": data.get("feedback") or [],
+                        "files_changed": data.get("files_changed") or [],
+                        "commands": data.get("commands") or [],
+                        "attempts": attempts,
+                        "rework_count": data.get("rework_count", 0),
+                    },
+                },
+                client,
+                log,
+            )
+        except Exception as exc:  # noqa: BLE001 - the controller must not crash the daemon
+            log(f"[controller] task failure decision failed: {exc}")
+            decision = None
+        if decision is not None and _apply_controller_decision(
+            settings,
+            ledger,
+            project,
+            layout,
+            task,
+            task_id,
+            data,
+            failure,
+            attempts,
+            client,
+            decision,
+            log,
+        ):
+            return
     spec_feedback = [
         str(item) for item in (data.get("spec_feedback") or [])
     ]

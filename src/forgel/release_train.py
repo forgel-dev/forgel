@@ -845,6 +845,7 @@ def audit_release(
     items: list[dict[str, Any]],
     client: ModelClient | None,
     log: Callable[[str], None] = print,
+    ledger: Ledger | None = None,
 ) -> bool:
     """Run the whole-change-set audit. Returns True when the release passes."""
 
@@ -914,6 +915,82 @@ def audit_release(
         save_release(layout, release)
         log(f"[release] {release['id']}: audit passed")
         return True
+    if blocking and settings.controller and ledger is not None and client is not None:
+        from . import controller
+
+        try:
+            decision = controller.decide(
+                settings,
+                ledger,
+                project,
+                layout,
+                "release_audit",
+                {
+                    "release": {
+                        "id": release.get("id"),
+                        "title": release.get("title"),
+                        "request": release.get("request"),
+                        "status": release.get("status"),
+                        "repos": release.get("repos") or {},
+                    },
+                    "audit": {
+                        "rounds": audit.get("rounds"),
+                        "verdict": audit.get("verdict"),
+                        "summary": audit.get("summary"),
+                        "findings": blocking,
+                    },
+                    "tasks": [
+                        {
+                            "id": item.get("id"),
+                            "title": item.get("title"),
+                            "status": item.get("status"),
+                        }
+                        for item in items
+                    ],
+                },
+                client,
+                log,
+            )
+        except Exception as exc:  # noqa: BLE001 - the train keeps going
+            log(
+                f"[controller] release audit decision failed: {exc}"
+            )
+            decision = None
+        if decision is not None:
+            if decision.operation == "release_fix" and _queue_fix_tasks(
+                layout, release, items, blocking, log
+            ):
+                release["status"] = "running"
+                save_release(layout, release)
+                return False
+            if decision.operation in {"release_resume", "release_audit"}:
+                release["status"] = "running"
+                save_release(layout, release)
+                return False
+            if decision.operation == "ask_user":
+                release["status"] = "blocked"
+                release["detail"] = (
+                    decision.question
+                    or decision.reason
+                    or audit.get("summary")
+                    or "the audit failed"
+                )
+                save_release(layout, release)
+                log(
+                    f"[release] {release['id']}: needs the owner: "
+                    f"{release['detail']}"
+                )
+                return False
+            if decision.operation in {"block", "stop"}:
+                release["status"] = "blocked"
+                release["detail"] = (
+                    decision.reason
+                    or decision.summary
+                    or audit.get("summary")
+                    or "the audit failed"
+                )
+                save_release(layout, release)
+                return False
     if (
         audit["rounds"] < MAX_AUDIT_ROUNDS
         and blocking
@@ -1709,7 +1786,14 @@ def process_releases(
                 settings.home, log=log
             )
             if audit_release(
-                settings, layout, project, release, items, auditor, log
+                settings,
+                layout,
+                project,
+                release,
+                items,
+                auditor,
+                log,
+                ledger=ledger,
             ):
                 release["status"] = "ready"
                 save_release(layout, release)

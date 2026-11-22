@@ -657,6 +657,82 @@ class ReleaseTrainTest(unittest.TestCase):
             " ".join(fix_tasks[0]["requirements"]),
         )
 
+    def _controller_settings(self) -> Settings:
+        return Settings(
+            home=self.settings.home,
+            registry_path=self.settings.registry_path,
+            templates_path=self.settings.templates_path,
+            jurisdiction_path=self.settings.jurisdiction_path,
+            qa_runtime="local",
+            controller=True,
+        )
+
+    def test_the_controller_queues_a_fix_task_for_audit_findings(
+        self,
+    ) -> None:
+        release, _task = self._release()
+        client = ScriptedModelClient(
+            [
+                FAIL_AUDIT,
+                json.dumps(
+                    {
+                        "operation": "release_fix",
+                        "reason": "the widget has no test",
+                    }
+                ),
+            ]
+        )
+
+        process_releases(
+            self._controller_settings(),
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = list_releases(self.layout)[0]
+        self.assertEqual(stored["status"], "running")
+        fix_tasks = [
+            task
+            for task in release_tasks(self.layout, str(release["id"]))
+            if task.get("status") == "pending"
+            and str(task.get("title") or "").startswith("Release audit:")
+        ]
+        self.assertEqual(len(fix_tasks), 1)
+
+    def test_the_controller_asks_the_owner_for_a_blocked_release(
+        self,
+    ) -> None:
+        release, _task = self._release()
+        question = "Which widget behavior is wanted?"
+        client = ScriptedModelClient(
+            [
+                FAIL_AUDIT,
+                json.dumps(
+                    {
+                        "operation": "ask_user",
+                        "question": question,
+                    }
+                ),
+            ]
+        )
+
+        process_releases(
+            self._controller_settings(),
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(stored["detail"], question)
+
     def test_a_release_waits_for_its_own_tasks(self) -> None:
         release, task = self._release()
         update_task(

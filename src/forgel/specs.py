@@ -481,6 +481,34 @@ def write_task_spec(
                     + "\n\nReturn another action or the final spec JSON.",
                 )
             )
+        unknown = [
+            item
+            for item in objects
+            if str(item.get("action") or "").strip()
+            and str(item.get("action")) not in RESEARCH_ACTIONS
+            and not _looks_like_spec(item)
+        ]
+        if unknown and not finals:
+            if markup_retries < MAX_SPEC_RETRIES:
+                names = ", ".join(
+                    sorted(
+                        {
+                            str(item.get("action") or "")
+                            for item in unknown
+                        }
+                    )
+                )
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        f"Unknown action(s): {names}. The only research "
+                        "actions are list_files and read_file. Return one "
+                        "of them or the final specification JSON.",
+                    )
+                )
+                markup_retries += 1
+                continue
         if finals:
             try:
                 parsed = _normalize_spec(finals[-1], intent)
