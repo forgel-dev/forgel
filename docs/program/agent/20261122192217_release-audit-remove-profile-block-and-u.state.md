@@ -1,7 +1,7 @@
 # Session State: Release audit: `remove_profile_block` and `uninstall_profile` remove a block whenever `# >>> fo
 
 - Task: `20261122192217_release-audit-remove-profile-block-and-u`
-- Session: 3
+- Session: 1
 - Status: in progress
 
 ## Goal
@@ -42,51 +42,25 @@ truth; re-read files with read_file when needed.
 ## Files Changed
 
 - install.sh
-- tests/test_install.py
-- tests/test_zz_probe2.py
-- tests/test_zz_timing_probe.py
 
 ## Actions
 
-- read_file: tests/test_zz_timing_probe.py
-- read_file: tests/test_install.py
-- run: ['sh', '-c', "cd /Users/okalistratov/Documents/sites/code && python -m pytest -q tests/test_install.py -k 'InstallerShellDetectionTest' -x 2>&1 | tail -60"]
-- read_file: tests/test_install.py
 - read_file: install.sh
 - read_file: install.sh
 - read_file: install.sh
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- write_file: tests/test_zz_timing_probe.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']
-- write_file: tests/test_zz_probe2.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_zz_probe2.py', '-s']
-- run: ['python', '-m', 'pytest', '-q', 'tests', '--durations=15']
-- read_file: tests/test_install.py
-- write_file: tests/test_install.py
+- recall
+- list_files
+- write_file: install.sh
 
 ## Commands
 
-- `['python', '-m', 'pytest', '-q', 'tests', '--durations=25']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests', '--durations=0']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests', '--durations=25']` -> exit 1
-- `['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests/test_zz_timing_probe.py', '-s']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests/test_zz_probe2.py', '-s']` -> exit 0
-- `['python', '-m', 'pytest', '-q', 'tests', '--durations=15']` -> exit 1
+- none
 
 ## Recent Observations
 
-- run python -m pytest -q tests --durations=15 -> exit 1
-- read_file tests/test_install.py: tests/test_install.py: lines 880-939 of 1951
-- write_file tests/test_install.py
+- recall: step 1 [read_file]
+- list_files: .gitignore
+- write_file install.sh
 
 ## Next Step
 
