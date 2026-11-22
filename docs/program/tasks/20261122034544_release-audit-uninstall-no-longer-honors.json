@@ -150,10 +150,86 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-22T03:45:44+00:00",
   "started_at": "2026-11-22T03:45:44+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-22T03:51:51+00:00",
+  "result": {
+    "summary": "Restored FORGEL_CODE_PROFILE handling in install.sh's --uninstall path and documented/tested it.\n\nChanges:\n- install.sh: extracted the per-file cleanup into `uninstall_profile`, kept the six standard `PROFILE_NAMES` loop, and added an additional cleanup of `$FORGEL_CODE_PROFILE` when it is set and non-empty. The override cleanup reuses `remove_profile_block`, so removal stays byte-exact against the two markers, preserves all other lines, is a silent no-op for missing/marker-free files, never creates a file, and runs after the standard loop so an override naming `$HOME/.profile` is cleaned exactly once. Exit codes and output are unchanged apart from the extra `Removed the PATH block from ...` line when the override file really carried a block.\n- tests/test_install.py: new `InstallerProfileOverrideUninstallTest` (7 tests) running the real `install.sh` under a temporary `$HOME`: override block removed with surrounding lines intact, override block removed after a real successful install, override block removed after an install that wrote the profile and failed its fresh-shell check, standard-profile cleanup unchanged with the variable unset, missing override file tolerated (exit 0, no file created), marker-free override untouched, and an override naming `$HOME/.profile` cleaned exactly once.\n- README.md: the Uninstall paragraph and the `FORGEL_CODE_PROFILE` option row now state that the uninstall also removes the marked block from the profile that variable names, including a block left by an install that failed its fresh-shell check; missing/marker-free files are left alone.\n- CHANGELOG.md: added `## [Unreleased]` / `### Fixed` entry above the untouched `[0.1.0]` section.\n\nTesting: `python -m unittest discover -s tests` — 178 tests, OK (includes the README guard tests and `sh -n install.sh`). The focused run `python -m unittest discover -s tests -p test_install.py` — 30 tests, OK.",
+    "files_changed": [
+      "CHANGELOG.md",
+      "README.md",
+      "install.sh",
+      "tests/test_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "..................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 178 tests in 63.516s\n\nOK\n",
+    "assumptions": [
+      "The override cleanup runs after the six standard names and reuses the same `remove_profile_block` helper, so a duplicate path (e.g. FORGEL_CODE_PROFILE=$HOME/.profile) is rewritten once and reported once; the install-time add_profile_block semantics were not touched.",
+      "The override is only cleaned when FORGEL_CODE_PROFILE is set and non-empty; no extra profile is guessed beyond the six standard names, matching the assumption recorded in the specification.",
+      "The failed-install scenario is reproduced with a custom (non-shell-read) profile path, which makes the installer write the block and then exit non-zero on the fresh-shell verification, leaving the block for the uninstall to clean."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 991808,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 19,
+      "estimated_input_tokens": 799744,
+      "provider_input_tokens": 851320,
+      "provider_output_tokens": 35046,
+      "estimated_tokens": 55777,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "00448c577ff4aab7a5842b3ae4e5eeb3c28e41c6",
+      "head": "cf763ff9dbe77b7a9a33935cfeecc393ae6aaca0",
+      "commit": "cf763ff9dbe77b7a9a33935cfeecc393ae6aaca0",
+      "commits": [
+        "cf763ff9dbe77b7a9a33935cfeecc393ae6aaca0"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261122034544_release-audit-uninstall-no-longer-honors.md"
+  },
   "request": ""
 }
