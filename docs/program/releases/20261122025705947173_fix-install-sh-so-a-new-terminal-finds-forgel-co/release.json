@@ -29,16 +29,17 @@
     }
   },
   "audit": {
-    "rounds": 0,
-    "verdict": "",
+    "rounds": 1,
+    "verdict": "error",
     "summary": "the audit could not run: model call exceeded the 300s deadline",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
       "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
       "20261122034544_release-audit-uninstall-no-longer-honors",
-      "20261122034544_release-audit-uninstall-omits-bashrc-alt"
+      "20261122034544_release-audit-uninstall-omits-bashrc-alt",
+      "20261122062911_make-install-sh-put-forgel-code-on-path-"
     ],
-    "at": "2026-11-22T04:04:29+00:00",
+    "at": "2026-11-22T07:33:37+00:00",
     "findings": [
       {
         "severity": "major",
