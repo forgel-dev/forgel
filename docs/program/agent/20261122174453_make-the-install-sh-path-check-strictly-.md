@@ -3,8 +3,8 @@
 - Task: `20261122174453_make-the-install-sh-path-check-strictly-`
 - Status: `failed`
 - Repository: `code`
-- Steps: 9
-- Finished: 2026-11-22T18:39:04+00:00
+- Steps: 16
+- Finished: 2026-11-22T19:09:27+00:00
 
 ## Requirements
 
@@ -24,24 +24,23 @@
 - The verification bound stays at its current value; no new environment variable is added for it.
 - The private temporary location is created under the system temporary directory with owner-only permissions and removed on every exit path.
 - The release of the installer fix is re-checked and published by the normal release process after the fix is accepted; no version or tag is chosen here.
-- Only repository hygiene remained: the installer change and its tests already satisfied the specification and were not modified or loosened in this session.
-- tests/test_zz_probe.py carried no assertion beyond what the real installer tests already check, so it was deleted rather than folded into tests/test_install.py.
-- The POSIX syntax gate (AC-6) is evidenced by the in-suite test that runs the installer through `sh -n` and by the no-`timeout` test, because the sandbox command guard rejects a direct `sh -n install.sh` invocation.
+- The scratch files named in the review (err.txt, out.txt, tests/test_zz_probe.py) were already removed before this session, and the committed change is limited to install.sh and tests/test_install.py, so no further deletion was needed.
+- tests/test_readme_install.py needs no change: README install lines and their assertions are unchanged by this task.
 
 ## Test Removals
 
-- tests/test_zz_probe.py: wrong -> tests/test_install.py::InstallerWatchdogTest::test_hanging_login_shell_is_killed_and_reported
+- none
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 9
-- Estimated input tokens (all calls): 113183
-- Provider input/output tokens: 117464 / 3752
-- Provider cache hit/miss tokens: 110208 / 7256
-- Estimated prompt at the end: 14085 tokens
+- Model calls: 16
+- Estimated input tokens (all calls): 213110
+- Provider input/output tokens: 220892 / 3927
+- Provider cache hit/miss tokens: 212352 / 8540
+- Estimated prompt at the end: 15042 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261122174453_make-the-install-sh-path-check-strictly-.md`)
@@ -237,17 +236,19 @@ Running the install command returns within a bounded time with either a verified
 
 ## Summary
 
-This retry only removed the scratch artifacts the review blocked; the installer fix from the previous attempt is unchanged. err.txt, out.txt and tests/test_zz_probe.py were deleted from the repository, so the attributed diff now touches only install.sh and tests/test_install.py. The probe module held no assertion that was missing from the real suite: the coverage it explored already lives in tests/test_install.py as InstallerWatchdogTest.test_hanging_login_shell_is_killed_and_reported, InstallerBoundedCheckTest (owner-only temporary directory, cleanup after success and failure, bounded stop of a shell that ignores the graceful signal) and InstallerBoundedToolsTest (POSIX check without GNU timeout, and an install that succeeds with a failing `timeout` first on PATH). install.sh and the existing additions in tests/test_install.py were left untouched. Verified with the full suite: `python -m pytest -q` -> 197 passed, 137 subtests passed. The standalone `sh -n install.sh` invocation is refused by the sandbox command guard ("only project shell scripts are allowed"), so the POSIX parse requirement is covered by the in-suite test InstallerTest.test_script_is_executable_and_parses_with_sh, which passed in that run, together with InstallerBoundedToolsTest.test_install_sh_never_invokes_gnu_timeout for the no-GNU-timeout requirement.; final test command exited 124
+No product changes were made in this session. Repository inspection shows the remaining review defect is already resolved: `git status --short` is empty, `err.txt`, `out.txt` and `tests/test_zz_probe.py` no longer exist in the tree, and the attributed commit `038edea` touches only `install.sh` and `tests/test_install.py` (617 insertions, 64 deletions, no scratch artifacts). The bounded fresh-shell check in `install.sh` and the installer tests were left untouched as the reviewer required. Verification: `python -m pytest -q` passes with 197 tests and 137 subtests, including `InstallerWatchdogTest::test_hanging_login_shell_is_killed_and_reported`, `InstallerBoundedCheckTest` (owner-only temporary directory, no leftover temporary entries after success and failure, bounded stop against a shell that ignores the graceful signal), `InstallerBoundedToolsTest` (no GNU `timeout` invocation; install succeeds with a failing `timeout` first on PATH), `InstallerProfileByteStabilityTest` (byte-identical re-install, no accumulated blank lines, restore of the original trailing-newline state) and `InstallerTest::test_script_is_executable_and_parses_with_sh`, which runs `sh -n` on the script. A direct `sh -n install.sh` through the task runner is rejected by the sandbox ("only project shell scripts are allowed"), so the script's POSIX parse is evidenced by that in-suite test instead.; final test command exited 124
 
 ## Files Changed
 
-- `install.sh`
-- `tests/test_install.py`
+- none
 
 ## Commands
 
 - `["python", "-m", "pytest", "-q"]` → exit 0
 - `["python", "-m", "pytest", "-q", "tests/test_install.py", "--collect-only"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "log", "--oneline", "-5"]` → exit 0
+- `["git", "show", "--stat", "--oneline", "HEAD"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 124
 
 ## Final Test Output
@@ -256,14 +257,17 @@ This retry only removed the scratch artifacts the review blocked; the installer 
 timed out after 120s
 ...................................................... [ 27%]
 ................................................. [ 52%]
-........................................................................ [ 88%]
-..................
+..............................
 ```
 
 ## Actions
 
 - list_files
+- list_files
 - run: ['python', '-m', 'pytest', '-q']
 - run: ['sh', '-n', 'install.sh']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only']
 - run: ['sh', '-n', './install.sh']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', '--collect-only']
+- run: ['git', 'status', '--short']
+- run: ['git', 'log', '--oneline', '-5']
+- run: ['git', 'show', '--stat', '--oneline', 'HEAD']
