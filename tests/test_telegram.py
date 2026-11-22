@@ -570,6 +570,24 @@ class SelectionAndAgentTest(unittest.TestCase):
         resume.assert_called_once()
         self.assertIn("20260101000000_widget", reply.text)
 
+    def test_plain_language_runtime_action(self) -> None:
+        project = self._project("Runtime", "A brief.")
+        self.ledger.set_session(7, project)
+        response = {
+            "kind": "action",
+            "reply": "",
+            "action": "runtime",
+            "action_args": {"operation": "drive"},
+        }
+        router = self._router([json.dumps(response)])
+        with patch(
+            "forgel.chat.run_operation",
+            return_value="The runtime advanced.",
+        ) as operation:
+            reply = router.handle(7, "подтолкни рантайм", "@tester")
+        operation.assert_called_once()
+        self.assertIn("advanced", reply.text)
+
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()
         project = self._project("Plan", "A brief.")

@@ -50,6 +50,7 @@ from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
 from .release import ReleaseError, release_project
 from .release_train import resume_release
+from .runtime_ops import run_operation
 from .task_review import accept_task, reject_task, rerun_review
 from .program_manifest import entries as manifest_entries
 from .program_manifest import repo_location
@@ -1979,6 +1980,22 @@ class CommandRouter:
                     )
                 )
             )
+        if action == "runtime":
+            project = self._selected(chat_id)
+            if isinstance(project, Reply):
+                return project
+            try:
+                text = run_operation(
+                    self.settings,
+                    self.ledger,
+                    project,
+                    str(args.get("operation") or ""),
+                    args,
+                    self._review_client(),
+                )
+            except ValueError as exc:
+                return self._error(chat_id, "chat_error", error=exc)
+            return combine(Reply(text))
         if action == "peak":
             policy = str(args.get("policy") or "").strip()
             return combine(self._peak(chat_id, policy, actor))

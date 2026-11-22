@@ -93,6 +93,7 @@ AGENT_ACTIONS = {
     "repo_publish",
     "release",
     "release_resume",
+    "runtime",
     "control_extract",
     "peak",
     "pause",
@@ -249,6 +250,11 @@ the action cannot run without it):
   (for example "0.1.0").
 - release_resume {release_id?}: put a stopped release back into the release
   train so it is audited and published again.
+- runtime {operation, task_id?, release_id?}: run or restart one runtime
+  operation now, in the order the state needs. Operations: drive (advance one
+  daemon iteration), orchestrate (run the project pipeline to the next gate),
+  task_process (QA, review and acceptance for a task), task_qa, task_review,
+  release_audit, release_finalize.
 - control_extract {path?}: move the project state into a separate repository,
   for a project that started with one folder and grew.
 - peak {policy?}: show or set the model peak policy ("always" or "off_peak").
