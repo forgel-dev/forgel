@@ -3,8 +3,8 @@
 - Task: `20261123213155_release-audit-forgel-code-interactive-py`
 - Status: `done`
 - Repository: `code`
-- Steps: 40
-- Finished: 2026-11-23T22:22:42+00:00
+- Steps: 41
+- Finished: 2026-11-23T22:44:16+00:00
 
 ## Requirements
 
@@ -20,26 +20,32 @@
 
 ## Assumptions
 
-- The fixed mask marker stays the existing `[redacted]` placeholder.
-- Russian labels are matched by stem (парол, секрет, токен, ключ) so inflected forms are recognized.
-- The label segment separators for compound labels are underscore, dot and hyphen, as stated in the specification's scope.
-- A scheme word after a whitespace joiner binds a credential only when the following token is not an ordinary prose word (so "bearer of good news" stays untouched).
+- The prose vocabulary is finite and maintained in the client: the words that make the named benign examples benign are members, and 'abc', 'swordfish' and 'hunter2' are not, matching the specification's prose-vocabulary rule.
+- A word recognised as prose is compared case-insensitively after stripping quotes and trailing sentence punctuation, so 'updated.' in 'Password updated.' still counts as prose.
+- The separator branches (':', '=') remain unconditional, so 'Secret: rotation' masks while 'Secret rotation scheduled' does not, as the specification's assumptions state.
+- The quoted-run rule covers " ' ` and « »; an unclosed quote masks to the end of its line.
+- No documentation file needed a change: the specification already states the behaviour implemented.
 
 ## Test Removals
 
-- none
+- tests/test_redact.py::RedactFormTest::test_a_colon_joined_value_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole
+- tests/test_redact.py::RedactFormTest::test_an_equals_joined_value_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole
+- tests/test_redact.py::RedactFormTest::test_a_whitespace_joined_value_still_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_a_bare_label_binds_a_word_that_is_not_prose
+- tests/test_redact.py::RedactFormTest::test_a_russian_label_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked
+- tests/test_redact.py::RedactFormTest::test_a_compound_label_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked
+- tests/test_redact.py::RedactFormTest::test_a_mentioned_label_is_left_alone: replaced -> tests/test_redact.py::RedactFormTest::test_benign_prose_is_displayed_unchanged
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 2
-- Handoffs: 1
-- Model calls: 40
-- Estimated input tokens (all calls): 1968224
-- Provider input/output tokens: 2029889 / 291655
-- Provider cache hit/miss tokens: 1856768 / 173121
-- Estimated prompt at the end: 84812 tokens
-- State: `docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.state.md`
+- Sessions: 1
+- Handoffs: 0
+- Model calls: 41
+- Estimated input tokens (all calls): 1970070
+- Provider input/output tokens: 1992696 / 57435
+- Provider cache hit/miss tokens: 1926272 / 66424
+- Estimated prompt at the end: 68932 tokens
+- State: not needed
 
 ## Specification (`docs/program/specs/20261123213155_release-audit-forgel-code-interactive-py.md`)
 
@@ -56,23 +62,23 @@
 | Repository | `code` |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-23T21:32:29+00:00 |
+| Created | 2026-11-23T22:33:41+00:00 |
 | Source | Plan `` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-Secrets present in engine replies and engine errors reach the screen because the session's text masking only recognizes a limited English keyword immediately followed by an equals sign or a single following whitespace-separated word. A secret introduced by a colon, by an authorization scheme word, by a non-English label, or by a compound label name passes through unmasked, so sensitive key material becomes visible in the interactive session and the guarantee that secret key material stays out of the session is broken.
+The interactive session's key-material masking is unreliable. It recognises a secret only in a narrow shape: a label and its value must be joined in the one form the masking expects, and only the token immediately after the label is replaced. Separated forms, authorization schemes, quoted values, Russian secret labels, environment-style compound labels and generic key names therefore slip through or are only partly masked, so key material the owner typed or that the engine echoed back can appear in clear on the session screen. At the same time the masking has no stated boundary against ordinary prose, so a message that merely mentions a token or a password risks being altered or left free by guesswork rather than by a rule.
 
-**Outcome:** Every engine reply and every engine error displayed in the session is masked before display, so a value bound to a secret-bearing label never appears in the visible session text — regardless of whether the label and value are joined by a colon, an equals sign or whitespace, whether an authorization scheme word sits between them, whether the label is English or Russian, or whether the label is a compound name containing a secret keyword as one of its segments. Ordinary prose and the rest of the message are left intact, labels stay readable next to the mask, and previously working session behavior does not regress.
+**Outcome:** The screen shows every secret-bearing form the client can display with its value replaced by one visible marker, while a sentence that merely talks about a token, password or secret is displayed byte-for-byte unchanged. The boundary between a bound value and ordinary prose is a single stated rule, and every listed form has exactly one expected outcome that no implementation has to guess.
 
 ## Product Intent
 
-Forgel Code is a thin, trustworthy console over the engine (D-002, D-004); a user must be able to read engine output on screen without the session leaking credentials the engine happened to echo.
+Forgel Code is a thin, human-facing display over the engine's own commands (D-002, D-004). Progress and answers must reach the owner faithfully, yet the screen must never become a leak of the key material the owner or the engine mentions.
 
 ## User Experience
 
-When the engine's answer or an engine error mentions a credential, the user sees the label followed by a fixed mask marker instead of the value; when the message contains no credential, the user sees it exactly as before, with phrasing, punctuation and spacing unchanged.
+The owner reads an engine reply, task list, release state or error message as the engine wrote it, except that a value bound to a secret label appears as [redacted]. A sentence such as 'Password updated.' or 'Secret rotation scheduled' reads unchanged, while 'set password swordfish' or 'the token abc' shows the value masked. The owner can share the screen without a value escaping, and still understands what the engine said.
 
 ## Roadmap
 
@@ -80,87 +86,85 @@ When the engine's answer or an engine error mentions a credential, the user sees
 
 ## Goals
 
-- The reported leak is closed for colon-joined, equals-joined, whitespace-joined, scheme-prefixed, non-English and compound-label secret forms.
-- The guarantee that no secret key material appears in the interactive session is restored for all engine replies and engine errors.
-- Benign messages are displayed unchanged.
-- Previously working session behavior does not regress.
+- Every secret-bearing form the client can display is masked whole, with the surrounding text unchanged.
+- The boundary between a bound value and ordinary prose is one stated rule, applied wherever the label occurs, so each listed form has exactly one expected outcome.
+- Benign prose mentioning a token, password or secret is displayed byte-for-byte unchanged.
+- An engine reply, task state or error that carries key material reaches the screen with no fragment of the value visible.
+- Masking is stable under repetition and does not disturb the client's other behaviour.
 
 ## Non-Goals
 
-- Detecting secrets that carry no label at all, such as an unaccompanied high-entropy string or a bare key-looking blob.
-- Hiding secrets anywhere other than what the session shows to the user.
-- Changing the wording of engine replies or engine errors, or stopping the engine from echoing secrets at its source.
-- Any change to the client's commands, prompts, layout or interaction model.
-- Vendor-specific recognition of particular credential formats beyond generic label, joining punctuation and scheme handling.
+- Changing how a sentence is interpreted and turned into an engine command
+- Adding, removing or re-parameterising any engine operation
+- Changing the wording of the marker as it appears elsewhere in the product
+- Masking values that no secret label binds (versions, counts, project keys, greetings)
+- Hunting for key material that carries no label at all
+- Any change on the engine side; the engine still produces the text, the client still decides what reaches the screen
+- Reading, storing, forwarding or validating the value; masking only rewrites text on its way to the screen
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | The client is a thin UI over the engine's parameterized commands; model access, the sandbox, review and release approval stay in the engine. | D-002, User, 2026-11-16 18:31 |
-| — | The client's working name is Forgel Code, a Python client, following a Pareto 20/80 scope. | D-004, User accepted the proposal, 2026-11-16 18:34 |
-| — | Work proceeds in order: machine-readable engine commands first, then the client and the console, then removal of the replaced chat mode from the engine. | D-006, User accepted the proposal, 2026-11-16 18:34 |
+| — | The client is a thin UI over the engine's parameterized commands; it does not call the model, read project files or run checks itself. | User decision log D-002, user 2026-11-16 18:31 |
+| — | The client's working name is Forgel Code; it is installed as forgel-code, follows a Pareto 20/80 scope and imports nothing from the engine. | User decision log D-004, user accepted the proposal 2026-11-16 18:34 |
 
 ## Functional Requirements
 
-- **FR-1**: Masking means: for a recognized secret-bearing label, the value bound to that label is replaced by a single fixed mask marker while the label is preserved, so the original value does not appear anywhere in the displayed text.
-- **FR-2**: A value following a recognized secret keyword and a colon, with or without intervening whitespace, is masked.
-- **FR-3**: A value following a recognized secret keyword and an equals sign, with or without surrounding whitespace, is masked.
-- **FR-4**: A value following a recognized secret keyword and whitespace (the previously supported single-token form) continues to be masked.
-- **FR-5**: A value that follows a recognized secret keyword plus a colon or whitespace and then an authorization scheme word is masked; the scheme word may remain visible, the credential after it may not.
-- **FR-6**: Secret keywords are recognized in English and in Russian; a Russian secret label followed by a colon, an equals sign or whitespace masks its value exactly as an English label does.
-- **FR-7**: A compound label containing a secret keyword as one of its segments is treated as a secret-bearing label; the whole label may remain visible but its bound value is masked.
-- **FR-8**: Label recognition is case-insensitive, including for non-English labels.
-- **FR-9**: Text not bound to a recognized secret-bearing label is displayed unchanged, including ordinary sentences that merely contain the word for a secret without a bound value.
-- **FR-10**: The label text itself is preserved next to the mask so the user can tell what kind of value was hidden.
-- **FR-11**: Masking is applied to every engine reply and every engine error before it is shown in the session, with no path by which engine output reaches the screen unmasked.
-- **FR-12**: Masking already-masked text neither errors nor reveals a value, and masking empty or secret-free text returns it unchanged.
-- **FR-13**: Previously working session behavior continues to work, including the masking forms that already worked.
+- **FR-1**: A masked value is replaced by the single visible marker [redacted]. Everything else in the message - the label, its separator, the authorization scheme word, quotation marks, spaces, punctuation and line breaks - stays byte-for-byte identical.
+- **FR-2**: A secret label is a case-insensitive word, or a compound whose segments are joined by '.', '_' or '-', in which at least one segment names key material: token, secret, password, passwd, passphrase, api key or apikey, credential, key, authorization, bearer; or which is a Russian word beginning with one of the stems парол-, секрет-, токен-, ключ-. A word that merely contains such a sequence inside itself is not a label.
+- **FR-3**: After a label, one or more ':' or '=' characters, with or without surrounding spaces, bind the following value, and the whole value is masked. The value is the entire run of non-whitespace characters up to the next whitespace or the end of the line; when it begins with a quote character (", ', « or `), the value is the whole quoted run, including spaces, up to the matching closing quote or the end of the line.
+- **FR-4**: A label followed by whitespace and then a quoted run binds that run even without a separator; the quoted content is masked and the quotation marks stay visible.
+- **FR-5**: A recognised authorization scheme word (bearer, basic, digest, negotiate, ntlm, oauth, oauth2, jwt, hmac, hawk, apikey, sso, scram-sha-1, scram-sha-256, aws4-hmac-sha256) directly after a label or after its separator stays visible and the token after the scheme is masked; this holds with and without a separator and takes precedence over the bare-label rule, so the scheme word itself is never treated as a value.
+- **FR-6**: A label followed only by whitespace binds the next word as a value and masks it, unless that word is recognised everyday prose. A word is recognised everyday prose when it belongs to the client's fixed vocabulary of common English and Russian function and narrative words (articles, prepositions, pronouns, conjunctions, auxiliaries and copulas, and the ordinary verbs and nouns used to narrate work), compared case-insensitively after ignoring trailing sentence punctuation, and it carries no key-material markers - no digits, no mixed case inside the word and no value punctuation. Any other word after a label is a bound value and is masked. This rule applies wherever the label appears in the sentence, at the start or in the middle.
+- **FR-7**: A copula or auxiliary between a label and the following word is skipped when judging that word, and the copula itself stays visible; the word after it decides between prose and bound value by the same rule.
+- **FR-8**: Sentences in which the word after a label is recognised everyday prose are displayed byte-for-byte unchanged; in particular, a password or secret that was updated, rotated or scheduled is not a value.
+- **FR-9**: Words that are not recognised everyday prose after a bare label are masked wherever they occur, including 'token abc', 'токен abc123', 'the token abc' and 'set password swordfish'.
+- **FR-10**: Masking is stable: text that already carries the marker is returned unchanged, a value is never masked twice, and the marker itself is never treated as a value to mask.
+- **FR-11**: Every text the session displays - an engine reply, a task title, plan text, release state and engine error text - is masked by these rules before it reaches the screen, so no fragment of a bound value appears anywhere in the session output.
+- **FR-12**: The session's other display and interpretation behaviour is unchanged, and the previously supported masking guarantees (separator-joined values, visible authorization scheme, Russian labels, compound labels, idempotence) keep holding.
 
 ## User Stories
 
-- As a developer watching Forgel Code work, I want credentials echoed by the engine to be masked before they reach my screen, so that a pasted secret does not end up visible in my terminal or my session history.
-- As a developer whose labels and messages are not always in English, I want secret labels in my own language to be recognized, so that the protection does not depend on the language of the output.
-- As a developer reading engine errors, I want the label to stay visible next to the mask, so that I can tell what kind of value was hidden without learning the value.
+- As the owner of a project, I want a value bound to a token, password or secret to appear as [redacted] on the session screen, so that I can share my screen or a transcript without leaking key material.
+- As the owner, I want a sentence that merely reports that a password was updated or that a secret rotation is scheduled to read exactly as written, so that masking never hides the engine's actual message from me.
+- As the owner, I want an engine reply or error that echoes key material to reach me masked, so that a careless engine message cannot leak a value into my terminal.
 
 ## Acceptance Criteria
 
-- **AC-1**: A message containing a secret label followed directly by a colon and a value is displayed with the value replaced by the mask marker and the value absent from the displayed text.
-- **AC-2**: A message containing a secret label, a colon, an authorization scheme word and a credential is displayed with the label and surrounding wording preserved and the credential replaced by the mask marker.
-- **AC-3**: A message containing a Russian secret label followed by a colon and a value is displayed with the value replaced by the mask marker.
-- **AC-4**: A message containing a compound label built from several segments, one of which is a secret keyword, joined to a value is displayed with the value replaced by the mask marker.
-- **AC-5**: A message containing a secret label joined to a value by an equals sign with no surrounding spaces is displayed with the value replaced by the mask marker.
-- **AC-6**: A message that merely mentions a secret word without binding a value to it is displayed unchanged.
-- **AC-7**: A message with no secret-bearing label is displayed byte-for-byte unchanged, including punctuation, spacing and wording.
-- **AC-8**: Masking the same message twice produces the same displayed result as masking it once, and masking empty text succeeds and yields empty text.
-- **AC-9**: Every engine reply and every engine error that reaches the session display is masked under these rules, with no displayed engine text bypassing masking.
-- **AC-10**: For each recognized form above, the secret value does not appear as a substring anywhere in what the user is shown for that message.
-- **AC-11**: Previously working session behavior does not regress.
+- **AC-1**: Separator-bound values are masked whole: 'token:abc123' shows 'token:[redacted]', 'password: hunter2' shows 'password: [redacted]', 'password = hunter2' shows 'password = [redacted]', and 'password==hunter2' shows 'password==[redacted]'.
+- **AC-2**: An authorization scheme stays visible and its credential is masked: 'Authorization: Bearer abc123' shows 'Authorization: Bearer [redacted]' and 'the token Bearer secretvalue' shows 'the token Bearer [redacted]'.
+- **AC-3**: Russian and compound labels are masked: 'токен: abc123' shows 'токен: [redacted]', 'AWS_SECRET_ACCESS_KEY=abc' shows 'AWS_SECRET_ACCESS_KEY=[redacted]', and 'пароль: hunter2', 'db_password=hunter2', 'aws.secret.key: hunter2' and 'api-key=hunter2' each show their value as [redacted].
+- **AC-4**: Benign prose is displayed byte-for-byte unchanged: 'Password updated.' and 'Secret rotation scheduled' come back identical, and so do 'the token is missing', 'rotate the password please', 'send the secret later', 'release: 0.1.1 open', an empty message and 'нажмите на кнопку (дважды)!'.
+- **AC-5**: A bare label followed by a word that is not recognised everyday prose is masked wherever the label sits: 'token abc' shows 'token [redacted]', 'токен abc123' shows 'токен [redacted]', 'the token abc' shows 'the token [redacted]', and 'set password swordfish' shows 'set password [redacted]'.
+- **AC-6**: A quoted value is masked whole with its quotation marks visible: 'password: "hunter2 and more"' shows 'password: "[redacted]"'.
+- **AC-7**: Masking is idempotent: masking already-masked text returns it unchanged, and each masked result carries exactly one marker per masked value.
+- **AC-8**: An engine reply, a task title and an engine error that contain a bound value reach the screen masked; a reply containing 'токен: abc123' and 'Authorization: Bearer abc123' shows neither value fragment anywhere in the session output.
+- **AC-9**: No other behaviour changes: every behaviour that worked before this change still works afterwards.
 
 ## Scope Boundaries
 
-- Recognition of secret-bearing labels joined to a value by a colon, an equals sign, or whitespace.
-- Recognition of a credential that follows an authorization scheme word placed after a secret-bearing label.
-- Recognition of secret keywords in languages other than English, at minimum English and Russian.
-- Recognition of compound labels in which a secret keyword appears as one of several label segments, segments being separated by underscores, dots or hyphens.
-- Masking applied to every engine reply and every engine error presented in the session, before the text becomes visible.
-- Replacing only the secret value while the surrounding label and the remaining message stay readable.
-- Idempotent and total behavior: masking the same text twice, masking empty text, and masking text with no secret all succeed without error.
-- Detecting secrets that carry no label at all, such as an unaccompanied high-entropy string or a bare key-looking blob.
-- Hiding secrets anywhere other than what the session shows to the user.
-- Changing the wording of engine replies or engine errors, or stopping the engine from echoing secrets at its source.
-- Any change to the client's commands, prompts, layout or interaction model.
-- Vendor-specific recognition of particular credential formats beyond generic label, joining punctuation and scheme handling.
+- Structured recognition of secret-bearing text on the way to the screen: label, separator, authorization scheme, quoted value, Russian label, compound and environment-style label, generic key name
+- One stated rule that separates a bound value from ordinary prose, applied wherever the label appears in the sentence
+- Masking the whole bound value, not a fragment of it
+- Masking applied consistently to every text the session shows, including engine replies, task and plan state, release state and error text
+- Making each listed form demonstrable as an executable example in the client's own test area
+- Changing how a sentence is interpreted and turned into an engine command
+- Adding, removing or re-parameterising any engine operation
+- Changing the wording of the marker as it appears elsewhere in the product
+- Masking values that no secret label binds (versions, counts, project keys, greetings)
+- Hunting for key material that carries no label at all
+- Any change on the engine side; the engine still produces the text, the client still decides what reaches the screen
+- Reading, storing, forwarding or validating the value; masking only rewrites text on its way to the screen
 
 ## Risks
 
-- Over-broad matching removes ordinary words from benign messages, degrading readability and breaking expected unchanged output.
-- Under-broad matching leaves one of the reported forms leaking, so the finding is not actually resolved even though some new behavior passes.
-- Masking applied after some engine output has already become visible leaves a bypass; the guarantee holds only if masking truly precedes display on every path.
-- Unicode case-insensitivity may differ from ASCII handling, so a naive ASCII-only case-insensitive match could miss upper-case Russian labels.
-- A value containing several space-separated tokens may be only partially masked if a single token is consumed.
-- A message that merely mentions a secret word inside a sentence can look covered while a genuine bound value still leaks, giving false confidence in the coverage.
-- The mask marker appearing inside an already-masked message could itself be re-matched, producing a different result on a second pass.
+- The decided rule trades a small amount of over-masking for safety: an everyday word missing from the recognised vocabulary makes a benign sentence mask the following word, which is visible noise but never a leak, and no required example depends on it.
+- The illustrative shape heuristic and the required masking of 'abc' and 'swordfish' cannot both hold; the specification chooses the vocabulary rule, so anyone expecting the shape-based heuristic will see the extra masking as a defect.
+- The engine belongs to another project and may shape its output differently over time; masking is defined over the displayed text, so such a difference is not observed here.
+- An unquoted value containing spaces is masked only up to the first space, so the remainder of such a value stays visible; this matches the previously pinned behaviour but remains a known limit of a label-bound secret.
+- Over-broad Russian stem matching may mask an ordinary Russian word that begins with a described stem, and an over-narrow vocabulary may mask a legitimate narrative word; both are accepted as the safe direction and are not pinned beyond the named examples.
+- Applying masking to every displayed text (plan text, release state, errors) could change other behaviour if it is done unevenly, which is why the unchanged-behaviour criterion is part of acceptance.
 
 ## Open Questions
 
@@ -168,93 +172,62 @@ When the engine's answer or an engine error mentions a credential, the user sees
 
 ## Assumptions
 
-- The fixed mask marker is a short visible placeholder, a run of asterisks for example, chosen by the developer and used consistently; its exact characters are not a product decision.
-- The authorization scheme word is not itself secret and may remain visible with its label.
-- For compound labels the whole label may remain visible; only the bound value is hidden.
-- Russian is the non-English language that must be supported because it is the language of the project's chat interaction; further languages are welcome but not required.
-- Underscore, dot and hyphen all count as label segment separators.
-- Hiding secrets that have already left the visible session is out of scope for this task.
-- Where a label is followed by an authorization scheme word, only the credential after the scheme word is hidden, not the scheme word.
+- The defect's illustrative shape heuristic (mask only a token carrying digits, mixed case or value punctuation) cannot be the deciding rule, because it would leave 'abc' and 'swordfish' visible, which the required examples forbid; the deciding rule is therefore the prose vocabulary: a word after a bare label is a value unless it is a recognised everyday prose word that carries no key-material markers.
+- 'Entire value rather than only the next token' is read as: a separator binds one whole value, and a quoted value is masked across its spaces; an unquoted value still ends at the first whitespace, because the session's existing behaviour masks only that run and keeps the following words.
+- The marker text stays [redacted], because the screen already shows that word today and owners already read it that way.
+- The prose vocabulary is finite and maintained by the client; the words that make the benign examples benign belong to it, and words like 'abc', 'swordfish' and 'hunter2' do not.
+- Separator binding is unconditional after a separator, so 'Secret: rotation' is masked while 'Secret rotation scheduled' is not; the separator is what makes the binding explicit.
+- Two adjacent labels in one message are handled one after another, each according to these rules.
+- The quoted-run rule applies to the quote characters commonly used in English and Russian typing, and an unclosed quote masks to the end of the line.
 
 ## Related Documents
 
-- `docs/program/decisions.md`
+- FORGEL.md
+- AGENTS.md
+- README.md
+- forgel_code/interactive.py
+- tests/test_redact.py
 
 ## Revision History
 
-- v2 — rewrote non-goals and assumptions in behavior terms, removed process and implementation detail, aligned requirements and acceptance, and mapped each acceptance criterion to a check.
-- v1 — initial specification from the release audit finding: masking must cover colon-joined, equals-joined, whitespace-joined, scheme-prefixed, non-English and compound-label secret forms in every displayed engine reply and error.
+- v1 - initial specification of the structured redactor.
+- v2 - rewritten after rejection: the whitespace form's prose exemption and the bound-value rule are now one stated rule (a bare label binds the next word unless that word is recognised everyday prose carrying no key-material markers, applied wherever the label appears), and acceptance states both directions - 'Password updated.' and 'Secret rotation scheduled' unchanged, 'the token abc' and 'set password swordfish' masked - so no form has two expected outcomes.
+- v3 - removed process and engineering wording from constraints, acceptance, risks and assumptions; the unchanged-behaviour statement is now expressed as behaviour rather than as a reference to an existing suite.
 
 
 ## Summary
 
-Rewrote `redact()` in `forgel_code/interactive.py` so every engine reply and engine error is masked before display. Secret-bearing labels are now recognized case-insensitively in English and Russian (Russian by stem), as single words or compound labels whose segments are joined by `_`, `.` or `-`, and a value bound to such a label by a colon, an equals sign (with or without spaces) or whitespace is replaced with the fixed marker `[redacted]` while the label stays visible. Whitespace/colon-bound authorization scheme words (e.g. `Bearer`) stay visible with only the credential after them masked. Prose that merely mentions a secret word ("the token is missing", "rotate the password please") is left intact, and secret-free text is returned unchanged and byte-for-byte; masking is idempotent and total for empty input. The mask already had a single funnel through `InteractiveSession.write()`, so every reply, error and state line continues to pass through it. The implementation no longer imports `re` (the client's stdlib allowlist forbids it), doing label scanning by hand instead. Added `tests/test_redact.py`, which checks each required form (colon, equals, whitespace, scheme-prefixed, Russian, compound labels), unchanged benign text, idempotency, and end-to-end that engine replies, engine state lines and engine errors reach the session screen with the value absent. Full suite `python -m pytest -q` passes: 267 passed, 172 subtests.
+Addressed the remaining review failures on top of the previous attempt. `redact()` in `forgel_code/interactive.py` now separates a bound value from ordinary prose with one stated rule: a label binds the following word unless that word is recognised everyday prose (a fixed vocabulary of English/Russian function words plus ordinary narrative verbs and nouns such as 'updated' or 'rotation') that carries no key-material markers (digits, mixed case, value punctuation). Consequently a clause-initial or mid-sentence benign mention (`Password updated.`, `Secret rotation scheduled`, `the token is missing`) is displayed byte-for-byte unchanged, while the previously working whitespace form is masked wherever the label sits (`the token abc`, `set password swordfish`, `установлен пароль swordfish`). Colon/equals forms (including `==` and spaced `=`), authorization schemes (`Authorization: Bearer abc123`, `the token Bearer secretvalue`), Russian stem labels, compound/environment labels, quoted values (including unclosed quotes hiding the rest of the line) and copula forms (`the token is VALUE`) keep masking only the value. The prose exemption is applied after the scheme, copula, quote and separator branches so no masking form regressed; masking stays idempotent and total for empty text, and every engine reply, error and state line still passes through the single `write()` funnel that calls `redact()`. `tests/test_redact.py` was rewritten around the new specification: each acceptance criterion has an executable example, including the two previously failing directions (`Password updated.`/`Secret rotation scheduled` unchanged; `the token abc`/`set password swordfish` masked), a byte-for-byte check for secret-free text, idempotence, absence of the value as a substring, and session-level checks that an engine reply containing `токен: abc123` and `Authorization: Bearer abc123`, a task title carrying `password=hunter2`, and an engine error carrying `password: hunter2` all reach the screen masked. Verification: `python -m pytest -q tests/test_redact.py` (12 passed, 17 subtests), `python -m pytest -q tests/test_interactive.py` (37 passed, 10 subtests), and the full suite `python -m pytest -q` (267 passed, 172 subtests).
 
 ## Files Changed
 
 - `forgel_code/interactive.py`
-- `tests/test_redact.py`
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q"]` → exit 124
+- `["python", "-m", "pytest", "-q", "tests/test_redact.py"]` → exit 0
 - `["python", "-m", "pytest", "-q", "tests/test_interactive.py"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install.py", "tests/test_install_timeout_verdict.py"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_redact.py", "tests/test_interactive.py"]` → exit 1
-- `["python", "-m", "pytest", "-q", "tests/test_redact.py", "tests/test_interactive.py"]` → exit 1
-- `["python", "-m", "pytest", "-q", "tests/test_redact.py", "tests/test_interactive.py"]` → exit 0
-- `["python", "-m", "pytest", "-q"]` → exit 1
-- `["python", "-m", "pytest", "-q", "tests/test_redact.py", "tests/test_interactive.py", "tests/test_cli.py"]` → exit 0
-- `["python", "-m", "pytest", "-q"]` → exit 1
-- `["python", "-m", "pytest", "-q", "tests/test_install.py::InstallerBoundedCheckTest::test_shell_that_ignores_the_stop_is_still_bounded", "tests/test_install_timeout_verdict.py::TimeoutVerdictOrderingTest::test_step_inside_the_bound_keeps_its_own_nonzero_outcome"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_redact.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_redact.py"]` → exit 0
 
 ## Final Test Output
 
 ```
-............................................................................................... [ 35%]
-........................................................................ [ 62%]
-.............................................................. [ 85%]
-......................................                                                                  [100%]
-267 passed, 172 subtests passed in 204.73s (0:03:24)
+............                                            [100%]
+12 passed, 17 subtests passed in 1.96s
 
 ```
 
 ## Actions
 
 - read_file: forgel_code/interactive.py
-- read_file: tests/test_interactive.py
-- read_file: forgel_code/session.py
-- read_file: forgel_code/render.py
-- read_file: forgel_code/engine.py
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- run: ['python', '-m', 'pytest', '-q']
+- read_file: tests/test_redact.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py']
 - run: ['python', '-m', 'pytest', '-q', 'tests/test_interactive.py']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py', 'tests/test_install_timeout_verdict.py']
-- read_file: tests/test_interactive.py
-- read_file: tests/test_interactive.py
-- read_file: forgel_code/engine.py
-- write_file: forgel_code/interactive.py
-- read_file: forgel_code/session.py
-- read_file: tests/test_interactive.py
-- write_file: tests/test_redact.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py', 'tests/test_interactive.py']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py', 'tests/test_interactive.py']
+- run: ['python', '-m', 'pytest', '-q']
 - read_file: forgel_code/interactive.py
 - write_file: forgel_code/interactive.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py', 'tests/test_interactive.py']
-- run: ['python', '-m', 'pytest', '-q']
-- read_file: tests/test_cli.py
-- write_file: forgel_code/interactive.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py', 'tests/test_interactive.py', 'tests/test_cli.py']
-- run: ['python', '-m', 'pytest', '-q']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install.py::InstallerBoundedCheckTest::test_shell_that_ignores_the_stop_is_still_bounded', 'tests/test_install_timeout_verdict.py::TimeoutVerdictOrderingTest::test_step_inside_the_bound_keeps_its_own_nonzero_outcome']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py']
 - run: ['python', '-m', 'pytest', '-q']

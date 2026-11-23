@@ -157,12 +157,12 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T21:31:55+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T22:33:42+00:00",
+  "finished_at": "2026-11-23T22:44:16+00:00",
   "result": {
-    "summary": "Rewrote `redact()` in `forgel_code/interactive.py` so every engine reply and engine error is masked before display. Secret-bearing labels are now recognized case-insensitively in English and Russian (Russian by stem), as single words or compound labels whose segments are joined by `_`, `.` or `-`, and a value bound to such a label by a colon, an equals sign (with or without spaces) or whitespace is replaced with the fixed marker `[redacted]` while the label stays visible. Whitespace/colon-bound authorization scheme words (e.g. `Bearer`) stay visible with only the credential after them masked. Prose that merely mentions a secret word (\"the token is missing\", \"rotate the password please\") is left intact, and secret-free text is returned unchanged and byte-for-byte; masking is idempotent and total for empty input. The mask already had a single funnel through `InteractiveSession.write()`, so every reply, error and state line continues to pass through it. The implementation no longer imports `re` (the client's stdlib allowlist forbids it), doing label scanning by hand instead. Added `tests/test_redact.py`, which checks each required form (colon, equals, whitespace, scheme-prefixed, Russian, compound labels), unchanged benign text, idempotency, and end-to-end that engine replies, engine state lines and engine errors reach the session screen with the value absent. Full suite `python -m pytest -q` passes: 267 passed, 172 subtests.; task review failed",
+    "summary": "Addressed the remaining review failures on top of the previous attempt. `redact()` in `forgel_code/interactive.py` now separates a bound value from ordinary prose with one stated rule: a label binds the following word unless that word is recognised everyday prose (a fixed vocabulary of English/Russian function words plus ordinary narrative verbs and nouns such as 'updated' or 'rotation') that carries no key-material markers (digits, mixed case, value punctuation). Consequently a clause-initial or mid-sentence benign mention (`Password updated.`, `Secret rotation scheduled`, `the token is missing`) is displayed byte-for-byte unchanged, while the previously working whitespace form is masked wherever the label sits (`the token abc`, `set password swordfish`, `установлен пароль swordfish`). Colon/equals forms (including `==` and spaced `=`), authorization schemes (`Authorization: Bearer abc123`, `the token Bearer secretvalue`), Russian stem labels, compound/environment labels, quoted values (including unclosed quotes hiding the rest of the line) and copula forms (`the token is VALUE`) keep masking only the value. The prose exemption is applied after the scheme, copula, quote and separator branches so no masking form regressed; masking stays idempotent and total for empty text, and every engine reply, error and state line still passes through the single `write()` funnel that calls `redact()`. `tests/test_redact.py` was rewritten around the new specification: each acceptance criterion has an executable example, including the two previously failing directions (`Password updated.`/`Secret rotation scheduled` unchanged; `the token abc`/`set password swordfish` masked), a byte-for-byte check for secret-free text, idempotence, absence of the value as a substring, and session-level checks that an engine reply containing `токен: abc123` and `Authorization: Bearer abc123`, a task title carrying `password=hunter2`, and an engine error carrying `password: hunter2` all reach the screen masked. Verification: `python -m pytest -q tests/test_redact.py` (12 passed, 17 subtests), `python -m pytest -q tests/test_interactive.py` (37 passed, 10 subtests), and the full suite `python -m pytest -q` (267 passed, 172 subtests).",
     "files_changed": [
       "forgel_code/interactive.py",
       "tests/test_redact.py"
@@ -173,9 +173,10 @@
           "python",
           "-m",
           "pytest",
-          "-q"
+          "-q",
+          "tests/test_redact.py"
         ],
-        "exit_code": 124
+        "exit_code": 0
       },
       {
         "command": [
@@ -192,64 +193,8 @@
           "python",
           "-m",
           "pytest",
-          "-q",
-          "tests/test_install.py",
-          "tests/test_install_timeout_verdict.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_redact.py",
-          "tests/test_interactive.py"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_redact.py",
-          "tests/test_interactive.py"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_redact.py",
-          "tests/test_interactive.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
           "-q"
         ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_redact.py",
-          "tests/test_interactive.py",
-          "tests/test_cli.py"
-        ],
         "exit_code": 0
       },
       {
@@ -257,18 +202,8 @@
           "python",
           "-m",
           "pytest",
-          "-q"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
           "-q",
-          "tests/test_install.py::InstallerBoundedCheckTest::test_shell_that_ignores_the_stop_is_still_bounded",
-          "tests/test_install_timeout_verdict.py::TimeoutVerdictOrderingTest::test_step_inside_the_bound_keeps_its_own_nonzero_outcome"
+          "tests/test_redact.py"
         ],
         "exit_code": 0
       },
@@ -286,42 +221,76 @@
           "python",
           "-m",
           "pytest",
-          "-q"
+          "-q",
+          "tests/test_redact.py"
         ],
         "exit_code": 0,
         "final_test": true
       }
     ],
-    "test_output": "............................................................................................... [ 35%]\n........................................................................ [ 62%]\n.............................................................. [ 85%]\n......................................                                                                  [100%]\n267 passed, 172 subtests passed in 204.73s (0:03:24)\n",
+    "test_output": "............                                            [100%]\n12 passed, 17 subtests passed in 1.96s\n",
     "assumptions": [
-      "The fixed mask marker stays the existing `[redacted]` placeholder.",
-      "Russian labels are matched by stem (парол, секрет, токен, ключ) so inflected forms are recognized.",
-      "The label segment separators for compound labels are underscore, dot and hyphen, as stated in the specification's scope.",
-      "A scheme word after a whitespace joiner binds a credential only when the following token is not an ordinary prose word (so \"bearer of good news\" stays untouched)."
+      "The prose vocabulary is finite and maintained in the client: the words that make the named benign examples benign are members, and 'abc', 'swordfish' and 'hunter2' are not, matching the specification's prose-vocabulary rule.",
+      "A word recognised as prose is compared case-insensitively after stripping quotes and trailing sentence punctuation, so 'updated.' in 'Password updated.' still counts as prose.",
+      "The separator branches (':', '=') remain unconditional, so 'Secret: rotation' masks while 'Secret rotation scheduled' does not, as the specification's assumptions state.",
+      "The quoted-run rule covers \" ' ` and « »; an unclosed quote masks to the end of its line.",
+      "No documentation file needed a change: the specification already states the behaviour implemented."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 2,
-      "compactions": 1,
-      "model_calls": 40,
-      "estimated_input_tokens": 1968224,
-      "provider_input_tokens": 2029889,
-      "provider_output_tokens": 291655,
-      "cache_hit_tokens": 1856768,
-      "cache_miss_tokens": 173121,
-      "estimated_tokens": 84812,
-      "state": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.state.md"
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 41,
+      "estimated_input_tokens": 1970070,
+      "provider_input_tokens": 1992696,
+      "provider_output_tokens": 57435,
+      "cache_hit_tokens": 1926272,
+      "cache_miss_tokens": 66424,
+      "estimated_tokens": 68932,
+      "state": ""
     },
-    "test_removals": [],
+    "test_removals": [
+      {
+        "test": "tests/test_redact.py::RedactFormTest::test_a_colon_joined_value_is_masked",
+        "reason": "replaced",
+        "replacement": "tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole"
+      },
+      {
+        "test": "tests/test_redact.py::RedactFormTest::test_an_equals_joined_value_is_masked",
+        "reason": "replaced",
+        "replacement": "tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole"
+      },
+      {
+        "test": "tests/test_redact.py::RedactFormTest::test_a_whitespace_joined_value_still_is_masked",
+        "reason": "replaced",
+        "replacement": "tests/test_redact.py::RedactFormTest::test_a_bare_label_binds_a_word_that_is_not_prose"
+      },
+      {
+        "test": "tests/test_redact.py::RedactFormTest::test_a_russian_label_is_masked",
+        "reason": "replaced",
+        "replacement": "tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked"
+      },
+      {
+        "test": "tests/test_redact.py::RedactFormTest::test_a_compound_label_is_masked",
+        "reason": "replaced",
+        "replacement": "tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked"
+      },
+      {
+        "test": "tests/test_redact.py::RedactFormTest::test_a_mentioned_label_is_left_alone",
+        "reason": "replaced",
+        "replacement": "tests/test_redact.py::RedactFormTest::test_benign_prose_is_displayed_unchanged"
+      }
+    ],
     "spec_issues": [],
     "escalated": [],
     "git": {
-      "base": "5db451934dc45eff8ac4093ba131512cd3b16880",
-      "head": "ec4bd355192bae72b706ba5a7008b764fbb47687",
-      "commit": "ec4bd355192bae72b706ba5a7008b764fbb47687",
+      "base": "ec4bd355192bae72b706ba5a7008b764fbb47687",
+      "head": "ef353bcb59451745439c86f4fe68c82ba19ee68a",
+      "commit": "ef353bcb59451745439c86f4fe68c82ba19ee68a",
       "commits": [
-        "ec4bd355192bae72b706ba5a7008b764fbb47687"
+        "ec4bd355192bae72b706ba5a7008b764fbb47687",
+        "ef353bcb59451745439c86f4fe68c82ba19ee68a"
       ]
     },
     "report": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.md",
@@ -537,7 +506,8 @@
       "kind": "review",
       "message": "FR-4 and FR-9 are contradictory as written: both cover a secret label followed by whitespace and a single ordinary word, FR-4 requiring the word to be masked as a bound value and FR-9 requiring the message to be displayed unchanged, and the specification never defines what distinguishes a bound value from prose. The rewrite must decide and state that distinction (for example: the whitespace form masks only a token that carries key-material markers such as digits, mixed case or value punctuation, while an ordinary word is left visible; and the previously supported whitespace form keeps masking regardless of where in the sentence the label appears), and must then make the acceptance criteria agree with that decision in both directions — a benign sentence such as `Password updated.` or `Secret rotation scheduled` displayed byte-for-byte unchanged, and a mid-sentence form such as `the token abc` or `set password swordfish` displayed with the value masked — so every listed form has one and only one expected outcome and no implementation has to guess.",
       "retryable": false
-    }
+    },
+    "failure": {}
   },
   "request": ""
 }
