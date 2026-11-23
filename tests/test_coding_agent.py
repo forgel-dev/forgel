@@ -1165,7 +1165,7 @@ class CodingAgentTest(unittest.TestCase):
                     }
                 ),
                 json.dumps({"action": "done", "summary": "finished"}),
-                json.dumps({"files": []}),
+                json.dumps({"files": ["work.py"]}),
             ]
         )
         result = CodingAgent(
@@ -1252,7 +1252,9 @@ class CodingAgentTest(unittest.TestCase):
                     }
                 ),
                 json.dumps({"action": "done", "summary": "finished"}),
-                json.dumps({"files": ["leftover/note.py"]}),
+                json.dumps(
+                    {"files": ["work.py", "leftover/note.py"]}
+                ),
             ]
         )
         result = CodingAgent(

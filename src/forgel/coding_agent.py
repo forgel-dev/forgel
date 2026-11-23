@@ -659,14 +659,15 @@ class CodingAgent:
             dirty_product = sorted(
                 path for path in dirty if _task_path(path)
             )
-            unexplained = [
-                path
+            affected = contract.affected_files(layout, task)
+            needs_decision = any(
+                path not in changed
+                or (affected and not contract.in_scope(path, affected))
                 for path in dirty_product
-                if not _covered(path, changed)
-            ]
-            if unexplained:
+            )
+            if dirty_product and needs_decision:
                 selected = self._completion_files(
-                    task, layout, repo, changed, unexplained, log
+                    task, layout, repo, changed, dirty_product, log
                 )
                 if selected is None:
                     status = "failed"
@@ -676,29 +677,26 @@ class CodingAgent:
                         "uncommitted files belong to the task"
                     )
                 else:
-                    changed = sorted(set(changed) | set(selected))
+                    changed = sorted(selected)
             if status == "done" and changed:
-                affected = contract.affected_files(layout, task)
                 if affected:
                     outside = sorted(
                         path
-                        for path in set(changed) | set(dirty_product)
-                        if _task_path(path)
-                        and not contract.in_scope(path, affected)
+                        for path in changed
+                        if not contract.in_scope(path, affected)
                     )
                     if outside:
-                        changed = [
-                            path
-                            for path in changed
-                            if contract.in_scope(path, affected)
-                        ]
+                        # The completion step is the authority on the task's
+                        # coherent change; a file the specification omitted but
+                        # the task needs is committed and the gap is recorded.
                         summary += (
-                            "; uncommitted files outside the contract: "
+                            "; the specification omitted files the task "
+                            "needs, committed with it: "
                             + ", ".join(outside[:10])
                         )
                         log(
-                            f"[agent] {task['id']}: uncommitted files "
-                            "outside the contract: "
+                            f"[agent] {task['id']}: specification omitted "
+                            "files committed with the task: "
                             + ", ".join(outside[:10])
                         )
                 try:
@@ -887,57 +885,74 @@ class CodingAgent:
         layout: ProjectLayout,
         repo: Path,
         changed: Sequence[str],
-        unexplained: Sequence[str],
+        candidates: Sequence[str],
         log: Callable[[str], None],
     ) -> list[str] | None:
-        """Let the model decide which uncommitted files belong to the task.
+        """Let the model decide the task's coherent change set.
 
-        A task can span sessions and failed attempts; some of its files are
-        already in the working tree when the final session starts. The model
-        sees the task, the attributed files and a bounded preview of the
-        unexplained ones. It returns only paths from the unexplained set.
+        The model sees the task, its contract, the files the agent already
+        reported, and a bounded diff of every uncommitted product file. It
+        returns the subset that implements this task: a file the
+        specification's affected-files list omitted is included when the task
+        needs it, and unrelated or parallel work is excluded. Only that set is
+        committed (D-097).
         """
 
         previews: list[str] = []
         used = 0
-        for path in list(unexplained)[:20]:
+        for path in list(candidates)[:20]:
             target = repo / path
+            text = ""
             try:
-                text = target.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                previews.append(f"--- {path} (unreadable or directory) ---")
-                continue
+                completed = subprocess.run(
+                    ["git", "-C", str(repo), "diff", "--no-color", "--", path],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                text = completed.stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                text = ""
+            if not text:
+                try:
+                    text = target.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    text = "(unreadable or directory)"
             previews.append(f"--- {path} ---\n{text[:2000]}")
-            used += len(text[:2000])
+            used += min(len(text), 2000)
             if used >= 12_000:
                 break
-        requirements = "\n".join(
-            f"- {item}" for item in (task.get("requirements") or [])
-        ) or "- none"
-        acceptance = "\n".join(
-            f"- {item}" for item in (task.get("acceptance") or [])
-        ) or "- none"
         attributed = "\n".join(f"- {item}" for item in changed) or "- none"
+        candidates_text = "\n".join(f"- {item}" for item in candidates) or "- none"
+        # The completion step decides the same question the reviewer judges:
+        # what belongs to this task. It receives the reviewer's whole context
+        # plus the uncommitted candidates and their diffs.
+        from .task_review import _review_prompt
+
+        review_context = _review_prompt(layout, task)
         messages = [
             ModelMessage(
                 "system",
-                "You are finishing a coding task. The runtime observed files "
-                "changed during the task but could not attribute every "
-                "uncommitted file. Decide which uncommitted files belong to "
-                "this task's coherent change. Use the task requirements and "
-                "the content preview. Exclude unrelated or parallel work. "
-                'Return exactly one JSON object: {"files": ["relative/path"]}. '
-                "Use an empty list when none belong.",
+                "You are finishing a coding task. You see the same facts the "
+                "reviewer sees, plus the uncommitted product files. Decide "
+                "this task's coherent change set: include every candidate that "
+                "implements its requirements, even when the specification's "
+                "affected-files list omitted it, and exclude files that are "
+                "unrelated or belong to parallel work. The affected-files list "
+                "can be incomplete; the requirements and acceptance are the "
+                "authority. Return exactly one JSON object: "
+                '{"files": ["relative/path"]} with only paths from the '
+                "candidate list. An empty list means no candidate belongs to "
+                "this task.",
             ),
             ModelMessage(
                 "user",
                 f"Task: {task.get('title') or task.get('id')}\n"
                 f"Summary: {task.get('summary') or ''}\n\n"
-                f"{contract.digest(layout, task)}\n\n"
-                f"Requirements:\n{requirements}\n\n"
-                f"Acceptance:\n{acceptance}\n\n"
-                f"Files already attributed to the task:\n{attributed}\n\n"
-                "Uncommitted files:\n" + "\n\n".join(previews),
+                f"{review_context}\n\n"
+                f"Files the agent reported:\n{attributed}\n\n"
+                f"Uncommitted product files:\n{candidates_text}\n\n"
+                + "\n\n".join(previews),
             ),
         ]
         try:
@@ -955,7 +970,7 @@ class CodingAgent:
         files = data.get("files") if isinstance(data, dict) else None
         if not isinstance(files, list):
             return None
-        allowed = set(unexplained)
+        allowed = set(candidates)
         selected: list[str] = []
         for item in files:
             path = _task_path(str(item))
@@ -963,7 +978,7 @@ class CodingAgent:
                 selected.append(path)
         log(
             f"[agent] {task['id']}: completion selected "
-            f"{len(selected)} of {len(unexplained)} unexplained file(s)"
+            f"{len(selected)} of {len(candidates)} uncommitted file(s)"
         )
         return selected
 
