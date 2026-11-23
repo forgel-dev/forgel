@@ -3,7 +3,7 @@
 - Project: `forgel-1d2bf685`
 - Request: Fix install.sh so a new terminal finds forgel-code on PATH
 - Class: patch
-- Status: running
+- Status: released
 - Created: 2026-11-22T02:57:06+00:00
 
 
@@ -13,7 +13,7 @@ The installer currently completes while the launcher directory never reaches PAT
 
 ## Repositories
 
-- `code` — pending, preset python, base 0.1.0, planned 0.1.1
+- `code` — released, preset python, base 0.1.0, releases 0.1.1
 
 ## Tasks
 
@@ -27,12 +27,12 @@ The installer currently completes while the launcher directory never reaches PAT
 - `20261123062514_release-audit-bounded-run-does-not-make-` — Release audit: `bounded_run` does not make the watchdog's timeout decision authoritative. After (code, done)
 - `20261123062514_release-audit-on-a-successful-check-boun` — Release audit: On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check` (code, done)
 - `20261123062514_release-audit-readme-md-still-documents-` — Release audit: README.md still documents `.../v0.1.0/install.sh` for the install command and fo (code, done)
-- `20261123164954_release-audit-bounded-run-clears-check-c` — Release audit: bounded_run clears CHECK_CHILD before calling cleanup_check, and install.sh deli (code, pending)
-- `20261123164954_release-audit-install-sh-s-bounded-run-s` — Release audit: install.sh's bounded_run still decides the timeout by testing for the timed-out (code, pending)
-- `20261123164954_release-audit-the-suite-runtime-regresse` — Release audit: The suite runtime regressed past the bound the release established. Task 2026112 (code, pending)
+- `20261123164954_release-audit-bounded-run-clears-check-c` — Release audit: bounded_run clears CHECK_CHILD before calling cleanup_check, and install.sh deli (code, done)
+- `20261123164954_release-audit-install-sh-s-bounded-run-s` — Release audit: install.sh's bounded_run still decides the timeout by testing for the timed-out (code, done)
+- `20261123164954_release-audit-the-suite-runtime-regresse` — Release audit: The suite runtime regressed past the bound the release established. Task 2026112 (code, done)
 
 ## Audit
 
-- Rounds: 2
-- Verdict: fail
+- Rounds: 3
+- Verdict: pass
 - Report: `docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md`

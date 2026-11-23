@@ -6,7 +6,7 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "running",
+  "status": "released",
   "tasks": [
     "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
     "20261122034544_release-audit-uninstall-no-longer-honors",
@@ -29,18 +29,24 @@
       "base_source": "changelog 0.1.0",
       "preset": "python",
       "planned_version": "0.1.1",
-      "version": "",
-      "status": "pending",
-      "tag": "",
-      "sha": "",
-      "release": "",
-      "detail": ""
+      "version": "0.1.1",
+      "status": "released",
+      "tag": "v0.1.1",
+      "sha": "c66a66aa6246d0554436160875ce5c10121daa38",
+      "release": "https://github.com/forgel-dev/code/releases/tag/v0.1.1",
+      "detail": "",
+      "version_files": [
+        "forgel_code/__init__.py"
+      ],
+      "release_refs": [
+        "install.sh"
+      ]
     }
   },
   "audit": {
-    "rounds": 2,
-    "verdict": "fail",
-    "summary": "The core installer change requested by the release is present (login-shell detection, profile selection, guarded PATH block, fresh-shell verification, failure reporting, uninstall cleanup, README), and the recorded suites pass. The release still cannot be published: the two most recent audit-mandated fixes are absent from the final install.sh (the timeout decision still races the watchdog, and the success path clears CHECK_CHILD before cleanup so the checked shell's background processes survive), the reviews and test runs for those tasks describe code and a test file that are not in the change set, the suite now takes 130-163 s and no longer meets the documented/required 120 s bound, and README advertises a v0.1.1 installer while install.sh still fetches the v0.1.0 source. The QA/review passes for those tasks are unsupported.",
+    "rounds": 3,
+    "verdict": "pass",
+    "summary": "The release delivers the requested installer behaviour and its follow-up audits: login-shell detection ($SHELL, then invoking process, then account login shell, then /bin/sh), per-shell profile selection (zsh ~/.zshrc; bash first existing of ~/.bash_profile/.bash_login/.profile or a created ~/.bash_profile; POSIX ~/.profile with a warning), a guarded, byte-stable, idempotent marked block, bounded fresh-login-shell verification that only reports success when `command -v forgel-code` equals the newly written launcher and otherwise fails non-zero naming the file, block, shell and observed PATH, and `--uninstall` that strips the block from every candidate profile (.zshrc, .zprofile, .zshenv, .bash_profile, .bash_login, .profile, .bashrc) plus FORGEL_CODE_PROFILE without creating or altering other lines. README and CHANGELOG were updated to match, the earlier v0.1.0 URL and 120-second runtime claim were removed, and the recorded suite runs complete with 218 tests passing. No blocking defect was found; remaining items are non-blocking hardening/cleanup observations.",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
       "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
@@ -52,57 +58,36 @@
       "20261122192217_release-audit-the-final-task-s-recorded-",
       "20261123062514_release-audit-bounded-run-does-not-make-",
       "20261123062514_release-audit-on-a-successful-check-boun",
-      "20261123062514_release-audit-readme-md-still-documents-"
+      "20261123062514_release-audit-readme-md-still-documents-",
+      "20261123164954_release-audit-bounded-run-clears-check-c",
+      "20261123164954_release-audit-install-sh-s-bounded-run-s",
+      "20261123164954_release-audit-the-suite-runtime-regresse"
     ],
-    "at": "2026-11-23T16:49:36+00:00",
+    "at": "2026-11-23T18:57:35+00:00",
     "findings": [
       {
-        "severity": "major",
+        "severity": "minor",
         "repo_id": "code",
-        "issue": "install.sh's bounded_run still decides the timeout by testing for the timed-out marker immediately after wait returns for the checked child; when the marker is absent it terminates the watchdog and keeps the child's status. A checked shell that exits after FORGEL_CODE_TIMEOUT but before the watchdog writes the marker is therefore reported as a verified success. That is exactly the defect task 20261123062514_release-audit-bounded-run-does-not-make- was required to fix, but the task has files_changed: [] and its review describes a DECISION_WAIT mechanism that is absent from the final diff; no committed regression test for the race is evidenced.",
-        "suggestion": "Make the watchdog write the final decision (timeout marker plus status), have the parent wait for that decision within a small bound derived from VERIFY_GRACE, and force CHECK_STATUS=124 whenever the bound elapsed regardless of the order of the child exit and the marker write. Add and commit the test whose checked shell exits just after FORGEL_CODE_TIMEOUT and assert install.sh fails with a message naming the limit."
-      },
-      {
-        "severity": "major",
-        "repo_id": "code",
-        "issue": "bounded_run clears CHECK_CHILD before calling cleanup_check, and install.sh deliberately does not put the checked shell in its own process group (the comment in the final file says so). On the success path cleanup_check therefore has nothing to signal and only removes the temporary directory, so background processes started by the checked login shell survive the check. This violates the dedicated-process-group and cleanup-ordering requirements (R-1..R-5, A-1..A-5) of task 20261123062514_release-audit-on-a-successful-check-boun. That task also has files_changed: [], and tests/test_check_cleanup.py, which its review and pytest output cite, is not present in the repository diff (the tests/ changes are limited to __init__.py, test_cli.py, test_install.py, test_packaging.py and test_readme_install.py).",
-        "suggestion": "Start the checked shell in a dedicated process group/session, record that group for cleanup, call cleanup_check before clearing CHECK_CHILD or any state it reads, signal the group plus a descendant sweep on every exit path, and commit tests that start a background process from the checked shell and assert it is gone on both success and timeout."
-      },
-      {
-        "severity": "major",
-        "repo_id": "code",
-        "issue": "The suite runtime regressed past the bound the release established. Task 20261122192217 required `python -m unittest discover -s tests` to exit 0 even under `timeout 120`, and README.md now states the suite completes 'under 120 seconds'; the final recorded runs are 130.35 s (204 tests), 149.72 s (206 tests) and 163.27 s (214 tests). The 79.9 s run that met the bound was undone by later test additions, so the documented bound and acceptance criterion AC2 are no longer verified and the audit command exceeds its 120 s limit. The earlier recorded timeout during task 20261122174453 has effectively returned.",
-        "suggestion": "Bring the suite back under the documented bound (or raise the bound consistently in README/acceptance and confirm the audit's timeout), then record a passing run of the full suite within that bound. Do not state 'under 120 seconds' while the final suite takes 163 s."
+        "issue": "When /dev/urandom or od is unavailable, random_token falls back to `$$$$$$`, making the private `forgel-code-check` directory name predictable under a shared ${TMPDIR:-/tmp}; another local user could pre-create or guess the path (the mkdir -m 700 retry mitigates but does not remove the predictability).",
+        "suggestion": "Fail closed (diagnose and abort the check) or derive the token from another non-predictable source instead of the PID when /dev/urandom and od are unavailable, and keep the owner-only mkdir check."
       },
       {
         "severity": "minor",
         "repo_id": "code",
-        "issue": "README.md points the install, update and uninstall commands at the v0.1.1 installer URL, but install.sh still defaults TAG=${FORGEL_CODE_TAG:-v0.1.0} and resolve_source builds the archive URL from $TAG. Running the documented v0.1.1 installer therefore downloads and installs the v0.1.0 source archive unless the user overrides FORGEL_CODE_TAG; the command does not install the release it advertises. Confirm this is intentional or align the default tag.",
-        "suggestion": "Align the default TAG with the release the installer ships with (v0.1.1) or derive it from the script's own release, or explicitly document that the installer intentionally installs the v0.1.0 source and why; keep README and the default consistent."
+        "issue": "On the success path bounded_run reaps the watchdog but leaves CHECK_WATCHER set, so cleanup_check sends TERM to an already-reaped PID; if the PID were reused in that window an unrelated process could be signalled.",
+        "suggestion": "Clear CHECK_WATCHER after the successful wait in bounded_run before cleanup_check runs, or have cleanup_check skip signalling when the watcher has already been reaped."
       },
       {
         "severity": "minor",
         "repo_id": "code",
-        "issue": "random_token falls back to the predictable token $$$$$$ when /dev/urandom or od is unavailable, so create_check_dir can create a guessable forgel-code-check.* directory in TMPDIR. This weakens the requirement that the check's temporary files carry unpredictable names and are owner-only.",
-        "suggestion": "Fail the verification closed when no entropy source is available (report an error and exit non-zero) instead of using a predictable token, or use another unpredictable source."
-      },
-      {
-        "severity": "minor",
-        "repo_id": "code",
-        "issue": "The release rewrites tests/test_readme_install.py as a guard that reads README.md and asserts the install URL. Project rule D-106 (FORGEL.md and AGENTS.md) prohibits adding, requiring or accepting a test, guard or automated check that reads a documentation file; documentation is review-only. The task requirement that mandated this guard conflicts with the project rule.",
-        "suggestion": "Remove the README-reading guard from the suite and verify the documented URLs by review; keep documentation checks out of the test suite."
-      },
-      {
-        "severity": "minor",
-        "repo_id": "code",
-        "issue": "remove_profile_block drops the last kept line when it equals MARKER_SEPARATOR and the block is at end of file, without requiring that the original file lacked a final newline. A user profile whose final line is exactly the installer separator comment but ends with a newline loses that line on install followed by uninstall; the separator is only supposed to be added when the original last line had no final newline.",
-        "suggestion": "Only drop MARKER_SEPARATOR when final_newline is 0 (or otherwise record the separator unambiguously with a stronger marker), and add the edge case to the byte-stability test."
+        "issue": "The CHANGELOG [Unreleased] 'Changed' entry describes volatile implementation detail of the test suite ('one read-only checkout copy and one prepared installation per scenario group... configure a limit below the product default'), which D-109 asks documentation not to carry.",
+        "suggestion": "Reword the entry to state the outcome (a faster suite with unchanged coverage) without internal test structure or limit/timing detail."
       }
     ],
     "errors": 0
   },
   "control_push": {},
-  "finalized_at": "",
+  "finalized_at": "2026-11-23T18:57:45+00:00",
   "detail": "",
   "next_at": ""
 }
