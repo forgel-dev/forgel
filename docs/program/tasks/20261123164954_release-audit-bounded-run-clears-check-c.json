@@ -136,10 +136,105 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-23T16:49:54+00:00",
   "started_at": "2026-11-23T16:49:54+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T16:58:44+00:00",
+  "result": {
+    "summary": "The change set was already present in the working tree from earlier sessions of this task; this session verified it end to end and made no further edits. install.sh now starts the checked login shell through a small Python launcher that calls setsid() (falling back to setpgid) before exec, so the checked shell leads a process group of its own whose id equals its own pid; the group id is recorded in CHECK_GROUP for the whole lifetime of the check. A watchdog decides whether the time bound elapsed and records that decision (timed-out/finished) in the private check directory before stopping anything, and bounded_run waits a bounded moment for that decision, so a shell that outlives the bound can never be reported as success. cleanup_check now stops the dedicated group (graceful then forceful on the timeout path, forceful on the success path) plus a sweep of descendants that left the group, removes the private temporary check directory, and is guarded by CHECK_CLEANED so the exit trap and a signal trap cannot release or signal the same check twice; every piece of state is cleared only after it has been used. The script's own description now states that the checked shell is placed in a process group of its own and that the group is stopped on every exit path, replacing the old text that claimed the shell was deliberately kept out of its own group. Existing behaviour (login-shell and profile detection, opt-outs, re-install, uninstall, never reading stdin) is untouched. Tests: the regression tests in tests/test_check_cleanup.py (successful and timed-out check stop the background process, group id equals shell pid, no private directory remains) pass, the added tests in tests/test_install.py for a shell that outlives the bound and for a withheld watchdog decision pass, and the full suite was run with the final command: 214 passed, 137 subtests passed.",
+    "files_changed": [
+      "install.sh",
+      "tests/test_check_cleanup.py",
+      "tests/test_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_check_cleanup.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "install.sh"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "tests/test_install.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "....................................................................................................... [ 48%]\n........................................................................ [ 81%]\n.......................................          [100%]\n214 passed, 137 subtests passed in 154.78s (0:02:34)\n",
+    "assumptions": [
+      "The existing cleanup regression tests and the recorded timeout wording ('stopped after Ns') and private check prefix are the reference for the fix.",
+      "Process-group control uses the Python interpreter the installer already requires; shells without it fall back to job control and a descendant sweep.",
+      "Cleanup is released exactly once per check via a guard flag, so the EXIT trap after a signal trap is a no-op rather than a second signal."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 13,
+      "estimated_input_tokens": 335389,
+      "provider_input_tokens": 348070,
+      "provider_output_tokens": 7084,
+      "cache_hit_tokens": 314624,
+      "cache_miss_tokens": 33446,
+      "estimated_tokens": 33987,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "7a11c1a26abc72bd3f82ece3d408b2324850a508",
+      "head": "be8ca1ed4e98ab53263dc595ebc41bc02515b666",
+      "commit": "be8ca1ed4e98ab53263dc595ebc41bc02515b666",
+      "commits": [
+        "be8ca1ed4e98ab53263dc595ebc41bc02515b666"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123164954_release-audit-bounded-run-clears-check-c.md"
+  },
   "request": ""
 }
