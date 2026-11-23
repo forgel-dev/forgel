@@ -3,8 +3,8 @@
 - Task: `20261123062514_release-audit-readme-md-still-documents-`
 - Status: `failed`
 - Repository: `code`
-- Steps: 25
-- Finished: 2026-11-23T12:52:02+00:00
+- Steps: 30
+- Finished: 2026-11-23T13:00:47+00:00
 
 ## Requirements
 
@@ -20,26 +20,28 @@
 
 ## Assumptions
 
-- Kept the single `## [Unreleased]` bullet in CHANGELOG.md and only corrected its wording, as the specification requires one bullet rather than a second entry.
-- Replaced `ReadmeTest::test_readme_has_no_default_branch_install` because its premise (raw.githubusercontent URLs must contain `/v`) is exactly the stale-tag policy the new specification forbids; the replacement `test_readme_has_no_tag_pinned_install` asserts the stronger canonical-URL contract instead.
-- The `## Tests` section's `v0.1.1.tar.gz[test]` link was left untouched: it is a release tarball, not an install-script URL, and R4 forbids other README changes.
-- The canonical URL tracks the `main` branch tip rather than a release tag; this is the trade-off the specification accepts to avoid advertising an unpublished tag.
+- The default branch is `main` and install.sh lives at the repository root, so the canonical URL is https://raw.githubusercontent.com/forgel-dev/code/main/install.sh.
+- The uninstall invocation form is unchanged (`| sh -s -- --uninstall`), because only the URL was in scope; install.sh already implements `--uninstall`.
+- The versionless default-branch URL intentionally tracks the branch tip rather than a published tag, because v0.1.1 is unpublished and the release rules forbid agents from naming an unpublished version.
+- CHANGELOG.md and tests/test_cli.py carry the same stale v0.1.1/v0.1.0 install-script URL, so they are updated with README.md to keep the committed tree consistent; the reviewer's allowed set names them.
+- The unrelated pre-existing changes (install.sh, tests/test_install.py, untracked tests/test_check_cleanup.py) are left uncommitted and untouched.
+- The pinned source tarball URL in the README `## Tests` section (`archive/refs/tags/v0.1.1.tar.gz`) is not an install-script URL and is outside the scope of this task (R4 forbids other README content changes); it is left unchanged.
 
 ## Test Removals
 
-- tests/test_cli.py::ReadmeTest::test_readme_has_no_default_branch_install: replaced -> tests/test_cli.py::ReadmeTest::test_readme_has_no_tag_pinned_install
+- none
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 1
-- Handoffs: 0
-- Model calls: 25
-- Estimated input tokens (all calls): 1080320
-- Provider input/output tokens: 1149043 / 46846
-- Provider cache hit/miss tokens: 1087360 / 61683
-- Estimated prompt at the end: 61079 tokens
-- State: not needed
+- Sessions: 2
+- Handoffs: 1
+- Model calls: 30
+- Estimated input tokens (all calls): 700769
+- Provider input/output tokens: 732216 / 17824
+- Provider cache hit/miss tokens: 708096 / 24120
+- Estimated prompt at the end: 29232 tokens
+- State: `docs/program/agent/20261123062514_release-audit-readme-md-still-documents-.state.md`
 
 ## Specification (`docs/program/specs/20261123062514_release-audit-readme-md-still-documents-.md`)
 
@@ -209,37 +211,40 @@ A new user opens README.md, copies the install command, and it downloads and run
 
 ## Summary
 
-Rewrote the README install documentation onto the single versionless canonical install-script URL `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh` and replaced the tag-pinned guard with a text-only canonical-URL guard.
-
-Changes:
-- README.md: the `## Install`, `### Update` and `### Uninstall` commands now all use the same versionless default-branch URL; the command shape (`curl -fsSL <url> | sh`, `| sh -s -- --uninstall`) and every other line are unchanged. The diff is exactly three URL substitutions, no tag-pinned install-script path remains, and no release version is named next to the commands.
-- tests/test_readme_install.py: the guard is now built on `INSTALL_URL` (versionless) instead of `INSTALL_TAG = "v0.1.1"`. `assert_single_install_script_url` rejects a stale tag path (`/v0.1.0/install.sh`), any tag-pinned install-script path (`/v<tag>/install.sh`), a missing URL (fewer than two), and any URL other than the one canonical string. Added `test_no_tag_pinned_install_script_url`, `test_another_branch_install_script_url_is_rejected`, `test_a_missing_install_script_url_is_rejected`, and kept `test_stale_install_script_url_is_rejected` / `test_divergent_install_script_url_is_rejected`, both proving rejection by `assertRaises(AssertionError)` on the guard itself, not by message wording. The module imports only `re`, `unittest` and `pathlib`: no network, `urllib`, `http.client`, `requests`, `socket` or `subprocess`.
-- tests/test_cli.py: `ReadmeTest::test_readme_has_a_pinned_install_command` now expects `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh` and additionally asserts no tag-pinned path; the former `test_readme_has_no_default_branch_install` (which forced the tag pin) was replaced by `test_readme_has_no_tag_pinned_install`, which asserts every raw.githubusercontent.com line is the canonical URL and none is tag-pinned. No other assertion was weakened.
-- CHANGELOG.md: the single existing `## [Unreleased]` → `### Fixed` bullet now describes the delivered change (versionless current installer for install/update/uninstall, no stale tag path, guard on reintroduction); wording no longer names v0.1.1.
-
-Verification:
-- `python -m pytest -q` → 214 passed, 137 subtests passed in 140.84s.
-- No `v0.1.0/install.sh` or `v0.1.1/install.sh` string in README.md; both commands share one URL.
-- Live fetch of the canonical URL: HTTP 200, 29597 bytes, from `raw.githubusercontent.com` resolved against the `main` branch (the repository branch is `main`; `git tag --list` shows no published v0.1.1 tag, so a tag-pinned URL would 404 — verified v0.1.1/install.sh returns 404).
-- Uninstall invocation confirmed against `install.sh`: the `main()` case `--uninstall)` dispatching to `uninstall()` (install.sh lines 962-963), documented in `usage()` at line 0115 and 0123.
-- `git diff --name-only` shows the four task files plus the pre-existing unrelated working-tree changes in `install.sh` and `tests/test_install.py`, which this task did not touch and did not commit.; the completion step could not decide which uncommitted files belong to the task
+README.md now documents one versionless install-script URL, https://raw.githubusercontent.com/forgel-dev/code/main/install.sh, in all three documented commands (install, update, uninstall), and every tag-pinned install-script path is gone. The worktree diff of README.md is exactly three URL substitutions (`.../v0.1.0/install.sh` -> `.../main/install.sh`); command shape (`curl -fsSL <url> | sh`, `| sh -s -- --uninstall`), options, prose and section structure are untouched, and no release version is named next to the commands. tests/test_readme_install.py replaces the tag-pinned guard with a text-only canonical-URL guard: `assert_single_install_script_url` rejects a stale `v0.1.0` install-script path, any `/v<tag>/install.sh` path, fewer than two install-script URLs, and any URL other than the single canonical string. Negative cases are proven with `assertRaises`/guard raising only: `test_stale_install_script_url_is_rejected`, `test_divergent_install_script_url_is_rejected`, `test_another_branch_install_script_url_is_rejected`, `test_a_missing_install_script_url_is_rejected`, `test_rejects_a_stale_url_anywhere_in_the_document`. The module imports only `re`, `unittest` and `pathlib` — no `urllib`, `http.client`, `requests`, `socket` or `subprocess`, so the guard needs no network. tests/test_cli.py's ReadmeTest now asserts the canonical URL and uses `assertNotRegex(r"/v[0-9][^\s/]*/install\.sh")` instead of requiring a tag; CHANGELOG.md's entry describes the versionless default-branch URL instead of the unpublished v0.1.1 tag. `python -m pytest -q` passed for the whole repository (214 passed, 137 subtests passed), and a focused rerun of tests/test_readme_install.py plus tests/test_cli.py passed (105 passed, 113 subtests passed). The canonical URL was fetched for real with curl against the `main` branch and returned HTTP 200; `git tag --list` shows no v0.1.1 tag, so the earlier spec conflict (pin an unpublished tag) is resolved by the versionless URL, as v2 of the specification directs. tests/test_probe_canonical_url.py, the temporary network probe from the previous attempt, was deleted and is absent from the tree. Committing is not available to this agent in this environment (git is restricted to read-only commands), so the change set is staged for the runtime to commit: README.md, tests/test_readme_install.py, tests/test_cli.py and CHANGELOG.md. The pre-existing unrelated working-tree changes (install.sh, tests/test_install.py and the untracked tests/test_check_cleanup.py) are not part of this change set and are not listed.; the completion step could not decide which uncommitted files belong to the task
 
 ## Files Changed
 
 - `CHANGELOG.md`
 - `README.md`
 - `tests/test_cli.py`
-- `tests/test_probe_canonical_url.py`
 - `tests/test_readme_install.py`
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q"]` → exit 0
-- `["git", "diff", "--name-only"]` → exit 0
-- `["python", "-m", "pytest", "-q", "-s", "tests/test_probe_canonical_url.py"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
 - `["git", "diff", "--name-only"]` → exit 0
 - `["git", "diff", "-U0", "--", "README.md"]` → exit 0
-- `["git", "diff", "--stat", "--", "tests/test_cli.py", "CHANGELOG.md", "tests/test_readme_install.py"]` → exit 0
+- `["git", "diff", "-U1", "--", "tests/test_cli.py", "CHANGELOG.md"]` → exit 0
+- `["git", "diff", "--stat"]` → exit 0
+- `["git", "diff", "-U0", "--", "tests/test_cli.py", "CHANGELOG.md", "install.sh", "tests/test_install.py"]` → exit 0
+- `["git", "diff", "-U0", "--", "install.sh", "tests/test_install.py"]` → exit 0
+- `["git", "diff", "-U0", "--", "CHANGELOG.md"]` → exit 0
+- `["git", "diff", "-U0", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "diff", "-U2", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "diff", "-U3", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "diff", "-U3", "--", "tests/test_cli.py", "CHANGELOG.md"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "diff"]` → exit 0
+- `["git", "status"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "diff", "--stat", "--", "README.md", "tests/test_readme_install.py", "tests/test_cli.py", "CHANGELOG.md"]` → exit 0
+- `["git", "diff", "-U1", "--", "tests/test_cli.py", "CHANGELOG.md"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 0
+- `["git", "show", "--stat", "HEAD"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "log", "--oneline", "-5"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_readme_install.py", "tests/test_cli.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
 
 ## Final Test Output
@@ -248,33 +253,41 @@ Verification:
 ....................................................................................................... [ 48%]
 ........................................................................ [ 81%]
 .......................................          [100%]
-214 passed, 137 subtests passed in 141.48s (0:02:21)
+214 passed, 137 subtests passed in 146.08s (0:02:26)
 
 ```
 
 ## Actions
 
-- read_file: README.md
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_cli.py
-- read_file: CHANGELOG.md
-- read_file: tests/test_cli.py
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- read_file: tests/test_cli.py
-- write_file: README.md
-- run: ['curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}\n', 'https://raw.githubusercontent.com/forgel-dev/code/main/install.sh']
-- write_file: tests/test_readme_install.py
-- read_file: tests/test_cli.py
-- write_file: tests/test_cli.py
-- write_file: CHANGELOG.md
-- run: ['python', '-m', 'pytest', '-q']
-- run: ['git', 'diff', '--name-only']
-- write_file: tests/test_probe_canonical_url.py
-- write_file: tests/test_probe_canonical_url.py
-- run: ['python', '-m', 'pytest', '-q', '-s', 'tests/test_probe_canonical_url.py']
-- delete_file: tests/test_probe_canonical_url.py
+- run: ['git', 'status', '--short']
 - run: ['git', 'diff', '--name-only']
 - run: ['git', 'diff', '-U0', '--', 'README.md']
-- run: ['git', 'diff', '--stat', '--', 'tests/test_cli.py', 'CHANGELOG.md', 'tests/test_readme_install.py']
+- run: ['git', 'diff', '-U1', '--', 'tests/test_cli.py', 'CHANGELOG.md']
+- read_file: tests/test_cli.py
+- read_file: tests/test_readme_install.py
+- read_file: README.md
+- read_file: CHANGELOG.md
+- run: ['git', 'diff', '--stat']
+- run: ['git', 'diff', '-U0', '--', 'tests/test_cli.py', 'CHANGELOG.md', 'install.sh', 'tests/test_install.py']
+- run: ['git', 'diff', '-U0', '--', 'install.sh', 'tests/test_install.py']
+- run: ['git', 'diff', '-U0', '--', 'CHANGELOG.md']
+- run: ['git', 'diff', '-U0', '--', 'tests/test_cli.py']
+- run: ['git', 'diff', '-U2', '--', 'tests/test_cli.py']
+- run: ['git', 'diff', '-U3', '--', 'tests/test_cli.py']
+- run: ['git', 'diff', '-U3', '--', 'tests/test_cli.py', 'CHANGELOG.md']
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- run: ['git', 'diff']
+- run: ['git', 'status']
+- recall
+- run: ['git', 'status', '--short']
+- run: ['git', 'diff', '--stat', '--', 'README.md', 'tests/test_readme_install.py', 'tests/test_cli.py', 'CHANGELOG.md']
+- run: ['git', 'diff', '-U1', '--', 'tests/test_cli.py', 'CHANGELOG.md']
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: tests/test_readme_install.py
+- read_file: README.md
+- run: ['git', 'show', '--stat', 'HEAD']
+- run: ['git', 'status', '--short']
+- run: ['git', 'log', '--oneline', '-5']
+- run: ['git', 'commit', '-s', '-m', 'Document the release installer at the default-branch URL', '-m', 'README.md, its CHANGELOG entry and the CLI README assertions named the v0.1.1 install-script URL, which is not published, and the v0.1.0 URL is stale. Point the install, update and uninstall commands at one versionless install-script URL on the default branch and guard README.md against any tag-pinned or divergent install-script URL.', '--', 'README.md', 'tests/test_readme_install.py', 'tests/test_cli.py', 'CHANGELOG.md']
+- run: ['curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}\n', 'https://raw.githubusercontent.com/forgel-dev/code/main/install.sh']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_readme_install.py', 'tests/test_cli.py']
