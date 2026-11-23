@@ -383,22 +383,6 @@ def cmd_list(args: argparse.Namespace) -> int:
         ledger.close()
 
 
-def cmd_demo(args: argparse.Namespace) -> int:
-    settings = _settings(args)
-    ledger = _ledger(settings)
-    try:
-        project_id = create_project(settings, ledger, args.name, args.brief)
-        print(_say("cli_created", item=project_id))
-        result = Orchestrator(settings, ledger).run(project_id)
-        _print_result(ledger, project_id, result)
-        return 0
-    except (ProjectError, StageError) as exc:
-        print(_say("cli_error", error=exc), file=sys.stderr)
-        return 1
-    finally:
-        ledger.close()
-
-
 def cmd_sync(args: argparse.Namespace) -> int:
     settings = _settings(args)
     ledger = _ledger(settings)
@@ -1965,17 +1949,6 @@ def build_parser() -> argparse.ArgumentParser:
     listing = subparsers.add_parser("list", help="List projects")
     listing.add_argument("--home", default=None)
     listing.set_defaults(func=cmd_list)
-
-    demo = subparsers.add_parser(
-        "demo", help="Create and run a demo project to the approval gate"
-    )
-    demo.add_argument("--name", default="hello-web")
-    demo.add_argument(
-        "--brief",
-        default="A minimal web app with an index page and a health check.",
-    )
-    demo.add_argument("--home", default=None)
-    demo.set_defaults(func=cmd_demo)
 
     sync = subparsers.add_parser(
         "sync", help="Reconcile external changes and start a new generation"

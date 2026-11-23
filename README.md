@@ -112,13 +112,7 @@ The full contract is in
 
 Requires Python 3.11+.
 
-```bash
-make demo
-```
-
-This creates `.forgel-demo/` and runs the full pipeline from brief to staging.
-The same commands are available in a local console — no Telegram bot, no token
-and no server:
+The local console needs no Telegram bot, no token and no server:
 
 ```bash
 make chat
@@ -126,6 +120,9 @@ make chat
 # forgel> /status
 # forgel> /approve <project-id> staging
 ```
+
+The console creates `.forgel-demo/`; the daemon runs the project through the
+pipeline to the staging gate.
 
 For continuous work without a prompt, run the daemon in another terminal:
 
@@ -226,7 +223,7 @@ make test
 Run the core from the Docker image:
 
 ```bash
-docker compose run --rm forgel demo
+docker compose run --rm forgel init "My app" --brief "A minimal app."
 ```
 
 ## Telegram Interface

@@ -43,10 +43,11 @@ the sandbox core with a scripted model and spends nothing. See
 Run the M0 end-to-end skeleton:
 
 ```bash
-make demo
+PYTHONPATH=src python3 -m forgel init "My app" --brief "A minimal SaaS." --home .forgel-demo
+PYTHONPATH=src python3 -m forgel run <project-id> --home .forgel-demo
 ```
 
-The demo creates a project under `.forgel-demo/`, runs the pipeline, and writes a staging descriptor. The pipeline parks at the staging approval gate. Inspect and close it with:
+The run creates the project under `.forgel-demo/`, advances the pipeline, and writes a staging descriptor. The pipeline parks at the staging approval gate. Inspect and close it with:
 
 ```bash
 PYTHONPATH=src python3 -m forgel status <project-id> --home .forgel-demo

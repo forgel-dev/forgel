@@ -2,16 +2,13 @@ PYTHON ?= python3
 CLI_PIP ?= $(HOME)/.forgel-cli/bin/pip
 export PYTHONPATH := src
 
-.PHONY: test lint demo chat clean e2e-blog install-cli scenario scenario-execute scenario-test
+.PHONY: test lint chat clean e2e-blog install-cli scenario scenario-execute scenario-test
 
 test:
 	$(PYTHON) -m unittest discover -s tests -v
 
 lint:
 	$(PYTHON) -m compileall -q -x 'templates' src tests
-
-demo:
-	$(PYTHON) -m forgel demo --home .forgel-demo
 
 # Local console: the same commands as Telegram, no bot token and no server.
 chat:
