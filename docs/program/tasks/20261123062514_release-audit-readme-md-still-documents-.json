@@ -25,8 +25,10 @@
   "test_command": [
     "python",
     "-m",
-    "pytest",
-    "-q"
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
   ],
   "assumptions": [],
   "plan_id": "",
@@ -37,76 +39,99 @@
   "depends_on": [],
   "checks": [
     {
-      "criterion": "A1",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_readme_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "A2",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-lc",
-        "! grep -n 'v0.1.0/install.sh' README.md"
-      ]
-    },
-    {
-      "criterion": "A3",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-lc",
-        "test \"$(curl -fsSL -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/forgel-dev/code/main/install.sh)\" = 200"
-      ]
-    },
-    {
-      "criterion": "A4",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_readme_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "A5",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "A6",
+      "criterion": "AC1. README.md's first install command is exactly the canonical versionless command.",
       "verification": "command",
       "command": [
         "grep",
-        "-n",
-        "-i",
-        "uninstall",
-        "install.sh"
+        "-qxF",
+        "curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh",
+        "README.md"
       ]
     },
     {
-      "criterion": "A7",
-      "verification": "review",
-      "command": []
+      "criterion": "AC2. The update and uninstall commands use the canonical URL, the uninstall line carrying `-s -- --uninstall`.",
+      "verification": "command",
+      "command": [
+        "grep",
+        "-qxF",
+        "curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh -s -- --uninstall",
+        "README.md"
+      ]
+    },
+    {
+      "criterion": "AC3. README.md contains no tag-pinned install-script path.",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "if grep -nE '/v[0-9][^[:space:]/]*/install\\.sh' README.md; then exit 1; fi"
+      ]
+    },
+    {
+      "criterion": "AC4. The canonical URL returns HTTP 200 and serves the installer.",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "test \"$(curl -s -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/forgel-dev/code/main/install.sh)\" = 200"
+      ]
+    },
+    {
+      "criterion": "AC5. The guard errors on a tag-pinned path, on divergent URLs and on another branch's URL, each via assertRaises.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_readme_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "AC6. The guard imports no network module and passes without network access.",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-c",
+        "! grep -nEq '^[[:space:]]*(import|from)[[:space:]]+(socket|ssl|http|urllib|requests)([.[:space:]]|$)' tests/test_readme_install.py"
+      ]
+    },
+    {
+      "criterion": "AC7. The README documentation test in tests/test_cli.py asserts the canonical versionless URL.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_cli"
+      ]
+    },
+    {
+      "criterion": "AC8. The whole suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "AC9. The task commit contains exactly README.md, tests/test_readme_install.py and tests/test_cli.py.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-c",
+        "import subprocess,sys; out=subprocess.run(['git','show','--name-only','--format=','HEAD'],capture_output=True,text=True,check=True).stdout; got=sorted(p for p in out.split() if p); sys.exit(0 if got==sorted(['README.md','tests/test_readme_install.py','tests/test_cli.py']) else 1)"
+      ]
     }
   ],
   "external_dependencies": [
     {
-      "name": "raw.githubusercontent.com",
-      "interface": "HTTP GET of a repository file from a branch; returns 200 with the file body on success and 404 for a missing ref or path. Used to fetch https://raw.githubusercontent.com/forgel-dev/code/main/install.sh during acceptance.",
+      "name": "GitHub raw content host (raw.githubusercontent.com)",
+      "interface": "HTTPS GET of https://raw.githubusercontent.com/forgel-dev/code/main/install.sh returns HTTP 200 and the body of the POSIX `sh` installer; the same path pattern `https://raw.githubusercontent.com/<org>/<repo>/<ref>/<path>` is what the guard rejects when `<ref>` is a release tag.",
       "docs": "https://docs.github.com/en/repositories/working-with-files/using-files/viewing-a-file",
       "mode": "",
       "evidence": "",
@@ -114,16 +139,8 @@
     },
     {
       "name": "curl",
-      "interface": "CLI HTTP client; `-fsSL -o /dev/null -w '%{http_code}'` prints the status code and `-f` makes a non-2xx exit non-zero. Used for the live fetchability check.",
+      "interface": "`curl -fsSL <url>` streams a URL body to stdout for `sh`; `curl -s -o /dev/null -w '%{http_code}' <url>` prints the HTTP status code used by the AC4 check.",
       "docs": "https://curl.se/docs/manpage.html",
-      "mode": "",
-      "evidence": "",
-      "stub": ""
-    },
-    {
-      "name": "pytest",
-      "interface": "Test runner for the repository's tests/ directory; used to run the README guard test and the full suite.",
-      "docs": "https://docs.pytest.org/en/stable/",
       "mode": "",
       "evidence": "",
       "stub": ""
