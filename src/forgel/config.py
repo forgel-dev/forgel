@@ -87,7 +87,6 @@ class Settings:
     task_review: bool = False
     free_text_spec: bool = False
     task_accept: str = "auto"  # auto | human
-    task_retries: int = 0
     task_reworks: int = 0
     retry_backoff: tuple[int, ...] = (1, 5, 15, 30, 60)
     plan_on_failure: str = "quarantine"  # quarantine | stop | continue
@@ -185,13 +184,6 @@ class Settings:
             raise ValueError(
                 "FORGEL_TASK_ACCEPT must be one of: auto, human"
             )
-        retries_raw = (
-            os.environ.get("FORGEL_TASK_RETRIES", "5").strip() or "5"
-        )
-        if not retries_raw.isdigit() or int(retries_raw) > 10:
-            raise ValueError(
-                "FORGEL_TASK_RETRIES must be an integer from 0 to 10"
-            )
         reworks_raw = (
             os.environ.get("FORGEL_TASK_REWORKS", "8").strip() or "8"
         )
@@ -270,7 +262,6 @@ class Settings:
             task_review=_env_bool("FORGEL_TASK_REVIEW", True),
             free_text_spec=_env_bool("FORGEL_FREE_TEXT_SPEC", True),
             task_accept=task_accept,
-            task_retries=int(retries_raw),
             task_reworks=int(reworks_raw),
             retry_backoff=tuple(backoff),
             plan_on_failure=plan_on_failure,

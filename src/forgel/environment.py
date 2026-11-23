@@ -25,12 +25,14 @@ worth reporting, not silently ignoring.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from .layout import ProjectLayout
 from .program_manifest import entries
@@ -542,6 +544,39 @@ def command_argv(command: str) -> list[str]:
     if Path(argv[index]).name in PYTHON_NAMES:
         argv[index] = sys.executable
     return argv
+
+
+_PYTHON_SHIM: Path | None = None
+
+
+def interpreter_shim() -> Path:
+    """A directory where ``python`` and ``python3`` name this interpreter."""
+
+    global _PYTHON_SHIM
+    if _PYTHON_SHIM is not None:
+        return _PYTHON_SHIM
+    directory = Path(tempfile.mkdtemp(prefix="forgel-python-"))
+    for name in ("python", "python3"):
+        try:
+            (directory / name).symlink_to(sys.executable)
+        except OSError:
+            continue
+    _PYTHON_SHIM = directory
+    return directory
+
+
+def command_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The environment for a host command, with the interpreter discoverable.
+
+    A check may wrap its command in a shell (``sh -c 'timeout 120 python ...'``).
+    Resolving ``argv[0]`` cannot reach an interpreter named inside the script,
+    so a shim directory holding ``python`` and ``python3`` is put on PATH.
+    """
+
+    env = dict(base if base is not None else os.environ)
+    shim = interpreter_shim()
+    env["PATH"] = str(shim) + os.pathsep + env.get("PATH", os.defpath)
+    return env
 
 
 def environment_path(layout: ProjectLayout) -> Path:

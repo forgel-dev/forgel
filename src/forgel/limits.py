@@ -17,6 +17,12 @@ FILE = "docs/program/limits.json"
 
 LIMITS: dict[str, float] = {
     "command_timeout": 3_600.0,
+    "check_timeout": 3_600.0,
+    "audit_timeout": 3_600.0,
+    "github_check_timeout": 3_600.0,
+    "sandbox_timeout": 3_600.0,
+    "git_timeout": 3_600.0,
+    "clone_timeout": 3_600.0,
 }
 
 REASONS: dict[str, str] = {
@@ -24,6 +30,27 @@ REASONS: dict[str, str] = {
         "A repository command (build, test suite, probe) may run this long "
         "before it is treated as hung. One hour covers a deliberately slow "
         "suite; raise it with set_limit for a longer one."
+    ),
+    "check_timeout": (
+        "One acceptance check may run this long. A check that runs a whole "
+        "suite or an e2e is not a work budget."
+    ),
+    "audit_timeout": (
+        "The release audit may spend this long on model calls before it is "
+        "treated as hung."
+    ),
+    "github_check_timeout": (
+        "A commit's CI checks may take this long before Forgel stops "
+        "waiting."
+    ),
+    "sandbox_timeout": (
+        "One command inside the sandbox may run this long."
+    ),
+    "git_timeout": (
+        "A git operation (clone, fetch, push, diff) may run this long."
+    ),
+    "clone_timeout": (
+        "Cloning an adopted repository may take this long."
     ),
 }
 

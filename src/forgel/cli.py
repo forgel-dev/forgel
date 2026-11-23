@@ -26,6 +26,7 @@ from .adopt import (
 )
 from .approvals import ApprovalError, latest_approval, record_approval
 from .artifacts import read_json
+from . import limits
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .console import run_console
@@ -262,6 +263,32 @@ def cmd_run(args: argparse.Namespace) -> int:
     except StageError as exc:
         print(_say("cli_error", error=exc), file=sys.stderr)
         return 1
+    finally:
+        ledger.close()
+
+
+def cmd_limit(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    ledger = _ledger(settings)
+    try:
+        try:
+            project = resolve_project(ledger, args.project_id)
+        except ProjectError as exc:
+            print(_say("cli_error", error=exc), file=sys.stderr)
+            return 1
+        layout = ProjectLayout.detect(project["workspace"])
+        if args.name and args.seconds is not None:
+            try:
+                value = limits.set_value(layout, args.name, args.seconds)
+            except ValueError as exc:
+                print(_say("cli_error", error=exc), file=sys.stderr)
+                return 2
+            print(f"{args.name} = {value:g}s")
+            return 0
+        effective = {**limits.LIMITS, **limits.load(layout)}
+        for name in sorted(effective):
+            print(f"{name}: {effective[name]:g}s")
+        return 0
     finally:
         ledger.close()
 
@@ -1940,6 +1967,15 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("project_id")
     run.add_argument("--home", default=None)
     run.set_defaults(func=cmd_run)
+
+    limit = subparsers.add_parser(
+        "limit", help="Show or raise a runtime limit"
+    )
+    limit.add_argument("project_id")
+    limit.add_argument("name", nargs="?")
+    limit.add_argument("seconds", nargs="?", type=float)
+    limit.add_argument("--home", default=None)
+    limit.set_defaults(func=cmd_limit)
 
     status = subparsers.add_parser("status", help="Show a project and its events")
     status.add_argument("project_id")

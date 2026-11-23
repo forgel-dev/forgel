@@ -13,7 +13,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-CLONE_TIMEOUT = 600
+CLONE_TIMEOUT = 3600
 
 
 class ProviderError(RuntimeError):

@@ -121,24 +121,19 @@ class SettingsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
                 os.environ,
-                {"FORGEL_TASK_RETRIES": "", "FORGEL_PLAN_ON_FAILURE": ""},
+                {"FORGEL_PLAN_ON_FAILURE": ""},
                 clear=False,
             ):
                 settings = Settings.from_env(tmp)
-        self.assertEqual(settings.task_retries, 5)
         self.assertEqual(settings.task_reworks, 8)
         self.assertEqual(settings.plan_on_failure, "quarantine")
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
                 os.environ,
-                {
-                    "FORGEL_TASK_RETRIES": "1",
-                    "FORGEL_PLAN_ON_FAILURE": "stop",
-                },
+                {"FORGEL_PLAN_ON_FAILURE": "stop"},
                 clear=False,
             ):
                 settings = Settings.from_env(tmp)
-        self.assertEqual(settings.task_retries, 1)
         self.assertEqual(settings.plan_on_failure, "stop")
 
     def test_rework_defaults(self) -> None:
@@ -215,8 +210,6 @@ class SettingsTest(unittest.TestCase):
 
     def test_invalid_failure_policy_is_rejected(self) -> None:
         for case in (
-            {"FORGEL_TASK_RETRIES": "11"},
-            {"FORGEL_TASK_RETRIES": "x"},
             {"FORGEL_PLAN_ON_FAILURE": "sometimes"},
         ):
             with self.subTest(case=case):

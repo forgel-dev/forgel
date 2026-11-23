@@ -25,6 +25,7 @@ from typing import Any
 
 from .approvals import latest_approval
 from .artifacts import copy_template, read_json, write_json, write_text
+from . import limits
 from .complexity import evaluate, measure_patch, write_report
 from .config import Settings
 from .environment import (
@@ -172,6 +173,15 @@ class Orchestrator:
 
     def _ref(self, project: dict[str, Any], path: Path) -> str:
         return str(path.relative_to(self._workspace(project)))
+
+    def _command_timeout(self, project: dict[str, Any]) -> float:
+        """The crash guard for a repository command, configurable per project."""
+
+        return limits.get(
+            self._layout(project),
+            "command_timeout",
+            self.settings.command_timeout or 3_600.0,
+        )
 
     def _repo_ref(
         self, project: dict[str, Any], repo_id: str, relative: str = ""
@@ -1146,7 +1156,7 @@ See `docs/program/jurisdiction/requirements.md` and
                     argv = shlex.split(command)
                     if not argv:
                         raise StageError("environment command is empty")
-                    returncode, text = session.run(argv, timeout=300)
+                    returncode, text = session.run(argv, timeout=self._command_timeout(project))
                     output += text
                     if returncode != 0:
                         return returncode, output, label
@@ -1190,7 +1200,7 @@ See `docs/program/jurisdiction/requirements.md` and
                     env={**os.environ, **environment.env_map},
                     capture_output=True,
                     text=True,
-                    timeout=300,
+                    timeout=self._command_timeout(project),
                     check=False,
                 )
             except subprocess.TimeoutExpired as exc:
@@ -1216,7 +1226,7 @@ See `docs/program/jurisdiction/requirements.md` and
             cwd=str(script.parent),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=self._command_timeout(project),
             check=False,
         )
         output = completed.stdout
@@ -1245,7 +1255,7 @@ See `docs/program/jurisdiction/requirements.md` and
             env=env,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=self._command_timeout(project),
             check=False,
         )
         output += merge_output(result.stdout, result.stderr)
@@ -1268,7 +1278,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=self._command_timeout(project),
                 check=False,
             )
             output += "\n$ docker compose down -v\n" + merge_output(
@@ -1299,7 +1309,7 @@ See `docs/program/jurisdiction/requirements.md` and
                 cwd=str(qa_dir),
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=self._command_timeout(project),
                 check=False,
             )
             output += "$ npm install\n" + merge_output(
@@ -1313,7 +1323,7 @@ See `docs/program/jurisdiction/requirements.md` and
             cwd=str(layout.root),
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=self._command_timeout(project),
             check=False,
         )
         output += (

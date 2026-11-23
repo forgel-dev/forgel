@@ -62,7 +62,7 @@ REPO_RELEASES_DIR = "releases"
 CHANGELOG = "CHANGELOG.md"
 INITIAL_VERSION = "0.1.0"
 MAX_AUDIT_ERRORS = 15
-AUDIT_TOTAL_TIMEOUT = 900.0
+AUDIT_TOTAL_TIMEOUT = 3_600.0
 MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
 MAX_DIFF_CHARS = 60_000
@@ -659,17 +659,19 @@ def resume_release(
     return release
 
 
-def _audit_client(client: ModelClient) -> ModelClient:
+def _audit_client(
+    client: ModelClient, total_timeout: float = AUDIT_TOTAL_TIMEOUT
+) -> ModelClient:
     """Give the whole-change-set audit a longer deadline than a turn."""
 
     config = getattr(client, "config", None)
     if config is None:
         return client
     total = float(getattr(config, "total_timeout", 0) or 0)
-    if total <= 0 or total >= AUDIT_TOTAL_TIMEOUT:
+    if total <= 0 or total >= total_timeout:
         return client
     return OpenAICompatibleClient(
-        replace(config, total_timeout=AUDIT_TOTAL_TIMEOUT)
+        replace(config, total_timeout=total_timeout)
     )
 
 
@@ -863,7 +865,10 @@ def audit_release(
         save_release(layout, release)
         log(f"[release] {release['id']}: audit requires a model")
         return False
-    client = _audit_client(client)
+    client = _audit_client(
+        client,
+        limits.get(layout, "audit_timeout", AUDIT_TOTAL_TIMEOUT),
+    )
     messages = [
         ModelMessage("system", AUDIT_PROMPT),
         ModelMessage(

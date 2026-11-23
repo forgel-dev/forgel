@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol, Sequence
 
 from .config import Settings
+from . import limits
 from .environment import Environment, command_argv, mount_env_name
 from .layout import ProjectLayout
 from .proc import merge_output
@@ -240,7 +241,7 @@ class DockerSandbox:
                 self.daemon_path(dockerfile),
                 self.daemon_path(context),
             ],
-            timeout=1800,
+            timeout=limits.get(layout, "sandbox_timeout", 3_600.0),
             what=f"build of {tag}",
         )
         return tag
@@ -307,6 +308,7 @@ class DockerSandbox:
             env=tuple(env),
             extra_mounts=extra,
             log=self.log,
+            timeout=limits.get(layout, "sandbox_timeout", 3_600.0),
         )
 
 
@@ -324,6 +326,7 @@ class DockerSession:
         extra_mounts: Sequence[tuple[str, str]] = (),
         log: Callable[[str], None] = print,
         name: str | None = None,
+        timeout: float = 3_600.0,
     ) -> None:
         self.sandbox = sandbox
         self.project_id = project_id
@@ -333,6 +336,7 @@ class DockerSession:
         self.env = tuple(env)
         self.extra_mounts = tuple(extra_mounts)
         self.log = log
+        self.timeout = timeout
         self.name = name or (
             f"forgel-sbx-{_slug(project_id)}-{secrets.token_hex(4)}"
         )
@@ -435,7 +439,7 @@ class DockerSession:
                 argv = command_argv(command)
             except Exception as exc:  # noqa: BLE001 - reported as a sandbox error
                 raise SandboxError(f"invalid setup command {command!r}: {exc}") from exc
-            code, output = self._exec(argv, timeout=900)
+            code, output = self._exec(argv, timeout=self.timeout)
             if code != 0:
                 raise SandboxError(
                     f"setup command exited {code}: {command}\n{_cap(output)}"

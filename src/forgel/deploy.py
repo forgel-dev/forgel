@@ -216,7 +216,7 @@ class Runner:
         binary: bool = False,
         stream: bool = False,
         allow_fail: bool = False,
-        timeout: float = 300.0,
+        timeout: float = 3_600.0,
     ) -> subprocess.CompletedProcess:
         self.log(f"ssh {self.config.target}: {command}")
         try:
@@ -249,7 +249,7 @@ class Runner:
         command: list[str],
         input_data: str | None = None,
         env: Mapping[str, str] | None = None,
-        timeout: float = 1800.0,
+        timeout: float = 3_600.0,
     ) -> subprocess.CompletedProcess[str]:
         self.log("local: " + " ".join(shlex.quote(item) for item in command))
         try:
@@ -489,7 +489,7 @@ class Runner:
             script = self._package_install(need_docker)
         self.ssh(
             privilege + "sh -c " + shlex.quote(script),
-            timeout=1800,
+            timeout=3600,
         )
 
     def _package_install(self, need_docker: bool) -> str:
@@ -748,13 +748,13 @@ def deploy_up(
         runner.ssh(
             f"cd {shlex.quote(config.directory)} && "
             + runner.compose_command("pull", "--quiet"),
-            timeout=600,
+            timeout=3600,
         )
 
     runner.ssh(
         f"cd {shlex.quote(config.directory)} && chmod 700 . && "
         "chmod 600 .env && " + runner.compose_command("up", "-d", "--remove-orphans"),
-        timeout=900,
+        timeout=3600,
     )
     status = runner.ssh(
         f"cd {shlex.quote(config.directory)} && "
@@ -856,7 +856,7 @@ def deploy_backup(
             ".",
         ),
         binary=True,
-        timeout=900,
+        timeout=3600,
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(completed.stdout or b"")

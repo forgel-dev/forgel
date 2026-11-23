@@ -209,7 +209,7 @@ def _git_output(
             cwd=str(repo),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=3_600.0,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -224,7 +224,7 @@ def _git_ok(repo: Path, args: list[str]) -> bool:
             cwd=str(repo),
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=3_600.0,
             check=False,
         )
     except (OSError, subprocess.SubprocessError):

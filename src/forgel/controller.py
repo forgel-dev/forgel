@@ -90,7 +90,7 @@ Operations:
 - release_resume, release_audit, release_finalize, release_fix: run a
   release operation now;
 - set_limit {name, seconds}: raise a runtime limit when the work
-  legitimately needs more room (known limit: command_timeout);
+  legitimately needs more room (the limits block lists the known limits);
 - ask_user: stop and ask the owner; only when the decision needs a product
   choice, access or an irreversible action that only the owner can make;
 - stop: stop and report the current state.

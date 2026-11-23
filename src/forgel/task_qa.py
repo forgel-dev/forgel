@@ -32,6 +32,7 @@ from .config import Settings
 from .environment import (
     Environment,
     command_argv,
+    command_env,
     load_environment,
     mount_env_name,
 )
@@ -234,7 +235,7 @@ def _run_local(
     environment: Environment | None,
     repo_id: str,
     checks: Sequence[dict[str, Any]],
-    timeout: float = 900.0,
+    timeout: float = 3_600.0,
 ) -> list[tuple[dict[str, Any], int, str]]:
     fallback = _workdir(layout, environment, repo_id)
     env = {
@@ -246,6 +247,7 @@ def _run_local(
     if environment is not None:
         for mount in environment.mounts:
             env[mount_env_name(mount)] = str(layout.repo_path(mount))
+    env = command_env(env)
     results: list[tuple[dict[str, Any], int, str]] = []
     for check in checks:
         command = check["command"]
@@ -270,7 +272,7 @@ def _run_local(
         except subprocess.TimeoutExpired as exc:
             partial = merge_output(exc.stdout, exc.stderr)
             results.append(
-                (check, 124, output + f"timed out after 600s\n{partial}")
+                (check, 124, output + f"timed out after {timeout:g}s\n{partial}")
             )
             continue
         except (OSError, subprocess.SubprocessError) as exc:
@@ -453,22 +455,9 @@ def _record(
                 item
                 for item in result.checks
                 if item.get("verdict") == "fail"
-                and (
-                    not result.failure_kind
-                    or item.get("failure") == result.failure_kind
-                )
             ),
             None,
         )
-        if failing is None:
-            failing = next(
-                (
-                    item
-                    for item in result.checks
-                    if item.get("verdict") == "fail"
-                ),
-                None,
-            )
         if failing is not None:
             detail = (
                 f"{failing.get('criterion')} "
@@ -476,16 +465,11 @@ def _record(
                 f"{failing.get('repo') or 'project'} @ "
                 f"{failing.get('workdir') or '-'}]"
             )
-            if result.failure_kind in {
-                "spec",
-                "environment",
-                "infrastructure",
-            }:
-                evidence = " ".join(
-                    str(failing.get("output") or "").split()
-                )
-                if evidence:
-                    detail += ": " + evidence[:1200]
+            evidence = " ".join(
+                str(failing.get("output") or "").split()
+            )
+            if evidence:
+                detail += ": " + evidence[:1200]
         else:
             detail = f"exit {exit_code}"
         summary = str(data.get("summary") or "").strip()
@@ -493,15 +477,13 @@ def _record(
             (summary + "; " if summary else "")
             + f"task QA failed: {detail}"
         )
-        kind = {
-            "spec": "spec",
-            "environment": "environment",
-            "infrastructure": "infrastructure",
-        }.get(result.failure_kind, "qa")
+        # The failure kind is not inferred from the exit code: a command that
+        # could not start and a real failing test need different responses,
+        # and only the controlling model can tell them apart from the output.
         data["failure"] = {
-            "kind": kind,
+            "kind": result.failure_kind or "check",
             "message": f"task QA failed: {detail}",
-            "retryable": kind == "infrastructure",
+            "retryable": None,
         }
     else:
         skipped = [
@@ -841,8 +823,8 @@ def run_task_qa(
                 60.0,
                 limits.get(
                     layout,
-                    "command_timeout",
-                    settings.command_timeout or 3_600,
+                    "check_timeout",
+                    3_600,
                 ),
             ),
         )
@@ -854,25 +836,14 @@ def run_task_qa(
     checks: list[dict[str, Any]] = []
     output = ""
     exit_code = 0
-    failure_kinds: set[str] = set()
     for check, code, text in results:
         output += text
+        # Keep only what the check itself recorded (a sandbox error, for
+        # example). The exit code alone does not decide the cause: the
+        # controlling model reads the command and its output and decides.
         failure = str(check.get("failure") or "")
         if code != 0 and not failure:
-            if (
-                code in {124, 126, 127}
-                or "cannot run command" in text
-                or "timed out" in text
-            ):
-                failure = "infrastructure"
-            elif check.get("scope") == "e2e":
-                failure = "code"
-            elif check.get("scope") == "environment":
-                failure = "environment"
-            else:
-                failure = "code"
-        if code != 0:
-            failure_kinds.add(failure)
+            failure = "check"
         checks.append(
             {
                 "criterion": check["criterion"],
@@ -920,12 +891,7 @@ def run_task_qa(
         status = "review"
     if exit_code != 0:
         exit_code = exit_code or 1
-    failure_kind = ""
-    if exit_code != 0:
-        for candidate in ("code", "spec", "infrastructure", "environment"):
-            if candidate in failure_kinds:
-                failure_kind = candidate
-                break
+    failure_kind = "check" if exit_code != 0 else ""
     return _record(
         ledger,
         layout,

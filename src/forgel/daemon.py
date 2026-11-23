@@ -106,12 +106,12 @@ def _now() -> str:
 def _failure(
     kind: str, message: str, retryable: bool | None = None
 ) -> dict[str, Any]:
+    # ``retryable`` is a fact the caller may know; the kind alone never
+    # decides it. The controlling agent reads the failure and chooses.
     return {
         "kind": kind,
         "message": message,
-        "retryable": (
-            kind == "infrastructure" if retryable is None else retryable
-        ),
+        "retryable": retryable,
     }
 
 
@@ -722,45 +722,18 @@ def handle_failure(
     task_id: str,
     client: ModelClient | None,
     log: Callable[[str], None],
-    now: datetime | None = None,
 ) -> None:
-    """React to a failure by kind: retry, rework, arbitrate, quarantine."""
+    """Hand a failure to the controlling agent."""
 
     task = tasks.get_task(layout, task_id)
     if task is None or task.get("status") != "failed":
         return
-    moment = now or datetime.now(timezone.utc)
     data = dict(task.get("result") or {})
     failure = dict(
         data.get("failure")
         or _failure("external", "unknown failure", retryable=False)
     )
-    kind = str(failure.get("kind") or "external")
     attempts = int(data.get("attempts", 0))
-    if kind == "infrastructure" and attempts < settings.task_retries:
-        backoff = settings.retry_backoff or (1,)
-        delay = backoff[min(attempts, len(backoff) - 1)]
-        retry_at = (moment + timedelta(minutes=delay)).isoformat(
-            timespec="seconds"
-        )
-        data["attempts"] = attempts + 1
-        data["retry_after"] = retry_at
-        data["last_failure"] = failure
-        data.pop("failure", None)
-        tasks.update_task(
-            layout,
-            task_id,
-            status="pending",
-            started_at="",
-            finished_at="",
-            result=data,
-        )
-        log(
-            f"[retry] {project['id']}: task {task_id} infrastructure "
-            f"failure; retry {attempts + 1}/{settings.task_retries} "
-            f"in {delay}m (at {retry_at})"
-        )
-        return
     if client is None:
         _controller_stopped(
             settings,

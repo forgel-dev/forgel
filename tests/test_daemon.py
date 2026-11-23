@@ -145,91 +145,37 @@ class DaemonTest(unittest.TestCase):
                 (workspace / "docs/program/iterations/1/close.md").exists()
             )
 
-    def test_infrastructure_failure_is_retried_then_stopped(
-        self,
-    ) -> None:
+    def test_an_infrastructure_failure_goes_to_the_controller(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            settings = self._settings(tmp)
-            settings = Settings(
-                home=settings.home,
-                registry_path=settings.registry_path,
-                templates_path=settings.templates_path,
-                jurisdiction_path=settings.jurisdiction_path,
-                qa_runtime="local",
-                task_retries=1,
+            settings, ledger, project, layout, task = self._failed_task(tmp)
+            data = dict(task.get("result") or {})
+            data["failure"] = {
+                "kind": "infrastructure",
+                "message": "the command could not run",
+                "retryable": None,
+            }
+            tasks.update_task(
+                layout, str(task["id"]), status="failed", result=data
             )
-            ledger = Ledger(settings.db_path)
-            self.addCleanup(ledger.close)
-            project_id = create_project(
-                settings,
-                ledger,
-                "Retry demo",
-                "A demo brief.",
-                mode="brownfield",
-            )
-            project = ledger.get_project(project_id)
-            assert project is not None
-            layout = ProjectLayout.detect(project["workspace"])
-            set_entries(
-                layout,
-                [
-                    {
-                        "id": "main",
-                        "role": "application",
-                        "provider": "local",
-                        "url": "",
-                        "depends_on": [],
-                    }
-                ],
-            )
-            repo = layout.repo_path("main")
-            repo.mkdir(parents=True)
-            (repo / "README.md").write_text("demo\n", encoding="utf-8")
-            subprocess.run(
-                ["git", "init", "-q"], cwd=repo, check=True
-            )
-            subprocess.run(
-                ["git", "add", "-A"], cwd=repo, check=True
-            )
-            subprocess.run(
-                [
-                    "git",
-                    "-c",
-                    "user.name=T",
-                    "-c",
-                    "user.email=t@example.com",
-                    "commit",
-                    "-q",
-                    "-m",
-                    "initial",
-                ],
-                cwd=repo,
-                check=True,
-            )
-            task = create_task(
-                layout, "Do work", ["A"], ["B"], repo_id="main"
-            )
-            client = ScriptedModelClient([])
-            run_once(settings, ledger, log=lambda _m: None, client=client)
-            stored = get_task(layout, task["id"])
+            from forgel.controller import Decision
+
+            decision = Decision(operation="stop", reason="not retryable")
+            with patch(
+                "forgel.controller.decide", return_value=decision
+            ) as decide:
+                handle_failure(
+                    settings,
+                    ledger,
+                    project,
+                    layout,
+                    str(task["id"]),
+                    ScriptedModelClient([]),
+                    lambda _m: None,
+                )
+            decide.assert_called_once()
+            stored = get_task(layout, str(task["id"]))
             assert stored is not None
-            self.assertEqual(stored["status"], "pending")
-            self.assertEqual(stored["result"]["attempts"], 1)
-            self.assertTrue(stored["result"]["retry_after"])
-            # The backoff is not elapsed: the task is not picked up.
-            self.assertIsNone(tasks.next_pending_task(layout))
-            # Simulate the backoff elapsing.
-            data = dict(stored["result"])
-            data["retry_after"] = "2000-01-01T00:00:00+00:00"
-            tasks.update_task(layout, task["id"], result=data)
-            run_once(settings, ledger, log=lambda _m: None, client=client)
-            stored = get_task(layout, task["id"])
-            assert stored is not None
-            self.assertEqual(stored["status"], "failed")
-            self.assertIn(
-                "controlling agent stopped",
-                stored["result"]["summary"],
-            )
+            self.assertEqual(stored["status"], "blocked")
 
     def test_an_incomplete_read_is_an_infrastructure_failure(self) -> None:
         failure = _classify_crash(http.client.IncompleteRead(b""))

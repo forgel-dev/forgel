@@ -164,12 +164,12 @@ class TaskQATest(unittest.TestCase):
             log=lambda _m: None,
         )
         self.assertEqual(result.status, "fail")
-        self.assertEqual(result.failure_kind, "environment")
+        self.assertEqual(result.failure_kind, "check")
         stored = get_task(self.layout, task["id"])
         assert stored is not None
         self.assertEqual(stored["status"], "failed")
         self.assertEqual(
-            stored["result"]["failure"]["kind"], "environment"
+            stored["result"]["failure"]["kind"], "check"
         )
         self.assertIn("task QA failed", stored["result"]["summary"])
 
@@ -302,11 +302,11 @@ class TaskQATest(unittest.TestCase):
             log=lambda _m: None,
         )
         self.assertEqual(result.status, "fail")
-        self.assertEqual(result.failure_kind, "code")
+        self.assertEqual(result.failure_kind, "check")
         stored = get_task(self.layout, task["id"])
         assert stored is not None
         self.assertEqual(
-            stored["result"]["failure"]["kind"], "qa"
+            stored["result"]["failure"]["kind"], "check"
         )
         e2e = next(
             item
@@ -386,7 +386,7 @@ class TaskQATest(unittest.TestCase):
         self.assertIn("work.py", result.output)
         stored = get_task(self.layout, task["id"])
         assert stored is not None
-        self.assertEqual(stored["result"]["failure"]["kind"], "qa")
+        self.assertEqual(stored["result"]["failure"]["kind"], "code")
 
     def test_a_deferred_mobile_e2e_is_skipped_not_failing(self) -> None:
         set_entries(
@@ -700,7 +700,7 @@ class TaskQATest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "failed")
         self.assertEqual(
-            stored["result"]["failure"]["kind"], "qa"
+            stored["result"]["failure"]["kind"], "check"
         )
 
     def test_a_review_only_check_requires_review(self) -> None:

@@ -45,7 +45,7 @@ class ModelConfig:
     base_url: str
     api_key: str
     timeout: float = 600.0
-    total_timeout: float = 1500.0
+    total_timeout: float = 3_600.0
     retries: int = 5
     retry_backoff: tuple[float, ...] = (1.0, 3.0, 9.0)
 
@@ -451,12 +451,12 @@ def build_model_client(
         retries = 5
     try:
         total_timeout = float(
-            env.get("FORGEL_MODEL_TOTAL_TIMEOUT", "1500")
+            env.get("FORGEL_MODEL_TOTAL_TIMEOUT", "3600")
         )
     except ValueError:
-        total_timeout = 1500.0
+        total_timeout = 3_600.0
     if total_timeout <= 0:
-        total_timeout = 1500.0
+        total_timeout = 3_600.0
     retries = max(0, min(retries, 10))
     backoff: list[float] = []
     for item in env.get("FORGEL_MODEL_RETRY_BACKOFF", "1,3,9").split(","):

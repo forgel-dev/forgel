@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from forgel.environment import (
     Environment,
     EnvironmentError,
     command_argv,
+    command_env,
     environment_path,
     load_environment,
     parse_environment,
@@ -400,6 +402,17 @@ class CommandArgvTest(unittest.TestCase):
     def test_empty_command_is_rejected(self) -> None:
         with self.assertRaises(EnvironmentError):
             command_argv("   ")
+
+    def test_a_shell_wrapped_command_finds_the_interpreter(self) -> None:
+        env = command_env({"PATH": "/usr/bin:/bin"})
+        completed = subprocess.run(
+            ["sh", "-c", "python -c 'print(42)'"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("42", completed.stdout)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ def _run(
     repo: Path,
     *args: str,
     env: dict[str, str] | None = None,
-    timeout: float = 180.0,
+    timeout: float = 3_600.0,
 ) -> subprocess.CompletedProcess[str]:
     merged = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     if env:

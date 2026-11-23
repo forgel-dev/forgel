@@ -259,9 +259,10 @@ and point the project at them, or wait for a dedicated services sandbox.
   is accepted automatically; set `FORGEL_TASK_ACCEPT=human` to leave every
   task in `review` until `/task accept <id>`. Review-only criteria are part of
   the reviewer's verdict; only an errored review needs a human.
-- Infrastructure failures are retried with backoff (`FORGEL_TASK_RETRIES=5`, 1/5/15/30/60 min); QA and review
-  rejections go back for rework with the feedback (`FORGEL_TASK_REWORKS=8`) and
-  an external arbiter (`FORGEL_TASK_ARBITER`) resolves a repeated conflict.
+- Every failure goes to the controlling agent, which reads the failing
+  command, its exit code and output and decides whether to retry, rework
+  (`FORGEL_TASK_REWORKS=8`), raise a limit or stop. An external arbiter
+  (`FORGEL_TASK_ARBITER`) resolves a repeated conflict.
   An exhausted budget quarantines the task and blocks its dependents;
   `FORGEL_PLAN_ON_FAILURE=stop` stops the milestone instead. `/task retry`
   releases a quarantined task and its dependents.
