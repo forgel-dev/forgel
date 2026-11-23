@@ -1001,20 +1001,6 @@ class CodingAgent:
                 + "\n\n".join(previews),
             ),
         ]
-        try:
-            raw = self.client.complete(
-                messages, model=project_model_name(layout.control)
-            )
-        except ModelError as exc:
-            log(
-                f"[agent] {task['id']}: completion file selection failed: "
-                f"{exc}"
-            )
-            return None
-        objects = json_objects(raw)
-        data = objects[-1] if objects else None
-        if not isinstance(data, dict):
-            return None
         allowed = set(candidates)
 
         def _paths(value: Any) -> list[str] | None:
@@ -1044,49 +1030,83 @@ class CodingAgent:
                     result.append({"path": path, "reason": reason})
             return result
 
-        commit = _paths(data.get("commit"))
-        revert = _paths(data.get("revert"))
-        ignore = _paths(data.get("ignore"))
-        escalate = _escalations(data.get("escalate"))
-        if (
-            commit is None
-            or revert is None
-            or ignore is None
-            or escalate is None
-        ):
-            return None
-        assigned = (
-            commit
-            + revert
-            + ignore
-            + [item["path"] for item in escalate]
-        )
-        if len(assigned) != len(set(assigned)) or set(assigned) != allowed:
-            log(
-                f"[agent] {task['id']}: the completion step did not decide "
-                "every uncommitted file"
+        def _decision(raw: str) -> dict[str, Any] | None:
+            objects = json_objects(raw)
+            data = objects[-1] if objects else None
+            if not isinstance(data, dict):
+                return None
+            commit = _paths(data.get("commit"))
+            revert = _paths(data.get("revert"))
+            ignore = _paths(data.get("ignore"))
+            escalate = _escalations(data.get("escalate"))
+            if (
+                commit is None
+                or revert is None
+                or ignore is None
+                or escalate is None
+            ):
+                return None
+            assigned = (
+                commit
+                + revert
+                + ignore
+                + [item["path"] for item in escalate]
             )
-            return None
-        tracked_ignored = [
-            path for path in ignore if git_ops.is_tracked(repo, path)
-        ]
-        if tracked_ignored:
+            if len(assigned) != len(set(assigned)) or set(assigned) != allowed:
+                return None
+            tracked_ignored = [
+                path for path in ignore if git_ops.is_tracked(repo, path)
+            ]
+            if tracked_ignored:
+                log(
+                    f"[agent] {task['id']}: cannot ignore tracked files: "
+                    + ", ".join(tracked_ignored[:10])
+                )
+                return None
+            return {
+                "commit": commit,
+                "revert": revert,
+                "ignore": ignore,
+                "escalate": escalate,
+            }
+
+        for attempt in range(3):
+            try:
+                raw = self.client.complete(
+                    messages, model=project_model_name(layout.control)
+                )
+            except ModelError as exc:
+                log(
+                    f"[agent] {task['id']}: completion file selection "
+                    f"failed: {exc}"
+                )
+                return None
+            decision = _decision(raw)
+            if decision is not None:
+                log(
+                    f"[agent] {task['id']}: completion decided "
+                    f"{len(decision['commit'])} commit, "
+                    f"{len(decision['revert'])} revert, "
+                    f"{len(decision['ignore'])} ignore, "
+                    f"{len(decision['escalate'])} escalate"
+                )
+                return decision
             log(
-                f"[agent] {task['id']}: cannot ignore tracked files: "
-                + ", ".join(tracked_ignored[:10])
+                f"[agent] {task['id']}: completion decision "
+                f"{attempt + 1}/3 did not decide every file; asking again"
             )
-            return None
-        log(
-            f"[agent] {task['id']}: completion decided "
-            f"{len(commit)} commit, {len(revert)} revert, "
-            f"{len(ignore)} ignore, {len(escalate)} escalate"
-        )
-        return {
-            "commit": commit,
-            "revert": revert,
-            "ignore": ignore,
-            "escalate": escalate,
-        }
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Your previous answer did not decide every uncommitted "
+                    "candidate. Return one JSON object with commit, revert, "
+                    "ignore and escalate arrays; every candidate exactly "
+                    "once; an ignored path must be untracked. Candidates: "
+                    + ", ".join(candidates),
+                )
+            )
+        return None
 
     def _record_escalation(
         self,

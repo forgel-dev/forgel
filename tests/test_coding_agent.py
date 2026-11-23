@@ -1523,6 +1523,55 @@ class CodingAgentTest(unittest.TestCase):
         ]
         self.assertIn("escalation", stages)
 
+    def test_the_completion_step_retries_an_incomplete_decision(self) -> None:
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 1\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+                json.dumps(
+                    {
+                        "commit": ["work.py"],
+                        "revert": [],
+                        "ignore": [],
+                        "escalate": [],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "commit": ["work.py", ".gitignore"],
+                        "revert": [],
+                        "ignore": [],
+                        "escalate": [],
+                    }
+                ),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        tracked = _run(self.repo, "ls-files", "work.py").stdout.strip()
+        self.assertEqual(tracked, "work.py")
+
     def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
         leftover = self.repo / "leftover"
         leftover.mkdir()
