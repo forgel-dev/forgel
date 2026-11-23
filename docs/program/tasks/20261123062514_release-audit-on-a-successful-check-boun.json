@@ -1,18 +1,35 @@
 {
   "id": "20261123062514_release-audit-on-a-successful-check-boun",
   "title": "Release audit: On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check`",
-  "spec": "",
+  "spec": "docs/program/specs/20261123062514_release-audit-on-a-successful-check-boun.md",
   "summary": "Run the checked shell in its own process group/session (with stdin/stdout detached so an interactive shell does not stop) and terminate that group after every outcome, including success; otherwise reliably enumerate and kill descendants before clearing `CHECK_CHILD`. Add a test with a profile that starts a background process.",
   "requirements": [
-    "On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check` and never signals the checked login shell's process group or descendants. A profile that starts a background process leaves that process running after the check, contrary to the requirement that no process started by the check remains. The timeout path also relies on a process-tree walk and does not preserve a dedicated group for cleanup."
+    "R-1: `bounded_run` starts the checked login shell in a new dedicated process group, and that group identity is available to `cleanup_check` for the whole lifetime of the check.",
+    "R-2: On the success path, `bounded_run` calls `cleanup_check` before clearing `CHECK_CHILD` or any other state `cleanup_check` reads; `CHECK_CHILD` is not cleared while cleanup still needs it.",
+    "R-3: `cleanup_check` signals the dedicated process group, so processes started by the checked login shell that remain in that group are terminated on the success path as well as the failure path.",
+    "R-4: Descendants of the checked login shell that left the dedicated group are terminated too, via a descendant sweep performed in addition to the group signal.",
+    "R-5: The timeout path performs cleanup through the dedicated process group, not through a process-tree walk as its primary mechanism.",
+    "R-6: Cleanup is idempotent and runs at most once per check; a second call is a no-op and does not raise.",
+    "R-7: `bounded_run` returns the same result (status, exit code, output) as before the change on the success, failure and timeout paths.",
+    "R-8: A test starts a background process from the checked login shell and asserts, after `bounded_run` returns, that the process is no longer running, for the success path and for the timeout path."
   ],
   "acceptance": [
-    "The release audit finding is resolved: On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check` and never signals the checked login shell's process group or descendants. A profile that starts a background process leaves that process running after the check, contrary to the requirement that no process started by the check remains. The timeout path also relies on a process-tree walk and does not preserve a dedicated group for cleanup.",
-    "Existing tests pass"
+    "A-1: After a bounded check whose checked login shell starts a background process and exits successfully, the background process is no longer running when `bounded_run` returns.",
+    "A-2: After a bounded check whose checked login shell starts a background process and the check times out, the background process is no longer running when `bounded_run` returns.",
+    "A-3: On the success path, `cleanup_check` runs before `CHECK_CHILD` is cleared; code inspection shows no ordering in which state needed by `cleanup_check` is cleared first.",
+    "A-4: The timeout path cleans up via the dedicated process group; no process-tree walk is the primary cleanup mechanism.",
+    "A-5: The checked login shell runs in its own process group, not in the caller's group.",
+    "A-6: Check results (status, exit code, output) are unchanged for success, failure and timeout paths.",
+    "A-7: The existing test suite passes."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "tests"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
@@ -20,12 +37,90 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A-1",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests",
+        "-k",
+        "background or cleanup"
+      ]
+    },
+    {
+      "criterion": "A-2",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests",
+        "-k",
+        "timeout"
+      ]
+    },
+    {
+      "criterion": "A-3",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A-4",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A-5",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A-6",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "A-7",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX process groups and signals (setpgid, killpg, SIGTERM/SIGKILL)",
+      "interface": "Create a dedicated process group for the checked login shell with `subprocess.Popen(..., start_new_session=True)` or `os.setpgid(child.pid, child.pid)`, then clean up the whole group with `os.killpg(child.pid, SIGTERM)` and, after a bounded wait, `os.killpg(child.pid, SIGKILL)`.",
+      "docs": "POSIX.1-2017: setpgid(2), kill(2) — `killpg` signals the process group led by the child; Python `os.setpgid`, `os.killpg`, and `subprocess.Popen(start_new_session=True)` / `preexec_fn=os.setpgrp`.",
+      "mode": "direct",
+      "evidence": "The repository is a Python `unittest` project targeting a POSIX/Linux environment. Project `AGENTS.md` identifies `environment.yaml` as the environment contract and `environment/` as the sandbox Dockerfile; Python's standard library on that platform exposes `os.setpgid`, `os.killpg`, and `subprocess.Popen(start_new_session=True)`, so no external package or service is required.",
+      "stub": ""
+    },
+    {
+      "name": "Login shell (`bash -l`, `sh -l` or the configured shell)",
+      "interface": "Invoke the configured shell as a login shell, e.g. `bash -l -c <command>` or `sh -l -c <command>`, inside the dedicated process group; the login shell reads its profile files and any background children inherit the group signalled during cleanup.",
+      "docs": "bash(1) INVOCATION section: a login shell reads `/etc/profile` and `~/.bash_profile` / `~/.profile`.",
+      "mode": "direct",
+      "evidence": "The local POSIX/Linux test environment provides `/bin/bash` and `/bin/sh`, and the project's `environment.yaml` / `environment/` contract declares the shell environment used by the checks. `bash(1)` documents `-l` login-shell profile loading and profile-started background processes.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "",
+  "started_at": "2026-11-23T11:22:18+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
