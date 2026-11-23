@@ -48,17 +48,9 @@
 
 {{functional_requirements}}
 
-## Technical Requirements
-
-{{technical_requirements}}
-
 ## User Stories
 
 {{user_stories}}
-
-## Tests
-
-{{tests}}
 
 ## Acceptance Criteria
 

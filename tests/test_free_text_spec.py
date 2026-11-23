@@ -29,16 +29,17 @@ SPEC = {
     "outcome": "The feature exists.",
     "scope": ["the feature"],
     "non_goals": [],
-    "requirements": ["Create feature.py"],
-    "acceptance": ["feature.py exists"],
+    "requirements": [
+        "The feature module exists and is available to the product."
+    ],
+    "acceptance": ["The feature module exists and is available."],
     "constraints": [],
     "assumptions": [],
     "risks": [],
-    "goals": ["feature.py exists"],
+    "goals": ["The feature exists."],
     "user_decisions": [],
     "user_stories": [],
     "open_questions": [],
-    "affected_files": ["feature.py"],
     "related_documents": [],
     "revision_history": ["1.0.0 — initial"],
     "checks": [
@@ -114,8 +115,8 @@ class FreeTextSpecTest(unittest.TestCase):
         return create_task(
             self.layout,
             "Add a feature",
-            ["Create feature.py"],
-            ["feature.py exists"],
+            ["The feature module exists and is available to the product."],
+            ["The feature module exists and is available."],
             repo_id="main",
             test_command=[],
             spec="docs/program/requests/req.md",

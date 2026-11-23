@@ -369,7 +369,6 @@ class AgentTest(unittest.TestCase):
             "## Document Information",
             "## User Decisions",
             "## Functional Requirements",
-            "## Tests",
             "## Risks",
             "## Revision History",
         ):

@@ -11,7 +11,12 @@ from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
-from forgel.specs import MAX_SPEC_RETRIES, SpecError, write_task_spec
+from forgel.specs import (
+    MAX_SPEC_RETRIES,
+    SpecError,
+    implementation_problems,
+    write_task_spec,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -194,6 +199,41 @@ class SpecCheckValidationTest(unittest.TestCase):
                 log=lambda _m: None,
             )
         self.assertIn("exists in repository 'main'", str(caught.exception))
+
+
+
+
+class ImplementationDetailTest(unittest.TestCase):
+    def test_commands_files_and_runtime_steps_are_rejected(self) -> None:
+        problems = implementation_problems(
+            {
+                "requirements": [
+                    "Run `git commit` and update README.md"
+                ],
+                "acceptance": ["The file tests/test_cli.py changes"],
+                "goals": ["curl https://example.com"],
+                "constraints": ["The runtime commit step passes"],
+            }
+        )
+        self.assertGreaterEqual(len(problems), 4)
+
+    def test_behavior_text_is_accepted(self) -> None:
+        self.assertEqual(
+            implementation_problems(
+                {
+                    "requirements": [
+                        "The install command points to the current release."
+                    ],
+                    "acceptance": [
+                        "A reader who copies the command gets the current "
+                        "release."
+                    ],
+                    "goals": ["The documented install path is current."],
+                    "constraints": ["No network access is required."],
+                }
+            ),
+            [],
+        )
 
 
 if __name__ == "__main__":

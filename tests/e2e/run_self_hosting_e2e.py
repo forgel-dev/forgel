@@ -60,14 +60,14 @@ PLAN = {
 
 SPEC = {
     "problem": "The fixture has no greeting module.",
-    "outcome": "greeting.py exists and the fixture test command stays green.",
-    "scope": ["Add greeting.py with a short greeting message."],
+    "outcome": "The fixture offers a short greeting and its test command stays green.",
+    "scope": ["Offer a short greeting from the fixture."],
     "non_goals": [],
     "requirements": [
-        "Create greeting.py with a short greeting message.",
+        "The fixture offers a short greeting message.",
     ],
     "acceptance": [
-        "greeting.py exists and the fixture test command stays green.",
+        "The fixture offers a short greeting and its test command stays green.",
     ],
     "constraints": ["Python standard library only."],
     "assumptions": [],
@@ -98,9 +98,9 @@ REVIEW = {
     "summary": "The tiny change meets every explicit requirement.",
     "requirements": [
         {
-            "requirement": "greeting.py exists",
+            "requirement": "The fixture offers a short greeting.",
             "verdict": "pass",
-            "note": "The agent wrote it and committed the change.",
+            "note": "The agent added it and the runtime committed the change.",
         }
     ],
     "blocking": [],

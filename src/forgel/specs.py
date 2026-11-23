@@ -10,6 +10,7 @@ independent reviewer work from; the task record is an index.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Sequence
@@ -118,10 +119,15 @@ Rules:
   result is judged. Do not add features beyond the intent, and do not
   prescribe an implementation file list: state the required behavior, the
   developer chooses the files.
-- The coding agent edits files and runs repository commands; its git is
-  read-only. Do not put a git write command, "the agent commits" or any
-  commit step into the requirements: the runtime commits the selected change
-  set.
+- Requirements, acceptance, constraints, goals, user stories, risks and open
+  questions describe observable product behavior and outcomes only. Never put
+  a command (shell, git, package manager), a file path, code, an identifier, a
+  tool or provider name, an environment variable, a commit/PR/worktree step
+  or any other implementation detail into them. A verification command
+  belongs only in the "checks" field, and the test command in
+  "test_command". Runtime mechanics (git, commit, worktree, done report) are
+  never requirements. If the intent or the respec issue names a command, a
+  file or a runtime step, restate the behavior it must produce.
 - Give every acceptance criterion a check. Use a command when the criterion
   can be verified by one; use review only for a subjective criterion. Never
   use a vacuous check.
@@ -339,6 +345,69 @@ def _looks_like_tool_markup(text: str) -> bool:
     )
 
 
+IMPLEMENTATION_PATTERNS = (
+    re.compile(r"\bgit\b", re.IGNORECASE),
+    re.compile(r"\b(?:curl|wget)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:pip|npm|yarn|pnpm|docker|ssh|scp|rsync)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bpython\s+-m\b", re.IGNORECASE),
+    re.compile(r"\b(?:sh|bash|zsh)\s+-c\b", re.IGNORECASE),
+    re.compile(r"```"),
+    re.compile(r"(?:https?://|git@)\S+", re.IGNORECASE),
+    re.compile(
+        r"\b[\w.-]+(?:/[\w.-]+)+\.(?:md|py|sh|json|ya?ml|toml|txt|mjs|js|ts|cfg|ini)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[\w-]+\.(?:md|py|sh|json|ya?ml|toml|txt|mjs|js|ts|cfg|ini)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:commit|commits|committed|worktree|done report)\b",
+        re.IGNORECASE,
+    ),
+)
+
+IMPLEMENTATION_FIELDS = (
+    "problem",
+    "outcome",
+    "requirements",
+    "acceptance",
+    "constraints",
+    "goals",
+    "user_stories",
+    "scope",
+    "non_goals",
+    "risks",
+    "open_questions",
+    "assumptions",
+)
+
+
+def implementation_problems(spec: Mapping[str, Any]) -> list[str]:
+    """Functional text must not carry commands, files, code or runtime steps."""
+
+    problems: list[str] = []
+    for field in IMPLEMENTATION_FIELDS:
+        value = spec.get(field)
+        values = [value] if isinstance(value, str) else value or []
+        for item in values:
+            text = str(item).strip()
+            if not text:
+                continue
+            for pattern in IMPLEMENTATION_PATTERNS:
+                match = pattern.search(text)
+                if match:
+                    problems.append(
+                        f"{field}: implementation detail "
+                        f"{match.group(0)!r} in {text[:160]!r}"
+                    )
+                    break
+    return problems
+
+
 def _looks_like_spec(data: Mapping[str, Any]) -> bool:
     """A candidate final answer must carry spec fields, not tool results."""
 
@@ -516,6 +585,9 @@ def write_task_spec(
         if finals:
             try:
                 parsed = _normalize_spec(finals[-1], intent)
+                implementation = implementation_problems(parsed)
+                if implementation:
+                    raise SpecError("; ".join(implementation[:5]))
                 problems = check_problems(
                     layout,
                     str(intent.get("repo_id") or ""),
@@ -544,8 +616,15 @@ def write_task_spec(
                 messages.append(
                     ModelMessage(
                         "user",
-                        f"The specification is invalid: {exc}. Return a "
-                        "complete JSON specification. Every command check "
+                        f"The specification is invalid: {exc}. The document "
+                        "describes functional requirements only: remove every "
+                        "command, file path, code, tool or provider name, "
+                        "environment variable, commit/git/worktree/done-report "
+                        "step and other implementation detail from "
+                        "requirements, acceptance, constraints, goals, user "
+                        "stories, risks, open questions and assumptions; a "
+                        "verification command belongs only in checks. Return "
+                        "a complete JSON specification. Every command check "
                         "must run in the task repository "
                         f"'{intent.get('repo_id') or 'project root'}' and "
                         "must not point at files that exist only in another "
@@ -746,14 +825,8 @@ def render_spec(
         "functional_requirements": requirements_doc.numbered(
             "FR", spec.get("requirements") or []
         ),
-        "technical_requirements": requirements_doc.bullets(
-            spec.get("constraints") or []
-        ),
         "user_stories": requirements_doc.bullets(
             spec.get("user_stories") or []
-        ),
-        "tests": requirements_doc.checks_text(
-            spec.get("checks") or [], spec.get("test_command") or []
         ),
         "acceptance": requirements_doc.numbered(
             "AC", spec.get("acceptance") or []
@@ -778,32 +851,7 @@ def render_spec(
             or ["1.0.0 — Initial specification."]
         ),
     }
-    return requirements_doc.render(values) + _external_section(spec)
-
-
-def _external_section(spec: Mapping[str, Any]) -> str:
-    dependencies = [
-        item
-        for item in (spec.get("external_dependencies") or [])
-        if isinstance(item, dict)
-    ]
-    if not dependencies:
-        return ""
-    lines = ["", "## External Dependencies", ""]
-    for item in dependencies:
-        lines.append(
-            f"- **{item.get('name') or '—'}** — mode `"
-            f"{item.get('mode') or 'unknown'}`; interface: "
-            f"{item.get('interface') or '—'}; docs: "
-            f"{item.get('docs') or '—'}; evidence: "
-            f"{item.get('evidence') or '—'}"
-        )
-        stub = str(item.get("stub") or "").strip()
-        if stub:
-            lines.append("  ```")
-            lines.extend("  " + line for line in stub.splitlines())
-            lines.append("  ```")
-    return "\n".join(lines) + "\n"
+    return requirements_doc.render(values)
 
 
 def spec_path(task_id: str) -> str:

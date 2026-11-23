@@ -314,6 +314,11 @@ For a change request:
   the document. Do not prescribe an implementation file list: state the
   required behavior. Leave a list empty only when the conversation truly has
   nothing to add.
+- Requirements, acceptance, constraints, goals, user stories, risks and open
+  questions describe observable product behavior only. Never put a command, a
+  file path, code, a tool or provider name, an environment variable, a
+  commit/git/worktree step or any other implementation detail into them; a
+  verification command belongs in test_command.
 - list the explicit functional requirements and acceptance criteria; do not
   guess unstated features;
 - when the request depends on an external interface (a tool, a service, a
