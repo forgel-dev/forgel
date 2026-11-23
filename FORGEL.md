@@ -45,7 +45,9 @@ a rewrite of the released tag. The runtime release train computes the next
 version from the repository's tags and `CHANGELOG.md` and publishes it; it
 never moves an existing tag. Agents do not assign, promise or rewrite release
 versions or tags. The release report is the source of truth for the version
-and publication. A release without its audit is not published.
+and publication. A release without its audit is not published. Only a
+critical or major audit finding holds a release back; a failed audit with
+nothing blocking publishes, and its findings stay in the report.
 
 ## Runtime Process Model
 

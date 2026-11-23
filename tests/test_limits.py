@@ -48,6 +48,17 @@ class LimitsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             limits.set_value(self.layout, "unknown", 10)
 
+    def test_the_audit_deadline_is_half_an_hour_and_configurable(
+        self,
+    ) -> None:
+        self.assertEqual(
+            limits.get(self.layout, "audit_timeout"), 1800
+        )
+        limits.set_value(self.layout, "audit_timeout", 900)
+        self.assertEqual(
+            limits.get(self.layout, "audit_timeout"), 900
+        )
+
     def test_the_runtime_operation_raises_a_limit(self) -> None:
         text = run_operation(
             self.settings,

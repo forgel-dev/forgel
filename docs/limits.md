@@ -15,14 +15,14 @@ reason, is visible to the controlling agent, and can be raised at runtime.
 
 ## Project limits
 
-Defaults are one hour: they guard against a hung process, not against a slow
-but legitimate run.
+Defaults are one hour (the release audit's model call is 30 minutes): they
+guard against a hung process, not against a slow but legitimate run.
 
 | Limit | Default | Meaning |
 |---|---|---|
 | `command_timeout` | 3600 s | one repository command (build, test suite, probe) |
 | `check_timeout` | 3600 s | one acceptance check or environment gate |
-| `audit_timeout` | 3600 s | the whole-change-set release audit's model calls |
+| `audit_timeout` | 1800 s | the whole-change-set release audit's model call |
 | `github_check_timeout` | 3600 s | waiting for a commit's CI checks |
 | `sandbox_timeout` | 3600 s | one command inside the sandbox |
 | `git_timeout` | 3600 s | one git operation (clone, fetch, push, diff) |
@@ -51,7 +51,7 @@ so no limit is hidden:
 | model request timeout | 600 s | `FORGEL_MODEL_TIMEOUT` | one request cannot hang forever |
 | model call total | 3600 s | `FORGEL_MODEL_TOTAL_TIMEOUT` | retries under one deadline |
 | model retries | 5 | `FORGEL_MODEL_RETRIES` | transient provider failures |
-| audit deadline | 3600 s | `audit_timeout` project limit | a whole-change-set audit is one long call |
+| audit deadline | 1800 s | `audit_timeout` project limit | a whole-change-set audit is one long call |
 | audit model errors | 15 | `MAX_AUDIT_ERRORS` in code | repeated provider failure stops with a clear message |
 | review verdict retries | 10 | `MAX_REVIEW_RETRIES` in code | malformed reviewer output |
 | spec retries | 5 | `MAX_SPEC_RETRIES` in code | malformed writer output |

@@ -62,7 +62,7 @@ REPO_RELEASES_DIR = "releases"
 CHANGELOG = "CHANGELOG.md"
 INITIAL_VERSION = "0.1.0"
 MAX_AUDIT_ERRORS = 15
-AUDIT_TOTAL_TIMEOUT = 3_600.0
+AUDIT_TOTAL_TIMEOUT = limits.LIMITS["audit_timeout"]
 MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
 MAX_DIFF_CHARS = 60_000
@@ -665,16 +665,28 @@ def resume_release(
 def _audit_client(
     client: ModelClient, total_timeout: float = AUDIT_TOTAL_TIMEOUT
 ) -> ModelClient:
-    """Give the whole-change-set audit a longer deadline than a turn."""
+    """Give the whole-change-set audit its own deadline.
+
+    One audit call may use the whole deadline: the per-request timeout a turn
+    inherits would cut a slow answer into retries before the deadline is
+    reached.
+    """
 
     config = getattr(client, "config", None)
     if config is None:
         return client
-    total = float(getattr(config, "total_timeout", 0) or 0)
-    if total <= 0 or total >= total_timeout:
+    deadline = float(total_timeout)
+    if deadline <= 0:
         return client
+    request_timeout = max(
+        float(getattr(config, "timeout", 0) or 0), deadline
+    )
     return OpenAICompatibleClient(
-        replace(config, total_timeout=total_timeout)
+        replace(
+            config,
+            timeout=request_timeout,
+            total_timeout=deadline,
+        )
     )
 
 
@@ -868,10 +880,8 @@ def audit_release(
         save_release(layout, release)
         log(f"[release] {release['id']}: audit requires a model")
         return False
-    client = _audit_client(
-        client,
-        limits.get(layout, "audit_timeout", AUDIT_TOTAL_TIMEOUT),
-    )
+    deadline = limits.get(layout, "audit_timeout")
+    client = _audit_client(client, deadline)
     messages = [
         ModelMessage("system", AUDIT_PROMPT),
         ModelMessage(
@@ -917,10 +927,19 @@ def audit_release(
         if str(finding.get("severity") or "").lower()
         in {"critical", "major"}
     ]
-    if audit["verdict"] == "pass":
+    if audit["verdict"] == "pass" or not blocking:
+        # Only a critical or major finding holds a release back; a fail with
+        # nothing blocking is a non-blocking report, not a permanent stop.
         release["status"] = "ready"
         save_release(layout, release)
-        log(f"[release] {release['id']}: audit passed")
+        if audit["verdict"] == "pass":
+            log(f"[release] {release['id']}: audit passed")
+        else:
+            findings = len(audit.get("findings") or [])
+            log(
+                f"[release] {release['id']}: audit found no blocking "
+                f"issues ({findings} non-blocking); publishing"
+            )
         return True
     if blocking:
         if ledger is None or client is None:

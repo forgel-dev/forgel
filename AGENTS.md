@@ -142,6 +142,9 @@ user documentation; it does not apply to a requirements document.
 - Agents do not assign, promise or rewrite release versions or tags. The
   release report is the source of truth for the version and publication.
 - A release without its audit is not published.
+- Only a critical or major audit finding holds a release back. An audit
+  that failed with nothing blocking publishes, and its findings stay in the
+  report.
 
 ## Runtime Process Model
 

@@ -85,6 +85,9 @@ RELEASE_POLICY: tuple[str, ...] = (
     "(patch or minor; major from 1.0.0)",
     "release versions are assigned by the runtime, never by an agent",
     "a release without its audit is not published",
+    "only a critical or major audit finding holds a release; a failed "
+    "audit with no blocking finding publishes, and its findings stay in "
+    "the audit report",
 )
 
 

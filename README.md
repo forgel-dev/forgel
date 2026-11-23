@@ -503,9 +503,9 @@ set the base; without release history the first version is `0.1.0`. A patch
 release increments the patch number, a minor release (new functionality or
 changed behaviour) the minor number. A major release is only meaningful from
 `1.0.0` onward: before that a breaking change is still a minor release, and
-`1.0.0` is the first product release. A failed audit may queue fix tasks in
-the same release for up to two rounds; after that the release is blocked and
-reported.
+`1.0.0` is the first product release. A failed audit queues fix tasks in the
+same release for its critical and major findings. A failure with nothing
+blocking publishes the release; its findings stay in the audit report.
 
 Version manifests are written by the repository's runtime preset, not by the
 release train. A repository selects one explicitly with `preset:` in

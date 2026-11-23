@@ -60,6 +60,20 @@ FAIL_AUDIT = json.dumps(
         ],
     }
 )
+MINOR_AUDIT = json.dumps(
+    {
+        "verdict": "fail",
+        "summary": "Only style issues remain.",
+        "findings": [
+            {
+                "severity": "minor",
+                "repo_id": "web",
+                "issue": "The widget import is unused",
+                "suggestion": "Remove the unused import",
+            }
+        ],
+    }
+)
 
 
 def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -290,6 +304,25 @@ class ReleaseTrainTest(unittest.TestCase):
         )
         self.assertTrue(audit.exists())
         self.assertIn("pass", audit.read_text(encoding="utf-8"))
+
+    def test_a_failed_audit_without_blocking_findings_publishes(self) -> None:
+        release, _task = self._release()
+
+        actions = process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient([MINOR_AUDIT]),
+            log=lambda _m: None,
+        )
+
+        self.assertIn(f"released:{release['id']}", actions)
+        stored = list_releases(self.layout)[0]
+        self.assertEqual(stored["status"], "tagged")
+        audit = stored.get("audit") or {}
+        self.assertEqual(audit.get("verdict"), "fail")
+        self.assertEqual(len(audit.get("findings") or []), 1)
 
     def test_a_request_across_two_repositories_releases_both(self) -> None:
         api_task = create_task(
@@ -1094,6 +1127,9 @@ class ReleaseTrainTest(unittest.TestCase):
         audited = _audit_client(client)
         self.assertEqual(
             audited.config.total_timeout, AUDIT_TOTAL_TIMEOUT
+        )
+        self.assertEqual(
+            audited.config.timeout, AUDIT_TOTAL_TIMEOUT
         )
 
     def test_an_audit_error_does_not_consume_a_round(self) -> None:

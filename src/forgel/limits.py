@@ -18,7 +18,7 @@ FILE = "docs/program/limits.json"
 LIMITS: dict[str, float] = {
     "command_timeout": 3_600.0,
     "check_timeout": 3_600.0,
-    "audit_timeout": 3_600.0,
+    "audit_timeout": 1_800.0,
     "github_check_timeout": 3_600.0,
     "sandbox_timeout": 3_600.0,
     "git_timeout": 3_600.0,
@@ -36,8 +36,8 @@ REASONS: dict[str, str] = {
         "suite or an e2e is not a work budget."
     ),
     "audit_timeout": (
-        "The release audit may spend this long on model calls before it is "
-        "treated as hung."
+        "The release audit's model call may run this long before it is "
+        "treated as hung; one call may use the whole deadline."
     ),
     "github_check_timeout": (
         "A commit's CI checks may take this long before Forgel stops "
