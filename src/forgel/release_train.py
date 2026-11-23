@@ -540,14 +540,8 @@ def eligible_pending_task(
     """The first pending task whose repository has no earlier open release."""
 
     tasks_list = tasks.list_tasks(layout)
-    statuses = {
-        str(task["id"]): str(task.get("status") or "")
-        for task in tasks_list
-    }
     for task in tasks_list:
         if task.get("status") != "pending":
-            continue
-        if tasks._dependency_blockers(task, statuses):
             continue
         if not tasks._retry_ready(task, now):
             continue

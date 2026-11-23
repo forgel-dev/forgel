@@ -73,17 +73,12 @@ class TasksTest(unittest.TestCase):
             tasks.task_path(self.layout, task["id"]).exists()
         )
 
-    def test_dependencies_gate_the_next_task(self) -> None:
+    def test_tasks_run_in_creation_order(self) -> None:
         first = tasks.create_task(
             self.layout, "First", ["A"], ["B"], repo_id="main"
         )
         second = tasks.create_task(
-            self.layout,
-            "Second",
-            ["A"],
-            ["B"],
-            repo_id="main",
-            depends_on=[first["id"]],
+            self.layout, "Second", ["A"], ["B"], repo_id="main"
         )
         self.assertEqual(
             tasks.next_pending_task(self.layout)["id"], first["id"]
@@ -92,12 +87,10 @@ class TasksTest(unittest.TestCase):
         self.assertEqual(
             tasks.next_pending_task(self.layout)["id"], second["id"]
         )
-        tasks.update_task(self.layout, first["id"], status="failed")
-        self.assertIsNone(tasks.next_pending_task(self.layout))
-        blocked = tasks.blocked_pending(self.layout)
-        self.assertEqual([item["id"] for item in blocked], [second["id"]])
+        self.assertNotIn("depends_on", first)
+        self.assertNotIn("depends_on", second)
 
-    def test_a_failure_blocks_dependents_and_retry_releases_them(
+    def test_stopping_a_plan_blocks_it_and_retry_releases_it(
         self,
     ) -> None:
         first = tasks.create_task(
@@ -106,11 +99,11 @@ class TasksTest(unittest.TestCase):
         )
         second = tasks.create_task(
             self.layout, "Second", ["A"], ["B"], repo_id="main",
-            plan_id="p1", order=2, depends_on=[first["id"]],
+            plan_id="p1", order=2,
         )
-        third = tasks.create_task(
-            self.layout, "Third", ["A"], ["B"], repo_id="main",
-            plan_id="p1", order=3,
+        other = tasks.create_task(
+            self.layout, "Other", ["A"], ["B"], repo_id="main",
+            plan_id="p2", order=1,
         )
         tasks.update_task(
             self.layout,
@@ -118,7 +111,7 @@ class TasksTest(unittest.TestCase):
             status="failed",
             result={"failure": {"kind": "qa", "message": "red"}},
         )
-        blocked = tasks.block_dependents(self.layout, first["id"])
+        blocked = tasks.stop_plan(self.layout, first["id"])
         self.assertEqual(
             [item["id"] for item in blocked], [second["id"]]
         )
@@ -126,9 +119,9 @@ class TasksTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "blocked")
         self.assertEqual(stored["result"]["blocked_by"], first["id"])
-        pending = tasks.get_task(self.layout, third["id"])
-        assert pending is not None
-        self.assertEqual(pending["status"], "pending")
+        untouched = tasks.get_task(self.layout, other["id"])
+        assert untouched is not None
+        self.assertEqual(untouched["status"], "pending")
         retried = tasks.retry_task(self.layout, first["id"])
         self.assertEqual(retried["status"], "pending")
         self.assertEqual(retried["result"]["manual_retries"], 1)

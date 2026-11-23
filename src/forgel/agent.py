@@ -1735,7 +1735,6 @@ class ProjectAgent:
             "task": "—",
             "plan": "—",
             "repository": "—",
-            "depends_on": "—",
             "status": "New",
             "version": "1.0.0",
             "created": created,

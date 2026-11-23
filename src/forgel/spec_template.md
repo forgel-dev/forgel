@@ -9,7 +9,6 @@
 | Task | {{task}} |
 | Plan | {{plan}} |
 | Repository | {{repository}} |
-| Depends on | {{depends_on}} |
 | Status | {{status}} |
 | Version | {{version}} |
 | Created | {{created}} |

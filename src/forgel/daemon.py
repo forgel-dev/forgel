@@ -387,9 +387,7 @@ def _quarantine(
     log: Callable[[str], None],
 ) -> None:
     if settings.plan_on_failure == "stop":
-        tasks.block_dependents(layout, task_id, stop=True)
-    elif settings.plan_on_failure == "quarantine":
-        tasks.block_dependents(layout, task_id, stop=False)
+        tasks.stop_plan(layout, task_id)
     stored = tasks.get_task(layout, task_id) or {}
     attempt = tasks.attempt_number(stored)
     ledger.append_event(
@@ -879,9 +877,7 @@ def _controller_stopped(
     """Stop the task with a description the owner can act on."""
 
     if settings.plan_on_failure == "stop":
-        tasks.block_dependents(layout, task_id, stop=True)
-    elif settings.plan_on_failure == "quarantine":
-        tasks.block_dependents(layout, task_id, stop=False)
+        tasks.stop_plan(layout, task_id)
     result = dict(data)
     result.pop("blocked_by", None)
     result["summary"] = "the controlling agent stopped: " + str(reason)
@@ -939,9 +935,6 @@ def _ensure_formal_spec(
             or task_id
         ),
         "repo_id": task.get("repo_id") or "",
-        "depends_on": [
-            str(item) for item in (task.get("depends_on") or [])
-        ],
         "requirements": requirements,
         "acceptance": acceptance,
     }
@@ -961,7 +954,6 @@ def _ensure_formal_spec(
             task_id,
             str(task.get("plan_id") or ""),
             intent["repo_id"],
-            intent["depends_on"],
         ),
     )
     updated = tasks.update_task(

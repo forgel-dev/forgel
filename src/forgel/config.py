@@ -89,7 +89,9 @@ class Settings:
     task_accept: str = "auto"  # auto | human
     task_reworks: int = 0
     retry_backoff: tuple[int, ...] = (1, 5, 15, 30, 60)
-    plan_on_failure: str = "quarantine"  # quarantine | stop | continue
+    # "stop" halts the rest of the milestone on a failure; other values let
+    # the remaining tasks run in plan order.
+    plan_on_failure: str = "continue"
 
     @classmethod
     def from_env(cls, home: str | Path | None = None) -> Settings:
@@ -209,15 +211,14 @@ class Settings:
         if not backoff:
             raise ValueError("FORGEL_TASK_RETRY_BACKOFF must not be empty")
         plan_on_failure = (
-            os.environ.get("FORGEL_PLAN_ON_FAILURE", "quarantine")
+            os.environ.get("FORGEL_PLAN_ON_FAILURE", "continue")
             .strip()
             .lower()
-            or "quarantine"
+            or "continue"
         )
         if plan_on_failure not in {"quarantine", "stop", "continue"}:
             raise ValueError(
-                "FORGEL_PLAN_ON_FAILURE must be one of: "
-                "quarantine, stop, continue"
+                "FORGEL_PLAN_ON_FAILURE must be one of: stop, continue"
             )
         return cls(
             home=home_path.expanduser().resolve(),

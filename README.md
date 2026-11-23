@@ -191,7 +191,7 @@ milestone goal into an ordered backlog of task intents; a separate
 requirements writer expands each intent into a formal specification under
 `docs/program/specs/<task>.md`, and a plan review checks the whole set against
 the goal before queueing. `--dry-run` previews the specifications, and the
-daemon runs a task only after its dependencies are done. The plan is committed
+daemon runs the plan's tasks in the order the plan lists them. The plan is committed
 as `docs/program/plans/<id>.md`. A free-text task that has no formal
 specification gets one, plus the external-dependency report, before the coder
 starts (`FORGEL_FREE_TEXT_SPEC=0` disables this). See `PLAN.md` §7.15.
@@ -298,7 +298,7 @@ The current agent takes a task end to end:
    acceptance criteria; for a milestone, `forgel plan` (or `/plan`) decomposes
    the goal into task intents, a separate requirements writer writes a formal
    spec for each, and a plan review checks the plan against the goal before the
-   daemon starts a task whose dependencies are done.
+   daemon starts the tasks in the order the plan lists them.
 2. The agent works on the task in the sandbox: it reads the repository, edits
    the code, commits with a bot message and writes its report to
    `docs/program/agent/<task>.md`.
@@ -574,8 +574,8 @@ chat) asks the planner for an ordered backlog of task intents; a separate
 requirements writer expands each intent into a formal specification, and a plan
 review checks the whole plan against the goal before queueing. `--dry-run`
 previews the specifications. The plan is committed as
-`docs/program/plans/<id>.md`, and the daemon runs a task only after its
-dependencies are done.
+`docs/program/plans/<id>.md`, and the daemon runs the tasks in the order the
+plan lists them.
 
 The daemon picks up pending tasks and runs the coding agent inside the
 project's repository. The model returns one JSON action per turn (list, read,
@@ -597,12 +597,12 @@ reviewer; only an errored review needs a human.
 Every failure goes to the controlling agent: it sees the failing command, its
 exit code and its output, and decides whether to retry, send the work back
 with feedback (`FORGEL_TASK_REWORKS=8`), fix a broken check or limit, or stop
-and ask a human. An exhausted budget quarantines the task and blocks its
-dependents. When a review
+and ask a human. An exhausted budget fails the task; with
+`FORGEL_PLAN_ON_FAILURE=stop` the rest of its milestone stops too. When a review
 rejection repeats, an external arbiter decides whether the change or the
 acceptance criteria are wrong; `criteria` fails the task with a proposed
-revision. `forgel task retry` requeues a failed task and releases its
-dependents; `forgel plan --status` shows the milestone state.
+revision. `forgel task retry` requeues a failed task and releases the tasks its
+milestone stopped; `forgel plan --status` shows the milestone state.
 
 Tasks carry executable acceptance checks, run by QA and stored outside the
 agent's write scope. A criterion that cannot be automated is marked

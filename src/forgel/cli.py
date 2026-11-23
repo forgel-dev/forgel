@@ -1785,12 +1785,6 @@ def cmd_plan(args: argparse.Namespace) -> int:
         if result.notes:
             print(result.notes)
         for index, item in enumerate(result.tasks, 1):
-            depends = (
-                ", ".join(
-                    str(value) for value in item["depends_on"]
-                )
-                or _say("cli_none")
-            )
             identifier = item.get("task_id") or "-"
             print(
                 _say(
@@ -1798,7 +1792,6 @@ def cmd_plan(args: argparse.Namespace) -> int:
                     index=index,
                     title=item["title"],
                     repo=item.get("repo_id") or _say("cli_sole"),
-                    deps=depends,
                     task=identifier,
                 )
             )

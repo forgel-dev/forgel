@@ -122,12 +122,7 @@ def plan_status(
     for status in statuses.values():
         counts[status] = counts.get(status, 0) + 1
     runnable = any(
-        task.get("status") == "pending"
-        and all(
-            statuses.get(dep) == "done"
-            for dep in (task.get("depends_on") or [])
-        )
-        for task in items
+        task.get("status") == "pending" for task in items
     )
     failed = any(status == "failed" for status in statuses.values())
     blocked = any(status == "blocked" for status in statuses.values())
@@ -188,7 +183,6 @@ def _integration_intent(
         "title": "Declare the program e2e for the interacting repositories",
         "summary": problem,
         "repo_id": repo_id,
-        "depends_on": [],
     }
 
 
@@ -234,8 +228,7 @@ Return exactly one JSON object:
     {{
       "title": "short imperative title",
       "summary": "the outcome this task delivers and why it is needed",
-      "repo_id": "one of the project repositories, or empty for the sole one",
-      "depends_on": [0]
+      "repo_id": "one of the project repositories, or empty for the sole one"
     }}
   ]
 }}
@@ -249,7 +242,6 @@ Rules:
   adds an existing local git repository at path. Repositories are created or
   added before the tasks run; depends_on may reference an existing repository
   or an earlier planned one.
-- depends_on uses 0-based indexes of earlier tasks only; no cycles.
 - One repository per task; do not mix repositories in one task.
 - A separate requirements writer turns each task intent into a formal
   specification. Your job is the decomposition: a clear outcome, the right
@@ -443,20 +435,11 @@ def _parse_plan(
             raise PlanningError(
                 f"task {index} targets unknown repository {repo_id!r}"
             )
-        depends_on = item.get("depends_on") or []
-        if not isinstance(depends_on, list) or any(
-            not isinstance(value, int) or value < 0 or value >= index
-            for value in depends_on
-        ):
-            raise PlanningError(
-                f"task {index}: depends_on must use earlier task indexes"
-            )
         items.append(
             {
                 "title": title,
                 "summary": summary,
                 "repo_id": repo_id,
-                "depends_on": [int(value) for value in depends_on],
             }
         )
     return notes, items, repositories
@@ -537,7 +520,6 @@ def _blocked_spec(
         "title": title,
         "summary": summary,
         "repo_id": str(intent.get("repo_id") or ""),
-        "depends_on": list(intent.get("depends_on") or []),
         "problem": summary or title,
         "outcome": (
             "The owner decides this task's scope before it can be "
@@ -1045,7 +1027,6 @@ def plan_project(
                                 "title": item["title"],
                                 "summary": item.get("summary") or "",
                                 "repo_id": item["repo_id"],
-                                "depends_on": item["depends_on"],
                             }
                             for item in items
                         ],
@@ -1170,7 +1151,6 @@ def plan_project(
     created: list[dict[str, Any]] = []
     task_records: list[dict[str, Any]] = []
     for index, (item, spec) in enumerate(zip(items, task_specs)):
-        depends = [ids[position] for position in item["depends_on"]]
         spec_ref = specs.spec_path(ids[index])
         task = tasks.create_task(
             layout,
@@ -1182,7 +1162,6 @@ def plan_project(
             plan_id=plan_id,
             plan_goal=goal,
             order=index + 1,
-            depends_on=depends,
             checks=list(spec["checks"]),
             language=task_language,
             spec=spec_ref,
@@ -1216,7 +1195,6 @@ def plan_project(
                 ids[index],
                 plan_id,
                 str(item["repo_id"]),
-                depends,
             ),
         )
         created.append(
@@ -1225,7 +1203,6 @@ def plan_project(
                 **spec,
                 "task_id": ids[index],
                 "spec": spec_ref,
-                "depends_on": depends,
                 "blocked": blocked_reason,
             }
         )
@@ -1234,7 +1211,6 @@ def plan_project(
     task_lines = "\n".join(
         f"{index}. `{item['task_id']}` {item['title']}\n"
         f"   - repo: {item['repo_id'] or '(sole)'}\n"
-        f"   - depends on: {', '.join(item['depends_on']) or 'none'}\n"
         f"   - spec: `{item['spec']}`\n"
         f"   - summary: {item.get('summary') or '—'}\n"
         f"   - checks: "

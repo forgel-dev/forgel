@@ -361,12 +361,10 @@ def rewrite_task_spec(
 
     task_id = str(task["id"])
     repo_id = str(task.get("repo_id") or "").strip()
-    depends_on = [str(item) for item in (task.get("depends_on") or [])]
     intent = {
         "title": task.get("title") or task_id,
         "summary": task.get("summary") or task.get("title") or task_id,
         "repo_id": repo_id,
-        "depends_on": depends_on,
     }
     goal = str(task.get("plan_goal") or task.get("title") or "—")
     spec = specs.write_task_spec(
@@ -387,7 +385,6 @@ def rewrite_task_spec(
             task_id,
             str(task.get("plan_id") or ""),
             repo_id,
-            depends_on,
         ),
     )
     tasks.update_task(layout, task_id, spec=ref)

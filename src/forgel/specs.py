@@ -300,7 +300,6 @@ def _normalize_spec(
         "title": str(intent.get("title") or "").strip(),
         "summary": str(intent.get("summary") or "").strip(),
         "repo_id": str(intent.get("repo_id") or "").strip(),
-        "depends_on": list(intent.get("depends_on") or []),
         "problem": str(data.get("problem") or "").strip(),
         "outcome": str(data.get("outcome") or "").strip(),
         "product_intent": str(
@@ -901,7 +900,6 @@ def render_spec(
     task_id: str,
     plan_id: str,
     repo_id: str,
-    depends_on: Sequence[str],
 ) -> str:
     created = datetime.now(timezone.utc).isoformat(timespec="seconds")
     problem = str(spec.get("problem") or "").strip()
@@ -916,8 +914,6 @@ def render_spec(
         "task": f"`{task_id}`",
         "plan": f"`{plan_id}`",
         "repository": f"`{repo_id or '(sole)'}`",
-        "depends_on": ", ".join(f"`{item}`" for item in depends_on)
-        or "none",
         "status": "Specification",
         "version": "1.0.0",
         "created": created,

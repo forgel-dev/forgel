@@ -4,6 +4,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from forgel.artifacts import write_text
@@ -746,7 +747,7 @@ class TaskReviewTest(unittest.TestCase):
         )
         self.assertEqual(accepted["status"], "done")
 
-    def test_qa_failure_quarantines_dependent_tasks(self) -> None:
+    def test_a_stopped_plan_blocks_its_remaining_tasks(self) -> None:
         write_text(
             self.layout.control / "environment.yaml",
             render_environment(
@@ -764,6 +765,8 @@ class TaskReviewTest(unittest.TestCase):
             ["Write a note"],
             ["The note exists"],
             repo_id="main",
+            plan_id="p1",
+            order=1,
         )
         second = create_task(
             self.layout,
@@ -771,7 +774,8 @@ class TaskReviewTest(unittest.TestCase):
             ["Write another note"],
             ["The note exists"],
             repo_id="main",
-            depends_on=[first["id"]],
+            plan_id="p1",
+            order=2,
         )
         responses = [
             json.dumps(
@@ -784,7 +788,7 @@ class TaskReviewTest(unittest.TestCase):
             json.dumps({"action": "done", "summary": "added the note"}),
         ]
         run_once(
-            self.settings,
+            replace(self.settings, plan_on_failure="stop"),
             self.ledger,
             log=lambda _m: None,
             client=ScriptedModelClient(responses),

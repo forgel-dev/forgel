@@ -676,7 +676,6 @@ def plan(settings: Settings, ledger: Ledger, args: Any) -> int:
                         "title": item.get("title"),
                         "repo_id": item.get("repo_id") or "",
                         "task_id": item.get("task_id") or "",
-                        "depends_on": list(item.get("depends_on") or []),
                     }
                     for item in result.tasks
                 ],

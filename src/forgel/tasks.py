@@ -100,7 +100,6 @@ def create_task(
     plan_id: str = "",
     plan_goal: str = "",
     order: int = 0,
-    depends_on: list[str] | None = None,
     checks: list[dict[str, Any]] | None = None,
     language: str = "",
     spec: str = "",
@@ -140,9 +139,6 @@ def create_task(
         "release_id": release_id.strip(),
         "release_class": release_class.strip().lower(),
         "order": order,
-        "depends_on": [
-            item for item in (depends_on or []) if item
-        ],
         "checks": [_normalize_check(item) for item in (checks or [])],
         "external_dependencies": [
             dict(item) for item in (external_dependencies or [])
@@ -247,36 +243,20 @@ def recover_running(
     return recovered
 
 
-def _dependency_blockers(
-    task: dict[str, Any], statuses: dict[str, str]
-) -> list[str]:
-    return [
-        dep
-        for dep in (task.get("depends_on") or [])
-        if statuses.get(dep) != "done"
-    ]
-
-
 def blocked_pending(layout: ProjectLayout) -> list[dict[str, Any]]:
-    """Tasks waiting on a dependency, or explicitly blocked by a failure."""
+    """Tasks explicitly blocked and waiting for a decision."""
 
-    tasks = list_tasks(layout)
-    statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
     return [
         task
-        for task in tasks
+        for task in list_tasks(layout)
         if task.get("status") == "blocked"
-        or (
-            task.get("status") == "pending"
-            and _dependency_blockers(task, statuses)
-        )
     ]
 
 
-def block_dependents(
-    layout: ProjectLayout, failed_id: str, stop: bool = False
+def stop_plan(
+    layout: ProjectLayout, failed_id: str
 ) -> list[dict[str, Any]]:
-    """Quarantine a failed task's dependents (or the whole plan on stop)."""
+    """Halt the failed task's plan: its pending and blocked tasks stop."""
 
     tasks = list_tasks(layout)
     failed = next(
@@ -285,31 +265,12 @@ def block_dependents(
     if failed is None:
         return []
     plan_id = str(failed.get("plan_id") or "")
-    frontier = {failed_id}
-    seen = {failed_id}
-    dependents: set[str] = set()
-    while frontier:
-        next_frontier: set[str] = set()
-        for task in tasks:
-            task_id = str(task["id"])
-            if task_id in seen:
-                continue
-            if any(
-                dep in frontier for dep in (task.get("depends_on") or [])
-            ):
-                dependents.add(task_id)
-                next_frontier.add(task_id)
-                seen.add(task_id)
-        frontier = next_frontier
+    if not plan_id:
+        return []
     changed: list[dict[str, Any]] = []
     for task in tasks:
         task_id = str(task["id"])
-        if task_id == failed_id:
-            continue
-        target = task_id in dependents
-        if stop and plan_id and task.get("plan_id") == plan_id:
-            target = target or task.get("status") in {"pending", "blocked"}
-        if not target:
+        if task_id == failed_id or task.get("plan_id") != plan_id:
             continue
         if task.get("status") not in {"pending", "blocked"}:
             continue
@@ -350,7 +311,7 @@ def unblock_for_retry(
 def retry_task(
     layout: ProjectLayout, task_id: str
 ) -> dict[str, Any]:
-    """Manually requeue a task and release its quarantined dependents.
+    """Manually requeue a task and release what its failure stopped.
 
     Any status can be requeued: a running task that a human or controller
     wants to run again, a task in review, or a finished one. The task keeps
@@ -478,13 +439,10 @@ def next_pending_task(
     release_id: str = "",
 ) -> dict[str, Any] | None:
     tasks = list_tasks(layout)
-    statuses = {str(task["id"]): str(task.get("status")) for task in tasks}
     for task in tasks:
         if task.get("status") != "pending":
             continue
         if release_id and str(task.get("release_id") or "") != release_id:
-            continue
-        if _dependency_blockers(task, statuses):
             continue
         if not _retry_ready(task, now):
             continue

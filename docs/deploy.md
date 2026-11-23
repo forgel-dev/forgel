@@ -263,9 +263,8 @@ and point the project at them, or wait for a dedicated services sandbox.
   command, its exit code and output and decides whether to retry, rework
   (`FORGEL_TASK_REWORKS=8`), raise a limit or stop. An external arbiter
   (`FORGEL_TASK_ARBITER`) resolves a repeated conflict.
-  An exhausted budget quarantines the task and blocks its dependents;
-  `FORGEL_PLAN_ON_FAILURE=stop` stops the milestone instead. `/task retry`
-  releases a quarantined task and its dependents.
+  An exhausted budget stops the task; `FORGEL_PLAN_ON_FAILURE=stop` stops the
+  rest of its milestone instead. `/task retry` releases the stopped tasks.
 - The bot uses outbound long polling; no inbound port is needed. Restrict SSH
   and keep the host patched.
 - Budget enforcement is not implemented yet (M1). Use a scoped, prepaid model

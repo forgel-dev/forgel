@@ -126,7 +126,7 @@ class SettingsTest(unittest.TestCase):
             ):
                 settings = Settings.from_env(tmp)
         self.assertEqual(settings.task_reworks, 8)
-        self.assertEqual(settings.plan_on_failure, "quarantine")
+        self.assertEqual(settings.plan_on_failure, "continue")
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(
                 os.environ,

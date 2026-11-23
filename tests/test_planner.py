@@ -142,7 +142,7 @@ class PlannerTest(unittest.TestCase):
             **kwargs,
         )
 
-    def test_plan_creates_ordered_tasks_with_dependencies(self) -> None:
+    def test_plan_creates_ordered_tasks(self) -> None:
         result = self._plan()
         self.assertEqual(len(result.tasks), 2)
         created = list_tasks(self.layout)
@@ -150,7 +150,7 @@ class PlannerTest(unittest.TestCase):
         first, second = created[0], created[1]
         self.assertEqual(first["order"], 1)
         self.assertEqual(second["order"], 2)
-        self.assertEqual(second["depends_on"], [first["id"]])
+        self.assertNotIn("depends_on", second)
         self.assertEqual(first["plan_id"], result.plan_id)
         self.assertEqual(first["plan_goal"], "Bring the project to M1")
         self.assertTrue(result.release_id)
@@ -542,8 +542,11 @@ class PlannerTest(unittest.TestCase):
         first, second = list_tasks(self.layout)
         update_task(self.layout, first["id"], status="failed")
         summary = plan_status(self.layout, result.plan_id)
-        self.assertEqual(summary["status"], "stalled")
+        self.assertEqual(summary["status"], "running")
         self.assertEqual(summary["counts"].get("failed"), 1)
+        update_task(self.layout, second["id"], status="failed")
+        summary = plan_status(self.layout, result.plan_id)
+        self.assertEqual(summary["status"], "stalled")
         update_task(self.layout, first["id"], status="done")
         update_task(self.layout, second["id"], status="review")
         summary = plan_status(self.layout, result.plan_id)
@@ -796,27 +799,6 @@ class PlannerTest(unittest.TestCase):
         result = self._plan()
         self.assertIn("Integration deferred", result.notes)
         self.assertIn("simulator", result.notes)
-
-    def test_forward_dependency_is_rejected(self) -> None:
-        payload = {
-            "tasks": [
-                {
-                    "title": "First",
-                    "requirements": ["x"],
-                    "acceptance": ["y"],
-                    "repo_id": "main",
-                    "depends_on": [1],
-                },
-                {
-                    "title": "Second",
-                    "requirements": ["x"],
-                    "acceptance": ["y"],
-                    "repo_id": "main",
-                },
-            ]
-        }
-        with self.assertRaises(PlanningError):
-            self._plan(payload)
 
     def test_too_many_tasks_are_rejected(self) -> None:
         payload = {
