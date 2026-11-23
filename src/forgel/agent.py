@@ -254,8 +254,10 @@ the action cannot run without it):
 - runtime {operation, task_id?, release_id?}: run or restart one runtime
   operation now, in the order the state needs. Operations: drive (advance one
   daemon iteration), task_retry (queue a task again), task_restart (rewrite its
-  specification from the task request and start it over), task_process (QA,
-  review and acceptance for a task), task_qa, task_review, release_resume,
+  specification from the task request and start it over), task_cancel (stop a
+  task for good: it leaves the task list and its requirements document is
+  marked cancelled), task_process (QA, review and acceptance for a task),
+  task_qa, task_review, release_resume,
   release_audit, release_finalize, set_limit (raise a runtime limit).
 - control_extract {path?}: move the project state into a separate repository,
   for a project that started with one folder and grew.
@@ -746,7 +748,7 @@ def build_context(
 
     task_items = [
         item
-        for item in tasks.list_tasks(layout)
+        for item in tasks.listed_tasks(layout)
         if created_after(item.get("created_at"), initialized)
     ]
     if task_items:

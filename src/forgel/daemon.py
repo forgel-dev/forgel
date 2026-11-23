@@ -1017,6 +1017,17 @@ def _run_task(
     log: Callable[[str], None],
 ) -> bool:
     task_id = str(task["id"])
+    if str(task.get("status") or "") == "cancelled" or specs.cancelled(
+        layout, task
+    ):
+        stored = tasks.get_task(layout, task_id) or task
+        if stored.get("status") != "cancelled":
+            tasks.cancel_task(layout, task_id)
+        log(
+            f"[daemon] {project['id']}: task {task_id} is cancelled; "
+            "not started"
+        )
+        return True
     policy = peak.project_policy(settings, layout.control)
     if peak.should_defer(policy, hours=settings.peak_hours):
         log(

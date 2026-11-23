@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from forgel import specs
+from forgel.artifacts import write_text
 from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
@@ -14,7 +16,7 @@ from forgel.model import ScriptedModelClient
 from forgel.projects import create_project
 from forgel.release_train import save_release
 from forgel.runtime_ops import OPERATIONS, run_operation
-from forgel.tasks import create_task, get_task, update_task
+from forgel.tasks import create_task, get_task, listed_tasks, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -217,6 +219,77 @@ class RuntimeOpsTest(unittest.TestCase):
         ]
         self.assertIn("task_restart", stages)
 
+
+    def test_task_cancel_stops_work_and_marks_the_document(self) -> None:
+        task = self._task(status="running")
+        update_task(
+            self.layout,
+            task["id"],
+            result={"git": {"base": "a" * 40, "head": "b" * 40}},
+        )
+        spec = self.layout.artifact(specs.spec_path(task["id"]))
+        write_text(spec, "# Task\n\nDo the work.\n")
+
+        text = run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_cancel",
+            {"task_id": task["id"]},
+        )
+
+        self.assertIn("cancelled", text)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "cancelled")
+        self.assertEqual(
+            stored["result"].get("git", {}).get("head"), "b" * 40
+        )
+        document = spec.read_text(encoding="utf-8")
+        self.assertTrue(document.startswith(specs.CANCEL_MARKER))
+        self.assertIn("not accept", document)
+        self.assertIn("Do the work.", document)
+        self.assertEqual(listed_tasks(self.layout), [])
+
+    def test_a_cancelled_task_is_not_accepted_for_work(self) -> None:
+        task = self._task(status="running")
+        spec = self.layout.artifact(specs.spec_path(task["id"]))
+        write_text(spec, "# Task\n")
+
+        run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_cancel",
+            {"task_id": task["id"]},
+        )
+
+        for operation in ("task_retry", "task_restart", "task_process"):
+            with self.assertRaises(ValueError):
+                run_operation(
+                    self.settings,
+                    self.ledger,
+                    self.project,
+                    operation,
+                    {"task_id": task["id"]},
+                )
+
+    def test_a_marked_document_blocks_work_even_without_the_status(
+        self,
+    ) -> None:
+        task = self._task(status="pending")
+        spec = self.layout.artifact(specs.spec_path(task["id"]))
+        write_text(spec, specs.CANCEL_NOTE + "\n# Task\n")
+
+        self.assertTrue(specs.cancelled(self.layout, task))
+        with self.assertRaises(ValueError):
+            run_operation(
+                self.settings,
+                self.ledger,
+                self.project,
+                "task_process",
+                {"task_id": task["id"]},
+            )
 
     def test_an_implicit_operation_targets_the_running_task(self) -> None:
         running = self._task(status="running")

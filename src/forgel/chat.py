@@ -17,7 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
 
-from . import config_store, daemon_config, peak
+from . import config_store, daemon_config, peak, specs
 from .i18n import has as _has
 from .i18n import t as _t
 from .language import detect as detect_language
@@ -79,7 +79,7 @@ from .tasks import (
     get_task,
     current_task,
     latest_task,
-    list_tasks,
+    listed_tasks,
     retry_task,
 )
 
@@ -710,7 +710,7 @@ class CommandRouter:
         if isinstance(project, Reply):
             return project
         layout = ProjectLayout.detect(project["workspace"])
-        entries = list_tasks(layout)
+        entries = listed_tasks(layout)
         if not entries:
             return Reply(self._text(chat_id, "chat_tasks_none"))
         lines = [
@@ -774,11 +774,11 @@ class CommandRouter:
             )
         if action in {"cancel", "retry"}:
             try:
-                task = (
-                    cancel_task(layout, task_id)
-                    if action == "cancel"
-                    else retry_task(layout, task_id)
-                )
+                if action == "cancel":
+                    task = cancel_task(layout, task_id)
+                    specs.mark_cancelled(layout, task)
+                else:
+                    task = retry_task(layout, task_id)
             except ValueError as exc:
                 return self._error(chat_id, "chat_error", error=exc)
             commit_task(

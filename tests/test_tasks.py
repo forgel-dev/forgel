@@ -209,8 +209,36 @@ class TasksTest(unittest.TestCase):
         cancelled = tasks.cancel_task(self.layout, task["id"])
         self.assertEqual(cancelled["status"], "cancelled")
         self.assertIsNone(tasks.next_pending_task(self.layout))
+        self.assertEqual(tasks.listed_tasks(self.layout), [])
+        again = tasks.cancel_task(self.layout, task["id"])
+        self.assertEqual(again["status"], "cancelled")
+
+    def test_a_running_task_can_be_cancelled_and_keeps_its_result(
+        self,
+    ) -> None:
+        task = tasks.create_task(
+            self.layout, "Build", ["a"], ["b"]
+        )
+        tasks.update_task(
+            self.layout,
+            task["id"],
+            status="running",
+            result={"git": {"head": "a" * 40}},
+        )
+
+        cancelled = tasks.cancel_task(
+            self.layout, task["id"], notes="not needed"
+        )
+
+        self.assertEqual(cancelled["status"], "cancelled")
+        self.assertEqual(
+            cancelled["result"]["git"]["head"], "a" * 40
+        )
+        self.assertIn("not needed", cancelled["result"]["summary"])
         with self.assertRaises(ValueError):
-            tasks.cancel_task(self.layout, task["id"])
+            tasks.retry_task(self.layout, task["id"])
+        with self.assertRaises(ValueError):
+            tasks.restart_task(self.layout, task["id"])
 
     def test_project_state_tracks_tasks(self) -> None:
         self.assertEqual(

@@ -36,6 +36,7 @@ OPERATIONS = (
     "drive",
     "task_retry",
     "task_restart",
+    "task_cancel",
     "task_process",
     "task_qa",
     "task_review",
@@ -54,6 +55,20 @@ def _task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
             f"unknown task {task_id!r}" if task_id else "there is no task"
         )
     return task
+
+
+def _workable(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> None:
+    """Refuse work on a cancelled task: the document is not accepted."""
+
+    if str(task.get("status") or "") == "cancelled" or specs.cancelled(
+        layout, task
+    ):
+        raise ValueError(
+            f"task {task['id']} is cancelled; its requirements document "
+            "is not accepted for work"
+        )
 
 
 def _release(
@@ -182,14 +197,36 @@ def run_operation(
             return "The runtime had nothing runnable."
         return "The runtime advanced: " + ", ".join(processed) + "."
 
+    if name == "task_cancel":
+        task = _task(layout, str(args.get("task_id") or ""))
+        task_id = str(task["id"])
+        notes = str(
+            args.get("notes") or args.get("reason") or ""
+        ).strip()
+        cancelled = tasks.cancel_task(layout, task_id, notes=notes)
+        marked = specs.mark_cancelled(layout, cancelled)
+        answer = (
+            f"Task {task_id} is cancelled and is not accepted for work "
+            "again."
+        )
+        if marked:
+            answer += " Its requirements document is marked at the top."
+        answer += (
+            " Commits it already made stay in the tree for the release "
+            "audit."
+        )
+        return answer
+
     if name == "task_retry":
         task = _task(layout, str(args.get("task_id") or ""))
+        _workable(layout, task)
         task_id = str(task["id"])
         tasks.retry_task(layout, task_id)
         return f"Task {task_id} is queued again."
 
     if name == "task_restart":
         task = _task(layout, str(args.get("task_id") or ""))
+        _workable(layout, task)
         if client is None:
             raise ValueError(
                 "no model is configured to rewrite the specification"
@@ -205,6 +242,7 @@ def run_operation(
 
     if name in {"task_process", "task_qa", "task_review"}:
         task = _task(layout, str(args.get("task_id") or ""))
+        _workable(layout, task)
         task_id = str(task["id"])
         if name == "task_qa":
             qa = run_task_qa(settings, ledger, dict(project), task, log)

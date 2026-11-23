@@ -567,7 +567,7 @@ acceptance criteria, a target repository, optional constraints, a test command
 and recorded assumptions. In a multi-repository project the agent picks the
 most likely repository and states why instead of asking; a wrong assumption is
 corrected by the next request. The bot reports the task id, and `/tasks` lists
-it. Cancel a queued task with `/task cancel <id>`.
+it. Cancel any task with `/task cancel <id>`.
 
 For a milestone, `forgel plan <project> --goal "..."` (or `/plan <goal>` in the
 chat) asks the planner for an ordered backlog of task intents; a separate
@@ -613,7 +613,10 @@ review.
 
 From the chat: send a plain message to the selected project to queue a change;
 `/plan` decomposes a milestone; `/tasks` shows the queue; `/task accept|reject`
-records a review decision; `/task cancel <id>` cancels a pending task.
+records a review decision; `/task cancel <id>` cancels a task in any status —
+it leaves the task list, its requirements document is marked cancelled at the
+top and is never accepted for work again, and commits it already made stay in
+the tree for the release audit to judge.
 
 Free local runs can use a scripted model or a subagent bridge instead of a
 provider key; a production run uses `FORGEL_MODEL_API_KEY`. The manual blog e2e

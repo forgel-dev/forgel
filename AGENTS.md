@@ -72,10 +72,13 @@ shim and is not part of the public repository.
   invalid. The writer decides the remaining details from the issue and the recorded
   decisions; it never leaves an open alternative or waits for an answer.
 - **The project agent may run every runtime operation directly (D-108).**
-  drive, task retry/restart/process/qa/review, release resume/audit/finalize
-  and set_limit are all available; no stage-specific allowlist hides one. A
-  task can be retried or restarted from its requirements in any status —
-  running, review or finished — and the runtime does not lock it.
+  drive, task retry/restart/cancel/process/qa/review, release
+  resume/audit/finalize and set_limit are all available; no stage-specific
+  allowlist hides one. A task can be retried or restarted from its
+  requirements in any status — running, review or finished — and the runtime
+  does not lock it. A cancelled task leaves the task list, its requirements
+  document is marked at the top and is refused by the runtime on every work
+  path; commits it already made stay for the release audit.
 
 ## Prompt Rules (Non-Negotiable)
 

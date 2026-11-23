@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from .artifacts import write_text
-from . import contract, git_ops
+from . import contract, git_ops, specs
 from .config import Settings
 from .instructions import instruction_context
 from .layout import ProjectLayout
@@ -1033,6 +1033,13 @@ def _set_acceptance(
 ) -> dict[str, Any]:
     layout = ProjectLayout.detect(str(project["workspace"]))
     task = get_task(layout, str(task["id"])) or task
+    if str(task.get("status") or "") == "cancelled" or specs.cancelled(
+        layout, task
+    ):
+        raise ValueError(
+            f"task {task['id']} is cancelled; its requirements document "
+            "is not accepted for work"
+        )
     data = dict(task.get("result") or {})
     data["acceptance"] = {
         "status": status,
@@ -1286,6 +1293,10 @@ def process_task_result(
 
     layout = ProjectLayout.detect(str(project["workspace"]))
     task = get_task(layout, str(task["id"])) or task
+    if str(task.get("status") or "") == "cancelled" or specs.cancelled(
+        layout, task
+    ):
+        return
     if not (settings.task_qa or settings.task_review):
         return
     qa: TaskQAResult | None = None
@@ -1339,6 +1350,13 @@ def rerun_review(
     task = get_task(layout, str(task_id))
     if task is None:
         raise ValueError(f"unknown task {task_id!r}")
+    if str(task.get("status") or "") == "cancelled" or specs.cancelled(
+        layout, task
+    ):
+        raise ValueError(
+            f"task {task_id} is cancelled; its requirements document "
+            "is not accepted for work"
+        )
     if task.get("status") != "review":
         raise ValueError(
             "only tasks awaiting a review decision can be re-reviewed "

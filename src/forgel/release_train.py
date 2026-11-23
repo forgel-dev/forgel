@@ -763,6 +763,7 @@ def _audit_observation(
             {
                 "id": task.get("id"),
                 "title": task.get("title"),
+                "status": task.get("status"),
                 "repo_id": task.get("repo_id"),
                 "spec": task.get("spec"),
                 "summary": task.get("summary"),
@@ -1811,19 +1812,36 @@ def process_releases(
         if not items:
             waiting.append(repos)
             continue
-        statuses = {str(task.get("status") or "") for task in items}
+        # A cancelled task leaves the release train but keeps its commits:
+        # the audit still sees them in the change set and decides.
+        active = [
+            task
+            for task in items
+            if str(task.get("status") or "") != "cancelled"
+        ]
+        if not active:
+            release["status"] = "cancelled"
+            release["detail"] = "every task in the release was cancelled"
+            save_release(layout, release)
+            log(
+                f"[release] {release_id}: every task was cancelled; "
+                "the release is cancelled"
+            )
+            actions.append(f"blocked:{release_id}")
+            continue
+        statuses = {str(task.get("status") or "") for task in active}
         if (
             not statuses & {"pending", "running", "review"}
             and not all(
                 task.get("status") == "done" and _accepted(task)
-                for task in items
+                for task in active
             )
         ):
             stopped = [
                 task
-                for task in items
+                for task in active
                 if str(task.get("status") or "")
-                in {"failed", "cancelled", "blocked"}
+                in {"failed", "blocked"}
             ]
             decision = None
             if ledger is not None and client is not None and stopped:
@@ -1983,7 +2001,10 @@ def process_releases(
             save_release(layout, release)
             actions.append(f"blocked:{release_id}")
             continue
-        if not all(task.get("status") == "done" and _accepted(task) for task in items):
+        if not all(
+            task.get("status") == "done" and _accepted(task)
+            for task in active
+        ):
             waiting.append(repos)
             continue
         audit = dict(release.get("audit") or {})

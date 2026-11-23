@@ -91,9 +91,11 @@ the release policy changes.
   the rejected option and stay consistent with the acceptance; the writer
   decides the remaining details and never leaves an open alternative.
 - **Every runtime operation is directly available (D-108):** drive, task
-  retry/restart/process/qa/review, release resume/audit/finalize and
+  retry/restart/cancel/process/qa/review, release resume/audit/finalize and
   set_limit; a task can be retried or restarted from its requirements in any
-  status.
+  status. A cancelled task leaves the task list, its requirements document is
+  marked at the top and is refused by the runtime on every work path; commits
+  it already made stay for the release audit.
 - **Documentation states behavior and contracts (D-109):** it may describe
   commands, API endpoints and request/response formats, but never volatile
   implementation details — internal structure, timings, runtime bounds, test

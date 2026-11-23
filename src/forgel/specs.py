@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping, Sequence
 
 from . import requirements as requirements_doc
+from .artifacts import write_text
 from .check_commands import check_problems
 from .instructions import instruction_context
 from .layout import ProjectLayout
@@ -44,6 +45,13 @@ SPEC_KEYS = {
     "external_dependencies",
 }
 SPEC_DIR = "docs/program/specs"
+CANCEL_MARKER = "<!-- forgel:cancelled -->"
+CANCEL_NOTE = (
+    f"{CANCEL_MARKER}\n"
+    "\n"
+    "> **Cancelled.** This task was cancelled. The runtime does not accept "
+    "this requirements document for work.\n"
+)
 
 
 class SpecError(RuntimeError):
@@ -957,3 +965,42 @@ def render_spec(
 
 def spec_path(task_id: str) -> str:
     return f"{SPEC_DIR}/{task_id}.md"
+
+
+def document_path(task: Mapping[str, Any]) -> str:
+    """The requirements document of a task: its own spec, or the default."""
+
+    return str(task.get("spec") or spec_path(str(task["id"])))
+
+
+def cancelled(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> bool:
+    """True when the requirements document is marked cancelled."""
+
+    try:
+        text = layout.artifact(document_path(task)).read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return False
+    return text.lstrip().startswith(CANCEL_MARKER)
+
+
+def mark_cancelled(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> bool:
+    """Put the cancellation note at the top of the requirements document.
+
+    Returns False when the task has no requirements document yet.
+    """
+
+    path = layout.artifact(document_path(task))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    if text.lstrip().startswith(CANCEL_MARKER):
+        return True
+    write_text(path, CANCEL_NOTE + "\n" + text)
+    return True

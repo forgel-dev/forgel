@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
-from . import __version__, git_ops, language, peak, tasks
+from . import __version__, git_ops, language, peak, specs, tasks
 from .adopt import (
     AdoptError,
     add_repository,
@@ -1013,13 +1013,14 @@ def cmd_task(args: argparse.Namespace) -> int:
             except ValueError as exc:
                 print(_say("cli_error", error=exc), file=sys.stderr)
                 return 1
+            specs.mark_cancelled(layout, task)
             tasks.commit_task(
                 layout, task["id"], f"Cancel task {task['id']}"
             )
             print(_say("cli_task_cancelled", task=task["id"]))
             return 0
         if args.action == "list":
-            entries = tasks.list_tasks(layout)
+            entries = tasks.listed_tasks(layout)
             if not entries:
                 print(_say("cli_no_tasks"))
                 return 0

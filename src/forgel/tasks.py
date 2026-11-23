@@ -360,6 +360,8 @@ def retry_task(
     task = get_task(layout, task_id)
     if task is None:
         raise ValueError(f"unknown task {task_id!r}")
+    if task.get("status") == "cancelled":
+        raise ValueError(f"task {task_id} is cancelled")
     data = dict(task.get("result") or {})
     if data.get("failure"):
         data["last_failure"] = data["failure"]
@@ -392,6 +394,8 @@ def restart_task(
     task = get_task(layout, task_id)
     if task is None:
         raise ValueError(f"unknown task {task_id!r}")
+    if task.get("status") == "cancelled":
+        raise ValueError(f"task {task_id} is cancelled")
     previous = dict(task.get("result") or {})
     updated = update_task(
         layout,
@@ -488,8 +492,18 @@ def next_pending_task(
     return None
 
 
+def listed_tasks(layout: ProjectLayout) -> list[dict[str, Any]]:
+    """The task list shown to the user: cancelled work is removed from it."""
+
+    return [
+        task
+        for task in list_tasks(layout)
+        if task.get("status") != "cancelled"
+    ]
+
+
 def latest_task(layout: ProjectLayout) -> dict[str, Any] | None:
-    tasks = list_tasks(layout)
+    tasks = listed_tasks(layout)
     return tasks[-1] if tasks else None
 
 
@@ -500,27 +514,39 @@ def current_task(layout: ProjectLayout) -> dict[str, Any] | None:
     task, not a newer pending one queued behind it.
     """
 
-    tasks = list_tasks(layout)
+    tasks = listed_tasks(layout)
     for task in reversed(tasks):
         if task.get("status") == "running":
             return task
     return tasks[-1] if tasks else None
 
 
-def cancel_task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
+def cancel_task(
+    layout: ProjectLayout, task_id: str, notes: str = ""
+) -> dict[str, Any]:
+    """Cancel a task in any status.
+
+    The record and its result stay: the task's commits are kept for the
+    release audit, which decides whether to keep or revert them.
+    """
+
     task = get_task(layout, task_id)
     if task is None:
         raise ValueError(f"unknown task {task_id!r}")
-    if task.get("status") != "pending":
-        raise ValueError(
-            f"only pending tasks can be cancelled (status: {task.get('status')})"
-        )
+    if task.get("status") == "cancelled":
+        return task
+    summary = "cancelled by the user"
+    if notes:
+        summary += f": {notes}"
+    data = dict(task.get("result") or {})
+    data["summary"] = summary
+    data["cancelled_at"] = _now()
     return update_task(
         layout,
         task_id,
         status="cancelled",
         finished_at=_now(),
-        result={"summary": "cancelled by the user"},
+        result=data,
     )
 
 

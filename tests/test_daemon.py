@@ -10,8 +10,9 @@ from types import SimpleNamespace
 
 from unittest.mock import patch
 
-from forgel import tasks
+from forgel import specs, tasks
 from forgel.approvals import awaits_approval, record_approval
+from forgel.artifacts import write_text
 from forgel.config import Settings
 from forgel.controller import OPERATIONS
 from forgel.daemon import (
@@ -545,6 +546,43 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(stored["status"], "blocked")
             self.assertIn("needs the owner", stored["result"]["summary"])
             self.assertIn(question, stored["result"]["summary"])
+
+    def test_a_marked_document_is_never_started(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self._settings(tmp)
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+            project_id = create_project(
+                settings,
+                ledger,
+                "Cancelled demo",
+                "A brief.",
+                mode="brownfield",
+            )
+            project = ledger.get_project(project_id)
+            assert project is not None
+            layout = ProjectLayout.detect(project["workspace"])
+            task = create_task(
+                layout,
+                "Do the work",
+                ["Do it"],
+                ["It is done"],
+                repo_id="main",
+            )
+            write_text(
+                layout.artifact(specs.spec_path(task["id"])),
+                specs.CANCEL_NOTE + "\n# Task\n",
+            )
+            logs: list[str] = []
+
+            run_once(settings, ledger, log=logs.append)
+
+            stored = get_task(layout, task["id"])
+            assert stored is not None
+            self.assertEqual(stored["status"], "cancelled")
+            self.assertTrue(
+                any("cancelled" in line for line in logs)
+            )
 
     def test_peak_hours_defer_model_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

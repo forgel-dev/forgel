@@ -349,7 +349,10 @@ def tasks(settings: Settings, ledger: Ledger, args: Any) -> int:
     except ProjectError as exc:
         return fail(args, "tasks", str(exc))
     layout = ProjectLayout.detect(project["workspace"])
-    items = [task_view(task) for task in task_store.list_tasks(layout)]
+    items = [
+        task_view(task)
+        for task in task_store.listed_tasks(layout)
+    ]
     if items:
         lines = [
             _say(args, "client_tasks_header", count=len(items))

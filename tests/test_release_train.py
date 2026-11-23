@@ -324,6 +324,53 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertEqual(audit.get("verdict"), "fail")
         self.assertEqual(len(audit.get("findings") or []), 1)
 
+    def test_a_cancelled_task_does_not_block_the_release(self) -> None:
+        release, _task = self._release()
+        cancelled = create_task(
+            self.layout,
+            "Drop the banner",
+            ["Drop the banner"],
+            ["The banner is gone"],
+            repo_id="web",
+            release_id=str(release["id"]),
+        )
+        update_task(
+            self.layout,
+            cancelled["id"],
+            status="cancelled",
+            result={"summary": "cancelled by the user"},
+        )
+
+        actions = process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient([PASS_AUDIT]),
+            log=lambda _m: None,
+        )
+
+        self.assertIn(f"released:{release['id']}", actions)
+        stored = list_releases(self.layout)[0]
+        self.assertEqual(stored["status"], "tagged")
+
+    def test_a_release_with_only_cancelled_tasks_is_cancelled(self) -> None:
+        release, task = self._release()
+        update_task(self.layout, task["id"], status="cancelled")
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient([]),
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "cancelled")
+
     def test_a_request_across_two_repositories_releases_both(self) -> None:
         api_task = create_task(
             self.layout,
