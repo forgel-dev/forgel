@@ -132,6 +132,17 @@ def _attributed_diff(
             "No product commits were attributed to this task. The change may "
             "already exist in the repository; inspect the current files."
         )
+    # Review the net change, not each commit. A change introduced in one
+    # attempt and reverted in a later one is not part of the work the task
+    # delivers; judging the per-commit diffs reports reverted work as if it
+    # were still in the tree.
+    base = _git_output(repo, ["rev-parse", f"{commits[0]}^"]).strip()
+    if base:
+        command = ["diff", "--no-color", f"{base}..{commits[-1]}"]
+        if files:
+            command += ["--", *files]
+        text = _git_output(repo, command).strip()
+        return text or "No net product changes in the attributed commits."
     parts: list[str] = []
     for commit in commits:
         command = ["show", "--format=", commit]

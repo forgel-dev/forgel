@@ -189,6 +189,43 @@ class TaskReviewTest(unittest.TestCase):
         self.assertIn("value = 2", diff)
         self.assertNotIn("unrelated", diff)
 
+    def test_the_review_diff_ignores_reverted_work(self) -> None:
+        write_text(self.repo / "app.py", "value = 2\n")
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "step one",
+        )
+        first = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        write_text(self.repo / "app.py", "value = 1\n")
+        self._git("add", "-A")
+        self._git(
+            "-c", "user.name=T", "-c", "user.email=t@example.com",
+            "commit", "-q", "-m", "revert",
+        )
+        second = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={
+                "summary": "implemented",
+                "files_changed": ["app.py"],
+                "git": {"commits": [first, second]},
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        diff = task_diff(self.layout, stored)
+        self.assertNotIn("value = 2", diff)
+        self.assertIn("No net product changes", diff)
+
     def test_a_restored_test_is_not_reported_as_removed(self) -> None:
         test_file = self.repo / "tests" / "test_sample.py"
         test_file.parent.mkdir()
