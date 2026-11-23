@@ -49,7 +49,7 @@ from .artifacts import write_text
 from .planner import PlanningError, plan_project, plan_status
 from .project_config import ConfigError, render_project_config
 from .release import ReleaseError, release_project
-from .release_train import resume_release
+from .release_train import cancel_empty_release, resume_release
 from .runtime_ops import run_operation
 from .task_review import accept_task, reject_task, rerun_review
 from .program_manifest import entries as manifest_entries
@@ -773,10 +773,12 @@ class CommandRouter:
                 )
             )
         if action in {"cancel", "retry"}:
+            release_id = ""
             try:
                 if action == "cancel":
                     task = cancel_task(layout, task_id)
                     specs.mark_cancelled(layout, task)
+                    release_id = cancel_empty_release(layout, task["id"])
                 else:
                     task = retry_task(layout, task_id)
             except ValueError as exc:
@@ -786,15 +788,20 @@ class CommandRouter:
                 task["id"],
                 f"{action.capitalize()} task {task['id']}",
             )
-            return Reply(
-                self._text(
-                    chat_id,
-                    "chat_task_cancelled"
-                    if action == "cancel"
-                    else "chat_task_requeued",
-                    task=task["id"],
-                )
+            text = self._text(
+                chat_id,
+                "chat_task_cancelled"
+                if action == "cancel"
+                else "chat_task_requeued",
+                task=task["id"],
             )
+            if release_id:
+                text += "\n" + self._text(
+                    chat_id,
+                    "chat_release_empty_cancelled",
+                    release=release_id,
+                )
+            return Reply(text)
         task = get_task(layout, task_id)
         if task is None:
             return self._error(

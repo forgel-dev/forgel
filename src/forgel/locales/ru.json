@@ -115,6 +115,7 @@
   "chat_tasks_header": "Задачи: {count}",
   "chat_task_usage": "Использование: /task cancel|retry|review <task-id>, /task accept <task-id> [заметка] или /task reject <task-id> [заметка]",
   "chat_task_cancelled": "Задача {task} отменена.",
+  "chat_release_empty_cancelled": "У релиза {release} не осталось задач, он отменён.",
   "chat_task_requeued": "Задача {task} возвращена в очередь.",
   "chat_unknown_task": "ошибка: неизвестная задача {task}",
   "chat_task_accepted": "Задача {task} принята ({status}).",

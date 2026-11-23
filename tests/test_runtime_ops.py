@@ -14,7 +14,7 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.projects import create_project
-from forgel.release_train import save_release
+from forgel.release_train import load_release, save_release
 from forgel.runtime_ops import OPERATIONS, run_operation
 from forgel.tasks import create_task, get_task, listed_tasks, update_task
 
@@ -250,6 +250,61 @@ class RuntimeOpsTest(unittest.TestCase):
         self.assertIn("not accept", document)
         self.assertIn("Do the work.", document)
         self.assertEqual(listed_tasks(self.layout), [])
+
+    def test_cancelling_the_last_task_cancels_its_release(self) -> None:
+        release_id = self._release()
+        task = create_task(
+            self.layout,
+            "Do work",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            release_id=release_id,
+        )
+
+        text = run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_cancel",
+            {"task_id": task["id"]},
+        )
+
+        stored = load_release(self.layout, release_id)
+        assert stored is not None
+        self.assertEqual(stored["status"], "cancelled")
+        self.assertIn(release_id, text)
+
+    def test_cancelling_one_of_two_tasks_keeps_the_release(self) -> None:
+        release_id = self._release()
+        first = create_task(
+            self.layout,
+            "First",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            release_id=release_id,
+        )
+        create_task(
+            self.layout,
+            "Second",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            release_id=release_id,
+        )
+
+        run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_cancel",
+            {"task_id": first["id"]},
+        )
+
+        stored = load_release(self.layout, release_id)
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
 
     def test_a_cancelled_task_is_not_accepted_for_work(self) -> None:
         task = self._task(status="running")

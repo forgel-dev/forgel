@@ -288,6 +288,39 @@ def release_tasks(
     ]
 
 
+def cancel_empty_release(
+    layout: ProjectLayout, task_id: str
+) -> str:
+    """Cancel a task's release when no task in it is left to run.
+
+    Returns the release id when the release was cancelled, else an empty
+    string.
+    """
+
+    task = tasks.get_task(layout, task_id)
+    if task is None:
+        return ""
+    release_id = str(task.get("release_id") or "")
+    if not release_id:
+        return ""
+    release = load_release(layout, release_id)
+    if release is None:
+        return ""
+    if str(release.get("status") or "") in TERMINAL_RELEASE_STATUSES:
+        return ""
+    items = release_tasks(layout, release_id)
+    if not items:
+        return ""
+    if any(
+        str(item.get("status") or "") != "cancelled" for item in items
+    ):
+        return ""
+    release["status"] = "cancelled"
+    release["detail"] = "every task in the release was cancelled"
+    save_release(layout, release)
+    return release_id
+
+
 def load_release(
     layout: ProjectLayout, release_id: str
 ) -> dict[str, Any] | None:
@@ -1814,13 +1847,11 @@ def process_releases(
             if str(task.get("status") or "") != "cancelled"
         ]
         if not active:
+            # The user cancelled the work; the release is empty bookkeeping.
+            # The cancel operation reports it, so the train stays quiet.
             release["status"] = "cancelled"
             release["detail"] = "every task in the release was cancelled"
             save_release(layout, release)
-            log(
-                f"[release] {release_id}: every task was cancelled; "
-                "the release is cancelled"
-            )
             actions.append(f"blocked:{release_id}")
             continue
         statuses = {str(task.get("status") or "") for task in active}

@@ -20,6 +20,7 @@ from .ledger import Ledger
 from .model import ModelClient
 from .release_train import (
     audit_release,
+    cancel_empty_release,
     finalize_release,
     list_releases,
     load_release,
@@ -208,6 +209,11 @@ def run_operation(
         )
         if marked:
             answer += " Its requirements document is marked at the top."
+        release_id = cancel_empty_release(layout, task_id)
+        if release_id:
+            answer += (
+                f" Release {release_id} had no tasks left and is cancelled."
+            )
         answer += (
             " Commits it already made stay in the tree for the release "
             "audit."

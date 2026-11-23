@@ -115,6 +115,7 @@
   "chat_tasks_header": "Tasks: {count}",
   "chat_task_usage": "Usage: /task cancel|retry|review <task-id>, /task accept <task-id> [note] or /task reject <task-id> [note]",
   "chat_task_cancelled": "Cancelled task {task}.",
+  "chat_release_empty_cancelled": "Release {release} has no tasks left and is cancelled.",
   "chat_task_requeued": "Requeued task {task}.",
   "chat_unknown_task": "error: unknown task {task}",
   "chat_task_accepted": "Accepted task {task} ({status}).",
