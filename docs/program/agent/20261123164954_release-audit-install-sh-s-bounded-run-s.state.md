@@ -11,26 +11,35 @@ truth; re-read files with read_file when needed.
 
 ## Requirements
 
-- When a checked step runs longer than the configured timeout and exits on its own before the timeout has been recorded, the installer reports a timeout failure for that step.
-- The absence of a recorded timeout at the moment a checked step's result becomes available is never taken as evidence that the step finished within the timeout.
-- Every checked step produces exactly one verdict: either the step's own outcome or a timeout; the verdict is never left undetermined and never defaults to success for a step that overran.
-- A checked step that finishes before the timeout expires produces no timeout verdict and keeps its own outcome unchanged, including a nonzero outcome.
-- When a timeout verdict is produced, the installation result is a failure and no success message is shown for that step.
-- The test suite includes a regression test for the overrun-then-exit-before-timeout-recorded ordering that fails against the previous behavior and passes with the correction.
-- The regression test is deterministic: it forces the ordering explicitly and does not depend on elapsed-time delays, scheduling luck or real network access.
-- Every test that existed before this correction still passes, with its premise unchanged.
+- When a verification command does not finish within its time limit, the installer must fail the installation and its failure must state that the time limit was exceeded.
+- That failure must occur regardless of whether the command ends just before, at, or just after the moment the limit elapses.
+- A verification command that finishes within its limit and reports success must let the installation continue.
+- A verification command that finishes within its limit and reports failure must be reported as that failure and must not be presented as a time-limit failure.
+- No situation may exist in which the installation is reported as successful for a verification run that exceeded its limit.
+- The installer's additional waiting for the outcome of a verification run after the limit has passed must be finite and short.
+- The verification step must leave no residual processes and no temporary working artifacts behind, including when the limit is exceeded.
+- The project's test suite must contain a regression test whose verification command ends just after the limit and which asserts that the installation fails with a message naming the limit.
+- The behavior of the installer for verification commands that finish well within their limit must remain unchanged.
+- All project artifacts are in English.
 
 ## Acceptance Criteria
 
-- A checked step that overruns the configured timeout and exits on its own before the timeout is recorded is reported as a timeout with a nonzero result and is never reported as a verified success.
-- A checked step that completes before the timeout expires yields its own outcome and no timeout verdict, including when that outcome is nonzero.
-- The test suite contains a regression test for the overrun-then-exit-before-timeout-recorded ordering that is deterministic and would fail if the installer reverted to deciding the verdict solely by the presence of a recorded timeout.
-- The complete pre-existing test suite passes alongside the correction.
-- The installer still parses and runs without syntax errors in its supported shell environment.
+- A verification command that ends just after the time limit makes the installation fail with a message naming the time limit.
+- A verification command that succeeds well within the time limit lets the installation complete.
+- A verification command that fails with its own error within the time limit produces that error and not a time-limit message.
+- No run in which the time limit elapsed is reported as a successful installation.
+- The regression test for the just-after-limit case exists and passes, and the full test suite passes.
+- The pre-existing tests for within-limit verification pass without being weakened, showing that behavior for those cases is unchanged.
+- After an exceeded-limit run, no verification processes remain and no temporary working artifacts are left behind.
+- Every artifact produced is in English.
 
 ## Constraints
 
-- none
+- One change that a single agent can finish and verify on its own.
+- The time limit and its default value stay as they are.
+- No existing test may be weakened to make the new behavior pass.
+- Project and repository instructions and recorded user decisions are binding.
+- A verification command running past its limit must continue to fail the installation; only the correctness of that verdict changes.
 
 ## Assumptions
 
@@ -43,30 +52,29 @@ truth; re-read files with read_file when needed.
 
 ## Actions
 
+- run: ['git', 'status', '--porcelain', '--untracked-files=all']
 - read_file: install.sh
-- read_file: tests/test_check_cleanup.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_readme_install.py
-- write_file: install.sh
-- run: ['sh', '-n', 'install.sh']
-- read_file: tests/test_stub_contract.py
-- write_file: tests/test_install_timeout_verdict.py
-- write_file: tests/test_install_timeout_verdict.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install_timeout_verdict.py']
-- write_file: install.sh
-- write_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: tests/test_install_timeout_verdict.py
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: tests/test_install_timeout_verdict.py
+- read_file: install.sh
+- recall
 
 ## Commands
 
-- `['python', '-m', 'pytest', '-q', 'tests/test_install_timeout_verdict.py']` -> exit 0
+- `['git', 'status', '--porcelain', '--untracked-files=all']` -> exit 0
+- `['python', '-m', 'pytest', '-q']` -> exit 124
 
 ## Recent Observations
 
-- run python -m pytest -q tests/test_install_timeout_verdict.py -> exit 0
-- write_file install.sh
-- write_file install.sh
+- read_file tests/test_install_timeout_verdict.py: tests/test_install_timeout_verdict.py: lines 30-149 of 178
+- read_file install.sh: install.sh: lines 1-20 of 1024
+- recall: step 1 [read_file]
 
 ## Next Step
 
