@@ -1,18 +1,37 @@
 {
   "id": "20261123062514_release-audit-bounded-run-does-not-make-",
   "title": "Release audit: `bounded_run` does not make the watchdog's timeout decision authoritative. After",
-  "spec": "",
+  "spec": "docs/program/specs/20261123062514_release-audit-bounded-run-does-not-make-.md",
   "summary": "Have the watchdog record the final child/timeout status and wait for that status before deciding success, or measure the deadline in the parent and fail on any overrun; add a test whose checked shell returns just after FORGEL_CODE_TIMEOUT.",
   "requirements": [
-    "`bounded_run` does not make the watchdog's timeout decision authoritative. After the checked shell exits, the parent immediately kills the watchdog if the `timed-out` marker is absent. If the shell finishes after the configured limit but before the watchdog has written the marker, the check can be reported as successful, so the hard bound and the rule that a timed-out check is a failure are not guaranteed."
+    "`bounded_run` must not treat the absence of the `timed-out` marker at the moment the checked child exits as proof that the bound did not elapse; the timeout decision must be resolved after the watchdog has reached its own decision.",
+    "When the bound elapsed before the checked command exited, `bounded_run` must set `CHECK_STATUS=124` regardless of the ordering between the child's exit and the marker write.",
+    "`verify_profile` must report `CHECK_STATUS=124` as a failed verification: a non-zero installer exit and a message that names the configured limit, never a success.",
+    "When the checked command exits before the bound elapses, `bounded_run` must return that command's own exit status and its captured output unchanged.",
+    "Every exit path of `bounded_run` must leave no watchdog process and no private check directory behind, including the timeout path and paths taken after a failure.",
+    "The wait for the watchdog's decision must itself be bounded by a fixed, small limit derived from `VERIFY_GRACE`, so `install.sh` cannot hang waiting for a watchdog that never answers.",
+    "The installer must remain POSIX `sh` (`sh -n install.sh` clean, `set -eu`) and must not invoke GNU `timeout` or any binary not already used by the script.",
+    "A regression test in `tests/test_install.py` must exercise the real `install.sh` with a fresh-shell check whose runtime exceeds `FORGEL_CODE_TIMEOUT` and assert that the install fails at the bound instead of reporting success.",
+    "No existing test may be weakened to accommodate the change.",
+    "The whole existing test suite must still pass."
   ],
   "acceptance": [
-    "The release audit finding is resolved: `bounded_run` does not make the watchdog's timeout decision authoritative. After the checked shell exits, the parent immediately kills the watchdog if the `timed-out` marker is absent. If the shell finishes after the configured limit but before the watchdog has written the marker, the check can be reported as successful, so the hard bound and the rule that a timed-out check is a failure are not guaranteed.",
-    "Existing tests pass"
+    "A checked command that outlives `FORGEL_CODE_TIMEOUT` makes `install.sh` exit non-zero with a failure message naming the limit, and this holds even when the command's exit lands between the limit and the watchdog's marker write.",
+    "A checked command that finishes inside the limit keeps its own exit status and output, and the installer's verification result is unchanged from the documented behaviour.",
+    "After a timed-out run and after a successful run, no watchdog process from the check and no private `forgel-code-check` directory remain.",
+    "The bounded wait for the watchdog decision terminates on its own, so no run of `install.sh` blocks indefinitely.",
+    "`sh -n install.sh` reports no syntax error and the script contains no invocation of GNU `timeout`.",
+    "The new regression test fails against the current `bounded_run` and passes against the fixed one.",
+    "`python -m pytest -q` passes for the whole repository."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
@@ -20,12 +39,113 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A checked command that outlives FORGEL_CODE_TIMEOUT makes install.sh exit non-zero with a failure message naming the limit, even when the exit lands between the limit and the marker write.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "timeout or bounded"
+      ]
+    },
+    {
+      "criterion": "A checked command that finishes inside the limit keeps its own exit status and output, and the verification result is unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "verify or fresh"
+      ]
+    },
+    {
+      "criterion": "After a timed-out run and after a successful run, no watchdog process and no private forgel-code-check directory remain.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q",
+        "-k",
+        "cleanup or process or check_dir"
+      ]
+    },
+    {
+      "criterion": "The bounded wait for the watchdog decision terminates on its own, so no run of install.sh blocks indefinitely.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_install.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "sh -n install.sh reports no syntax error and the script contains no invocation of GNU timeout.",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    },
+    {
+      "criterion": "The new regression test fails against the current bounded_run and passes against the fixed one.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "python -m pytest -q passes for the whole repository.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX shell (`/bin/sh`, dash, bash, zsh, ksh)",
+      "interface": "Execute `install.sh` as a POSIX shell script: the suite runs the real `install.sh` as a subprocess through `/bin/sh` (or the script's shebang) — argv, stdin/stdout/stderr and exit status only; the installer and tests additionally start login interactive shells as `-l -i -c` invocations of the available shell (`/bin/sh`, dash, bash, zsh, ksh). No emulation layer is needed because the concrete shell executable is provided by the host environment.",
+      "docs": "POSIX.1-2017 Shell Command Language; repository contract quoted in the header of `install.sh`",
+      "mode": "direct",
+      "evidence": "The header of `install.sh` states the POSIX shell contract for the script, and `tests/test_install.py` executes the real `install.sh` as a subprocess, so the shell is consumed only through its standard process interface.",
+      "stub": ""
+    },
+    {
+      "name": "Python 3 with pip (the interpreter the installer installs the client with)",
+      "interface": "Invoke the interpreter selected by `FORGEL_CODE_PYTHON` (falling back to `python3`) to create the install prefix and install the client; the test module first probes an interpreter of version 3.9 or newer whose `python -m pip --version` succeeds, then runs the installer.",
+      "docs": "`pyproject.toml` in the code repository (requires-python and build backend); `README.md`, Tests section",
+      "mode": "direct",
+      "evidence": "`pyproject.toml` declares the Python version requirement and packaging metadata that `install.sh` installs against; `README.md`'s Tests section documents probing a Python 3.9+ interpreter with pip before running the installer.",
+      "stub": ""
+    },
+    {
+      "name": "pytest / unittest test runner",
+      "interface": "Collect and run `tests/test_install.py` with `python -m pytest -q`; the same module is also runnable with the standard library as `python -m unittest discover -s tests -v`, so the suite does not depend on a third-party runner being installed.",
+      "docs": "`README.md`, Tests section; `tests/test_install.py`",
+      "mode": "direct",
+      "evidence": "`README.md`'s Tests section names the runner and command for the suite, and `tests/test_install.py` is the module it collects; the file is a plain test module, so the stdlib `unittest` entry point covers the same collection.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "",
+  "started_at": "2026-11-23T10:41:36+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
