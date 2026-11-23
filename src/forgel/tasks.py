@@ -290,7 +290,7 @@ def stop_plan(
 def unblock_for_retry(
     layout: ProjectLayout, task_id: str
 ) -> list[dict[str, Any]]:
-    """Return tasks quarantined by ``task_id`` to pending."""
+    """Return the tasks stopped by ``task_id`` to pending."""
 
     changed: list[dict[str, Any]] = []
     for task in list_tasks(layout):

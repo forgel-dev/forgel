@@ -376,7 +376,7 @@ def _dismiss_review(
     )
 
 
-def _quarantine(
+def _record_failure(
     settings: Settings,
     ledger: Ledger,
     project: dict[str, Any],
@@ -705,7 +705,7 @@ def _apply_controller_decision(
             finished_at=_now(),
             result=result,
         )
-        _quarantine(
+        _record_failure(
             settings,
             ledger,
             project,

@@ -216,7 +216,7 @@ class Settings:
             .lower()
             or "continue"
         )
-        if plan_on_failure not in {"quarantine", "stop", "continue"}:
+        if plan_on_failure not in {"stop", "continue"}:
             raise ValueError(
                 "FORGEL_PLAN_ON_FAILURE must be one of: stop, continue"
             )
