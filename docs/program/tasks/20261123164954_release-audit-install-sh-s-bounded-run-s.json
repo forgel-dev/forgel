@@ -108,12 +108,121 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T16:49:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T18:23:40+00:00",
+  "finished_at": "2026-11-23T18:30:14+00:00",
   "result": {
-    "manual_restarts": 1
+    "manual_restarts": 1,
+    "resume_count": 1,
+    "resumed_at": "2026-11-23T18:23:40+00:00",
+    "summary": "Fixed install.sh so the bounded verification check reports a time-limit failure whenever the check's own measured duration reaches the configured limit, instead of inferring the verdict solely from the watchdog's recorded marker. bounded_run now takes a timestamp with a new now_millis helper before starting the check and again when the check's result is available; the verdict is 124 when the elapsed time reaches limit*1000 milliseconds or when the watchdog recorded 'timed-out'. The wait for the watchdog's record stays bounded by DECISION_WAIT, the existing graceful/forceful stop and cleanup paths are unchanged (so no residual processes or private directories remain), and the time limit, its default and all user-facing message wording are untouched. Added tests/test_install_timeout_verdict.py, which drives the real installer through tests/test_install helpers with a deterministic 'date' stub (a fabricated clock) and asserts: just-after-limit, at-limit and early-exit-before-marker runs all fail with 'the check was stopped after 1s' and leave no check directory behind, while an in-limit run keeps its own nonzero status and is not reported as a timeout. Verified with `sh -n install.sh` and the full suite: `python -m pytest -q` -> 218 passed, 137 subtests passed.",
+    "files_changed": [
+      "install.sh",
+      "tests/test_install_timeout_verdict.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "-x",
+          "--timeout=120"
+        ],
+        "exit_code": 4
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install_timeout_verdict.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "install.sh"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "....................................................................................................... [ 47%]\n........................................................................ [ 80%]\n...........................................      [100%]\n218 passed, 137 subtests passed in 150.71s (0:02:30)\n",
+    "assumptions": [
+      "The check's duration is measured from just before the command is started to just after its own status is available, and duration >= limit counts as exceeding the limit (the limit is inclusive, matching 'ends just before, at, or just after').",
+      "When no usable clock is available (the helper reports 0), the watchdog's recorded 'timed-out' marker remains the fallback verdict, as before.",
+      "The regression test forces the just-after-limit case deterministically with a stubbed clock rather than relying on real process timing, so it cannot be flaky.",
+      "Existing exit cleanup (stop_check plus removal of the private check directory) already satisfies the no-residual-processes/artifacts requirement and was left unchanged."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 17,
+      "estimated_input_tokens": 365846,
+      "provider_input_tokens": 378515,
+      "provider_output_tokens": 3711,
+      "cache_hit_tokens": 355968,
+      "cache_miss_tokens": 22547,
+      "estimated_tokens": 28677,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "be8ca1ed4e98ab53263dc595ebc41bc02515b666",
+      "head": "56dbe17da2e9ce2383a210ad116254780c671cb2",
+      "commit": "56dbe17da2e9ce2383a210ad116254780c671cb2",
+      "commits": [
+        "56dbe17da2e9ce2383a210ad116254780c671cb2"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123164954_release-audit-install-sh-s-bounded-run-s.md"
   },
   "request": ""
 }

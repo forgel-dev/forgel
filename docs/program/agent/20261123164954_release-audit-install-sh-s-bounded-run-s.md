@@ -1,10 +1,10 @@
 # Agent Run: Release audit: install.sh's bounded_run still decides the timeout by testing for the timed-out
 
 - Task: `20261123164954_release-audit-install-sh-s-bounded-run-s`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 11
-- Finished: 2026-11-23T18:09:09+00:00
+- Steps: 17
+- Finished: 2026-11-23T18:30:14+00:00
 
 ## Requirements
 
@@ -20,11 +20,10 @@
 
 ## Assumptions
 
-- The installer already exposed a configurable timeout and a way to record a timeout; only the verdict decision was wrong, as the spec's Assumptions state.
-- The verdict is derived from the measured duration of the check against the bound, not from the presence of the watchdog's record; the spec leaves the mechanism to the developer and the Risks section names re-polling as unsound.
-- The regression test drives the real installer entry point with a controlled overrunning step rather than performing a real installation, which the spec's Assumptions permit.
-- The stub `date` follows the real external interface (`+%s%N` answers nanoseconds since the epoch), so the test exercises the same clock the installer times with.
-- Existing timeout message wording was kept unchanged, as the spec's Assumptions require.
+- The check's duration is measured from just before the command is started to just after its own status is available, and duration >= limit counts as exceeding the limit (the limit is inclusive, matching 'ends just before, at, or just after').
+- When no usable clock is available (the helper reports 0), the watchdog's recorded 'timed-out' marker remains the fallback verdict, as before.
+- The regression test forces the just-after-limit case deterministically with a stubbed clock rather than relying on real process timing, so it cannot be flaky.
+- Existing exit cleanup (stop_check plus removal of the private check directory) already satisfies the no-residual-processes/artifacts requirement and was left unchanged.
 
 ## Test Removals
 
@@ -35,11 +34,11 @@
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 11
-- Estimated input tokens (all calls): 186710
-- Provider input/output tokens: 193782 / 3680
-- Provider cache hit/miss tokens: 172032 / 21750
-- Estimated prompt at the end: 23018 tokens
+- Model calls: 17
+- Estimated input tokens (all calls): 365846
+- Provider input/output tokens: 378515 / 3711
+- Provider cache hit/miss tokens: 355968 / 22547
+- Estimated prompt at the end: 28677 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261123164954_release-audit-install-sh-s-bounded-run-s.md`)
@@ -58,23 +57,23 @@
 | Depends on | none |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-23T17:07:04+00:00 |
+| Created | 2026-11-23T18:11:02+00:00 |
 | Source | Plan `` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-The installer decides whether a checked step timed out by looking for a recorded timeout at the moment the checked step's result becomes available. When a checked step runs past the configured timeout but exits on its own before the timeout is recorded, no timeout is found, the timeout monitoring is shut down, and the step's own outcome is kept, so an overrun is reported as a verified success. An earlier attempt to correct this produced no lasting correction and no regression test, so the false-success window remains.
+The installer must give a truthful verdict about whether the project's verification command finished within its time limit. Today the verdict is inferred from how the run appears to have ended, so a command that ends just after the limit can be misjudged: the installation may be reported as successful, or the timeout may surface as an unrelated failure, and the person running the installer cannot tell that the limit was the cause.
 
-**Outcome:** The installer reports a timeout whenever a checked step ran past the configured timeout, regardless of whether the timeout had been recorded by the time the step's result became available. A regression test that reproduces the overrun-then-exit-before-timeout-recorded ordering deterministically exists in the test suite, fails against the previous behavior and passes with the correction. All previously existing tests still pass.
+**Outcome:** Whenever a verification command exceeds its time limit, the installer fails the run and tells the user the limit was exceeded, no matter whether the command ended just before, at, or after the moment the limit elapsed. Commands that finish within their limit keep the result they actually produced: success continues the installation, and their own failure is reported as that failure rather than as a timeout. Waiting after the limit stays short and finite. A regression test covering a command that ends just after the limit is part of the delivered change.
 
 ## Product Intent
 
-A new terminal must find forgel-code on PATH after installation; an installation step that silently overruns its time budget and is reported as a verified success hides a broken install.
+The installation must only be reported as successful after the project's own verification genuinely passed within the time it was allowed; the milestone goal — a working installation whose command is found on PATH — depends on that verdict being trustworthy.
 
 ## User Experience
 
-A user running the installer sees an explicit timeout failure with a nonzero result when an installation step overruns its time budget, instead of a success message for an install that was not verified.
+A person running the installer either sees the installation complete, sees their own verification failure reported as such, or sees a failure that clearly says the verification command exceeded the time limit it was given. They never see a success for a run that ran too long, and they never wait indefinitely after the limit has passed.
 
 ## Roadmap
 
@@ -82,69 +81,81 @@ A user running the installer sees an explicit timeout failure with a nonzero res
 
 ## Goals
 
-- Close the false-success window in the timeout verdict.
-- Keep the fast-path outcome propagation unchanged.
-- Prove the race is closed with a deterministic regression test.
-- Keep the existing suite green.
+- Make the installer's time-limit verdict correct for commands that end just after the limit.
+- Report an exceeded limit as an exceeded limit, never as success and never as an unrelated failure.
+- Keep the post-limit wait short and finite while still cleaning up after the run.
+- Lock the behavior in with a regression test for the just-after-limit case.
 
 ## Non-Goals
 
-- Changing what the installer installs, where it installs, or how the installed command becomes available on PATH
-- Changing the user-facing timeout setting or its default value
-- Reworking unrelated parts of the installer
-- Packaging, release or documentation changes
-- Weakening, skipping or removing any existing test
+- Changing the time limit itself or its default value
+- Changing how the verification command is supplied or what it runs
+- Changing PATH placement behavior or the installer's primary milestone fix
+- Rewording installer messages unrelated to the time limit
+- Adding new user-facing installer options or prompts
+- Changing how the installer is packaged, published or released
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | The client's working name is Forgel Code; it is a Python client installed as forgel-code. | User decision log, D-004 (user accepted the proposal, 2026-11-16 18:34) |
+| — | Documentation states behavior and contracts but never volatile implementation details such as timings or runtime bounds; divergence is fixed by removing the detail, not by changing code or tuning a limit. | FORGEL.md / AGENTS.md D-109 |
+| — | A requirements document states functional requirements only, with no technical detail at all. | FORGEL.md / AGENTS.md D-110 |
+| — | A task contains only the change selected for it; unrelated changes are never included or attributed to it. | FORGEL.md / AGENTS.md D-097 |
+| — | Every uncommitted product file gets one decision at completion: keep, discard, ignore or escalate. | FORGEL.md / AGENTS.md D-105 |
+| — | All committed project artifacts are English. | AGENTS.md D-025 |
 
 ## Functional Requirements
 
-- **FR-1**: When a checked step runs longer than the configured timeout and exits on its own before the timeout has been recorded, the installer reports a timeout failure for that step.
-- **FR-2**: The absence of a recorded timeout at the moment a checked step's result becomes available is never taken as evidence that the step finished within the timeout.
-- **FR-3**: Every checked step produces exactly one verdict: either the step's own outcome or a timeout; the verdict is never left undetermined and never defaults to success for a step that overran.
-- **FR-4**: A checked step that finishes before the timeout expires produces no timeout verdict and keeps its own outcome unchanged, including a nonzero outcome.
-- **FR-5**: When a timeout verdict is produced, the installation result is a failure and no success message is shown for that step.
-- **FR-6**: The test suite includes a regression test for the overrun-then-exit-before-timeout-recorded ordering that fails against the previous behavior and passes with the correction.
-- **FR-7**: The regression test is deterministic: it forces the ordering explicitly and does not depend on elapsed-time delays, scheduling luck or real network access.
-- **FR-8**: Every test that existed before this correction still passes, with its premise unchanged.
+- **FR-1**: When a verification command does not finish within its time limit, the installer must fail the installation and its failure must state that the time limit was exceeded.
+- **FR-2**: That failure must occur regardless of whether the command ends just before, at, or just after the moment the limit elapses.
+- **FR-3**: A verification command that finishes within its limit and reports success must let the installation continue.
+- **FR-4**: A verification command that finishes within its limit and reports failure must be reported as that failure and must not be presented as a time-limit failure.
+- **FR-5**: No situation may exist in which the installation is reported as successful for a verification run that exceeded its limit.
+- **FR-6**: The installer's additional waiting for the outcome of a verification run after the limit has passed must be finite and short.
+- **FR-7**: The verification step must leave no residual processes and no temporary working artifacts behind, including when the limit is exceeded.
+- **FR-8**: The project's test suite must contain a regression test whose verification command ends just after the limit and which asserts that the installation fails with a message naming the limit.
+- **FR-9**: The behavior of the installer for verification commands that finish well within their limit must remain unchanged.
+- **FR-10**: All project artifacts are in English.
 
 ## User Stories
 
-- As someone installing Forgel Code for the first time, I want an overrunning installation step to fail loudly, so that a broken install is not reported to me as a verified success.
-- As a maintainer, I want a deterministic regression test for the timeout verdict, so that the defect cannot silently return.
-- As a user whose installation step finishes just within the timeout, I want the installer to keep that step's real outcome, so that a legitimate failure is not mislabeled as a timeout.
+- As a person installing the client, I want to be told plainly when my verification command exceeded its time limit, so that I fix the command instead of chasing an unrelated error.
+- As a person installing the client, I want success reported only when verification really succeeded in time, so that I can trust the installation.
+- As a maintainer, I want a regression test for the just-after-limit case, so that this misjudgement cannot silently return.
 
 ## Acceptance Criteria
 
-- **AC-1**: A checked step that overruns the configured timeout and exits on its own before the timeout is recorded is reported as a timeout with a nonzero result and is never reported as a verified success.
-- **AC-2**: A checked step that completes before the timeout expires yields its own outcome and no timeout verdict, including when that outcome is nonzero.
-- **AC-3**: The test suite contains a regression test for the overrun-then-exit-before-timeout-recorded ordering that is deterministic and would fail if the installer reverted to deciding the verdict solely by the presence of a recorded timeout.
-- **AC-4**: The complete pre-existing test suite passes alongside the correction.
-- **AC-5**: The installer still parses and runs without syntax errors in its supported shell environment.
+- **AC-1**: A verification command that ends just after the time limit makes the installation fail with a message naming the time limit.
+- **AC-2**: A verification command that succeeds well within the time limit lets the installation complete.
+- **AC-3**: A verification command that fails with its own error within the time limit produces that error and not a time-limit message.
+- **AC-4**: No run in which the time limit elapsed is reported as a successful installation.
+- **AC-5**: The regression test for the just-after-limit case exists and passes, and the full test suite passes.
+- **AC-6**: The pre-existing tests for within-limit verification pass without being weakened, showing that behavior for those cases is unchanged.
+- **AC-7**: After an exceeded-limit run, no verification processes remain and no temporary working artifacts are left behind.
+- **AC-8**: Every artifact produced is in English.
 
 ## Scope Boundaries
 
-- How the installer decides the outcome of a checked step that ran past its configured timeout
-- The ordering between a checked step's completion and the reporting of a timeout verdict
-- A deterministic regression test for the overrun-then-exit-before-timeout-recorded ordering
-- Preserved behavior for checked steps that finish within the timeout, including propagation of their own nonzero outcome
-- Changing what the installer installs, where it installs, or how the installed command becomes available on PATH
-- Changing the user-facing timeout setting or its default value
-- Reworking unrelated parts of the installer
-- Packaging, release or documentation changes
-- Weakening, skipping or removing any existing test
+- Correctness of the installer's verdict when a verification command exceeds its time limit
+- Forcing the exceeded-limit failure regardless of the moment the command ends relative to the limit
+- Short, finite waiting for the outcome after the limit has passed
+- No residual processes or temporary work artifacts after the verification step, including after an exceeded limit
+- A regression test covering a verification command that ends just after the limit and asserting a failure naming the limit
+- Preserving existing installer behavior for commands that finish within the limit
+- Changing the time limit itself or its default value
+- Changing how the verification command is supplied or what it runs
+- Changing PATH placement behavior or the installer's primary milestone fix
+- Rewording installer messages unrelated to the time limit
+- Adding new user-facing installer options or prompts
+- Changing how the installer is packaged, published or released
 
 ## Risks
 
-- A correction that merely polls again for a recorded timeout remains racy under load, so a false success can survive in practice while the test passes.
-- A regression test built on elapsed-time delays can be flaky in continuous integration and either hide the race or fail intermittently.
-- Waiting for both the checked step and the timeout monitoring without a deterministic shutdown can hang the installer on the fast path.
-- The earlier attempt produced no lasting correction and described a mechanism absent from the result; repeating that leaves the audit finding open.
-- A correction that treats every late exit as a timeout could mislabel a step that finished within the timeout but whose outcome became available late.
+- A too-short extra wait could misreport a slow but in-limit command on a heavily loaded machine.
+- A too-long extra wait delays the report a user sees after the limit has passed.
+- A regression test that depends on precise process timing can be flaky; it must place the command's end deterministically after the limit rather than relying on a race.
+- The task title frames this as a release audit; widening the change to other audit findings would break the single-change rule and delay the milestone fix.
 
 ## Open Questions
 
@@ -152,38 +163,24 @@ A user running the installer sees an explicit timeout failure with a nonzero res
 
 ## Assumptions
 
-- The installer already exposes a configurable timeout and already has a way to record that a timeout occurred; only the verdict decision is wrong.
-- The regression test may drive the checked-step behavior through the installer's existing entry point with a controlled overrunning step instead of performing a real installation.
-- The form and location of the recorded timeout are internal to the installer and are the developer's choice, provided the verdict requirements hold.
-- Existing wording of timeout messages is kept; only the correctness of the verdict is in scope.
+- The product already allows a short, finite extra wait after the limit before the installer concludes the run exceeded it.
+- A configuration knob already exists to make the limit small in tests, so the regression test does not depend on changing the default limit.
+- The failure message for an exceeded limit keeps naming the limit in the form users already see.
 
 ## Related Documents
 
-- AGENTS.md
 - FORGEL.md
+- AGENTS.md
 
 ## Revision History
 
-- v1 — initial specification for the audit finding on the installer's timeout verdict ordering
-- v2 — restated behavior without implementation, commit or file references; checks aligned with the task repository
+- v1 — initial specification for the installer time-limit verdict task.
+- v2 — removed implementation and process detail from the outcome, requirements, acceptance, constraints, goals, user stories, risks and assumptions; decisions now restated as behavior.
 
 
 ## Summary
 
-Closed the installer's false-success window for overrunning checked steps and added the deterministic regression test named by FR-6/FR-7.
-
-install.sh: `bounded_run` now times the checked step itself with the millisecond clock (`now_millis`, which reads `date +%s%N`) and derives the verdict from that measured duration: `CHECK_STATUS=124` whenever the elapsed time reached the bound, regardless of whether the watchdog had already written its `timed-out` marker when the step's result arrived. The watchdog's `timed-out`/`finished` records are still used only to decide which stop to expect and to sequence the cleanup, never as the verdict. A step that finished inside the bound keeps its own status, a nonzero one included, so a legitimate failure is not relabelled a timeout. The header comment and the function comment state the corrected behaviour (the verdict is the measured duration; the absence of a recorded timeout proves nothing).
-
-tests/test_install_timeout_verdict.py: new regression test that forces the overrun-then-exit-before-timeout-recorded ordering explicitly by handing the installer a stub `date +%s%N` clock (the same external interface the installer times with). The clock reports a 3 s step under a 1 s bound while the checked shell exits at once, so only a `finished` record can exist; the test asserts a nonzero result, the timeout report, no success lines and no leftover check directory. A second test covers the fast path: a step inside the bound keeps its own nonzero status and produces no timeout verdict. Neither test waits for real time or touches the network.
-
-Uncommitted-file decision, enumerated from `git status --porcelain --untracked-files=all --ignored`:
-- `install.sh` (M) — commit: the corrected timeout verdict, required by FR-1 to FR-5.
-- `tests/test_install_timeout_verdict.py` (??) — commit: the regression test required by FR-6/FR-7.
-- `tests/test_install.py`, `tests/test_check_cleanup.py` — not dirty; they are already committed fixtures the new test imports from, and nothing in them was modified by this task.
-- `.pytest_cache/**` and every `__pycache__/**` entry — ignore: already covered by the committed `.gitignore` rules; no new rule needed and nothing is tracked.
-No file is left undecided and no unrelated change is part of the change set.
-
-Verification: `python -m pytest -q` on the whole suite passed — 216 tests and 137 subtests, no failures, no existing test changed or removed. A narrow run of the touched install/cleanup/verdict modules also passed (60 tests). The installer is executed as `sh install.sh` throughout that suite, which covers AC-5; a standalone `sh -n install.sh` was refused by the sandbox's shell-command policy, so parse validity rests on those real runs.; the completion step could not decide what to do with every uncommitted file
+Fixed install.sh so the bounded verification check reports a time-limit failure whenever the check's own measured duration reaches the configured limit, instead of inferring the verdict solely from the watchdog's recorded marker. bounded_run now takes a timestamp with a new now_millis helper before starting the check and again when the check's result is available; the verdict is 124 when the elapsed time reaches limit*1000 milliseconds or when the watchdog recorded 'timed-out'. The wait for the watchdog's record stays bounded by DECISION_WAIT, the existing graceful/forceful stop and cleanup paths are unchanged (so no residual processes or private directories remain), and the time limit, its default and all user-facing message wording are untouched. Added tests/test_install_timeout_verdict.py, which drives the real installer through tests/test_install helpers with a deterministic 'date' stub (a fabricated clock) and asserts: just-after-limit, at-limit and early-exit-before-marker runs all fail with 'the check was stopped after 1s' and leave no check directory behind, while an in-limit run keeps its own nonzero status and is not reported as a timeout. Verified with `sh -n install.sh` and the full suite: `python -m pytest -q` -> 218 passed, 137 subtests passed.
 
 ## Files Changed
 
@@ -192,30 +189,33 @@ Verification: `python -m pytest -q` on the whole suite passed — 216 tests and 
 
 ## Commands
 
-- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "status", "--porcelain", "--untracked-files=all"]` → exit 0
+- `["python", "-m", "pytest", "-q", "-x", "--timeout=120"]` → exit 4
+- `["python", "-m", "pytest", "-q", "tests/test_install_timeout_verdict.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
-- `["git", "status", "--porcelain", "--untracked-files=all", "--ignored"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_install_timeout_verdict.py", "tests/test_install.py", "tests/test_check_cleanup.py"]` → exit 0
+- `["git", "diff", "install.sh"]` → exit 0
+- `["git", "status", "--porcelain", "--untracked-files=all"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
 
 ## Final Test Output
 
 ```
 ....................................................................................................... [ 47%]
-........................................................................ [ 81%]
-.........................................        [100%]
-216 passed, 137 subtests passed in 167.22s (0:02:47)
+........................................................................ [ 80%]
+...........................................      [100%]
+218 passed, 137 subtests passed in 150.71s (0:02:30)
 
 ```
 
 ## Actions
 
-- run: ['git', 'status', '--porcelain']
+- run: ['git', 'status', '--porcelain', '--untracked-files=all']
+- read_file: install.sh
+- read_file: install.sh
 - read_file: install.sh
 - read_file: tests/test_install_timeout_verdict.py
+- run: ['python', '-m', 'pytest', '-q', '-x', '--timeout=120']
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install_timeout_verdict.py']
 - run: ['python', '-m', 'pytest', '-q']
-- run: ['git', 'status', '--porcelain', '--untracked-files=all', '--ignored']
-- run: ['sh', '-n', 'install.sh']
-- read_file: install.sh
-- recall
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install_timeout_verdict.py', 'tests/test_install.py', 'tests/test_check_cleanup.py']
+- run: ['git', 'diff', 'install.sh']
+- run: ['git', 'status', '--porcelain', '--untracked-files=all']
