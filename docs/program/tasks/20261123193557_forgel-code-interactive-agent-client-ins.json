@@ -266,10 +266,10 @@
     }
   ],
   "language": "ru",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-23T19:35:57+00:00",
-  "started_at": "2026-11-23T20:18:20+00:00",
-  "finished_at": "2026-11-23T20:19:48+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "model call failed: model endpoint returned an empty answer",
     "files_changed": [],
@@ -304,11 +304,12 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.md",
+    "attempts": 1,
+    "last_failure": {
       "kind": "infrastructure",
       "message": "model call failed: model endpoint returned an empty answer"
-    },
-    "report": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.md"
+    }
   },
   "request": "docs/program/requests/20261123193557152385_forgel-code-interactive-agent-client-instead-of-a-command-wr.md"
 }
