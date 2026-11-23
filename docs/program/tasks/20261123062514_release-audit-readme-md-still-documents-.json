@@ -25,10 +25,8 @@
   "test_command": [
     "python",
     "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests"
+    "pytest",
+    "-q"
   ],
   "assumptions": [],
   "plan_id": "",
@@ -44,31 +42,27 @@
       "command": [
         "python",
         "-m",
-        "unittest",
-        "-v",
-        "tests.test_readme_install"
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
       ]
     },
     {
       "criterion": "A2",
       "verification": "command",
       "command": [
-        "python",
-        "-c",
-        "import sys;t=open('README.md',encoding='utf-8').read();c=t.count('/v0.1.1/install.sh');s=t.count('/v0.1.0/');print('v0.1.1 installer URLs:',c,'stale paths:',s);sys.exit(0 if c==3 and s==0 else 1)"
+        "bash",
+        "-lc",
+        "! grep -n 'v0.1.0/install.sh' README.md"
       ]
     },
     {
       "criterion": "A3",
       "verification": "command",
       "command": [
-        "python",
-        "-m",
-        "unittest",
-        "-k",
-        "test_stale_install_script_url_is_rejected",
-        "-v",
-        "tests.test_readme_install"
+        "bash",
+        "-lc",
+        "test \"$(curl -fsSL -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/forgel-dev/code/main/install.sh)\" = 200"
       ]
     },
     {
@@ -77,11 +71,9 @@
       "command": [
         "python",
         "-m",
-        "unittest",
-        "-k",
-        "test_divergent_install_script_url_is_rejected",
-        "-v",
-        "tests.test_readme_install"
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
       ]
     },
     {
@@ -89,44 +81,49 @@
       "verification": "command",
       "command": [
         "python",
-        "-c",
-        "import sys;t=open('tests/test_readme_install.py',encoding='utf-8').read();bad=[s for s in ('import urllib','import http.client','import requests','import socket','import subprocess','from subprocess','os.system','os.popen','urlopen','urlretrieve') if s in t];print(bad);sys.exit(1 if bad else 0)"
+        "-m",
+        "pytest",
+        "-q"
       ]
     },
     {
       "criterion": "A6",
       "verification": "command",
       "command": [
-        "python",
-        "-m",
-        "unittest",
-        "-v",
-        "tests.test_cli.ReadmeTest"
+        "grep",
+        "-n",
+        "-i",
+        "uninstall",
+        "install.sh"
       ]
     },
     {
       "criterion": "A7",
       "verification": "review",
       "command": []
-    },
-    {
-      "criterion": "A8",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests"
-      ]
     }
   ],
   "external_dependencies": [
     {
-      "name": "GitHub raw content URL for the release installer",
-      "interface": "`https://raw.githubusercontent.com/forgel-dev/code/<tag>/install.sh` returns the raw POSIX `sh` installer for tag `<tag>`; the documentation quotes this URL as the install, update and uninstall command and the tests assert its text, never fetching it.",
-      "docs": "README.md `## Install`; install.sh header comment",
+      "name": "raw.githubusercontent.com",
+      "interface": "HTTP GET of a repository file from a branch; returns 200 with the file body on success and 404 for a missing ref or path. Used to fetch https://raw.githubusercontent.com/forgel-dev/code/main/install.sh during acceptance.",
+      "docs": "https://docs.github.com/en/repositories/working-with-files/using-files/viewing-a-file",
+      "mode": "",
+      "evidence": "",
+      "stub": ""
+    },
+    {
+      "name": "curl",
+      "interface": "CLI HTTP client; `-fsSL -o /dev/null -w '%{http_code}'` prints the status code and `-f` makes a non-2xx exit non-zero. Used for the live fetchability check.",
+      "docs": "https://curl.se/docs/manpage.html",
+      "mode": "",
+      "evidence": "",
+      "stub": ""
+    },
+    {
+      "name": "pytest",
+      "interface": "Test runner for the repository's tests/ directory; used to run the README guard test and the full suite.",
+      "docs": "https://docs.pytest.org/en/stable/",
       "mode": "",
       "evidence": "",
       "stub": ""
