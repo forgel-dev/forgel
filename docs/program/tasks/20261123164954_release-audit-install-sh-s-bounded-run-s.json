@@ -97,29 +97,67 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "failed",
   "created_at": "2026-11-23T16:49:54+00:00",
-  "started_at": "2026-11-23T17:16:54+00:00",
-  "finished_at": "",
+  "started_at": "2026-11-23T17:29:43+00:00",
+  "finished_at": "2026-11-23T17:50:41+00:00",
   "result": {
-    "summary": "model call failed: model endpoint returned an empty answer",
-    "files_changed": [],
-    "commands": [],
-    "test_output": "",
-    "assumptions": [],
+    "summary": "Closed the installer's false-success window for overrunning checked steps and added the deterministic regression test.\n\ninstall.sh: `bounded_run` now times the checked step itself with the millisecond clock (`now_millis`) and derives the verdict from that measured duration: `CHECK_STATUS=124` whenever the elapsed time reached the bound, regardless of whether the watchdog had already written its `timed-out` marker when the step's result arrived. The watchdog's `timed-out`/`finished` records are still used, but only to decide which stop to expect and to sequence the cleanup, never as the verdict; a step that finished inside the bound keeps its own status, a nonzero one included. The header comment states the corrected behavior (the verdict is the measured duration, the absence of a recorded timeout proves nothing).\n\ntests/test_install_timeout_verdict.py: new regression test that forces the overrun-then-exit-before-timeout-recorded ordering explicitly by handing the installer a stub `date +%s%N` clock (the same external interface the installer times with): the clock reports a 3 s step under a 1 s bound while the checked shell exits at once, so only a `finished` record can exist. The test asserts the installation fails with the timeout message and no success message, and that the check directory is released. A second test forces a zero-length step with a nonzero (3) exit and asserts the step's own outcome is reported with no timeout verdict.\n\nVerification: full suite `python -m pytest -q` -> 216 passed, 137 subtests passed (the whole pre-existing suite, including the installer, packaging and README install tests, which execute install.sh end to end and therefore exercise the shell parsing/execution path). The shell-syntax-only command was refused by the sandbox runner, so parsing is covered by those existing tests that run the script instead.; the completion step could not decide what to do with every uncommitted file",
+    "files_changed": [
+      "install.sh",
+      "tests/test_install_timeout_verdict.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install_timeout_verdict.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "....................................................................................................... [ 47%]\n........................................................................ [ 81%]\n.........................................        [100%]\n216 passed, 137 subtests passed in 164.94s (0:02:44)\n",
+    "assumptions": [
+      "The regression test drives checked-step behavior through the installer's existing entry point with a controlled overrunning login-shell stub rather than performing a real installation, as the specification's Assumptions allow.",
+      "The clock override is done by placing a stub `date` first on PATH, since `date +%s%N` is the external interface `now_millis` reads; the stub answers a timestamp and advances by a fixed step per call, so no elapsed-time delay, scheduling luck or network access affects the verdict.",
+      "The form and location of the watchdog's timeout record were kept as-is; only the verdict decision changed.",
+      "Existing timeout/failure message wording was preserved."
+    ],
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 1,
-      "compactions": 0,
-      "model_calls": 8,
-      "estimated_input_tokens": 235680,
-      "provider_input_tokens": 199764,
-      "provider_output_tokens": 31567,
-      "cache_hit_tokens": 163456,
-      "cache_miss_tokens": 36308,
-      "estimated_tokens": 43755,
-      "state": ""
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 23,
+      "estimated_input_tokens": 979928,
+      "provider_input_tokens": 1031136,
+      "provider_output_tokens": 195994,
+      "cache_hit_tokens": 932352,
+      "cache_miss_tokens": 98784,
+      "estimated_tokens": 24200,
+      "state": "docs/program/agent/20261123164954_release-audit-install-sh-s-bounded-run-s.state.md"
     },
     "test_removals": [],
     "spec_issues": [],
@@ -135,6 +173,13 @@
     "last_failure": {
       "kind": "infrastructure",
       "message": "model call failed: model endpoint returned an empty answer"
+    },
+    "resume_count": 1,
+    "resumed_at": "2026-11-23T17:29:43+00:00",
+    "last_summary": "model call failed: model endpoint returned an empty answer",
+    "failure": {
+      "kind": "agent",
+      "message": "Closed the installer's false-success window for overrunning checked steps and added the deterministic regression test.\n\ninstall.sh: `bounded_run` now times the checked step itself with the millisecond clock (`now_millis`) and derives the verdict from that measured duration: `CHECK_STATUS=124` whenever the elapsed time reached the bound, regardless of whether the watchdog had already written its `timed-out` marker when the step's result arrived. The watchdog's `timed-out`/`finished` records are still used, but only to decide which stop to expect and to sequence the cleanup, never as the verdict; a step that finished inside the bound keeps its own status, a nonzero one included. The header comment states the corrected behavior (the verdict is the measured duration, the absence of a recorded timeout proves nothing).\n\ntests/test_install_timeout_verdict.py: new regression test that forces the overrun-then-exit-before-timeout-recorded ordering explicitly by handing the installer a stub `date +%s%N` clock (the same external interface the installer times with): the clock reports a 3 s step under a 1 s bound while the checked shell exits at once, so only a `finished` record can exist. The test asserts the installation fails with the timeout message and no success message, and that the check directory is released. A second test forces a zero-length step with a nonzero (3) exit and asserts the step's own outcome is reported with no timeout verdict.\n\nVerification: full suite `python -m pytest -q` -> 216 passed, 137 subtests passed (the whole pre-existing suite, including the installer, packaging and README install tests, which execute install.sh end to end and therefore exercise the shell parsing/execution path). The shell-syntax-only command was refused by the sandbox runner, so parsing is covered by those existing tests that run the script instead.; the completion step could not decide what to do with every uncommitted file"
     }
   },
   "request": ""
