@@ -925,25 +925,22 @@ class CodingAgent:
         attributed = "\n".join(f"- {item}" for item in changed) or "- none"
         candidates_text = "\n".join(f"- {item}" for item in candidates) or "- none"
         # The completion step decides the same question the reviewer judges:
-        # what belongs to this task. It receives the reviewer's whole context
-        # plus the uncommitted candidates and their diffs.
+        # what belongs to this task. It reasons with the reviewer's own system
+        # prompt and context, plus the uncommitted candidates and their diffs,
+        # so the two decisions cannot diverge.
+        from .task_review import SYSTEM_PROMPT as REVIEW_SYSTEM_PROMPT
         from .task_review import _review_prompt
 
         review_context = _review_prompt(layout, task)
         messages = [
             ModelMessage(
                 "system",
-                "You are finishing a coding task. You see the same facts the "
-                "reviewer sees, plus the uncommitted product files. Decide "
-                "this task's coherent change set: include every candidate that "
-                "implements its requirements, even when the specification's "
-                "affected-files list omitted it, and exclude files that are "
-                "unrelated or belong to parallel work. The affected-files list "
-                "can be incomplete; the requirements and acceptance are the "
-                "authority. Return exactly one JSON object: "
-                '{"files": ["relative/path"]} with only paths from the '
-                "candidate list. An empty list means no candidate belongs to "
-                "this task.",
+                REVIEW_SYSTEM_PROMPT
+                + "\n\nAlso return a `files` array in the same JSON object: "
+                "the candidate paths that belong to this task's change set. "
+                "Include a candidate the specification omitted when the task "
+                "needs it; exclude unrelated or parallel work. Use only "
+                "paths from the candidate list.",
             ),
             ModelMessage(
                 "user",
