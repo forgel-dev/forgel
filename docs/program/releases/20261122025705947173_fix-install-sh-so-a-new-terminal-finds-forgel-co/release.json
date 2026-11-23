@@ -6,7 +6,7 @@
   "release_class": "patch",
   "plan_id": "",
   "created_at": "2026-11-22T02:57:06+00:00",
-  "status": "blocked",
+  "status": "running",
   "tasks": [
     "20261122025705_fix-install-sh-so-a-new-terminal-finds-f",
     "20261122034544_release-audit-uninstall-no-longer-honors",
@@ -32,8 +32,8 @@
     }
   },
   "audit": {
-    "rounds": 1,
-    "verdict": "fail",
+    "rounds": 0,
+    "verdict": "",
     "summary": "The change set largely implements the requested shell detection, profile selection, fresh-shell verification, uninstall cleanup, documentation and tests, but it cannot be published as-is. The recorded full-suite run for the final task timed out after 120 seconds and never completed, so the required full-suite acceptance is unverified. The block-removal logic also treats an unmatched start marker as an open block and deletes every following line, risking loss of unrelated profile content.",
     "report": "docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md",
     "task_ids": [
@@ -62,6 +62,6 @@
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": "the release has a failed or cancelled task",
+  "detail": "",
   "next_at": ""
 }
