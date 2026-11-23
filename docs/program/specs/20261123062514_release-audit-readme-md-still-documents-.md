@@ -12,23 +12,23 @@
 | Depends on | none |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-23T12:16:52+00:00 |
+| Created | 2026-11-23T12:28:35+00:00 |
 | Source | Plan `` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-README.md documents the install and uninstall commands with the release installer path, but the release reference it carries and the assertions in the test suite disagree: the README's `## Install`, `### Update` and `### Uninstall` blocks must name the current release installer, and the suite contains a pinned-URL expectation in `tests/test_cli.py` (`ReadmeTest::test_readme_has_a_pinned_install_command`) that was written against the old tag. A stale or split release reference in the documented one-command install path is a documentation defect: the reader is sent to an installer for a release that no longer carries the described behaviour, and the suite cannot be green while the two files pin different tags.
+The release audit found the README's install documentation out of step with the installer release it is meant to describe, and nothing in the suite stops a stale install-script URL from coming back. The reader is told to fetch an installer ref that no longer matches the script that carries the login-shell PATH block, and the update and uninstall commands are documented separately, so any one of them can drift without the suite noticing. The task must leave the three documented commands pinned to the intended release installer and add a documentation guard that fails when any of them, or an older install-script path, reappears.
 
-**Outcome:** README.md names exactly one install-script URL — the release installer of the current release — and the install, update and uninstall commands all use it character for character. The test suite fails whenever any of those three documented commands names a different tag or a different repository path, and `python -m pytest -q` passes on the whole suite because the pinned-URL assertion in `tests/test_cli.py` now expects the same release as the README guard in `tests/test_readme_install.py`.
+**Outcome:** README.md documents exactly one install-script URL, from the intended release tag v0.1.1, shared by the install, update and uninstall commands; no `/v0.1.0/install.sh` string remains anywhere in the file; and `tests/test_readme_install.py` carries assertions for all three commands so that changing any one of them, or reintroducing the stale path, makes the suite fail. The full test suite still passes without network access, and the fact that the v0.1.1 tag is not yet published is recorded as a known gap rather than fixed by creating or moving a tag or by falling back to v0.1.0.
 
 ## Product Intent
 
-Forgel Code installs with one command copied from README.md (D-004: the client is installed as `forgel-code` from the public `forgel-dev/code` repository, D-005). The documented command must be the installer of the release that actually ships the login-shell PATH handling the README promises, so a reader who copies the line gets the product the text describes.
+The product offers exactly one one-command install path: fetch install.sh and pipe it into a shell. That script owns the login-shell detection, the single marked PATH block in the profile the login shell reads, and the fresh-shell verification that makes a new terminal find `forgel-code`. Documentation that points at an older installer advertises behaviour the old script does not have, so the documented command must name the installer release that implements it, and a suite guard must keep it that way.
 
 ## User Experience
 
-A reader copies the install line from README.md, pipes it into `sh`, and gets the release installer that writes the marked PATH block and verifies it in a fresh login shell. The same line, with `-s -- --uninstall`, removes it again. Nobody who follows the README lands on an installer from the previous release.
+A new user copies one command from the README, runs it, and gets the installer that writes the marked PATH block into the profile their login shell reads and then verifies in a fresh login shell that `forgel-code` resolves. The update section repeats that same command, and the uninstall section runs the same script with `--uninstall`, so all three documented actions operate on the same installer. Nobody is sent to an older installer that lacks the PATH handling the prose promises.
 
 ## Roadmap
 
@@ -36,142 +36,108 @@ A reader copies the install line from README.md, pipes it into `sh`, and gets th
 
 ## Goals
 
-- The one-command install path a reader copies from README.md is the release installer of the current release.
-- The install, update and uninstall commands in README.md name one and the same release installer URL.
-- A stale release tag in any of those three documented commands fails the suite instead of shipping.
-- The whole suite is green again, with no test weakened to get there.
+- README.md's install, update and uninstall commands all use the intended release installer at v0.1.1.
+- No stale `/v0.1.0/install.sh` path remains in README.md.
+- A documentation guard asserts all three commands and the absence of the stale path, and demonstrably fails when either is violated.
+- The suite passes offline and no release tag is created, moved or promised.
 
 ## Non-Goals
 
-- Changing `install.sh` behaviour, its PATH handling, its fresh-shell check or its options.
-- Changing `install.sh`'s own header comment or its `FORGEL_CODE_TAG` default.
-- Assigning, promising, creating or moving a release tag; the release train owns the version (FORGEL.md `## Releases`).
-- Adding a versionless `latest` installer URL or teaching `install.sh` to serve one.
-- Changing any other README section, the client code, the packaging backend or the other installer tests.
-- Weakening any test: the pinned URL is moved to the current tag, not relaxed to a looser substring check.
+- Creating, moving or promising any release tag; the runtime release train owns tags and versions
+- Falling back to the newest published tag (v0.1.0) because v0.1.1 is unpublished
+- Changing install.sh behaviour, its default `FORGEL_CODE_TAG`, or the install command in its header comment
+- Changing the engine, the client code, packaging or the build backend
+- Requiring any network access, HTTP status assertion or live URL fetch as part of the test suite
+- Asserting that `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh` returns HTTP 200 before the release train publishes the tag
+- Adding documentation beyond the install, update and uninstall commands this task corrects
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | D-004: The client's working name is Forgel Code. It is a Python client installed as `forgel-code`, follows a Pareto 20/80 scope and imports nothing from the engine. | User decisions log, D-004 (accepted proposal, 2026-11-16 18:34) |
-| — | D-005: The second repository is public and lives in the same organization as the first (`forgel-dev`). | User decisions log, D-005 (user, 2026-11-16 21:14) |
+| — | D-004: the client is installed as `forgel-code`, a Python client with a Pareto 20/80 scope that imports nothing from the engine. | User accepted the proposal, 2026-11-16 18:34 |
+| — | D-002: the client is a thin UI over the engine's parameterized commands; model access, sandbox, QA, review and release approval stay in the engine. | User, 2026-11-16 18:31 |
+| — | D-006: work proceeds engine commands first, then the client repository and console move, then removal of the replaced chat mode. | User accepted the proposal, 2026-11-16 18:34 |
 
 ## Functional Requirements
 
-- **FR-1**: R1: README.md contains no install-script URL whose ref is `v0.1.0`; the string `/v0.1.0/install.sh` does not appear anywhere in the file.
-- **FR-2**: R2: The first command in the first code block of the `## Install` section is exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh`.
-- **FR-3**: R3: The install command in the `### Update` section is byte-identical to the command in R2.
-- **FR-4**: R4: The command in the `### Uninstall` section is exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh -s -- --uninstall`.
-- **FR-5**: R5: Every install-script URL anywhere in README.md is the same URL as R2 — one owner/repository path, one ref, one script path.
-- **FR-6**: R6: The test suite contains a guard, in `tests/test_readme_install.py`, that reads README.md from the repository root and fails when any of the commands in R2, R3 and R4 names a different tag or a different install-script URL; it is part of the default suite invocation and needs no environment variable or marker.
-- **FR-7**: R7: The pinned install-URL assertion in `tests/test_cli.py` (`ReadmeTest::test_readme_has_a_pinned_install_command`) expects the same release tag as R2 instead of `v0.1.0`, and still asserts a pinned install command rather than a weaker substring presence check.
-- **FR-8**: R8: `python -m pytest -q` exits 0 on the whole suite.
-- **FR-9**: R9: CHANGELOG.md gains one English entry inside the `## [Unreleased]` section describing the documentation fix and the guard.
-- **FR-10**: R10: `tests/test_readme_install.py` builds all three expected commands from a single release-tag constant, so the next release moves one constant instead of three literals.
+- **FR-1**: R1: README.md's install section leads with exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh`.
+- **FR-2**: R2: README.md's update section shows exactly that same command, character for character.
+- **FR-3**: R3: README.md's uninstall section shows exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh -s -- --uninstall`.
+- **FR-4**: R4: README.md contains no occurrence of the string `v0.1.0/install.sh`.
+- **FR-5**: R5 (amended): when the behaviour the README describes exists only on the default branch because the intended tag is not yet published, the README keeps the intended release tag v0.1.1 and the unpublished tag is recorded as a known gap in the task report; substituting an earlier published tag such as v0.1.0 is forbidden.
+- **FR-6**: R6: `tests/test_readme_install.py` pins the intended release tag in one constant and asserts R1, R2 and R3 as full expected command strings, so that changing a URL, a flag or the `| sh` form in any of the three sections makes the module fail.
+- **FR-7**: R7: `tests/test_readme_install.py` asserts R4, so a reintroduced stale install-script path fails the module.
+- **FR-8**: R8: `tests/test_readme_install.py` performs no network I/O: it reads files only, so the guard passes and fails identically offline.
+- **FR-9**: R9 (amended): the suite never asserts an HTTP status for the v0.1.1 installer URL; the post-release publication of that tag is verified by the release train and its audit, not by this test module or by a command check in this task.
+- **FR-10**: R10: the pre-existing documentation guards in `tests/test_readme_install.py` (single install-script URL, no alternative main install path, no editable install, Tests section, prerequisites) keep their current strength and keep passing.
+- **FR-11**: R11: the full suite, `python -m unittest discover -s tests`, passes with no environment variable or marker excluding a test.
+- **FR-12**: R12: the task report records the observed HTTP status of `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh` at commit time and states that a 404 is the expected, recorded known gap until the release train publishes the tag.
 
 ## Technical Requirements
 
-- All committed artifacts are English (AGENTS.md project rule).
-- Never weaken a test to make it pass (repository code AGENTS.md): the `tests/test_cli.py` assertion is moved to the current tag, not deleted or broadened.
-- A published tag is immutable and agents do not assign or rewrite release versions or tags (FORGEL.md `## Releases`, `## Release Rules`); this task only changes which existing release the documentation names.
-- The suite must stay within the 120-second bound the README `## Tests` section states, and must keep running without network access: the installer scenarios install from a local checkout with `PIP_NO_INDEX=1`.
-- The change is one logical commit, English and imperative, with `git commit -s` (project Change Workflow).
-- No tool attribution lines and no session references in the commit.
+- All committed artifacts are English (project rule).
+- Do not weaken an existing test to make the change pass; strengthen the product or the test's premise instead (repository rule).
+- A published tag is immutable; agents do not assign, promise or rewrite release versions or tags (FORGEL.md, AGENTS.md ## Release Rules).
+- No new runtime or test dependency: the suite runs on the standard library (README `## Tests`).
+- No network access in unit tests; the suite must pass offline.
+- Keep the change to one logical documentation fix plus its guard; leave unrelated README prose stable.
+- Commit in English, imperative mood, with `git commit -s`, and without tool attribution lines.
 
 ## User Stories
 
-- As someone installing Forgel Code, I want the README's install line to fetch the current release installer so that I get the login-shell PATH handling the surrounding text describes.
-- As someone removing Forgel Code, I want the README's uninstall line to run the same release installer with `--uninstall` so that the block and the launcher it wrote are both removed.
-- As a maintainer, I want the suite to fail when a documented install command names an older release so that a stale line cannot ship.
+- As a new user, I want the README's install command to fetch the installer that writes the PATH block and verifies it, so that a new terminal finds `forgel-code`.
+- As a maintainer, I want the install, update and uninstall commands guarded by a test, so that a stale installer URL cannot be committed unnoticed.
+- As a release auditor, I want the unpublished-tag gap recorded rather than patched, so that no agent creates or moves a release tag.
 
 ## Tests
 
-- A1: `python -c import pathlib,sys
-text=pathlib.Path('README.md').read_text(encoding='utf-8')
-stale='/v0.1.0/install.sh'
-print('stale occurrences:', text.count(stale))
-sys.exit(1 if stale in text else 0)`
-- A2: `python -m pytest -q tests/test_readme_install.py`
-- A3: `python -c import pathlib,subprocess,sys
-p=pathlib.Path('README.md')
-orig=p.read_text(encoding='utf-8')
-files=['tests/test_readme_install.py','tests/test_cli.py']
-run=lambda: subprocess.run([sys.executable,'-m','pytest','-q',*files],capture_output=True).returncode
-base=run()
-lines=orig.splitlines(True)
-hits=[i for i,l in enumerate(lines) if 'forgel-dev/code/v0.1.1/install.sh' in l]
-caught=[]
-try:
-    for i in hits:
-        mutated=list(lines)
-        mutated[i]=mutated[i].replace('/v0.1.1/','/v0.1.0/')
-        p.write_text(''.join(mutated),encoding='utf-8')
-        caught.append(run()!=0)
-finally:
-    p.write_text(orig,encoding='utf-8')
-print('baseline=%d documented_lines=%d caught=%s' % (base,len(hits),caught))
-sys.exit(0 if base==0 and len(hits)>=3 and all(caught) else 1)`
-- A4: `python -c import pathlib,sys
-text=pathlib.Path('tests/test_cli.py').read_text(encoding='utf-8')
-stale='v0.1.0/install.sh'
-print('stale pin occurrences:', text.count(stale))
-sys.exit(1 if stale in text else 0)`
-- A5: `python -m pytest -q`
-- A6: `python -c import pathlib,sys
-text=pathlib.Path('CHANGELOG.md').read_text(encoding='utf-8')
-start=text.find('## [Unreleased]')
-end=text.find('## [0.1.0]')
-ok=start!=-1 and end!=-1 and start<end
-section=text[start:end] if ok else ''
-found='README' in section and ('install' in section.lower())
-print('unreleased entry mentions README install docs:', found)
-sys.exit(0 if found else 1)`
-- A7: `python -c import sys,urllib.error,urllib.request
-url='https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh'
-try:
-    with urllib.request.urlopen(url,timeout=15) as response:
-        print('resolved', response.status)
-        sys.exit(0 if response.status==200 else 1)
-except urllib.error.HTTPError as error:
-    print('http error', error.code)
-    sys.exit(1)
-except OSError as error:
-    print('network unavailable, url not verified:', error)
-    sys.exit(0)`
-- Command: `python -m pytest -q`
+- A1: `python -m unittest discover -s tests -p test_readme_install.py`
+- A2: `python -m unittest discover -s tests -p test_readme_install.py`
+- A3: `python -m unittest discover -s tests -p test_readme_install.py`
+- A4: `sh -c ! grep -F 'v0.1.0/install.sh' README.md`
+- A5: `sh -c set -eu; d=$(mktemp -d); mkdir "$d/tests"; cp tests/test_readme_install.py "$d/tests/"; sed 's#code/v0\.1\.1/install\.sh#code/v0.1.0/install.sh#g' README.md > "$d/README.md"; grep -F 'v0.1.0/install.sh' "$d/README.md" >/dev/null; if python -m unittest discover -s "$d/tests" -p 'test_readme_install.py' >"$d/out" 2>&1; then echo 'guard did not fail on a stale README' >&2; cat "$d/out" >&2; exit 1; fi; grep -q 'stale install script' "$d/out"; echo ok`
+- A6: `sh -c ! grep -nE 'urllib|http\.client|requests|socket|curl' tests/test_readme_install.py`
+- A7: `sh -c curl -fsS -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | grep -qx 200`
+- A8: `python -m unittest discover -s tests`
+- A9: review
+- Command: `python -m unittest discover -s tests`
 
 ## Acceptance Criteria
 
-- **AC-1**: A1: `grep`-style inspection of README.md finds no `/v0.1.0/install.sh`.
-- **AC-2**: A2: The `## Install` install command, the `### Update` command and the `### Uninstall` command are the release installer of the tag `v0.1.1`, and the uninstall command is the install command plus ` | sh -s -- --uninstall`.
-- **AC-3**: A3: `tests/test_readme_install.py` exits 1 when the tag in the `## Install` command is changed to another tag, when the tag in the `### Update` command is changed, and when the tag in the `### Uninstall` command is changed.
-- **AC-4**: A4: `tests/test_cli.py` contains no install-script expectation naming `v0.1.0`.
-- **AC-5**: A5: `python -m pytest -q` exits 0 on the whole suite.
-- **AC-6**: A6: The `## [Unreleased]` section of CHANGELOG.md carries an entry that names the README install/uninstall documentation and its guard.
-- **AC-7**: A7: When the network is reachable, `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh` answers HTTP 200.
+- **AC-1**: A1: README.md's install section leads with `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh`, and the guard module passes on the committed file.
+- **AC-2**: A2: README.md's update section shows exactly the same command as the install section, and the guard module asserts it.
+- **AC-3**: A3: README.md's uninstall section shows exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh -s -- --uninstall`, and the guard module asserts it.
+- **AC-4**: A4: `grep -F 'v0.1.0/install.sh' README.md` finds nothing.
+- **AC-5**: A5: The guard bites — on a temporary copy of README.md in which `code/v0.1.1/install.sh` is replaced by `code/v0.1.0/install.sh`, the guard module fails for both the install and the uninstall command.
+- **AC-6**: A6: `tests/test_readme_install.py` contains no network client import or fetch, so it needs no network.
+- **AC-7**: A7: The URL form the README uses is real: the same host answers 200 for the published `main` ref of `install.sh`.
+- **AC-8**: A8: The full suite, `python -m unittest discover -s tests`, passes.
+- **AC-9**: A9: The task report records the status of the v0.1.1 installer URL at commit time and that its publication is a known gap owned by the release train.
 
 ## Scope Boundaries
 
-- README.md: the `## Install` install command, the `### Update` install command and the `### Uninstall` command are brought to the current release installer, with no other release tag left anywhere in the file's install-script URLs.
-- tests/test_readme_install.py: the README guard keeps (or gains) an assertion that the install, update and uninstall commands are the release installer, built from one release-tag constant.
-- tests/test_cli.py: the pinned install-URL assertion that still names the old tag is updated to the same release tag.
-- CHANGELOG.md: one English entry under `## [Unreleased]` for the documentation fix and its guard.
-- Changing `install.sh` behaviour, its PATH handling, its fresh-shell check or its options.
-- Changing `install.sh`'s own header comment or its `FORGEL_CODE_TAG` default.
-- Assigning, promising, creating or moving a release tag; the release train owns the version (FORGEL.md `## Releases`).
-- Adding a versionless `latest` installer URL or teaching `install.sh` to serve one.
-- Changing any other README section, the client code, the packaging backend or the other installer tests.
-- Weakening any test: the pinned URL is moved to the current tag, not relaxed to a looser substring check.
+- README.md: the install command, the update command and the uninstall command all name the release installer at the intended tag v0.1.1
+- README.md: no occurrence of the stale install-script path `/v0.1.0/install.sh`
+- README.md: the prose around those commands stays consistent with a single install-script URL shared by install, update and uninstall
+- tests/test_readme_install.py: explicit assertions that the install command, the update command and the uninstall command each equal the release installer form
+- tests/test_readme_install.py: an assertion that the stale v0.1.0 install-script path is absent
+- Recording, in the task report, that the v0.1.1 tag is not yet published and that the documented URL therefore answers 404 until the release train publishes it
+- Creating, moving or promising any release tag; the runtime release train owns tags and versions
+- Falling back to the newest published tag (v0.1.0) because v0.1.1 is unpublished
+- Changing install.sh behaviour, its default `FORGEL_CODE_TAG`, or the install command in its header comment
+- Changing the engine, the client code, packaging or the build backend
+- Requiring any network access, HTTP status assertion or live URL fetch as part of the test suite
+- Asserting that `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh` returns HTTP 200 before the release train publishes the tag
+- Adding documentation beyond the install, update and uninstall commands this task corrects
 
 ## Risks
 
-- If tag `v0.1.1` is not yet published, the documented URL answers 404 until the release train publishes it; this task must not create or move the tag (FORGEL.md `## Releases`), so the pin can only be corrected by a later change or by the release itself.
-- If the release train selects a different next version, the pin in README.md and in both test files moves with that release; a hardcoded literal kept in three places would drift — hence R10.
-- The previous specification was rejected because it forbade touching `tests/test_cli.py` while requiring the `v0.1.0` string to leave README.md; that contradiction is resolved here by putting `tests/test_cli.py` in scope (R7). Any implementation that leaves the signed expectation in place cannot reach A5.
-- `install.sh`'s own header comment and its `FORGEL_CODE_TAG` default still name `v0.1.0`; the README fix does not address them, and they are a separate follow-up rather than a hidden part of this task.
-- Requiring the guard to fail for each of the three documented commands (A3) can surface an over-broad or under-broad guard: a guard that only reads the `## Install` section passes A2 but fails A3.
-- A7 needs outbound network access; on an offline machine the check reports the URL as unresolved and passes, so A7 never turns an offline build red, but it also proves nothing there.
+- The v0.1.1 tag is not published, so the documented URL answers 404 today; anyone who copies the command before the release train publishes the tag gets an error. This is recorded as a known gap, not fixed here, because tags belong to the release train.
+- install.sh itself still defaults `FORGEL_CODE_TAG` to `v0.1.0` and its header comment shows the `v0.1.0` URL; once v0.1.1 is published, the documented command fetches a script that would install the v0.1.0 source. That inconsistency is outside this task's scope and needs a follow-up audit item.
+- A guard that only greps for one stale string can pass while a differently worded stale path survives; the negative control is what proves the guard bites on the install and uninstall commands.
+- The negative control copies README.md and the guard module into a temporary directory; if the module later depends on another repository file, that copy approach breaks and must be updated with it.
+- The `main` ref used by A7 can legitimately change, so that check proves the URL form, not the file's content; it must never be read as proof that v0.1.1 exists.
 
 ## Open Questions
 
@@ -180,33 +146,28 @@ except OSError as error:
 ## Affected Files
 
 - README.md
-- tests/test_cli.py
 - tests/test_readme_install.py
-- CHANGELOG.md
 
 ## Assumptions
 
-- The current release installer tag is `v0.1.1`, as already encoded by `tests/test_readme_install.py` (`INSTALL_TAG = "v0.1.1"`); keeping it is the minimal change that makes README and suite agree, and the suite itself rejects a versionless URL (`TAG_RE` requires exactly one tag per URL).
-- `tests/test_cli.py` holds the stale expectation in `ReadmeTest::test_readme_has_a_pinned_install_command`; the exact line number is not asserted here, only that no `v0.1.0` install-script expectation survives in that file.
-- A CHANGELOG entry is repo convention for a user-visible documentation change; `## [Unreleased]` already exists and is where it belongs.
-- The network reachability of the documented URL is not a suite dependency: the suite is offline by design, so A7 is verified as a separate, network-optional check.
+- The intended release tag is v0.1.1: it is what the README's install, update and uninstall commands and its pinned-revision test line already name, and what the guard module's `INSTALL_TAG` pins.
+- A pinned tag URL is preferred over a versionless `latest` URL, because the existing guard compares the tag exactly and a versionless URL would weaken that comparison.
+- The guard module may be extended in place; its existing helper functions are reusable and need no rewrite.
+- The pre-existing README strings already carry v0.1.1 in the install, update and uninstall commands as read at specification time; the deliverable therefore centres on the guard plus any residual stale string, and the coder verifies rather than assumes the README state.
+- The v0.1.1 tag's publication is a separate event owned by the release train; this task neither waits for it nor blocks on it.
 
 ## Related Documents
 
-- README.md
-- tests/test_readme_install.py
-- tests/test_cli.py
-- install.sh
+- AGENTS.md
+- FORGEL.md
 - CHANGELOG.md
 - releases/0.1.0/release.md
-- FORGEL.md
-- AGENTS.md
 
 ## Revision History
 
-- v1 — initial specification; it forbade changes to tests/test_cli.py while requiring the v0.1.0 install-script string to leave README.md, which made R1 and the green-suite acceptance criterion unsatisfiable.
-- v2 — concrete defect fixed: tests/test_cli.py is now in scope (R7), the pinned-URL assertion there is required to move to the same release tag as the README guard, an acceptance criterion (A4) and a command check cover the absence of the old pin, and a risk records the resolved contradiction. The guard-tightening requirement survives unchanged (R6, A3).
+- v1: initial specification.
+- v2: removed the unsatisfiable network requirement for HTTP 200 on the unpublished v0.1.1 installer URL and removed the fallback to the newest published tag; the unreleased tag is now recorded as a known gap (R5, R9, R12, A9), matching the Risks section and FORGEL.md ## Releases.
 
 ## External Dependencies
 
-- **GitHub raw content URL** — mode `unknown`; interface: `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>` serves the file at `<path>` from the commit or tag `<ref>` of the public repository `<owner>/<repo>`; the README pipes such a URL into `sh`. The task uses `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh`.; docs: GitHub Docs: raw.githubusercontent.com raw content URL form (no local copy in the repository); the repository itself is `forgel-dev/code` per D-005.; evidence: —
+- **GitHub raw content host (raw.githubusercontent.com)** — mode `unknown`; interface: `GET https://raw.githubusercontent.com/forgel-dev/code/<ref>/install.sh` returns 200 with the script body for a published ref (`main`, `v0.1.0`) and 404 for an unpublished ref (`v0.1.1`). The README only embeds this URL as text; the implementation must not fetch it in tests.; docs: https://docs.github.com/en/repositories/working-with-files/using-files/getting-permanent-links-to-files; evidence: —

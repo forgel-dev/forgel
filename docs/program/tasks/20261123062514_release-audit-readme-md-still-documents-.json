@@ -25,8 +25,10 @@
   "test_command": [
     "python",
     "-m",
-    "pytest",
-    "-q"
+    "unittest",
+    "discover",
+    "-s",
+    "tests"
   ],
   "assumptions": [],
   "plan_id": "",
@@ -41,8 +43,13 @@
       "verification": "command",
       "command": [
         "python",
-        "-c",
-        "import pathlib,sys\ntext=pathlib.Path('README.md').read_text(encoding='utf-8')\nstale='/v0.1.0/install.sh'\nprint('stale occurrences:', text.count(stale))\nsys.exit(1 if stale in text else 0)"
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_readme_install.py"
       ]
     },
     {
@@ -51,9 +58,12 @@
       "command": [
         "python",
         "-m",
-        "pytest",
-        "-q",
-        "tests/test_readme_install.py"
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_readme_install.py"
       ]
     },
     {
@@ -61,53 +71,74 @@
       "verification": "command",
       "command": [
         "python",
-        "-c",
-        "import pathlib,subprocess,sys\np=pathlib.Path('README.md')\norig=p.read_text(encoding='utf-8')\nfiles=['tests/test_readme_install.py','tests/test_cli.py']\nrun=lambda: subprocess.run([sys.executable,'-m','pytest','-q',*files],capture_output=True).returncode\nbase=run()\nlines=orig.splitlines(True)\nhits=[i for i,l in enumerate(lines) if 'forgel-dev/code/v0.1.1/install.sh' in l]\ncaught=[]\ntry:\n    for i in hits:\n        mutated=list(lines)\n        mutated[i]=mutated[i].replace('/v0.1.1/','/v0.1.0/')\n        p.write_text(''.join(mutated),encoding='utf-8')\n        caught.append(run()!=0)\nfinally:\n    p.write_text(orig,encoding='utf-8')\nprint('baseline=%d documented_lines=%d caught=%s' % (base,len(hits),caught))\nsys.exit(0 if base==0 and len(hits)>=3 and all(caught) else 1)"
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_readme_install.py"
       ]
     },
     {
       "criterion": "A4",
       "verification": "command",
       "command": [
-        "python",
+        "sh",
         "-c",
-        "import pathlib,sys\ntext=pathlib.Path('tests/test_cli.py').read_text(encoding='utf-8')\nstale='v0.1.0/install.sh'\nprint('stale pin occurrences:', text.count(stale))\nsys.exit(1 if stale in text else 0)"
+        "! grep -F 'v0.1.0/install.sh' README.md"
       ]
     },
     {
       "criterion": "A5",
       "verification": "command",
       "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
+        "sh",
+        "-c",
+        "set -eu; d=$(mktemp -d); mkdir \"$d/tests\"; cp tests/test_readme_install.py \"$d/tests/\"; sed 's#code/v0\\.1\\.1/install\\.sh#code/v0.1.0/install.sh#g' README.md > \"$d/README.md\"; grep -F 'v0.1.0/install.sh' \"$d/README.md\" >/dev/null; if python -m unittest discover -s \"$d/tests\" -p 'test_readme_install.py' >\"$d/out\" 2>&1; then echo 'guard did not fail on a stale README' >&2; cat \"$d/out\" >&2; exit 1; fi; grep -q 'stale install script' \"$d/out\"; echo ok"
       ]
     },
     {
       "criterion": "A6",
       "verification": "command",
       "command": [
-        "python",
+        "sh",
         "-c",
-        "import pathlib,sys\ntext=pathlib.Path('CHANGELOG.md').read_text(encoding='utf-8')\nstart=text.find('## [Unreleased]')\nend=text.find('## [0.1.0]')\nok=start!=-1 and end!=-1 and start<end\nsection=text[start:end] if ok else ''\nfound='README' in section and ('install' in section.lower())\nprint('unreleased entry mentions README install docs:', found)\nsys.exit(0 if found else 1)"
+        "! grep -nE 'urllib|http\\.client|requests|socket|curl' tests/test_readme_install.py"
       ]
     },
     {
       "criterion": "A7",
       "verification": "command",
       "command": [
-        "python",
+        "sh",
         "-c",
-        "import sys,urllib.error,urllib.request\nurl='https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh'\ntry:\n    with urllib.request.urlopen(url,timeout=15) as response:\n        print('resolved', response.status)\n        sys.exit(0 if response.status==200 else 1)\nexcept urllib.error.HTTPError as error:\n    print('http error', error.code)\n    sys.exit(1)\nexcept OSError as error:\n    print('network unavailable, url not verified:', error)\n    sys.exit(0)"
+        "curl -fsS -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | grep -qx 200"
       ]
+    },
+    {
+      "criterion": "A8",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "A9",
+      "verification": "review",
+      "command": []
     }
   ],
   "external_dependencies": [
     {
-      "name": "GitHub raw content URL",
-      "interface": "`https://raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>` serves the file at `<path>` from the commit or tag `<ref>` of the public repository `<owner>/<repo>`; the README pipes such a URL into `sh`. The task uses `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh`.",
-      "docs": "GitHub Docs: raw.githubusercontent.com raw content URL form (no local copy in the repository); the repository itself is `forgel-dev/code` per D-005.",
+      "name": "GitHub raw content host (raw.githubusercontent.com)",
+      "interface": "`GET https://raw.githubusercontent.com/forgel-dev/code/<ref>/install.sh` returns 200 with the script body for a published ref (`main`, `v0.1.0`) and 404 for an unpublished ref (`v0.1.1`). The README only embeds this URL as text; the implementation must not fetch it in tests.",
+      "docs": "https://docs.github.com/en/repositories/working-with-files/using-files/getting-permanent-links-to-files",
       "mode": "",
       "evidence": "",
       "stub": ""
