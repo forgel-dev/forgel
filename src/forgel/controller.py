@@ -41,6 +41,8 @@ MAX_MARKUP_RETRIES = 3
 
 OPERATIONS = (
     "retry",
+    "task_retry",
+    "task_restart",
     "rework",
     "respec",
     "accept",
@@ -84,6 +86,9 @@ gets the work to its result; do not follow a fixed retry ladder.
 
 Operations:
 - retry: run the same work again unchanged;
+- task_retry: queue the task again unchanged;
+- task_restart: rewrite the specification from the task request and run it
+  again from the beginning;
 - rework: send the work back with concrete feedback;
 - respec: the specification is the defect; rewrite it for the given issue;
 - accept: the work meets the requirements; accept it;
@@ -126,6 +131,8 @@ you need is not shown.
 
 TASK_ACTIONS = {
     "retry",
+    "task_retry",
+    "task_restart",
     "set_limit",
     "rework",
     "respec",
@@ -137,7 +144,15 @@ TASK_ACTIONS = {
     "block",
     "ask_user",
 }
-RELEASE_ACTIONS = {"audit", "fix", "block", "ask_user", "set_limit"}
+RELEASE_ACTIONS = {
+    "audit",
+    "fix",
+    "block",
+    "ask_user",
+    "set_limit",
+    "task_retry",
+    "task_restart",
+}
 # Any operation the model may choose is mapped to a stage action. Nothing
 # falls through: a tool that does not exist for the stage is its equivalent,
 # not a dead end.
@@ -153,6 +168,8 @@ _TASK_ALIASES = {
 
 def task_action(operation: str) -> str:
     name = str(operation or "").strip().lower()
+    if name in {"task_retry", "task_restart"}:
+        return name
     if name == "set_limit":
         return "set_limit"
     if name in {"retry", "run_task"}:
@@ -164,6 +181,8 @@ def task_action(operation: str) -> str:
 
 def release_action(operation: str) -> str:
     name = str(operation or "").strip().lower()
+    if name in {"task_retry", "task_restart"}:
+        return name
     if name == "set_limit":
         return "set_limit"
     if name in {"release_resume", "release_audit"}:

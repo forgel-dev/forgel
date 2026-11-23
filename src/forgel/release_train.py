@@ -1899,6 +1899,38 @@ def process_releases(
                         f"[release] {release_id}: {limit_name} raised to "
                         f"{value:g}s"
                     )
+                if decision.operation in {"task_retry", "task_restart"}:
+                    from . import runtime_ops
+
+                    try:
+                        text = runtime_ops.run_operation(
+                            settings,
+                            ledger,
+                            project,
+                            decision.operation,
+                            {"task_id": str(stopped[0]["id"])},
+                            client,
+                            log,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log(
+                            f"[release] {release_id}: "
+                            f"{decision.operation}: {exc}"
+                        )
+                        release["status"] = "blocked"
+                        release["detail"] = (
+                            f"{decision.operation} failed: {exc}"
+                        )
+                        save_release(layout, release)
+                        actions.append(f"blocked:{release_id}")
+                        continue
+                    release["status"] = "running"
+                    save_release(layout, release)
+                    actions.append(
+                        f"{decision.operation}:{stopped[0]['id']}"
+                    )
+                    log(f"[release] {release_id}: {text}")
+                    continue
                 task = stopped[0]
                 data = dict(task.get("result") or {})
                 data["last_failure"] = (

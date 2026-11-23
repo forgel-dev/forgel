@@ -350,16 +350,16 @@ def unblock_for_retry(
 def retry_task(
     layout: ProjectLayout, task_id: str
 ) -> dict[str, Any]:
-    """Manually requeue a failed task and release its quarantined dependents."""
+    """Manually requeue a task and release its quarantined dependents.
+
+    Any status can be requeued: a running task that a human or controller
+    wants to run again, a task in review, or a finished one. The task keeps
+    its specification and its result; only the execution counters reset.
+    """
 
     task = get_task(layout, task_id)
     if task is None:
         raise ValueError(f"unknown task {task_id!r}")
-    if task.get("status") not in {"failed", "blocked"}:
-        raise ValueError(
-            "only a failed or blocked task can be retried "
-            f"(status: {task.get('status')})"
-        )
     data = dict(task.get("result") or {})
     if data.get("failure"):
         data["last_failure"] = data["failure"]
@@ -375,6 +375,36 @@ def retry_task(
         started_at="",
         finished_at="",
         result=data,
+    )
+    unblock_for_retry(layout, task_id)
+    return updated
+
+
+def restart_task(
+    layout: ProjectLayout, task_id: str
+) -> dict[str, Any]:
+    """Clear a task's result and put it back to pending, from the beginning.
+
+    The caller rewrites the specification first; this only resets the task
+    state. Any status is accepted, including a running or finished task.
+    """
+
+    task = get_task(layout, task_id)
+    if task is None:
+        raise ValueError(f"unknown task {task_id!r}")
+    previous = dict(task.get("result") or {})
+    updated = update_task(
+        layout,
+        task_id,
+        status="pending",
+        started_at="",
+        finished_at="",
+        result={
+            "manual_restarts": int(
+                previous.get("manual_restarts", 0)
+            )
+            + 1,
+        },
     )
     unblock_for_retry(layout, task_id)
     return updated

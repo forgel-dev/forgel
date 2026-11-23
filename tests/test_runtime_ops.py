@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,12 +10,41 @@ from unittest.mock import patch
 from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
+from forgel.model import ScriptedModelClient
 from forgel.projects import create_project
 from forgel.release_train import save_release
 from forgel.runtime_ops import OPERATIONS, run_operation
-from forgel.tasks import create_task, update_task
+from forgel.tasks import create_task, get_task, update_task
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+RESTART_SPEC = {
+    "problem": "The work is missing.",
+    "outcome": "The work is done.",
+    "scope": ["the work"],
+    "non_goals": [],
+    "requirements": ["The work is done."],
+    "acceptance": ["The work works."],
+    "constraints": [],
+    "assumptions": [],
+    "risks": [],
+    "goals": ["The work exists."],
+    "user_decisions": [],
+    "user_stories": [],
+    "open_questions": [],
+    "related_documents": [],
+    "revision_history": [],
+    "checks": [
+        {
+            "criterion": "The work is correct",
+            "verification": "review",
+            "command": [],
+        }
+    ],
+    "test_command": [],
+    "external_dependencies": [],
+}
 
 
 class RuntimeOpsTest(unittest.TestCase):
@@ -140,6 +170,52 @@ class RuntimeOpsTest(unittest.TestCase):
                 {"release_id": release_id},
             )
         self.assertIn("released", text)
+
+
+    def test_task_retry_accepts_any_status(self) -> None:
+        task = self._task(status="running")
+        text = run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_retry",
+            {"task_id": task["id"]},
+        )
+        self.assertIn("queued", text)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "pending")
+
+    def test_task_restart_rewrites_the_spec_and_starts_over(self) -> None:
+        task = self._task(status="done")
+        client = ScriptedModelClient([json.dumps(RESTART_SPEC)])
+        text = run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_restart",
+            {"task_id": task["id"]},
+            client=client,
+        )
+        self.assertIn("restarted", text)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "pending")
+        self.assertEqual(
+            stored["requirements"], RESTART_SPEC["requirements"]
+        )
+        self.assertEqual(
+            stored["result"].get("manual_restarts"), 1
+        )
+        spec_path = self.layout.artifact(
+            f"docs/program/specs/{task['id']}.md"
+        )
+        self.assertTrue(spec_path.exists())
+        stages = [
+            event["stage"]
+            for event in self.ledger.events(self.project["id"])
+        ]
+        self.assertIn("task_restart", stages)
 
     def test_every_documented_operation_is_unique(self) -> None:
         self.assertEqual(len(OPERATIONS), len(set(OPERATIONS)))

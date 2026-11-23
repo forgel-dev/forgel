@@ -12,7 +12,8 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 from .config import Settings
-from . import limits
+from . import limits, specs, tasks
+from .artifacts import write_text
 from .daemon import handle_failure, run_once
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -23,6 +24,7 @@ from .release_train import (
     list_releases,
     load_release,
     release_tasks,
+    resume_release,
 )
 from .task_qa import run_task_qa
 from .task_review import process_task_result, rerun_review
@@ -32,9 +34,12 @@ Log = Callable[[str], None]
 
 OPERATIONS = (
     "drive",
+    "task_retry",
+    "task_restart",
     "task_process",
     "task_qa",
     "task_review",
+    "release_resume",
     "release_audit",
     "release_finalize",
     "set_limit",
@@ -64,6 +69,82 @@ def _release(
     if not releases:
         raise ValueError("there is no release")
     return releases[-1]
+
+
+def _restart_from_requirements(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    layout: ProjectLayout,
+    task: Mapping[str, Any],
+    client: ModelClient,
+    log: Log,
+) -> str:
+    """Rewrite the specification from the task's own request and start over."""
+
+    task_id = str(task["id"])
+    repo_id = str(task.get("repo_id") or "").strip()
+    depends_on = [str(item) for item in (task.get("depends_on") or [])]
+    intent = {
+        "title": task.get("title") or task_id,
+        "summary": task.get("summary") or task.get("title") or task_id,
+        "repo_id": repo_id,
+        "depends_on": depends_on,
+    }
+    goal = str(task.get("plan_goal") or task.get("title") or "—")
+    notes = ""
+    request = str(task.get("request") or "").strip()
+    if request:
+        try:
+            notes = layout.artifact(request).read_text(encoding="utf-8")
+        except OSError:
+            notes = ""
+    log(f"[restart] {project['id']}: task {task_id}: rewriting spec")
+    spec = specs.write_task_spec(
+        settings, layout, goal, notes, intent, client, log=log
+    )
+    ref = specs.spec_path(task_id)
+    write_text(
+        layout.artifact(ref),
+        specs.render_spec(
+            spec,
+            task_id,
+            str(task.get("plan_id") or ""),
+            repo_id,
+            depends_on,
+        ),
+    )
+    tasks.restart_task(layout, task_id)
+    tasks.update_task(
+        layout,
+        task_id,
+        spec=ref,
+        requirements=list(spec.get("requirements") or []),
+        acceptance=list(spec.get("acceptance") or []),
+        constraints=list(spec.get("constraints") or []),
+        checks=list(spec.get("checks") or []),
+        test_command=list(spec.get("test_command") or []),
+        external_dependencies=list(
+            spec.get("external_dependencies") or []
+        ),
+    )
+    tasks.commit_task(layout, task_id, f"Restart spec {task_id}")
+    ledger.append_event(
+        str(project["id"]),
+        "task_restart",
+        status="completed",
+        payload={
+            "task": task_id,
+            "requirements": list(spec.get("requirements") or []),
+        },
+        artifact_refs=[ref],
+        generation=ledger.current_generation(str(project["id"])),
+    )
+    log(
+        f"[restart] {project['id']}: task {task_id}: specification "
+        f"rewritten; task is pending"
+    )
+    return f"Task {task_id} restarted from its requirements."
 
 
 def run_operation(
@@ -100,6 +181,27 @@ def run_operation(
         if not processed:
             return "The runtime had nothing runnable."
         return "The runtime advanced: " + ", ".join(processed) + "."
+
+    if name == "task_retry":
+        task = _task(layout, str(args.get("task_id") or ""))
+        task_id = str(task["id"])
+        tasks.retry_task(layout, task_id)
+        return f"Task {task_id} is queued again."
+
+    if name == "task_restart":
+        task = _task(layout, str(args.get("task_id") or ""))
+        if client is None:
+            raise ValueError(
+                "no model is configured to rewrite the specification"
+            )
+        return _restart_from_requirements(
+            settings, ledger, project, layout, task, client, log
+        )
+
+    if name == "release_resume":
+        release = _release(layout, str(args.get("release_id") or ""))
+        resume_release(layout, str(release["id"]))
+        return f"Release {release['id']} is running again."
 
     if name in {"task_process", "task_qa", "task_review"}:
         task = _task(layout, str(args.get("task_id") or ""))

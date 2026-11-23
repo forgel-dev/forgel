@@ -85,8 +85,12 @@ the release policy changes.
   documentation file. A documentation task has review-only checks and no test
   command.
 - **A respec issue is binding (D-107):** the rewritten requirements remove
-  the rejected option and stay consistent with the acceptance; the writer decides the remaining details and never leaves an open
-  alternative.
+  the rejected option and stay consistent with the acceptance; the writer
+  decides the remaining details and never leaves an open alternative.
+- **Every runtime operation is directly available (D-108):** drive, task
+  retry/restart/process/qa/review, release resume/audit/finalize and
+  set_limit; a task can be retried or restarted from its requirements in any
+  status.
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

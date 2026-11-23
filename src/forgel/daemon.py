@@ -505,6 +505,24 @@ def _apply_controller_decision(
     from . import controller
 
     operation = str(decision.operation)
+    if operation in {"task_retry", "task_restart"}:
+        from . import runtime_ops
+
+        try:
+            text = runtime_ops.run_operation(
+                settings,
+                ledger,
+                project,
+                operation,
+                {"task_id": task_id},
+                client,
+                log,
+            )
+        except ValueError as exc:
+            log(f"[controller] task {task_id}: {operation}: {exc}")
+            return False
+        log(f"[controller] task {task_id}: {operation}: {text}")
+        return True
     action = controller.task_action(operation)
     if action == "retry":
         data["attempts"] = attempts + 1

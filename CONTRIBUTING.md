@@ -129,6 +129,9 @@ Small fixes (typos, broken links) can go straight to a PR.
 - **A respec issue is binding (D-107):** fix the rejected option in the
   requirements, keep requirements and acceptance consistent, and decide the
   remaining details; never leave an open alternative.
+- **Every runtime operation is directly available (D-108):** no
+  stage-specific allowlist; a task can be retried or restarted from its
+  requirements in any status.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.

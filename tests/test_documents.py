@@ -137,7 +137,8 @@ class ContextTimeFilterTest(unittest.TestCase):
         initialized = initialized_at(self.layout, self.project)
         assert initialized is not None
         self.assertEqual(
-            initialized, parse_time(self.project["created_at"])
+            initialized,
+            parse_time(self.layout.metadata()["created_at"]),
         )
 
     def test_repository_documents_are_read_regardless_of_age(self) -> None:
