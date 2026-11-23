@@ -1,18 +1,33 @@
 {
   "id": "20261123164954_release-audit-install-sh-s-bounded-run-s",
   "title": "Release audit: install.sh's bounded_run still decides the timeout by testing for the timed-out",
-  "spec": "",
+  "spec": "docs/program/specs/20261123164954_release-audit-install-sh-s-bounded-run-s.md",
   "summary": "Make the watchdog write the final decision (timeout marker plus status), have the parent wait for that decision within a small bound derived from VERIFY_GRACE, and force CHECK_STATUS=124 whenever the bound elapsed regardless of the order of the child exit and the marker write. Add and commit the test whose checked shell exits just after FORGEL_CODE_TIMEOUT and assert install.sh fails with a message naming the limit.",
   "requirements": [
-    "install.sh's bounded_run still decides the timeout by testing for the timed-out marker immediately after wait returns for the checked child; when the marker is absent it terminates the watchdog and keeps the child's status. A checked shell that exits after FORGEL_CODE_TIMEOUT but before the watchdog writes the marker is therefore reported as a verified success. That is exactly the defect task 20261123062514_release-audit-bounded-run-does-not-make- was required to fix, but the task has files_changed: [] and its review describes a DECISION_WAIT mechanism that is absent from the final diff; no committed regression test for the race is evidenced."
+    "When a checked step runs longer than the configured timeout and exits on its own before the timeout has been recorded, the installer reports a timeout failure for that step.",
+    "The absence of a recorded timeout at the moment a checked step's result becomes available is never taken as evidence that the step finished within the timeout.",
+    "Every checked step produces exactly one verdict: either the step's own outcome or a timeout; the verdict is never left undetermined and never defaults to success for a step that overran.",
+    "A checked step that finishes before the timeout expires produces no timeout verdict and keeps its own outcome unchanged, including a nonzero outcome.",
+    "When a timeout verdict is produced, the installation result is a failure and no success message is shown for that step.",
+    "The test suite includes a regression test for the overrun-then-exit-before-timeout-recorded ordering that fails against the previous behavior and passes with the correction.",
+    "The regression test is deterministic: it forces the ordering explicitly and does not depend on elapsed-time delays, scheduling luck or real network access.",
+    "Every test that existed before this correction still passes, with its premise unchanged."
   ],
   "acceptance": [
-    "The release audit finding is resolved: install.sh's bounded_run still decides the timeout by testing for the timed-out marker immediately after wait returns for the checked child; when the marker is absent it terminates the watchdog and keeps the child's status. A checked shell that exits after FORGEL_CODE_TIMEOUT but before the watchdog writes the marker is therefore reported as a verified success. That is exactly the defect task 20261123062514_release-audit-bounded-run-does-not-make- was required to fix, but the task has files_changed: [] and its review describes a DECISION_WAIT mechanism that is absent from the final diff; no committed regression test for the race is evidenced.",
-    "Existing tests pass"
+    "A checked step that overruns the configured timeout and exits on its own before the timeout is recorded is reported as a timeout with a nonzero result and is never reported as a verified success.",
+    "A checked step that completes before the timeout expires yields its own outcome and no timeout verdict, including when that outcome is nonzero.",
+    "The test suite contains a regression test for the overrun-then-exit-before-timeout-recorded ordering that is deterministic and would fail if the installer reverted to deciding the verdict solely by the presence of a recorded timeout.",
+    "The complete pre-existing test suite passes alongside the correction.",
+    "The installer still parses and runs without syntax errors in its supported shell environment."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
@@ -20,12 +35,72 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "An overrunning step that exits before the timeout is recorded is reported as a timeout with a nonzero result",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A step completing before the timeout keeps its own outcome and produces no timeout verdict",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A deterministic regression test for the overrun-then-exit-before-timeout-recorded ordering exists and would fail against the previous verdict logic",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The regression test does not rely on elapsed-time delays, scheduling luck or real network access",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The complete pre-existing test suite passes",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The installer still parses without syntax errors",
+      "verification": "command",
+      "command": [
+        "sh",
+        "-n",
+        "install.sh"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX shell",
+      "interface": "Execute the installer and its checked step with the system POSIX shell, e.g. `/bin/sh install.sh`; `bounded_run` depends on POSIX background-job, `wait`, `kill`, and exit-status semantics.",
+      "docs": "Repository `code`, `install.sh`; the script's declared interpreter and POSIX shell behavior.",
+      "mode": "direct",
+      "evidence": "`install.sh` declares `#!/bin/sh` and implements `bounded_run` using POSIX shell process control (`wait`, `kill`, background child/watchdog handling). The concrete local interface is therefore `/bin/sh`, not an external package or service.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-23T16:49:54+00:00",
-  "started_at": "",
+  "started_at": "2026-11-23T17:06:10+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
