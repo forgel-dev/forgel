@@ -7,6 +7,6 @@ These files stayed uncommitted because they are unrelated to the task. The plann
 
 | Path | Reason |
 |---|---|
-| `install.sh` | The bounded fresh-shell check rework (watchdog, dedicated process group, cleanup on every exit path) is a separate task's change set, not part of the README install-URL fix; it must stay uncommitted for the planner. |
-| `tests/test_install.py` | The late/login-shell and withheld-watchdog tests exercise the same separate install.sh rework; they are unrelated to this task and must stay uncommitted. |
-| `tests/test_check_cleanup.py` | Untracked new module asserting the reworked check's process-group cleanup; unrelated to this README task and must remain uncommitted. |
+| `install.sh` | The bounded fresh-shell check rework (watchdog, dedicated process group, cleanup on every exit path) belongs to a separate change set and is unrelated to the README install-URL fix. |
+| `tests/test_install.py` | The late/login-shell and withheld-watchdog tests exercise the separate install.sh rework; unrelated to this task. |
+| `tests/test_check_cleanup.py` | Untracked new module asserting the reworked check's process-group cleanup; part of the separate install.sh task, not this README task. |

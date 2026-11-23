@@ -1,7 +1,7 @@
 # Session State: Release audit: README.md still documents `.../v0.1.0/install.sh` for the install command and fo
 
 - Task: `20261123062514_release-audit-readme-md-still-documents-`
-- Session: 1
+- Session: 2
 - Status: in progress
 
 ## Goal
@@ -38,55 +38,52 @@ truth; re-read files with read_file when needed.
 
 ## Files Changed
 
-- CHANGELOG.md
 - README.md
 - install.sh
 - tests/test_check_cleanup.py
-- tests/test_cli.py
 - tests/test_install.py
+- tests/test_probe_release_url.py
+- tests/test_probe_tags.py
 - tests/test_readme_install.py
 
 ## Actions
 
-- run: ['git', 'status', '--short']
-- run: ['git', 'diff', '--name-only']
-- run: ['git', 'diff', '-U0', '--', 'README.md']
-- run: ['git', 'diff', '-U1', '--', 'tests/test_cli.py', 'CHANGELOG.md']
-- read_file: tests/test_cli.py
-- read_file: tests/test_readme_install.py
-- read_file: README.md
-- read_file: CHANGELOG.md
-- run: ['git', 'diff', '--stat']
-- run: ['git', 'diff', '-U0', '--', 'tests/test_cli.py', 'CHANGELOG.md', 'install.sh', 'tests/test_install.py']
-- run: ['git', 'diff', '-U0', '--', 'install.sh', 'tests/test_install.py']
-- run: ['git', 'diff', '-U0', '--', 'CHANGELOG.md']
-- run: ['git', 'diff', '-U0', '--', 'tests/test_cli.py']
-- run: ['git', 'diff', '-U2', '--', 'tests/test_cli.py']
-- run: ['git', 'diff', '-U3', '--', 'tests/test_cli.py']
-- run: ['git', 'diff', '-U3', '--', 'tests/test_cli.py', 'CHANGELOG.md']
-- run: ['git', 'diff', '--', 'tests/test_cli.py']
-- run: ['git', 'diff']
-- run: ['git', 'status']
+- run: ['git', 'log', '--oneline', '--decorate', '-10']
+- run: ['git', 'for-each-ref', 'refs/tags']
 - recall
+- read_file: README.md
+- recall
+- run: ['curl', '-sS', '-o', '/dev/null', '-w', '%{http_code} v0.1.1\n', 'https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh']
+- recall
+- read_file: tests/test_readme_install.py
+- run: ['git', 'diff', '-U0', '--', 'README.md']
+- run: ['git', 'diff', '-U0', '--', 'tests/test_cli.py']
+- read_file: tests/test_cli.py
+- read_file: CHANGELOG.md
+- run: ['git', 'status', '--short']
+- read_file: README.md
+- run: ['git', 'diff', '-U2', '--', 'README.md', 'tests/test_readme_install.py']
+- read_file: tests/test_cli.py
+- run: ['git', 'log', '--oneline', '--decorate', '-10']
+- recall
+- run: ['git', 'restore', '--source=HEAD^', '--worktree', '--', 'tests/test_cli.py']
+- run: ['git', 'for-each-ref', 'refs/tags']
 
 ## Commands
 
-- `['git', 'diff', '-U0', '--', 'tests/test_cli.py', 'CHANGELOG.md', 'install.sh', 'tests/test_install.py']` -> exit 0
-- `['git', 'diff', '-U0', '--', 'install.sh', 'tests/test_install.py']` -> exit 0
-- `['git', 'diff', '-U0', '--', 'CHANGELOG.md']` -> exit 0
+- `['git', 'status', '--short']` -> exit 0
+- `['git', 'log', '--oneline', '--decorate', '-10']` -> exit 0
+- `['git', 'diff', '-U0', '--', 'README.md']` -> exit 0
 - `['git', 'diff', '-U0', '--', 'tests/test_cli.py']` -> exit 0
-- `['git', 'diff', '-U2', '--', 'tests/test_cli.py']` -> exit 0
-- `['git', 'diff', '-U3', '--', 'tests/test_cli.py']` -> exit 0
-- `['git', 'diff', '-U3', '--', 'tests/test_cli.py', 'CHANGELOG.md']` -> exit 0
-- `['git', 'diff', '--', 'tests/test_cli.py']` -> exit 0
-- `['git', 'diff']` -> exit 0
-- `['git', 'status']` -> exit 0
+- `['git', 'status', '--short']` -> exit 0
+- `['git', 'diff', '-U2', '--', 'README.md', 'tests/test_readme_install.py']` -> exit 0
+- `['git', 'log', '--oneline', '--decorate', '-10']` -> exit 0
 
 ## Recent Observations
 
-- run git diff -> exit 0
-- run git status -> exit 0
 - recall: step 1 [read_file]
+- run git restore '--source=HEAD^' --worktree -- tests/test_cli.py -> exit ?
+- run git for-each-ref refs/tags -> exit ?
 
 ## Next Step
 
