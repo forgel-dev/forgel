@@ -63,11 +63,72 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T16:49:54+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T18:39:19+00:00",
+  "finished_at": "2026-11-23T18:44:30+00:00",
   "result": {
-    "manual_restarts": 1
+    "manual_restarts": 1,
+    "summary": "Documentation-only change that removes the volatile suite runtime figure from the project's documentation while keeping the guidance about how the suite is run and what a run covers behaviourally accurate. README.md `## Tests` now states that a run from a source checkout needs only the Python standard library and no network access, that the single documented command (`python -m unittest discover -s tests`) runs the whole suite with no environment variable, marker or default option leaving a test out, and that the installer situations are covered — a real installation through pip into a temporary home directory with a real detected login shell. The sentence promising the run completes in under 120 seconds (about two minutes) and the following budget claim were deleted; nothing else in the install, options, commands, output, active-project or timeout guidance changed. CHANGELOG.md was edited so the existing Unreleased entry no longer quotes the release audit's two-minute suite bound nor claims the README states a runtime bound, and it gained an entry recording the removal of the runtime figure from the documentation. No product code, installer, client behaviour or test was changed and no automated documentation check was added. Verified by reading the documentation and by running the full suite (`python -m unittest discover -s tests`, 218 tests, all pass) plus the documentation guard test module (34 tests, all pass) to confirm the retained coverage and installer statements still match the project.",
+    "files_changed": [
+      "CHANGELOG.md",
+      "README.md"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_readme_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "test_output": "",
+    "assumptions": [
+      "The README's client `--timeout` default (600 seconds) and the installer's bounded fresh-shell check stay as documented, because they describe product behaviour rather than the suite's completion time.",
+      "The Unreleased CHANGELOG entry from the earlier suite-speed task was reworded instead of deleted, so the history still records the harness sharing and the test-configured bound without quoting a suite runtime or a budget.",
+      "The documentation task needs no new test; verification is review of the text plus the existing suite run, per the repository rule that documentation is verified by review."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 19,
+      "estimated_input_tokens": 712292,
+      "provider_input_tokens": 748710,
+      "provider_output_tokens": 25203,
+      "cache_hit_tokens": 693248,
+      "cache_miss_tokens": 55462,
+      "estimated_tokens": 55882,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "56dbe17da2e9ce2383a210ad116254780c671cb2",
+      "head": "49770a36f238efb7e672b845bdbe361b0b159f1d",
+      "commit": "49770a36f238efb7e672b845bdbe361b0b159f1d",
+      "commits": [
+        "49770a36f238efb7e672b845bdbe361b0b159f1d"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123164954_release-audit-the-suite-runtime-regresse.md"
   }
 }
