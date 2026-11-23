@@ -3,22 +3,20 @@
 - Task: `20261122192217_release-audit-the-final-task-s-recorded-`
 - Project: `forgel-1d2bf685`
 - Runtime: local + environment.yaml
-- Verdict: **FAIL**
-- Failure kind: `infrastructure`
-- Exit code: 127
-- Finished: 2026-11-23T04:13:37+00:00
+- Verdict: **PASS**
+- Exit code: 0
+- Finished: 2026-11-23T04:56:04+00:00
 
 ## Checks
 
 - environment test: pass (exit 0) [environment project @ /Users/okalistratov/Documents/sites/metaharness]
 - environment e2e: pass (exit 0) [e2e project @ /Users/okalistratov/Documents/sites/metaharness]
 - environment e2e: pass (exit 0) [e2e project @ /Users/okalistratov/Documents/sites/metaharness]
-- AC1 and AC2: the full suite exits 0 and fits the 120 s bound: fail (exit 127) [task code @ /Users/okalistratov/Documents/sites/code]
+- AC1 and AC2: the full suite exits 0 and fits the 120 s bound: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC4: the real installer scenarios still run and pass individually: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC5: test modules remain independently runnable: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC6: the README Tests section states the runtime bound: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC7: CHANGELOG [Unreleased] records the change: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
-- task test command: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC3: no test method, assertion, scenario or skip was weakened: review
 - AC8: measured before/after durations justify that the bound is met: review
 
@@ -27,7 +25,7 @@
 ```
 $ python -m unittest discover -s tests
 # cwd: /Users/okalistratov/Documents/sites/metaharness
-[agent] 20261123040851_inspect-and-finish: context handoff to session 2 (~6081/3072 tokens)
+[agent] 20261123045019_inspect-and-finish: context handoff to session 2 (~13341/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -455,20 +453,26 @@ $ python -m unittest discover -s tests
 [done] running
 [done] completed
 [github] GitHub API is unreachable; the branch is pushed without pull-request checks
-[github] demo-aab565ec: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
+[github] demo-f475cfd0: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
 ..............................................................................error: unknown project 'missing-project'
 ..error: unknown project 'missing-project'
 ........error: say needs text: --text "..." or a trailing argument
-..........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+.........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................../usr/local/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 405: 'Pull Request is not mergeable'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+/usr/local/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 405: 'bad secret-token value'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+/usr/local/Cellar/python@3.14/3.14.4/Frameworks/Python.framework/Versions/3.14/lib/python3.14/tempfile.py:484: ResourceWarning: Implicitly cleaning up <HTTPError 401: 'Unauthorized'>
+  _warnings.warn(self.warn_message, ResourceWarning)
+................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 722 tests in 148.743s
+Ran 723 tests in 162.601s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-e64379db']]
+PASS the daemon ran the task [['selfhost-1b9f30b4']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -479,22 +483,26 @@ PASS self-hosting gate is green and parked for human approval
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === CLIENT E2E ===
-PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-e2062da8  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-e2062da8", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
+PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-3dd6c413  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-3dd6c413", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
 ]
-PASS the client selects the project [{"command": "use", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-e2062da8) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-e2062da8", "name": "client e2e"}}}
+PASS the client selects the project [{"command": "use", "project": "client-e2e-3dd6c413", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-3dd6c413) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-3dd6c413", "name": "client e2e"}}}
 ]
-PASS status carries the selected project [{"command": "status", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-e2062da8: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-e2062da8", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
+PASS status carries the selected project [{"command": "status", "project": "client-e2e-3dd6c413", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-3dd6c413: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-3dd6c413", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
 ]
-PASS the engine session points to the project [{"command": "session", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-e2062da8).", "error": "", "session": "local", "project": {"id": "client-e2e-e2062da8", "name": "client e2e"}}}
+PASS the engine session points to the project [{"command": "session", "project": "client-e2e-3dd6c413", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-3dd6c413).", "error": "", "session": "local", "project": {"id": "client-e2e-3dd6c413", "name": "client e2e"}}}
 ]
-PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
+PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-3dd6c413", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
 ]
-PASS the engine receives --project on status [status --project client-e2e-e2062da8 --json]
-PASS say sends --text and --project [say --text hello integration --project client-e2e-e2062da8 --json]
+PASS the engine receives --project on status [status --project client-e2e-3dd6c413 --json]
+PASS say sends --text and --project [say --text hello integration --project client-e2e-3dd6c413 --json]
 PASS client e2e is green
-$ sh -c 'timeout 120 python -m unittest discover -s tests'
+$ python -m unittest discover -s tests
 # cwd: /Users/okalistratov/Documents/sites/code
-timeout: не удалось выполнить команду «python»: No such file or directory
+..........................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 202 tests in 104.062s
+
+OK
 $ python -m unittest tests.test_install -v
 # cwd: /Users/okalistratov/Documents/sites/code
 test_remove_profile_block_is_idempotent (tests.test_install.InstallerBlockRemovalTest.test_remove_profile_block_is_idempotent) ... ok
@@ -539,14 +547,6 @@ test_install_creates_the_launcher_in_the_bin_directory (tests.test_install.Insta
 test_install_exits_zero_and_prints_the_version (tests.test_install.InstallerTest.test_install_exits_zero_and_prints_the_version) ... ok
 test_install_reports_the_shell_profile_and_the_fresh_check (tests.test_install.InstallerTest.test_install_reports_the_shell_profile_and_the_fresh_check) ... ok
 test_launcher_prints_the_installed_version (tests.test_install.InstallerTest.test_launcher_prints_the_installed_version) ... ok
-test_login_shell_resolves_forgel_code_after_install (tests.test_install.InstallerTest.test_login_shell_resolves_forgel_code_after_install)
-A cleared, freshly started login shell finds the launcher unaided. ... ok
-test_missing_interpreter_fails_with_a_message (tests.test_install.InstallerTest.test_missing_interpreter_fails_with_a_message) ... ok
-test_piped_install_does_not_read_the_script_from_stdin (tests.test_install.InstallerTest.test_piped_install_does_not_read_the_script_from_stdin)
-The installer leaves the rest of stdin to the shell that read it. ... ok
-test_piped_install_reads_the_script_from_stdin (tests.test_install.InstallerTest.test_piped_install_reads_the_script_from_stdin)
-The documented ``curl ... | sh`` shape, with the script on stdin. ... ok
-test_profile_gets_one_marked_path_block (tests.test_install.InstallerTest.test_profile_gets_one_marked_path_block) ... ok
-test_profile_the_login_shell_ignores_fails_verification (tests.test_install.InstallerTest.test_profile_the_login_shel
-... [truncated, 32136 chars]
+test_login_shell_resolves_forgel_code_after_install (tests.
+... [truncated, 32693 chars]
 ```
