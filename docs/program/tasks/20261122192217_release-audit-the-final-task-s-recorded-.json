@@ -139,14 +139,14 @@
     }
   ],
   "language": "",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-22T19:22:17+00:00",
-  "started_at": "2026-11-23T04:00:00+00:00",
-  "finished_at": "2026-11-23T04:08:36+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "resume_count": 1,
     "resumed_at": "2026-11-23T00:05:45+00:00",
-    "summary": "Finished the release-audit remediation by completing the README `## Tests` section (the only failing acceptance point, AC6), then re-verified the whole suite.\n\nREADME.md `## Tests` now states both contract points explicitly: the documented command `python -m unittest discover -s tests` \"runs the whole suite — no environment variable, marker or default option leaves a test out\" and \"completes in under 120 seconds (about two minutes)\", and that the budget covers the installer scenarios, which run the real `install.sh` with a real pip install into a temporary home and a real detected login shell. The existing `pip install ...[test]` + `python -m pytest -q` block and the unittest command the README guard tests require are unchanged.\n\nNothing else was touched in this session: `tests/test_install.py` (shared per-scenario-group installation, one read-only checkout copy, bounded-check limit configured below the product default) and the CHANGELOG `[Unreleased]` entry were already in place from the earlier session and were left as-is.\n\nDiagnosis and measurements (R10/AC8), measured before any change:\n- suite did not complete inside the audit bound: `timeout 120` produced partial progress and exit 124; one completed measurement of the pre-change 202 tests took 134.1 s with `tests.test_install` alone at 91.4 s (54 tests); per-test `--durations` plus a timing probe showed the cost was one full checkout copy + offline pip install per installer test, the opt-out install repeated per test in `InstallerOptOutTest`, another copy in `PlainPipInstallTest`, and bounded-check cases waiting the product's default limit.\n\nAfter the change (this session):\n- `python -m unittest discover -s tests` — exit 0, `Ran 202 tests in 84.017s`, `OK`.\n- same command under a 120 s bound (`subprocess.run(..., timeout=120)` with `sys.executable`) — exit 0, `elapsed 80.01s rc=0`, `OK`, so AC2 holds with margin.\n- `python -m unittest tests.test_install` — exit 0, `Ran 54 tests in 52.465s`, `OK`.\n- `python -m unittest tests.test_readme_install tests.test_install tests.test_cli -v` — exit 0, 151 tests, `OK`; the verbose output shows the install, re-install, uninstall, opt-out, byte-stability and fresh-login-shell cases plus the `--uninstall`/bounded-check/watchdog/profile-override cases all running (AC4, AC5, and the README guard suite green against the new text).\n- `python -m pytest -q` — exit 0, `202 passed, 137 subtests passed in 80.48s` (R7: the whole suite, no marker or default option excluding anything).\n- README AC6 check re-read from the file: the `## Tests` body contains \"120 seconds (about two minutes)\" and the whole-suite statement, so `sed -n '/^## Tests/,/^## /p' README.md | grep -Eiq 'minute|120'` matches.\n- CHANGELOG `[Unreleased]` keeps the `### Changed` entry recording the suite change and the README bound (AC7).\n\nNo test method, assertion, fixture check or scenario was removed, skipped, xfailed or relaxed, and no default opt-out, marker or environment variable was added.",
+    "summary": "Finished the release-audit remediation by completing the README `## Tests` section (the only failing acceptance point, AC6), then re-verified the whole suite.\n\nREADME.md `## Tests` now states both contract points explicitly: the documented command `python -m unittest discover -s tests` \"runs the whole suite — no environment variable, marker or default option leaves a test out\" and \"completes in under 120 seconds (about two minutes)\", and that the budget covers the installer scenarios, which run the real `install.sh` with a real pip install into a temporary home and a real detected login shell. The existing `pip install ...[test]` + `python -m pytest -q` block and the unittest command the README guard tests require are unchanged.\n\nNothing else was touched in this session: `tests/test_install.py` (shared per-scenario-group installation, one read-only checkout copy, bounded-check limit configured below the product default) and the CHANGELOG `[Unreleased]` entry were already in place from the earlier session and were left as-is.\n\nDiagnosis and measurements (R10/AC8), measured before any change:\n- suite did not complete inside the audit bound: `timeout 120` produced partial progress and exit 124; one completed measurement of the pre-change 202 tests took 134.1 s with `tests.test_install` alone at 91.4 s (54 tests); per-test `--durations` plus a timing probe showed the cost was one full checkout copy + offline pip install per installer test, the opt-out install repeated per test in `InstallerOptOutTest`, another copy in `PlainPipInstallTest`, and bounded-check cases waiting the product's default limit.\n\nAfter the change (this session):\n- `python -m unittest discover -s tests` — exit 0, `Ran 202 tests in 84.017s`, `OK`.\n- same command under a 120 s bound (`subprocess.run(..., timeout=120)` with `sys.executable`) — exit 0, `elapsed 80.01s rc=0`, `OK`, so AC2 holds with margin.\n- `python -m unittest tests.test_install` — exit 0, `Ran 54 tests in 52.465s`, `OK`.\n- `python -m unittest tests.test_readme_install tests.test_install tests.test_cli -v` — exit 0, 151 tests, `OK`; the verbose output shows the install, re-install, uninstall, opt-out, byte-stability and fresh-login-shell cases plus the `--uninstall`/bounded-check/watchdog/profile-override cases all running (AC4, AC5, and the README guard suite green against the new text).\n- `python -m pytest -q` — exit 0, `202 passed, 137 subtests passed in 80.48s` (R7: the whole suite, no marker or default option excluding anything).\n- README AC6 check re-read from the file: the `## Tests` body contains \"120 seconds (about two minutes)\" and the whole-suite statement, so `sed -n '/^## Tests/,/^## /p' README.md | grep -Eiq 'minute|120'` matches.\n- CHANGELOG `[Unreleased]` keeps the `### Changed` entry recording the suite change and the README bound (AC7).\n\nNo test method, assertion, fixture check or scenario was removed, skipped, xfailed or relaxed, and no default opt-out, marker or environment variable was added.; task QA failed: AC1 and AC2: the full suite exits 0 and fits the 120 s bound [task code @ /Users/okalistratov/Documents/sites/code]: $ sh -c 'timeout 120 python -m unittest discover -s tests' # cwd: /Users/okalistratov/Documents/sites/code timeout: не удалось выполнить команду «python»: No such file or directory",
     "files_changed": [
       "CHANGELOG.md",
       "README.md",
@@ -299,7 +299,7 @@
         },
         {
           "command": "sh -c 'sed -n '\"'\"'/^## Tests/,/^## /p'\"'\"' README.md | grep -Eiq '\"'\"'minute|120'\"'\"''",
-          "exit_code": 1,
+          "exit_code": 0,
           "scope": "task",
           "repo": "code",
           "workdir": "/Users/okalistratov/Documents/sites/code"
@@ -389,13 +389,13 @@
         {
           "criterion": "AC6: the README Tests section states the runtime bound",
           "command": "sh -c 'sed -n '\"'\"'/^## Tests/,/^## /p'\"'\"' README.md | grep -Eiq '\"'\"'minute|120'\"'\"''",
-          "exit_code": 1,
-          "verdict": "fail",
+          "exit_code": 0,
+          "verdict": "pass",
           "scope": "task",
           "repo": "code",
           "workdir": "/Users/okalistratov/Documents/sites/code",
-          "output": "$ sh -c 'sed -n '\"'\"'/^## Tests/,/^## /p'\"'\"' README.md | grep -Eiq '\"'\"'minute|120'\"'\"''\n# cwd: /Users/okalistratov/Documents/sites/code",
-          "failure": "code"
+          "output": "",
+          "failure": ""
         },
         {
           "criterion": "AC7: CHANGELOG [Unreleased] records the change",
@@ -443,7 +443,7 @@
         }
       ],
       "review_required": true,
-      "failure_kind": "code"
+      "failure_kind": "infrastructure"
     },
     "rework_count": 1,
     "feedback": [
@@ -454,11 +454,12 @@
       "For the 120 s bound, run the check with the interpreter path actually in use (e.g. `timeout 120 \"$(command -v python3 || command -v python)\" -m unittest discover -s tests` or the absolute sys.executable) — the earlier exit 127 came from `python` not being on PATH under `sh -c`, not from the suite."
     ],
     "last_failure": {
-      "kind": "qa",
-      "message": "task QA failed: AC6: the README Tests section states the runtime bound [task code @ /Users/okalistratov/Documents/sites/code]",
-      "retryable": false
+      "kind": "infrastructure",
+      "message": "task QA failed: AC1 and AC2: the full suite exits 0 and fits the 120 s bound [task code @ /Users/okalistratov/Documents/sites/code]: $ sh -c 'timeout 120 python -m unittest discover -s tests' # cwd: /Users/okalistratov/Documents/sites/code timeout: не удалось выполнить команду «python»: No such file or directory",
+      "retryable": true
     },
-    "failure": {}
+    "attempts": 1,
+    "retry_after": "2026-11-23T04:14:37+00:00"
   },
   "request": ""
 }

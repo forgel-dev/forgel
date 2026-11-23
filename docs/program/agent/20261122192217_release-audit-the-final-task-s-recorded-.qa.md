@@ -4,9 +4,9 @@
 - Project: `forgel-1d2bf685`
 - Runtime: local + environment.yaml
 - Verdict: **FAIL**
-- Failure kind: `code`
+- Failure kind: `infrastructure`
 - Exit code: 127
-- Finished: 2026-11-23T01:20:35+00:00
+- Finished: 2026-11-23T04:13:37+00:00
 
 ## Checks
 
@@ -16,7 +16,7 @@
 - AC1 and AC2: the full suite exits 0 and fits the 120 s bound: fail (exit 127) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC4: the real installer scenarios still run and pass individually: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC5: test modules remain independently runnable: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
-- AC6: the README Tests section states the runtime bound: fail (exit 1) [task code @ /Users/okalistratov/Documents/sites/code]
+- AC6: the README Tests section states the runtime bound: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC7: CHANGELOG [Unreleased] records the change: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - task test command: pass (exit 0) [task code @ /Users/okalistratov/Documents/sites/code]
 - AC3: no test method, assertion, scenario or skip was weakened: review
@@ -27,7 +27,7 @@
 ```
 $ python -m unittest discover -s tests
 # cwd: /Users/okalistratov/Documents/sites/metaharness
-[agent] 20261123011539_inspect-and-finish: context handoff to session 2 (~6087/3072 tokens)
+[agent] 20261123040851_inspect-and-finish: context handoff to session 2 (~6081/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -455,20 +455,20 @@ $ python -m unittest discover -s tests
 [done] running
 [done] completed
 [github] GitHub API is unreachable; the branch is pushed without pull-request checks
-[github] demo-ef8489e9: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
+[github] demo-aab565ec: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
 ..............................................................................error: unknown project 'missing-project'
 ..error: unknown project 'missing-project'
 ........error: say needs text: --text "..." or a trailing argument
 ..........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 722 tests in 152.808s
+Ran 722 tests in 148.743s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-a466d16c']]
+PASS the daemon ran the task [['selfhost-e64379db']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -479,18 +479,18 @@ PASS self-hosting gate is green and parked for human approval
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === CLIENT E2E ===
-PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-1996bf2d  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-1996bf2d", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
+PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-e2062da8  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-e2062da8", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
 ]
-PASS the client selects the project [{"command": "use", "project": "client-e2e-1996bf2d", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-1996bf2d) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-1996bf2d", "name": "client e2e"}}}
+PASS the client selects the project [{"command": "use", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-e2062da8) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-e2062da8", "name": "client e2e"}}}
 ]
-PASS status carries the selected project [{"command": "status", "project": "client-e2e-1996bf2d", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-1996bf2d: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-1996bf2d", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
+PASS status carries the selected project [{"command": "status", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-e2062da8: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-e2062da8", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
 ]
-PASS the engine session points to the project [{"command": "session", "project": "client-e2e-1996bf2d", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-1996bf2d).", "error": "", "session": "local", "project": {"id": "client-e2e-1996bf2d", "name": "client e2e"}}}
+PASS the engine session points to the project [{"command": "session", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-e2062da8).", "error": "", "session": "local", "project": {"id": "client-e2e-e2062da8", "name": "client e2e"}}}
 ]
-PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-1996bf2d", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
+PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-e2062da8", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
 ]
-PASS the engine receives --project on status [status --project client-e2e-1996bf2d --json]
-PASS say sends --text and --project [say --text hello integration --project client-e2e-1996bf2d --json]
+PASS the engine receives --project on status [status --project client-e2e-e2062da8 --json]
+PASS say sends --text and --project [say --text hello integration --project client-e2e-e2062da8 --json]
 PASS client e2e is green
 $ sh -c 'timeout 120 python -m unittest discover -s tests'
 # cwd: /Users/okalistratov/Documents/sites/code
