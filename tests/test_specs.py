@@ -14,6 +14,7 @@ from forgel.projects import create_project
 from forgel.specs import (
     MAX_SPEC_RETRIES,
     SpecError,
+    documentation_problems,
     implementation_problems,
     write_task_spec,
 )
@@ -231,6 +232,89 @@ class ImplementationDetailTest(unittest.TestCase):
                     "goals": ["The documented install path is current."],
                     "constraints": ["No network access is required."],
                 }
+            ),
+            [],
+        )
+
+
+class DocumentationRuleTest(unittest.TestCase):
+    def test_a_documentation_task_rejects_command_checks_and_tests(
+        self,
+    ) -> None:
+        problems = documentation_problems(
+            {
+                "title": "Update README.md install instructions",
+                "summary": "Documentation fix",
+            },
+            {
+                "problem": "README.md is stale",
+                "outcome": "The documentation is current",
+                "requirements": [
+                    "The documentation names the current release."
+                ],
+                "acceptance": ["A reader sees the current release."],
+                "checks": [
+                    {
+                        "criterion": "A guard test reads the README",
+                        "verification": "command",
+                        "command": [
+                            "python",
+                            "-m",
+                            "pytest",
+                            "tests/test_readme.py",
+                        ],
+                    }
+                ],
+                "test_command": ["python", "-m", "pytest", "tests"],
+            },
+        )
+        self.assertTrue(problems)
+
+    def test_a_documentation_task_with_review_checks_is_clean(self) -> None:
+        self.assertEqual(
+            documentation_problems(
+                {
+                    "title": "Update the documentation",
+                    "summary": "Documentation fix",
+                },
+                {
+                    "problem": "The documentation is stale",
+                    "outcome": "The documentation is current",
+                    "requirements": [
+                        "The documentation names the current release."
+                    ],
+                    "acceptance": ["A reader sees the current release."],
+                    "checks": [
+                        {
+                            "criterion": "The documentation is current",
+                            "verification": "review",
+                            "command": [],
+                        }
+                    ],
+                    "test_command": [],
+                },
+            ),
+            [],
+        )
+
+    def test_a_code_task_with_command_checks_is_clean(self) -> None:
+        self.assertEqual(
+            documentation_problems(
+                {"title": "Add a module", "summary": "Code"},
+                {
+                    "problem": "The module is missing",
+                    "outcome": "The module exists",
+                    "requirements": ["The module exists."],
+                    "acceptance": ["The module works."],
+                    "checks": [
+                        {
+                            "criterion": "The module test passes",
+                            "verification": "command",
+                            "command": ["python", "-m", "unittest"],
+                        }
+                    ],
+                    "test_command": ["python", "-m", "unittest"],
+                },
             ),
             [],
         )

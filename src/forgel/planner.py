@@ -257,6 +257,8 @@ Rules:
   here; put uncertainty and ordering rationale in "notes".
 - Every task must be a single repository change that a coding agent can
   implement, test and commit on its own.
+- A task that only changes documentation is text: do not ask for a test or
+  guard for it; the reviewer reads it.
 - Do not create tasks for production deploys, payments, secrets, data
   destruction or legal decisions.
 - If the project has interacting repositories (a dependency edge), a

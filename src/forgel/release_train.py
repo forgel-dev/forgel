@@ -91,6 +91,9 @@ Check:
 - data migrations, destructive operations and rollback;
 - tests and evidence: a criterion is passed only when its command or review
   evidence is present.
+- documentation is text: judge it by reading. Never propose a test, guard or
+  automated check for a documentation file, and never report the absence of
+  such a test as a defect.
 
 A finding is blocking only when shipping it would break the product, lose or
 leak data, break a contract or leave a required check unverified. Style and

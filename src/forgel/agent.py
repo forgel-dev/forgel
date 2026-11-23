@@ -319,6 +319,8 @@ For a change request:
   file path, code, a tool or provider name, an environment variable, a
   commit/git/worktree step or any other implementation detail into them; a
   verification command belongs in test_command.
+- Never require a test for a documentation change; documentation is verified
+  by review of its text.
 - list the explicit functional requirements and acceptance criteria; do not
   guess unstated features;
 - when the request depends on an external interface (a tool, a service, a

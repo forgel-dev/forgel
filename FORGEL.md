@@ -80,6 +80,13 @@ the release policy changes.
   commit, revert (temporary/debug), ignore (artifact; a .gitignore rule is
   committed), or escalate (unrelated; the planner decides). Nothing is
   silently left or silently committed.
+- **Documentation is text and is verified by review (D-106):** never add,
+  require or accept a test, guard or automated check that reads a
+  documentation file. A documentation task has review-only checks and no test
+  command.
+- **A respec issue is binding (D-107):** the rewritten requirements remove
+  the rejected option and stay consistent with the acceptance; the writer decides the remaining details and never leaves an open
+  alternative.
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

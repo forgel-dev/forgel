@@ -541,6 +541,10 @@ Scope of responsibility:
   unrelated, temporary, debug or generated file that must not be committed?
   A missing needed file and an unrelated file are both blocking. There is no
   fixed file list to compare against; the requirements are the authority.
+- A documentation change is text. Judge its wording and accuracy by reading
+  it; never require, and never fail a task for missing, a test, guard or
+  automated check that reads a documentation file. A test that reads
+  documentation is a defect, not evidence.
 - A finding that asks for a different implementation, a simpler path or a
   style change is not a requirement. A change to the specification needs a
   concrete, verifiable defect; the specification is valid by default because

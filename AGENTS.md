@@ -60,6 +60,15 @@ shim and is not part of the public repository.
   `.gitignore` and commit the rule), or escalate (unrelated; leave it
   uncommitted with a reason for the planner). No file is silently left or
   silently committed.
+- **Documentation is text and is verified by review (D-106).** Never add,
+  require or accept a test, guard, assertion or automated check that reads a
+  documentation file. A documentation task has review-only checks and no test
+  command.
+- **A respec issue is binding (D-107).** The rewritten requirements and
+  acceptance remove the option the issue rejected and cannot contradict each
+  other; a requirement that permits an option the acceptance forbids is
+  invalid. The writer decides the remaining details from the issue and the recorded
+  decisions; it never leaves an open alternative or waits for an answer.
 
 ## Prompt Rules (Non-Negotiable)
 

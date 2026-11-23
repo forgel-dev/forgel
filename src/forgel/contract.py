@@ -33,6 +33,8 @@ RULES = """Rules:
   the whole working tree; an unrelated change is never attributed to this task.
 - Do not refactor unrelated code or the test harness, and do not add
   interfaces the requirements do not name.
+- Documentation is text: do not add or require tests for it; the reviewer
+  reads it.
 - The reviewer judges the change as a whole against the requirements, not
   against a file list."""
 

@@ -123,6 +123,12 @@ Small fixes (typos, broken links) can go straight to a PR.
   commit (needed), revert (temporary/debug), ignore (artifact; the .gitignore
   rule is committed), or escalate (unrelated; the planner decides a separate
   task or removal). Nothing is silently left or silently committed.
+- **Documentation is text (D-106):** never add or require a test, guard or
+  automated check that reads a documentation file; a documentation task has
+  review-only checks and no test command.
+- **A respec issue is binding (D-107):** fix the rejected option in the
+  requirements, keep requirements and acceptance consistent, and decide the
+  remaining details; never leave an open alternative.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.

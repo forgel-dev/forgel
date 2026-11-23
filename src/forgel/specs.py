@@ -103,7 +103,7 @@ Return exactly one JSON object:
     {"decision": "binding product decision", "source": "where it was recorded"}
   ],
   "user_stories": ["as a ... I want ... so that ..."],
-  "open_questions": ["only a question that cannot be decided reversibly"],
+  "open_questions": ["only a truly undecidable choice, never a way to avoid deciding"],
   "related_documents": ["path"],
   "revision_history": ["version and what changed"],
   "checks": [
@@ -128,6 +128,20 @@ Rules:
   "test_command". Runtime mechanics (git, commit, worktree, done report) are
   never requirements. If the intent or the respec issue names a command, a
   file or a runtime step, restate the behavior it must produce.
+- Documentation is text and is verified by review. Never require or add a
+  test, guard, assertion or automated check that reads a documentation file;
+  a documentation task has review-only checks and no test command.
+- A respec issue is a binding decision: the rewritten requirements and
+  acceptance must remove the option the issue rejected and must not leave a
+  product choice open when the acceptance depends on it. Requirements and
+  acceptance must be mutually consistent; a requirement that permits an
+  option the acceptance forbids is invalid. Decide the remaining details from
+  the issue, the task intent and the recorded decisions and write the
+  requirement; never use an open question to avoid the decision, and never
+  leave the specification waiting for an answer.
+- Do not default to open questions. Decide every reversible detail yourself,
+  record it as an assumption, and write the requirement. An open question is
+  reserved for a truly undecidable choice and never stops the work.
 - Give every acceptance criterion a check. Use a command when the criterion
   can be verified by one; use review only for a subjective criterion. Never
   use a vacuous check.
@@ -408,6 +422,82 @@ def implementation_problems(spec: Mapping[str, Any]) -> list[str]:
     return problems
 
 
+DOCUMENTATION_WORDS = re.compile(
+    r"\b(?:readme|documentation|documents?|docs?|manual|guide|changelog)\b",
+    re.IGNORECASE,
+)
+TEST_WORDS = re.compile(
+    r"\b(?:tests?|guard|assertions?|assert)\b", re.IGNORECASE
+)
+
+
+def documentation_task(
+    intent: Mapping[str, Any], spec: Mapping[str, Any]
+) -> bool:
+    """True when the task is a documentation change."""
+
+    text = " ".join(
+        str(item or "")
+        for item in (
+            intent.get("title"),
+            intent.get("summary"),
+            spec.get("problem"),
+            spec.get("outcome"),
+        )
+    )
+    return bool(DOCUMENTATION_WORDS.search(text))
+
+
+def documentation_problems(
+    intent: Mapping[str, Any], spec: Mapping[str, Any]
+) -> list[str]:
+    """Documentation is text: it is reviewed, never tested."""
+
+    if not documentation_task(intent, spec):
+        return []
+    problems: list[str] = []
+    if spec.get("test_command"):
+        problems.append("a documentation task has no test_command")
+    for check in spec.get("checks") or []:
+        criterion = str(check.get("criterion") or "")
+        command = " ".join(
+            str(item) for item in (check.get("command") or [])
+        )
+        if str(check.get("verification") or "") != "review":
+            problems.append(
+                "a documentation check must be review-only: "
+                f"{criterion[:120]}"
+            )
+        if DOCUMENTATION_WORDS.search(
+            criterion + " " + command
+        ) and TEST_WORDS.search(criterion + " " + command):
+            problems.append(
+                "documentation is verified by review, not by a test: "
+                f"{criterion[:120]}"
+            )
+    for field in (
+        "requirements",
+        "acceptance",
+        "constraints",
+        "goals",
+        "user_stories",
+    ):
+        value = spec.get(field)
+        values = [value] if isinstance(value, str) else value or []
+        for item in values:
+            text = str(item).strip()
+            if (
+                text
+                and DOCUMENTATION_WORDS.search(text)
+                and TEST_WORDS.search(text)
+            ):
+                problems.append(
+                    f"{field}: documentation is verified by review, not "
+                    f"by a test: {text[:120]}"
+                )
+    return problems
+
+
 def _looks_like_spec(data: Mapping[str, Any]) -> bool:
     """A candidate final answer must carry spec fields, not tool results."""
 
@@ -588,6 +678,9 @@ def write_task_spec(
                 implementation = implementation_problems(parsed)
                 if implementation:
                     raise SpecError("; ".join(implementation[:5]))
+                documentation = documentation_problems(intent, parsed)
+                if documentation:
+                    raise SpecError("; ".join(documentation[:5]))
                 problems = check_problems(
                     layout,
                     str(intent.get("repo_id") or ""),
@@ -623,7 +716,12 @@ def write_task_spec(
                         "step and other implementation detail from "
                         "requirements, acceptance, constraints, goals, user "
                         "stories, risks, open questions and assumptions; a "
-                        "verification command belongs only in checks. Return "
+                        "verification command belongs only in checks. A "
+                        "documentation task is text: it has review-only "
+                        "checks, no test command and no test or guard that "
+                        "reads a documentation file. A respec issue is "
+                        "binding: remove the option it rejected and keep "
+                        "requirements and acceptance consistent. Return "
                         "a complete JSON specification. Every command check "
                         "must run in the task repository "
                         f"'{intent.get('repo_id') or 'project root'}' and "
