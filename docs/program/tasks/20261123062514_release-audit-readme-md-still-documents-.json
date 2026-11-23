@@ -1,18 +1,32 @@
 {
   "id": "20261123062514_release-audit-readme-md-still-documents-",
   "title": "Release audit: README.md still documents `.../v0.1.0/install.sh` for the install command and fo",
-  "spec": "",
+  "spec": "docs/program/specs/20261123062514_release-audit-readme-md-still-documents-.md",
   "summary": "Update both documented commands to the current release installer (v0.1.1 or a versionless latest URL) and add a README guard test that asserts the install and uninstall commands use the release installer.",
   "requirements": [
-    "README.md still documents `.../v0.1.0/install.sh` for the install command and for the uninstall command, while the release describes v0.1.1 behavior. The v0.1.0 script predates the login-shell detection, fresh-shell verification, guarded block, cross-profile uninstall, and FORGEL_CODE_PROFILE cleanup, so a new user following the documentation still gets the original PATH bug and an uninstall that can leave the new block/separator and override-profile block behind."
+    "R1: README.md contains no reference to the `v0.1.0` install script URL (`.../v0.1.0/install.sh`), in the install command or anywhere else.",
+    "R2: The README install command and the README uninstall command reference exactly the same install-script URL, and that URL is the only install-script URL in README.md.",
+    "R3: The install-script URL in README.md points at the release whose behavior the documentation describes (the current release, i.e. the v0.1.1 release referenced by the audit finding), not at an earlier tag. The version selector appears exactly once in the URL and both commands inherit it.",
+    "R4: No other README content changes: the surrounding prose, command shape (`curl -fsSL <url> | bash`), options and section structure stay as they are, except for the URL itself.",
+    "R5: If the chosen URL names a release tag that is not yet published at commit time, the README names the newest published tag instead and the discrepancy is recorded in the task report; README must never advertise a tag that does not resolve.",
+    "R6: The existing test suite passes, and tests/test_readme_install.py either already fails on the stale URL (and therefore now passes) or is extended to assert R1 and R2 without weakening any existing assertion.",
+    "R7: No change to install.sh, forge_code/*, pyproject.toml or the release directories is introduced by this task."
   ],
   "acceptance": [
-    "The release audit finding is resolved: README.md still documents `.../v0.1.0/install.sh` for the install command and for the uninstall command, while the release describes v0.1.1 behavior. The v0.1.0 script predates the login-shell detection, fresh-shell verification, guarded block, cross-profile uninstall, and FORGEL_CODE_PROFILE cleanup, so a new user following the documentation still gets the original PATH bug and an uninstall that can leave the new block/separator and override-profile block behind.",
-    "Existing tests pass"
+    "A1: A grep for `v0.1.0/install.sh` in README.md returns nothing.",
+    "A2: All install-script URLs found in README.md are identical, and there are at least two of them (one in the install command, one in the uninstall command).",
+    "A3: The version selector in the README install-script URL equals the version documented as the current release, and the URL is fetchable (HTTP 200) from the public repository.",
+    "A4: The README diff contains only URL changes, reviewable as a small, self-contained change.",
+    "A5: `python -m pytest` passes for the whole repository, including tests/test_readme_install.py.",
+    "A6: `git diff --name-only` lists only README.md and, optionally, tests/test_readme_install.py."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
@@ -20,12 +34,89 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A1",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-lc",
+        "! grep -q 'v0.1.0/install.sh' README.md"
+      ]
+    },
+    {
+      "criterion": "A2",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-lc",
+        "test $(grep -oE 'https?://[^ )]*/install\\.sh' README.md | sort -u | wc -l) -eq 1 && test $(grep -coE 'https?://[^ )]*/install\\.sh' README.md) -ge 2"
+      ]
+    },
+    {
+      "criterion": "A3",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-lc",
+        "url=$(grep -oE 'https?://[^ )]*/install\\.sh' README.md | head -1); echo \"$url\"; test \"$(curl -fsSL -o /dev/null -w '%{http_code}' \"$url\")\" = 200"
+      ]
+    },
+    {
+      "criterion": "A4",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A5",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "A6",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-lc",
+        "git diff --name-only | grep -vE '^(README\\.md|tests/test_readme_install\\.py)$' | wc -l | grep -qx 0"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "GitHub release asset / raw file URL for install.sh",
+      "interface": "Tests intercept the documented `curl -fsSL https://raw.githubusercontent.com/forgel-dev/<repo>/<tag>/install.sh` fetch with a deterministic `curl` shim. The shim returns the repository's current `install.sh` for v0.1.1 and `git show v0.1.0:install.sh` for the immutable v0.1.0 tag. The production interface remains an HTTPS GET of the tag-pinned raw URL returning HTTP 200.",
+      "docs": "README.md install/uninstall command blocks; AGENTS.md Release Rules; releases/0.1.0/release.md",
+      "mode": "stub",
+      "evidence": "README.md documents `.../v0.1.0/install.sh` for both install and uninstall, and the release audit finding says the described behavior is v0.1.1. AGENTS.md Release Rules state that a published tag is immutable and the release report is the source of truth, so the raw URL is tag-pinned. The repository has the current `install.sh` and the v0.1.0 tag content is available through git.",
+      "stub": "#!/bin/sh\n# tests/stubs/curl - deterministic fixture for the tag-pinned install.sh URL.\nset -eu\n\nurl=\nfor arg in \"$@\"; do\n    case \"$arg\" in\n        -*) ;;\n        *) url=$arg ;;\n    esac\ndone\n\nroot=$(CDPATH= cd -- \"$(dirname -- \"$0\")/../..\" && pwd)\ncase \"$url\" in\n    https://raw.githubusercontent.com/forgel-dev/*/v0.1.0/install.sh)\n        exec git -C \"$root\" show v0.1.0:install.sh\n        ;;\n    https://raw.githubusercontent.com/forgel-dev/*/v0.1.1/install.sh)\n        exec cat \"$root/install.sh\"\n        ;;\n    *)\n        printf '%s\\n' \"stub curl: no fixture for $url\" >&2\n        exit 22\n        ;;\nesac"
+    },
+    {
+      "name": "curl",
+      "interface": "The documented install and uninstall commands use `curl -fsSL https://raw.githubusercontent.com/forgel-dev/<repo>/<tag>/install.sh | bash`; tests run the same command shape against the URL fixture.",
+      "docs": "README.md install/uninstall command blocks",
+      "mode": "direct",
+      "evidence": "README.md uses `curl -fsSL .../install.sh | bash` for install and uninstall. The dependency contract also states that checks exercise the same URL fetches, so curl is the local executable invoked by the command.",
+      "stub": ""
+    },
+    {
+      "name": "pytest",
+      "interface": "`pytest` runs the repository test suite under `tests/`; `make test` is the project's required verification entry point.",
+      "docs": "pyproject.toml; AGENTS.md Change Workflow and Layout",
+      "mode": "direct",
+      "evidence": "The dependency contract identifies pytest as the repository test runner and `pyproject.toml` as its configuration source. AGENTS.md requires `make test`/`make lint` and identifies `tests/` as the test suite.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "",
+  "started_at": "2026-11-23T12:00:28+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
