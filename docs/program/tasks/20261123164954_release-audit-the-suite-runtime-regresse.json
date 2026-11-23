@@ -1,16 +1,30 @@
 {
   "id": "20261123164954_release-audit-the-suite-runtime-regresse",
   "title": "Release audit: The suite runtime regressed past the bound the release established. Task 2026112",
-  "spec": "",
+  "spec": "docs/program/specs/20261123164954_release-audit-the-suite-runtime-regresse.md",
   "summary": "Bring the suite back under the documented bound (or raise the bound consistently in README/acceptance and confirm the audit's timeout), then record a passing run of the full suite within that bound. Do not state 'under 120 seconds' while the final suite takes 163 s.",
   "requirements": [
-    "The suite runtime regressed past the bound the release established. Task 20261122192217 required `python -m unittest discover -s tests` to exit 0 even under `timeout 120`, and README.md now states the suite completes 'under 120 seconds'; the final recorded runs are 130.35 s (204 tests), 149.72 s (206 tests) and 163.27 s (214 tests). The 79.9 s run that met the bound was undone by later test additions, so the documented bound and acceptance criterion AC2 are no longer verified and the audit command exceeds its 120 s limit. The earlier recorded timeout during task 20261122174453 has effectively returned."
+    "No project documentation states a suite completion time, duration or runtime bound.",
+    "The guidance on running the suite still tells the reader that the single documented command runs the whole suite, with nothing configured or selected that leaves a part of it out.",
+    "That guidance still tells the reader that the installer situations are covered, that they perform a real installation into a throwaway home location and use a real detected login shell, and that a run from a source checkout needs nothing beyond the Python standard library and no network access.",
+    "Every statement the project makes about how to run its suite and about what such a run covers is true of the project as it stands.",
+    "The documented client commands, options, output form, session behaviour and the installer's install, update and uninstall behaviour are unchanged.",
+    "All project documentation is written in English."
   ],
   "acceptance": [
-    "The release audit finding is resolved: The suite runtime regressed past the bound the release established. Task 20261122192217 required `python -m unittest discover -s tests` to exit 0 even under `timeout 120`, and README.md now states the suite completes 'under 120 seconds'; the final recorded runs are 130.35 s (204 tests), 149.72 s (206 tests) and 163.27 s (214 tests). The 79.9 s run that met the bound was undone by later test additions, so the documented bound and acceptance criterion AC2 are no longer verified and the audit command exceeds its 120 s limit. The earlier recorded timeout during task 20261122174453 has effectively returned.",
-    "Existing tests pass"
+    "Review of the project's documentation finds no statement of a suite completion time, duration or runtime bound anywhere.",
+    "Review of the guidance on running the suite finds it still telling the reader that one documented command runs the whole suite with nothing left out, that the installer situations are covered and perform a real installation into a throwaway home location with a real detected login shell, and that a run from a source checkout needs only the Python standard library and no network access.",
+    "Review finds every remaining statement about how to run the suite and about the coverage of such a run consistent with what the project actually does.",
+    "Review finds the documented client commands, options, output form, session behaviour and the installer's install, update and uninstall behaviour unchanged.",
+    "Review finds the documentation written in English."
   ],
-  "constraints": [],
+  "constraints": [
+    "Documentation states behaviour and contracts, never timings, runtime bounds or durations; a divergence is fixed by removing the detail, not by changing code or tuning a limit.",
+    "Documentation is text and is verified by review; no automated check that inspects a documentation document may be added, and this change carries review-only verification.",
+    "The release audit's whole-suite budget is owned outside this repository and is not raised here.",
+    "Project documentation is written in English.",
+    "Documentation describes only what the project does, never a volatile runtime characteristic of it."
+  ],
   "repo_id": "code",
   "test_command": [],
   "assumptions": [],
@@ -20,12 +34,40 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [],
+  "checks": [
+    {
+      "criterion": "Review of the project's documentation finds no statement of a suite completion time, duration or runtime bound anywhere.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Review of the guidance on running the suite finds it still telling the reader that one documented command runs the whole suite with nothing left out, that the installer situations are covered and perform a real installation into a throwaway home location with a real detected login shell, and that a run from a source checkout needs only the Python standard library and no network access.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Review finds every remaining statement about how to run the suite and about the coverage of such a run consistent with what the project actually does.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Review finds the documented client commands, options, output form, session behaviour and the installer's install, update and uninstall behaviour unchanged.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Review finds the documentation written in English.",
+      "verification": "review",
+      "command": []
+    }
+  ],
   "external_dependencies": [],
   "language": "",
   "status": "pending",
   "created_at": "2026-11-23T16:49:54+00:00",
   "started_at": "",
   "finished_at": "",
-  "result": {}
+  "result": {
+    "manual_restarts": 1
+  }
 }
