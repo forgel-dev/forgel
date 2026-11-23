@@ -66,6 +66,11 @@ the release policy changes.
 - Jurisdiction packs are advisory. Never claim legal compliance; the user is
   responsible. Production requires the compliance acknowledgement.
 - Generated project code belongs to the user.
+- **Never commit the whole working tree.** A task commit contains only the
+  change set selected for that task (D-097). Unrelated changes are never
+  staged, committed or attributed to a task. Committing everything makes the
+  reviewer reject the extra file and the runtime commit again, forever. This
+  has been tried and rejected repeatedly; do not do it, ever.
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

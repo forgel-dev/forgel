@@ -14,8 +14,20 @@ from typing import Any, Mapping
 
 from .layout import ProjectLayout
 
+CONTROL_PREFIXES = ("docs/program/", ".forgel/")
+CONTROL_FILES = {"program.yaml", "forgel.toml"}
+
+
+def is_control_path(value: str) -> bool:
+    """True for process state that the engine commits, not a product file."""
+
+    path = str(value or "").strip()
+    return path in CONTROL_FILES or path.startswith(CONTROL_PREFIXES)
+
 RULES = """Rules:
 - Change only the files the specification lists; make one logical change.
+- Stage and commit only those files. Never `git add -A` and never commit the
+  whole working tree; an unrelated change is never attributed to this task.
 - Do not refactor unrelated code or the test harness, and do not add
   interfaces the specification does not name.
 - Never commit temporary, probe, debug or generated scratch files.

@@ -483,10 +483,6 @@ def parse_actions(raw: str) -> list[dict[str, Any]]:
     ]
 
 
-CONTROL_PREFIXES = ("docs/program/", ".forgel/")
-CONTROL_FILES = {"program.yaml", "forgel.toml"}
-
-
 def _task_path(value: str) -> str:
     """A normalized product path, or ``""`` for control state/unsafe input."""
 
@@ -496,7 +492,7 @@ def _task_path(value: str) -> str:
     normalized = str(Path(path))
     if normalized == "." or ".." in Path(normalized).parts:
         return ""
-    if normalized in CONTROL_FILES or normalized.startswith(CONTROL_PREFIXES):
+    if contract.is_control_path(normalized):
         return ""
     return normalized
 

@@ -110,6 +110,11 @@ Small fixes (typos, broken links) can go straight to a PR.
 
 ## Commit Messages
 
+- **Never commit the whole working tree.** Stage only the files the task's
+  specification lists (D-097). Unrelated changes are never attributed to a
+  task and never committed with it. Committing everything makes the reviewer
+  reject the extra file and the cycle never ends; this has been tried and
+  rejected repeatedly. Never do it.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.

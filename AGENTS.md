@@ -42,6 +42,12 @@ shim and is not part of the public repository.
   responsible. The production gate requires the compliance acknowledgement.
 - Do not add tool attribution lines or session references to commits, pull
   requests or issues. Keep public history about the product.
+- **NEVER commit the whole working tree.** A task commit contains only the
+  change set selected for that task (D-097). Unrelated changes are never
+  staged, committed or attributed to a task. Committing everything puts
+  unrelated files into the task; the reviewer rejects the extra file; the
+  runtime commits again; the cycle never ends. This has been tried and
+  rejected repeatedly. Do not do it, ever.
 
 ## Prompt Rules (Non-Negotiable)
 
@@ -102,6 +108,10 @@ A main-chat prompt without this block is incomplete.
 4. Run `make test` and `make lint`.
 5. Update `PLAN.md` and related docs when a decision changes.
 6. Commit in English, imperative mood, with `git commit -s`.
+7. Stage only the files this task's specification lists. Never `git add -A`,
+   never commit the working tree, never commit a file that belongs to another
+   task (D-097). A needed change outside the contract stops the task so the
+   specification is corrected; it is not committed with unrelated work.
 
 ## Layout
 
