@@ -3,7 +3,7 @@
 - Project: `forgel-1d2bf685`
 - Request: Forgel Code: interactive agent client instead of a command wrapper
 - Class: minor
-- Status: planned
+- Status: running
 - Created: 2026-11-23T19:35:57+00:00
 
 
@@ -17,10 +17,13 @@ The Forgel Code client stops being only a set of one-shot, argument-driven wrapp
 
 ## Tasks
 
-- `20261123193557_forgel-code-interactive-agent-client-ins` — Forgel Code: interactive agent client instead of a command wrapper (code, pending)
+- `20261123193557_forgel-code-interactive-agent-client-ins` — Forgel Code: interactive agent client instead of a command wrapper (code, done)
+- `20261123213155_release-audit-forgel-code-interactive-py` — Release audit: `forgel_code/interactive.py`'s `redact()` does not keep key material out of the (code, pending)
+- `20261123213155_release-audit-localization-does-not-sati` — Release audit: Localization does not satisfy the requirement that every reply follow the owner' (code, pending)
+- `20261123213155_release-audit-the-session-does-not-refre` — Release audit: The session does not refresh task and release state on its own while the owner i (code, pending)
 
 ## Audit
 
-- Rounds: 0
-- Verdict: not run
-- Report: `—`
+- Rounds: 1
+- Verdict: fail
+- Report: `docs/program/releases/20261123193557155149_forgel-code-interactive-agent-client-instead-of-/audit.md`

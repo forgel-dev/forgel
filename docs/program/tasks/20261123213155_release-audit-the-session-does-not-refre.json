@@ -1,0 +1,30 @@
+{
+  "id": "20261123213155_release-audit-the-session-does-not-refre",
+  "title": "Release audit: The session does not refresh task and release state on its own while the owner i",
+  "spec": "",
+  "summary": "Poll the engine while waiting for input, for example with a timeout/select loop or a background state-refresh thread, and redraw when the state changes. Add a test that changes stub state between prompts without an owner request and verifies the update becomes visible.",
+  "requirements": [
+    "The session does not refresh task and release state on its own while the owner is idle. `InteractiveSession.run()` refreshes once, prints the prompt and then blocks on `self.input.readline()`; state is re-read only before the next prompt and after a submitted request. If a task or release changes while the owner waits, nothing updates the session. This fails requirement 6 and acceptance 5. The test uses empty input lines to force another loop iteration, so it does not verify idle refresh."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The session does not refresh task and release state on its own while the owner is idle. `InteractiveSession.run()` refreshes once, prints the prompt and then blocks on `self.input.readline()`; state is re-read only before the next prompt and after a submitted request. If a task or release changes while the owner waits, nothing updates the session. This fails requirement 6 and acceptance 5. The test uses empty input lines to force another loop iteration, so it does not verify idle refresh.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-23T21:31:55+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

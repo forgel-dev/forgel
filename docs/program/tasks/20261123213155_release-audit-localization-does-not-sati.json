@@ -1,0 +1,30 @@
+{
+  "id": "20261123213155_release-audit-localization-does-not-sati",
+  "title": "Release audit: Localization does not satisfy the requirement that every reply follow the owner'",
+  "spec": "",
+  "summary": "Support the owner's language beyond English/Russian, or obtain localized text from the engine, and render all client messages in that language. Add a test with a non-English/non-Russian message that checks both client labels and the displayed agent reply.",
+  "requirements": [
+    "Localization does not satisfy the requirement that every reply follow the owner's language. `language_of()` returns `ru` for any Cyrillic input and `en` for everything else, and `MESSAGES` only contains English and Russian strings. A French or Spanish message therefore gets English client labels, while engine replies and engine error text are written verbatim and are not guaranteed to match the owner's language. The Russian test only checks client labels; its stub engine reply remains English. This fails requirement 9 and acceptance 15."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: Localization does not satisfy the requirement that every reply follow the owner's language. `language_of()` returns `ru` for any Cyrillic input and `en` for everything else, and `MESSAGES` only contains English and Russian strings. A French or Spanish message therefore gets English client labels, while engine replies and engine error text are written verbatim and are not guaranteed to match the owner's language. The Russian test only checks client labels; its stub engine reply remains English. This fails requirement 9 and acceptance 15.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-23T21:31:55+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

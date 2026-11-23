@@ -6,9 +6,12 @@
   "release_class": "minor",
   "plan_id": "",
   "created_at": "2026-11-23T19:35:57+00:00",
-  "status": "planned",
+  "status": "running",
   "tasks": [
-    "20261123193557_forgel-code-interactive-agent-client-ins"
+    "20261123193557_forgel-code-interactive-agent-client-ins",
+    "20261123213155_release-audit-forgel-code-interactive-py",
+    "20261123213155_release-audit-the-session-does-not-refre",
+    "20261123213155_release-audit-localization-does-not-sati"
   ],
   "repos": {
     "code": {
@@ -26,11 +29,47 @@
     }
   },
   "audit": {
-    "rounds": 0,
-    "verdict": "",
-    "summary": "",
-    "report": "",
-    "task_ids": []
+    "rounds": 1,
+    "verdict": "fail",
+    "summary": "The interactive client is implemented and most one-shot paths are preserved, but the release is not safe to publish: secret redaction leaks common key-material forms, task/release state is not refreshed while the owner is idle, localization only covers English/Russian UI labels, and sensitive operations are protected by a bypassable substring blacklist. Help output also changed despite the requirement that non-interactive output remain unchanged.",
+    "report": "docs/program/releases/20261123193557155149_forgel-code-interactive-agent-client-instead-of-/audit.md",
+    "task_ids": [
+      "20261123193557_forgel-code-interactive-agent-client-ins"
+    ],
+    "at": "2026-11-23T21:31:48+00:00",
+    "errors": 0,
+    "findings": [
+      {
+        "severity": "critical",
+        "repo_id": "code",
+        "issue": "`forgel_code/interactive.py`'s `redact()` does not keep key material out of the session. It only handles a secret keyword followed by `=` or a single next whitespace token. `redact(\"token:abc123\")` is unchanged, `redact(\"Authorization: Bearer abc123\")` leaves `abc123` visible, `redact(\"токен: abc123\")` is unchanged because `SECRET_WORDS` is English-only, and labels such as `AWS_SECRET_ACCESS_KEY=abc` do not match the exact-word check. Since every engine reply and error is passed through this function before display, a secret in engine output can reach the screen, violating requirement 15 and acceptance 14. The existing `\"my token is abc123\"` test does not exercise this because the sentence is intercepted by the sensitive-marker path before it is shown.",
+        "suggestion": "Replace `redact()` with a structured redactor that recognizes separators (`:`, `=`, whitespace), auth schemes such as `Bearer`, quoted values, Russian secret labels, environment-variable names and generic key material, and redacts the entire value rather than only the next token. Add direct tests for `token:abc123`, `Authorization: Bearer abc123`, `токен: abc123`, `AWS_SECRET_ACCESS_KEY=abc` and an engine reply containing such text."
+      },
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "The session does not refresh task and release state on its own while the owner is idle. `InteractiveSession.run()` refreshes once, prints the prompt and then blocks on `self.input.readline()`; state is re-read only before the next prompt and after a submitted request. If a task or release changes while the owner waits, nothing updates the session. This fails requirement 6 and acceptance 5. The test uses empty input lines to force another loop iteration, so it does not verify idle refresh.",
+        "suggestion": "Poll the engine while waiting for input, for example with a timeout/select loop or a background state-refresh thread, and redraw when the state changes. Add a test that changes stub state between prompts without an owner request and verifies the update becomes visible."
+      },
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "Localization does not satisfy the requirement that every reply follow the owner's language. `language_of()` returns `ru` for any Cyrillic input and `en` for everything else, and `MESSAGES` only contains English and Russian strings. A French or Spanish message therefore gets English client labels, while engine replies and engine error text are written verbatim and are not guaranteed to match the owner's language. The Russian test only checks client labels; its stub engine reply remains English. This fails requirement 9 and acceptance 15.",
+        "suggestion": "Support the owner's language beyond English/Russian, or obtain localized text from the engine, and render all client messages in that language. Add a test with a non-English/non-Russian message that checks both client labels and the displayed agent reply."
+      },
+      {
+        "severity": "major",
+        "repo_id": "code",
+        "issue": "Sensitive operations are guarded only by a substring blacklist in `SENSITIVE_MARKERS`. Obvious variants fall through to the free-form `say` path: `change the config` (not `configuration`/`config file`/`settings`), `make a project acme` (not `create project`/`new project`), `set the key sk-...` (generic keys are not `api key`), and `onboard the repository` (not `adopt`). These sentences are sent to the engine's project agent rather than blocked or pointed to explicit client commands. If the project agent can perform those runtime operations, a plain-language sentence can carry out adoption, project creation, secret changes or configuration changes, violating requirements 10 and 11.",
+        "suggestion": "Do not use a substring blacklist as the authorization boundary. Use an allowlist of safe free-form requests, or route all potentially sensitive intents to explicit commands and reject/redirect them before calling the engine. Add negative tests for these and similar paraphrases, including generic configuration and key phrasings."
+      },
+      {
+        "severity": "minor",
+        "repo_id": "code",
+        "issue": "`forgel_code/cli.py` changes the parser description to mention the interactive session, so `forgel-code --help` no longer produces its previous output even though requirement 13 says every existing non-interactive usage keeps its previous output and exit status. The task review's claim that `--help` keeps its previous output is therefore inaccurate.",
+        "suggestion": "Restore the previous parser description, or explicitly amend the requirement/acceptance if help text is allowed to change. Keep one-shot and help output stable as required."
+      }
+    ]
   },
   "control_push": {},
   "finalized_at": "",
