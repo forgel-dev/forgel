@@ -39,45 +39,7 @@
   "depends_on": [],
   "checks": [
     {
-      "criterion": "AC1. README.md's first install command is exactly the canonical versionless command.",
-      "verification": "command",
-      "command": [
-        "grep",
-        "-qxF",
-        "curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh",
-        "README.md"
-      ]
-    },
-    {
-      "criterion": "AC2. The update and uninstall commands use the canonical URL, the uninstall line carrying `-s -- --uninstall`.",
-      "verification": "command",
-      "command": [
-        "grep",
-        "-qxF",
-        "curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh -s -- --uninstall",
-        "README.md"
-      ]
-    },
-    {
-      "criterion": "AC3. README.md contains no tag-pinned install-script path.",
-      "verification": "command",
-      "command": [
-        "sh",
-        "-c",
-        "if grep -nE '/v[0-9][^[:space:]/]*/install\\.sh' README.md; then exit 1; fi"
-      ]
-    },
-    {
-      "criterion": "AC4. The canonical URL returns HTTP 200 and serves the installer.",
-      "verification": "command",
-      "command": [
-        "sh",
-        "-c",
-        "test \"$(curl -s -o /dev/null -w '%{http_code}' https://raw.githubusercontent.com/forgel-dev/code/main/install.sh)\" = 200"
-      ]
-    },
-    {
-      "criterion": "AC5. The guard errors on a tag-pinned path, on divergent URLs and on another branch's URL, each via assertRaises.",
+      "criterion": "A1",
       "verification": "command",
       "command": [
         "python",
@@ -88,26 +50,65 @@
       ]
     },
     {
-      "criterion": "AC6. The guard imports no network module and passes without network access.",
+      "criterion": "A2",
       "verification": "command",
       "command": [
-        "sh",
+        "bash",
         "-c",
-        "! grep -nEq '^[[:space:]]*(import|from)[[:space:]]+(socket|ssl|http|urllib|requests)([.[:space:]]|$)' tests/test_readme_install.py"
+        "awk '/^### Update$/{f=1;next} /^#/{f=0} f' README.md | grep -Fx -e 'curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh'"
       ]
     },
     {
-      "criterion": "AC7. The README documentation test in tests/test_cli.py asserts the canonical versionless URL.",
+      "criterion": "A3",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-c",
+        "awk '/^### Uninstall$/{f=1;next} /^#/{f=0} f' README.md | grep -Fx -e 'curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh -s -- --uninstall'"
+      ]
+    },
+    {
+      "criterion": "A4",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-c",
+        "! grep -nE '/v[0-9][^[:space:]/]*/install\\.sh' README.md"
+      ]
+    },
+    {
+      "criterion": "A5",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-c",
+        "test \"$(grep -oE 'https?://[^[:space:]]*/install\\.sh' README.md | sort -u | wc -l)\" -eq 1"
+      ]
+    },
+    {
+      "criterion": "A6",
       "verification": "command",
       "command": [
         "python",
         "-m",
         "unittest",
-        "tests.test_cli"
+        "tests.test_readme_install",
+        "-v"
       ]
     },
     {
-      "criterion": "AC8. The whole suite passes.",
+      "criterion": "A7",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_readme_install",
+        "-v"
+      ]
+    },
+    {
+      "criterion": "A8",
       "verification": "command",
       "command": [
         "python",
@@ -119,28 +120,78 @@
       ]
     },
     {
-      "criterion": "AC9. The task commit contains exactly README.md, tests/test_readme_install.py and tests/test_cli.py.",
+      "criterion": "A9",
       "verification": "command",
       "command": [
-        "python",
+        "bash",
         "-c",
-        "import subprocess,sys; out=subprocess.run(['git','show','--name-only','--format=','HEAD'],capture_output=True,text=True,check=True).stdout; got=sorted(p for p in out.split() if p); sys.exit(0 if got==sorted(['README.md','tests/test_readme_install.py','tests/test_cli.py']) else 1)"
+        "test \"$(git show --name-only --format= HEAD | sed '/^$/d' | sort | tr '\\n' ' ')\" = \"README.md tests/test_cli.py tests/test_readme_install.py \""
+      ]
+    },
+    {
+      "criterion": "A10",
+      "verification": "command",
+      "command": [
+        "bash",
+        "-c",
+        "for p in install.sh tests/test_install.py tests/test_check_cleanup.py CHANGELOG.md; do git show --name-only --format= HEAD | grep -qxF \"$p\" && exit 1; done; for p in install.sh tests/test_install.py tests/test_check_cleanup.py; do test -n \"$(git status --porcelain -- \"$p\")\" || exit 1; done; exit 0"
+      ]
+    },
+    {
+      "criterion": "A11",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A12",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A13",
+      "verification": "command",
+      "command": [
+        "curl",
+        "-fsSIL",
+        "--max-time",
+        "20",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "https://raw.githubusercontent.com/forgel-dev/code/main/install.sh"
       ]
     }
   ],
   "external_dependencies": [
     {
-      "name": "GitHub raw content host (raw.githubusercontent.com)",
-      "interface": "HTTPS GET of https://raw.githubusercontent.com/forgel-dev/code/main/install.sh returns HTTP 200 and the body of the POSIX `sh` installer; the same path pattern `https://raw.githubusercontent.com/<org>/<repo>/<ref>/<path>` is what the guard rejects when `<ref>` is a release tag.",
-      "docs": "https://docs.github.com/en/repositories/working-with-files/using-files/viewing-a-file",
+      "name": "git",
+      "interface": "Path-limited staging and commit, and `git show --name-only --format= HEAD` for verification",
+      "docs": "https://git-scm.com/docs/git-commit",
       "mode": "",
       "evidence": "",
       "stub": ""
     },
     {
       "name": "curl",
-      "interface": "`curl -fsSL <url>` streams a URL body to stdout for `sh`; `curl -s -o /dev/null -w '%{http_code}' <url>` prints the HTTP status code used by the AC4 check.",
-      "docs": "https://curl.se/docs/manpage.html",
+      "interface": "The documented one-liner fetches the installer script over HTTPS and pipes it to a shell",
+      "docs": "https://curl.se/docs/",
+      "mode": "",
+      "evidence": "",
+      "stub": ""
+    },
+    {
+      "name": "GitHub raw file host (raw.githubusercontent.com)",
+      "interface": "Serves install.sh from the forgel-dev/code default branch at the path the README documents",
+      "docs": "https://docs.github.com/",
+      "mode": "",
+      "evidence": "",
+      "stub": ""
+    },
+    {
+      "name": "pytest",
+      "interface": "Second documented runner of the suite; declares the `test` extra in pyproject.toml",
+      "docs": "https://docs.pytest.org/",
       "mode": "",
       "evidence": "",
       "stub": ""
@@ -152,7 +203,7 @@
   "started_at": "2026-11-23T13:17:31+00:00",
   "finished_at": "2026-11-23T13:25:01+00:00",
   "result": {
-    "summary": "README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the install, update and uninstall commands; the three `/v0.1.1/install.sh` occurrences were replaced, no `/v<tag>/install.sh` path remains, and the surrounding prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are untouched. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string, proven through `assertRaises` on the guard's own helpers in test_stale_install_script_url_is_rejected, test_divergent_install_script_url_is_rejected, test_another_branch_install_script_url_is_rejected, test_a_missing_install_script_url_is_rejected and test_rejects_a_stale_url_anywhere_in_the_document; the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest now asserts the canonical versionless URL, rejects tag-pinned install paths and no longer rejects the default branch. CHANGELOG.md, install.sh, tests/test_install.py and tests/test_check_cleanup.py were left as found (CHANGELOG.md has no net diff against HEAD) and the scratch probe file the earlier attempt created was deleted. Verified with `python -m unittest discover -s tests`: 214 tests, OK.; the completion step could not decide which uncommitted files belong to the task",
+    "summary": "README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the install, update and uninstall commands; the three `/v0.1.1/install.sh` occurrences were replaced, no `/v<tag>/install.sh` path remains, and the surrounding prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are untouched. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string, proven through `assertRaises` on the guard's own helpers in test_stale_install_script_url_is_rejected, test_divergent_install_script_url_is_rejected, test_another_branch_install_script_url_is_rejected, test_a_missing_install_script_url_is_rejected and test_rejects_a_stale_url_anywhere_in_the_document; the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest now asserts the canonical versionless URL, rejects tag-pinned install paths and no longer rejects the default branch. CHANGELOG.md, install.sh, tests/test_install.py and tests/test_check_cleanup.py were left as found (CHANGELOG.md has no net diff against HEAD) and the scratch probe file the earlier attempt created was deleted. Verified with `python -m unittest discover -s tests`: 214 tests, OK.; the completion step could not decide which uncommitted files belong to the task; task QA failed: the task repository is committed [task code @ /Users/okalistratov/Documents/sites/code]: the task repository still has the task's uncommitted files: README.md, tests/test_cli.py, tests/test_readme_install.py",
     "files_changed": [
       "CHANGELOG.md",
       "README.md",
@@ -338,8 +389,30 @@
       }
     ],
     "failure": {
-      "kind": "agent",
-      "message": "README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the install, update and uninstall commands; the three `/v0.1.1/install.sh` occurrences were replaced, no `/v<tag>/install.sh` path remains, and the surrounding prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are untouched. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string, proven through `assertRaises` on the guard's own helpers in test_stale_install_script_url_is_rejected, test_divergent_install_script_url_is_rejected, test_another_branch_install_script_url_is_rejected, test_a_missing_install_script_url_is_rejected and test_rejects_a_stale_url_anywhere_in_the_document; the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest now asserts the canonical versionless URL, rejects tag-pinned install paths and no longer rejects the default branch. CHANGELOG.md, install.sh, tests/test_install.py and tests/test_check_cleanup.py were left as found (CHANGELOG.md has no net diff against HEAD) and the scratch probe file the earlier attempt created was deleted. Verified with `python -m unittest discover -s tests`: 214 tests, OK.; the completion step could not decide which uncommitted files belong to the task"
+      "kind": "code",
+      "message": "task QA failed: the task repository is committed [task code @ /Users/okalistratov/Documents/sites/code]: the task repository still has the task's uncommitted files: README.md, tests/test_cli.py, tests/test_readme_install.py",
+      "retryable": null
+    },
+    "qa": {
+      "status": "fail",
+      "runtime": "uncommitted",
+      "report": "docs/program/agent/20261123062514_release-audit-readme-md-still-documents-.qa.md",
+      "commands": [],
+      "checks": [
+        {
+          "criterion": "the task repository is committed",
+          "command": "",
+          "exit_code": 1,
+          "verdict": "fail",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "the task repository still has the task's uncommitted files: README.md, tests/test_cli.py, tests/test_readme_install.py",
+          "failure": "code"
+        }
+      ],
+      "review_required": false,
+      "failure_kind": "code"
     }
   },
   "request": ""
