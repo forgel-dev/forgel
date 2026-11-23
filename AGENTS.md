@@ -59,7 +59,9 @@ shim and is not part of the public repository.
   ignore (a useful artifact that must not be in the repository; add it to
   `.gitignore` and commit the rule), or escalate (unrelated; leave it
   uncommitted with a reason for the planner). No file is silently left or
-  silently committed.
+  silently committed. If the model cannot decide, the runtime commits the
+  files the agent itself changed and escalates the rest; an undecided path
+  does not exist.
 - **Documentation is text and is verified by review (D-106).** Never add,
   require or accept a test, guard, assertion or automated check that reads a
   documentation file. A documentation task has review-only checks and no test

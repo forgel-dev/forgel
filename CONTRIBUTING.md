@@ -122,7 +122,8 @@ Small fixes (typos, broken links) can go straight to a PR.
 - **Every uncommitted product file is decided at completion (D-105):**
   commit (needed), revert (temporary/debug), ignore (artifact; the .gitignore
   rule is committed), or escalate (unrelated; the planner decides a separate
-  task or removal). Nothing is silently left or silently committed.
+  task or removal). Nothing is silently left or silently committed; a model
+  failure falls back to the agent's own files and an escalation.
 - **Documentation is text (D-106):** never add or require a test, guard or
   automated check that reads a documentation file; a documentation task has
   review-only checks and no test command.

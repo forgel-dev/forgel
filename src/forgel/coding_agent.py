@@ -665,53 +665,77 @@ class CodingAgent:
                     task, layout, repo, changed, dirty_product, log
                 )
                 if decision is None:
-                    status = "failed"
-                    failure_kind = "agent"
+                    # There is no undecided outcome: the runtime commits the
+                    # files the agent itself changed and escalates the rest.
+                    dirty_set = set(dirty_product)
+                    commit_files = sorted(
+                        path for path in changed if path in dirty_set
+                    )
+                    decision = {
+                        "commit": commit_files,
+                        "revert": [],
+                        "ignore": [],
+                        "escalate": [
+                            {
+                                "path": path,
+                                "reason": (
+                                    "the completion step did not decide; "
+                                    "left for the planner"
+                                ),
+                            }
+                            for path in dirty_product
+                            if path not in commit_files
+                        ],
+                    }
                     summary += (
-                        "; the completion step could not decide what to do "
-                        "with every uncommitted file"
+                        "; the completion step did not decide; committed the "
+                        "agent's own files and escalated the rest"
+                    )
+                    log(
+                        f"[agent] {task['id']}: completion step did not "
+                        "decide; committing the agent's own files and "
+                        "escalating the rest"
+                    )
+                try:
+                    if decision["revert"]:
+                        git_ops.revert_paths(
+                            repo, decision["revert"]
+                        )
+                        summary += (
+                            "; reverted temporary files: "
+                            + ", ".join(decision["revert"][:10])
+                        )
+                    if decision["ignore"]:
+                        added = git_ops.add_ignores(
+                            repo, decision["ignore"]
+                        )
+                        summary += (
+                            "; kept out of the repository "
+                            "(in .gitignore): "
+                            + ", ".join(decision["ignore"][:10])
+                        )
+                        if added and ".gitignore" not in decision["commit"]:
+                            decision["commit"].append(".gitignore")
+                    escalated = list(decision["escalate"])
+                except git_ops.GitOperationError as exc:
+                    status = "failed"
+                    failure_kind = "infrastructure"
+                    summary += (
+                        f"; could not apply the completion decision: {exc}"
                     )
                 else:
-                    try:
-                        if decision["revert"]:
-                            git_ops.revert_paths(
-                                repo, decision["revert"]
-                            )
-                            summary += (
-                                "; reverted temporary files: "
-                                + ", ".join(decision["revert"][:10])
-                            )
-                        if decision["ignore"]:
-                            added = git_ops.add_ignores(
-                                repo, decision["ignore"]
-                            )
-                            summary += (
-                                "; kept out of the repository "
-                                "(in .gitignore): "
-                                + ", ".join(decision["ignore"][:10])
-                            )
-                            if added and ".gitignore" not in decision["commit"]:
-                                decision["commit"].append(".gitignore")
-                        escalated = list(decision["escalate"])
-                    except git_ops.GitOperationError as exc:
-                        status = "failed"
-                        failure_kind = "infrastructure"
-                        summary += (
-                            f"; could not apply the completion decision: {exc}"
+                    changed = sorted(decision["commit"])
+                    if escalated:
+                        self._record_escalation(
+                            layout, project, task, escalated, log
                         )
-                    else:
-                        changed = sorted(decision["commit"])
-                        if escalated:
-                            self._record_escalation(
-                                layout, project, task, escalated, log
+                        summary += (
+                            "; escalated unrelated changes for the "
+                            "planner: "
+                            + ", ".join(
+                                item["path"] for item in escalated[:10]
                             )
-                            summary += (
-                                "; escalated unrelated changes for the "
-                                "planner: "
-                                + ", ".join(
-                                    item["path"] for item in escalated[:10]
-                                )
-                            )
+                        )
             if status == "done" and changed:
                 try:
                     commit_sha = git_ops.commit_paths(
@@ -966,30 +990,24 @@ class CodingAgent:
             )
             or "- none"
         )
-        from .task_review import SYSTEM_PROMPT as REVIEW_SYSTEM_PROMPT
         from .task_review import _review_prompt
 
         review_context = _review_prompt(layout, task)
         messages = [
             ModelMessage(
                 "system",
-                REVIEW_SYSTEM_PROMPT
-                + "\n\nAlso decide every uncommitted candidate exactly once, "
-                "in the same JSON object:\n"
+                "You are finishing a coding task. You receive the reviewer's "
+                "full context and every uncommitted product file. Decide this "
+                "task's coherent change set: include the candidates that "
+                "implement the requirements (even a file the specification "
+                "omitted when the task needs it), revert temporary work, "
+                "ignore artifacts that must not be in the repository, and "
+                "escalate unrelated work. Return exactly one JSON object: "
                 '{"commit": ["path"], "revert": ["path"], '
                 '"ignore": ["path"], '
-                '"escalate": [{"path": "path", "reason": "why"}]}\n'
-                "- commit: needed for this task; it enters the commit and the "
-                "review diff.\n"
-                "- revert: temporary or debug work created for this task; it "
-                "is restored or deleted.\n"
-                "- ignore: useful but must not be in the repository (a log, a "
-                "build artifact); it is added to .gitignore and stays on disk.\n"
-                "- escalate: unrelated to this task; it stays uncommitted and "
-                "the reason lets the planner decide separately (a task of its "
-                "own, or removal).\n"
-                "Every candidate must appear exactly once. An ignored path "
-                "must be untracked. Never omit a candidate.",
+                '"escalate": [{"path": "path", "reason": "why"}]}. '
+                "Every candidate appears exactly once; an ignored path must be "
+                "untracked; never omit a candidate.",
             ),
             ModelMessage(
                 "user",

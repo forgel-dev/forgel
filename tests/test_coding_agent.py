@@ -1572,6 +1572,56 @@ class CodingAgentTest(unittest.TestCase):
         tracked = _run(self.repo, "ls-files", "work.py").stdout.strip()
         self.assertEqual(tracked, "work.py")
 
+
+    def test_an_undecided_completion_falls_back_to_the_agents_files(self) -> None:
+        parallel = self.repo / "parallel.py"
+        parallel.write_text("value = 0\n", encoding="utf-8")
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        invalid = json.dumps({"files": []})
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 1\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+                invalid,
+                invalid,
+                invalid,
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertIn("did not decide", result.summary)
+        tracked = _run(self.repo, "ls-files", "work.py").stdout.strip()
+        self.assertEqual(tracked, "work.py")
+        status = _run(self.repo, "status", "--porcelain").stdout
+        self.assertIn("parallel.py", status)
+        final = get_task(self.layout, task["id"])
+        assert final is not None
+        escalated = [
+            item["path"]
+            for item in (final["result"].get("escalated") or [])
+        ]
+        self.assertIn("parallel.py", escalated)
+
     def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
         leftover = self.repo / "leftover"
         leftover.mkdir()

@@ -79,7 +79,8 @@ the release policy changes.
 - **Every uncommitted product file is decided at completion (D-105):**
   commit, revert (temporary/debug), ignore (artifact; a .gitignore rule is
   committed), or escalate (unrelated; the planner decides). Nothing is
-  silently left or silently committed.
+  silently left or silently committed. A model failure falls back to
+  committing the agent's own changed files and escalating the rest.
 - **Documentation is text and is verified by review (D-106):** never add,
   require or accept a test, guard or automated check that reads a
   documentation file. A documentation task has review-only checks and no test
