@@ -115,6 +115,35 @@ class ControllerTest(unittest.TestCase):
             "BOOM-MARKER", client.requests[1][-1].content
         )
 
+    def test_tool_markup_is_retried_with_a_json_correction(self) -> None:
+        client = ScriptedModelClient(
+            [
+                "<|DSML|> calls> <|DSML|> invoke "
+                'name="action": "context_page", "key": "failure", '
+                '"page": 1}</|DSML|> parameter>',
+                json.dumps(
+                    {"operation": "stop", "reason": "seen"}
+                ),
+            ]
+        )
+
+        decision = decide(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            "task_failure",
+            {"failure": {"kind": "code", "message": "BOOM-MARKER"}},
+            client,
+            log=lambda _m: None,
+        )
+
+        self.assertEqual(decision.operation, "stop")
+        self.assertIn(
+            "Return exactly one JSON object",
+            client.requests[1][-1].content,
+        )
+
     def test_every_operation_maps_for_both_stages(self) -> None:
         for operation in OPERATIONS:
             self.assertIn(task_action(operation), TASK_ACTIONS)

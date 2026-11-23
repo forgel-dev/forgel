@@ -44,7 +44,7 @@ from .environment import (
 )
 from .layout import ProjectLayout
 from .ledger import Ledger
-from .model_output import json_objects
+from .model_output import json_objects, looks_like_tool_markup
 from .model import (
     ModelClient,
     ModelError,
@@ -470,20 +470,6 @@ def _cap(text: str, limit: int = MAX_OBSERVATION) -> str:
         text[:limit]
         + f"\n... [output truncated, {len(text)} chars; rerun with a "
         "narrower command or read the file with read_file]"
-    )
-
-
-def _looks_like_tool_markup(text: str) -> bool:
-    lowered = text.lower()
-    return any(
-        marker in lowered
-        for marker in (
-            "<｜｜dsml｜｜",
-            "<|",
-            "<tool_call",
-            "<function_call",
-            "<system_warning",
-        )
     )
 
 
@@ -1164,7 +1150,7 @@ class CodingAgent:
                 batch = parse_actions(raw)
                 if not batch:
                     if (
-                        _looks_like_tool_markup(raw)
+                        looks_like_tool_markup(raw)
                         and markup_retries < MAX_MARKUP_RETRIES
                     ):
                         messages.append(

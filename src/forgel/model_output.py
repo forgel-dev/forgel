@@ -10,6 +10,24 @@ from __future__ import annotations
 import json
 from typing import Any
 
+TOOL_MARKUP_MARKERS = (
+    "<｜｜dsml｜｜",
+    "<|",
+    "<tool_call",
+    "<tool_result",
+    "<function_call",
+    "<parameter",
+    "</invoke>",
+    "<system_warning",
+)
+
+
+def looks_like_tool_markup(text: str) -> bool:
+    """True when a reply is provider tool-call markup, not the JSON asked for."""
+
+    lowered = text.lower()
+    return any(marker in lowered for marker in TOOL_MARKUP_MARKERS)
+
 
 def _prepare(raw: str) -> str:
     text = raw.strip()

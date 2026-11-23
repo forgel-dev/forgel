@@ -34,9 +34,10 @@ from .model import (
     cache_tokens,
     project_model_name,
 )
-from .model_output import json_objects
+from .model_output import json_objects, looks_like_tool_markup
 
 MAX_CONTEXT_PAGES = 40
+MAX_MARKUP_RETRIES = 3
 
 OPERATIONS = (
     "retry",
@@ -108,6 +109,9 @@ Return exactly one JSON object:
   "question": "the one question for ask_user",
   "release_id": "the release for a release operation, when not the current one"
 }
+
+Return JSON only. Never emit tool-call markup such as <｜｜DSML｜｜> or XML;
+the runtime understands only the JSON forms above.
 
 Use only the facts in the context. Do not repeat what is already proven to
 work. Do not ask the owner to choose between internal process options.
@@ -453,6 +457,7 @@ def decide(
     calls = 0
     data: Any = None
     page_index: int | None = None
+    markup_retries = 0
     for _ in range(MAX_CONTEXT_PAGES):
         try:
             raw = client.complete(
@@ -472,6 +477,22 @@ def decide(
             cache_miss += miss
         objects = json_objects(raw)
         parsed = objects[-1] if objects else None
+        if not isinstance(parsed, dict) and looks_like_tool_markup(raw):
+            markup_retries += 1
+            if markup_retries > MAX_MARKUP_RETRIES:
+                raise ControllerError(
+                    "the controller kept returning tool-call markup"
+                )
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Return exactly one JSON object, not tool-call markup. "
+                    "To read a context page use " + CONTEXT_ACTION
+                    + "; then decide.",
+                )
+            )
+            continue
         if (
             isinstance(parsed, dict)
             and str(parsed.get("action") or "") == "context_page"
@@ -512,7 +533,11 @@ def decide(
             "the controller kept requesting context without deciding"
         )
     if not isinstance(data, dict):
-        raise ControllerError("the controller returned no decision")
+        preview = " ".join(str(raw).split())[:300]
+        raise ControllerError(
+            "the controller returned no decision"
+            + (f": {preview}" if preview else "")
+        )
     operation = str(data.get("operation") or "").strip().lower()
     if operation not in OPERATIONS:
         raise ControllerError(

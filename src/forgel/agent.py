@@ -44,7 +44,7 @@ from .repo_tools import (
     RepoActionError,
     execute_repo_action,
 )
-from .model_output import json_objects
+from .model_output import json_objects, looks_like_tool_markup
 from .model import (
     ModelClient,
     ModelError,
@@ -860,27 +860,10 @@ def _cap(text: str, limit: int = MAX_READ_CHARS) -> str:
     )
 
 
-def _looks_like_tool_markup(text: str) -> bool:
-    lowered = text.lower()
-    return any(
-        marker in lowered
-        for marker in (
-            "<｜｜dsml｜｜",
-            "<|",
-            "<tool_call",
-            "<tool_result",
-            "<function_call",
-            "<parameter",
-            "</invoke>",
-            "<system_warning",
-        )
-    )
-
-
 def _looks_structured(text: str) -> bool:
     """True when a model reply is a raw structure, not prose."""
 
-    if _looks_like_tool_markup(text):
+    if looks_like_tool_markup(text):
         return True
     stripped = text.strip()
     if stripped.startswith("```"):
@@ -1451,7 +1434,7 @@ class ProjectAgent:
                 )
                 if not finals:
                     continue
-            if _looks_like_tool_markup(raw) and markup_retries < MAX_MARKUP_RETRIES:
+            if looks_like_tool_markup(raw) and markup_retries < MAX_MARKUP_RETRIES:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
