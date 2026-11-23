@@ -97,10 +97,44 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "failed",
   "created_at": "2026-11-23T16:49:54+00:00",
   "started_at": "2026-11-23T17:06:10+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T17:16:50+00:00",
+  "result": {
+    "summary": "model call failed: model endpoint returned an empty answer",
+    "files_changed": [],
+    "commands": [],
+    "test_output": "",
+    "assumptions": [],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 8,
+      "estimated_input_tokens": 235680,
+      "provider_input_tokens": 199764,
+      "provider_output_tokens": 31567,
+      "cache_hit_tokens": 163456,
+      "cache_miss_tokens": 36308,
+      "estimated_tokens": 43755,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "be8ca1ed4e98ab53263dc595ebc41bc02515b666",
+      "head": "be8ca1ed4e98ab53263dc595ebc41bc02515b666",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "infrastructure",
+      "message": "model call failed: model endpoint returned an empty answer"
+    },
+    "report": "docs/program/agent/20261123164954_release-audit-install-sh-s-bounded-run-s.md"
+  },
   "request": ""
 }
