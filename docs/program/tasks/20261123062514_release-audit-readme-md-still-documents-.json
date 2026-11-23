@@ -25,10 +25,8 @@
   "test_command": [
     "python",
     "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests"
+    "pytest",
+    "-q"
   ],
   "assumptions": [],
   "plan_id": "",
@@ -39,159 +37,66 @@
   "depends_on": [],
   "checks": [
     {
-      "criterion": "A1",
+      "criterion": "A1: README.md no longer contains the superseded `v0.1.0/install.sh` path",
+      "verification": "command",
+      "command": [
+        "python",
+        "-c",
+        "import pathlib,sys; t=pathlib.Path('README.md').read_text(encoding='utf-8'); sys.exit(0 if 'v0.1.0/install.sh' not in t and 'v0.1.0' not in t else 1)"
+      ]
+    },
+    {
+      "criterion": "A4: the new README guard test passes against the corrected README.md",
       "verification": "command",
       "command": [
         "python",
         "-m",
-        "unittest",
-        "tests.test_readme_install",
-        "-v"
+        "pytest",
+        "tests/test_readme_install.py",
+        "-q"
       ]
     },
     {
-      "criterion": "A2",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-c",
-        "awk '/^### Update$/{f=1;next} /^#/{f=0} f' README.md | grep -Fx -e 'curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh'"
-      ]
-    },
-    {
-      "criterion": "A3",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-c",
-        "awk '/^### Uninstall$/{f=1;next} /^#/{f=0} f' README.md | grep -Fx -e 'curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh -s -- --uninstall'"
-      ]
-    },
-    {
-      "criterion": "A4",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-c",
-        "! grep -nE '/v[0-9][^[:space:]/]*/install\\.sh' README.md"
-      ]
-    },
-    {
-      "criterion": "A5",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-c",
-        "test \"$(grep -oE 'https?://[^[:space:]]*/install\\.sh' README.md | sort -u | wc -l)\" -eq 1"
-      ]
-    },
-    {
-      "criterion": "A6",
+      "criterion": "A6: the full repository test suite passes",
       "verification": "command",
       "command": [
         "python",
         "-m",
-        "unittest",
-        "tests.test_readme_install",
-        "-v"
+        "pytest",
+        "-q"
       ]
     },
     {
-      "criterion": "A7",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_readme_install",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "A8",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests"
-      ]
-    },
-    {
-      "criterion": "A9",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-c",
-        "test \"$(git show --name-only --format= HEAD | sed '/^$/d' | sort | tr '\\n' ' ')\" = \"README.md tests/test_cli.py tests/test_readme_install.py \""
-      ]
-    },
-    {
-      "criterion": "A10",
-      "verification": "command",
-      "command": [
-        "bash",
-        "-c",
-        "for p in install.sh tests/test_install.py tests/test_check_cleanup.py CHANGELOG.md; do git show --name-only --format= HEAD | grep -qxF \"$p\" && exit 1; done; for p in install.sh tests/test_install.py tests/test_check_cleanup.py; do test -n \"$(git status --porcelain -- \"$p\")\" || exit 1; done; exit 0"
-      ]
-    },
-    {
-      "criterion": "A11",
+      "criterion": "A2: the documented install command references the release installer and any version matches the newest CHANGELOG release",
       "verification": "review",
       "command": []
     },
     {
-      "criterion": "A12",
+      "criterion": "A3: the documented uninstall command references the release installer on the same terms as A2",
       "verification": "review",
       "command": []
     },
     {
-      "criterion": "A13",
-      "verification": "command",
-      "command": [
-        "curl",
-        "-fsSIL",
-        "--max-time",
-        "20",
-        "-o",
-        "/dev/null",
-        "-w",
-        "%{http_code}",
-        "https://raw.githubusercontent.com/forgel-dev/code/main/install.sh"
-      ]
+      "criterion": "A5: the guard test fails against a README documenting a superseded install path",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A7: the guard test makes no network call, spawns no external binary and calls no git",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "A8: the done report lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py and leaves unrelated worktree changes uncommitted",
+      "verification": "review",
+      "command": []
     }
   ],
   "external_dependencies": [
     {
-      "name": "git",
-      "interface": "Path-limited staging and commit, and `git show --name-only --format= HEAD` for verification",
-      "docs": "https://git-scm.com/docs/git-commit",
-      "mode": "",
-      "evidence": "",
-      "stub": ""
-    },
-    {
-      "name": "curl",
-      "interface": "The documented one-liner fetches the installer script over HTTPS and pipes it to a shell",
-      "docs": "https://curl.se/docs/",
-      "mode": "",
-      "evidence": "",
-      "stub": ""
-    },
-    {
-      "name": "GitHub raw file host (raw.githubusercontent.com)",
-      "interface": "Serves install.sh from the forgel-dev/code default branch at the path the README documents",
-      "docs": "https://docs.github.com/",
-      "mode": "",
-      "evidence": "",
-      "stub": ""
-    },
-    {
-      "name": "pytest",
-      "interface": "Second documented runner of the suite; declares the `test` extra in pyproject.toml",
-      "docs": "https://docs.pytest.org/",
+      "name": "Release installer script published as a release asset (`install.sh`) under the project's release URL on the public code repository host",
+      "interface": "HTTPS GET of a shell script from a release path; the documented command pipes or executes that script. Only the URL form is used in this task, never a live request.",
+      "docs": "releases/0.1.0/release.md (release report describing the published install command); no 0.1.1 release report present in the tree",
       "mode": "",
       "evidence": "",
       "stub": ""

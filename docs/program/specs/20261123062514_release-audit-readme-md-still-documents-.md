@@ -12,23 +12,23 @@
 | Depends on | none |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-23T13:29:47+00:00 |
+| Created | 2026-11-23T15:03:53+00:00 |
 | Source | Plan `` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-The release audit reports that the documented installation command in README.md still points at a pinned release installer path, so a user who copies it installs an obsolete script, and nothing in the suite fails when a documented command drifts to an old or divergent install-script URL. The previous specification of this task also left the completion step undecidable: it declared the agent's git read-only and left the commit to the runtime, while the worktree already carries unrelated modifications, so the runtime could not tell which paths belonged to the task, the repository stayed uncommitted, and the acceptance item 'the task repository is committed' with its exact three-path commit could never pass.
+README.md still documents the install and uninstall commands against the superseded release installer at `.../v0.1.0/install.sh`. A reader who copies those commands installs a stale release, so a new terminal may not have the current `forgel-code`, and nothing in the test suite notices when the documented commands drift away from the release installer again. The previous specification of this task also demanded agent-side git writes and a `curl` reachability probe, which the agent runtime does not permit.
 
-**Outcome:** README.md's install, update and uninstall commands all name one and the same canonical release-installer URL that is not pinned to a release tag; tests/test_readme_install.py guards that rule and fails the suite when a documented command carries a stale tag, a divergent tag or another branch; and the change is finished by the agent itself with a path-limited commit that lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py, leaving install.sh, tests/test_install.py, tests/test_check_cleanup.py and CHANGELOG.md uncommitted in the worktree.
+**Outcome:** README.md documents the install and uninstall commands against the current release installer (a versionless latest URL, or the released version recorded in CHANGELOG.md, never a superseded tag), a repository test guards those documented commands against regressing to a superseded or non-installer source, the full test suite passes, and the change set is committed by the runtime completion step from the paths named in the agent's done report (README.md, tests/test_readme_install.py, tests/test_cli.py), leaving unrelated worktree changes uncommitted.
 
 ## Product Intent
 
-Forgel Code is a thin console client distributed as a separate public repository in the Forgel organization (D-001, D-005) and installed as `forgel-code` (D-004). A user installs it with one command from the public repository, so the documented command must fetch the installer the project actually maintains, and the documentation must not freeze at a release the project has superseded.
+A user who copies the documented install command gets the current released `forgel-code` on PATH, and the documentation cannot silently fall behind a release again.
 
 ## User Experience
 
-A user opens the README, copies the single install command, the update command or the uninstall command, and each of them runs the same current installer. A later edit that reintroduces an old release path or a divergent install-script URL makes the test suite fail before that edit reaches a release.
+A new user finds the install line in README.md, pastes it into a fresh terminal, and afterwards runs `forgel-code` successfully, because the line points at the current release installer rather than an old tag.
 
 ## Roadmap
 
@@ -36,136 +36,131 @@ A user opens the README, copies the single install command, the update command o
 
 ## Goals
 
-- Every install-script command the README documents uses one canonical, tag-free release-installer URL.
-- The suite fails when a documented install-script command regresses to a stale tag, a divergent tag or another branch.
-- The task is committed by the agent with a path-limited commit that lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py, so the completion step never has to guess the change set again.
+- The documented install and uninstall commands point at the current release installer.
+- Documentation drift on those commands is caught by a repository test instead of by a user.
+- The change lands as a single small change set that the runtime completion step commits without agent git writes or network access.
 
 ## Non-Goals
 
-- Changing the PATH behaviour of install.sh: it is a separate change whose files are already modified in the worktree.
-- Publishing a release, creating or moving a tag, or assigning a version number.
-- Editing CHANGELOG.md: the release train owns the changelog and the file already carries unrelated modifications.
-- Changing the client's commands, output format or engine calls.
-- Rewriting the Windows fallback or any other README section beyond the install-script URLs.
+- Changing install.sh behaviour or its arguments.
+- Publishing, tagging or rewriting any release; versions come from the release train and its release report.
+- Fetching the documented URL over the network to prove reachability.
+- Reworking unrelated README sections, the client code or the engine contract.
+- Running git write commands or any network client from the agent.
+- Adding a new CI configuration or a new test runner.
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | D-001: The interactive client moves to a separate public repository in the same organization as the engine. | User decision log, 2026-11-16 21:14 |
-| — | D-004: The client's working name is Forgel Code; it is a Python client installed as `forgel-code`. | User decision log, 2026-11-16 18:34 |
-| — | D-005: The second repository is public and lives in the same organization as the first (`forgel-dev`). | User decision log, 2026-11-16 21:14 |
+| — | The client is a Python client installed as `forgel-code`, so the documented install command installs the `forgel-code` package. | User decision log, D-004 (2026-11-16 18:34) |
+| — | The client repository is public and lives in the same organization as the engine, so the documented install URL points at a publicly resolvable release location. | User decision log, D-005 (2026-11-16 21:14) |
 
 ## Functional Requirements
 
-- **FR-1**: R1: The `## Install` section's first runnable command is exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh`.
-- **FR-2**: R2: The `### Update` command block shows the same one-line installer command.
-- **FR-3**: R3: The `### Uninstall` command block shows exactly `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh -s -- --uninstall`.
-- **FR-4**: R4: No install-script path in README.md is pinned to a release tag: the text contains no match of `/v<digit><non-space, non-slash characters>/install.sh`, in particular no `v0.1.0/install.sh` and no `v0.1.1/install.sh`.
-- **FR-5**: R5: README.md contains at least two install-script URLs and exactly one distinct one, `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`.
-- **FR-6**: R6: In the `## Install` section no other installation path appears before the one-line installer: no `pip install`, `pip3 install`, `python -m venv`, `python3 -m venv`, `pipx` or `--user` token appears above it.
-- **FR-7**: R7: Outside the Windows fallback line and the single `[test]`-extra `pip install` line in the `## Tests` section, README.md names no other main installation path (`pipx`, `python -m venv`, `python3 -m venv`, `pip install`, `--user`) and no editable install (`-e` as a word of its own, `--editable`).
-- **FR-8**: R8: tests/test_readme_install.py contains a guard that reads README.md and fails with an AssertionError when R1 to R7 are violated; the guard needs no network, no environment variable and no particular working directory, and is not skipped.
-- **FR-9**: R9: The guard proves its teeth: the same assertions are run on mutated input where an install-script URL carries a stale tag, where it points at a divergent release tag and where it uses another branch, and the AssertionError is required. No existing test is weakened, removed or skipped to make this change pass.
-- **FR-10**: R10: The agent finishes the task itself and performs the commit. It stages and commits exactly README.md, tests/test_readme_install.py and tests/test_cli.py with a path-limited stage and commit — `git add -- README.md tests/test_readme_install.py tests/test_cli.py` followed by `git commit -- README.md tests/test_readme_install.py tests/test_cli.py`, or the single equivalent `git commit --only -- README.md tests/test_readme_install.py tests/test_cli.py`. It never uses `git add -A`, `git add .`, `git commit -a`, `git stash`, `git checkout --`, `git restore` or `git reset`, and it never adds install.sh, tests/test_install.py, tests/test_check_cleanup.py, CHANGELOG.md or any other modified file to the commit.
-- **FR-11**: R11: After the commit the agent verifies with `git show --name-only --format= HEAD` that the commit lists exactly README.md, tests/test_cli.py and tests/test_readme_install.py, and reports the commit hash and the files that remain modified in the worktree. The commit message is English, states that the README install, update and uninstall commands now use the canonical release installer, and carries no tool attribution or session reference.
+- **FR-1**: R1: README.md contains no install command that references a superseded release path; in particular the string `v0.1.0/install.sh` does not appear in README.md.
+- **FR-2**: R2: The documented install command in README.md invokes the release installer script (`install.sh`) from the release location and is presented as a copy-pasteable, complete shell command.
+- **FR-3**: R3: The documented uninstall command in README.md invokes the same release installer script from the release location and is presented as a copy-pasteable, complete shell command.
+- **FR-4**: R4: The installer location used in README.md is either a versionless latest-release URL or a URL whose version equals the newest released version recorded in CHANGELOG.md; the agent does not introduce, promise or invent a version.
+- **FR-5**: R5: A guard test in `tests/` reads README.md, extracts the documented install and uninstall commands, and fails when either command does not reference the release installer script or references a superseded release path.
+- **FR-6**: R6: The guard test fails for the pre-change README.md (a README documenting `v0.1.0/install.sh` does not satisfy it) and passes for the corrected README.md.
+- **FR-7**: R7: The guard test performs no network access, spawns no external binary and makes no git call, so it runs under the repository's normal test command.
+- **FR-8**: R8: The full repository test suite passes after the change.
+- **FR-9**: R9: The change set is exactly README.md, tests/test_readme_install.py and tests/test_cli.py; these three paths are listed in the agent's done report and the runtime completion step commits exactly the listed paths, leaving every other worktree modification uncommitted.
+- **FR-10**: R10: The agent inspects the worktree with read-only git commands only (`git status`, `git diff`, `git show`, `git log`) and never runs `git add`, `git commit`, `git reset` or `git checkout`.
+- **FR-11**: R11: No reachability or network proof of the documented URL is part of the task; the URL correctness is judged by the documented form and by the guard test, not by a live request.
 
 ## Technical Requirements
 
-- The guard uses only the Python standard library (unittest, pathlib, re) and runs under both runners README.md documents (`python -m unittest discover -s tests` and `python -m pytest -q`).
-- The change keeps README.md's other documented content — install options, shell-profile table, command table, output, timeout and tests sections — as it is.
-- All committed artifacts and the commit message are English; no tool attribution lines and no session references.
-- The whole working tree is never committed: the commit is path-limited to the three named paths and the unrelated modifications stay uncommitted.
-- The versionless default-branch URL is used rather than a pinned release path, so the documented command cannot freeze at an obsolete release; the task creates and moves no tag and assigns no version.
-- The agent's git is writable for this task and the agent performs the commit; no other step decides or performs the commit.
-- The check that fetches the documented URL needs outbound HTTPS to raw.githubusercontent.com.
+- The agent's git access is read-only; the runtime completion step performs the commit for the paths named in the done report.
+- The agent has no network client available; no `curl`, `wget` or HTTP fetch is part of the change or its verification.
+- A published tag is immutable; the task never rewrites a release and never assigns a version.
+- Never commit the whole working tree; the change set is the three named paths only.
+- Artifacts are written in English.
+- The repository test framework is pytest; the guard test uses it and nothing else.
+- The specification states behaviour, not an implementation file list; the developer chooses the guard test's internal structure inside `tests/`.
 
 ## User Stories
 
-- As a new user I want the README's single install command to fetch the current installer so that I do not end up on an obsolete release.
-- As a maintainer I want the suite to fail when a documented install-script command drifts to a stale or divergent URL so that the release audit does not find it first.
-- As the developer of this task I want an explicit completion contract so that my commit contains exactly this change and the unrelated worktree modifications stay out of it.
+- As a new user, I want the README install line to point at the current release installer, so that a fresh terminal ends up with a working `forgel-code` on PATH.
+- As a maintainer, I want a test that fails when the documented install or uninstall command regresses to an old release, so that the docs cannot silently fall behind a release.
 
 ## Tests
 
-- A1: `python -m unittest tests.test_readme_install -v`
-- A2: `bash -c awk '/^### Update$/{f=1;next} /^#/{f=0} f' README.md | grep -Fx -e 'curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh'`
-- A3: `bash -c awk '/^### Uninstall$/{f=1;next} /^#/{f=0} f' README.md | grep -Fx -e 'curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/main/install.sh | sh -s -- --uninstall'`
-- A4: `bash -c ! grep -nE '/v[0-9][^[:space:]/]*/install\.sh' README.md`
-- A5: `bash -c test "$(grep -oE 'https?://[^[:space:]]*/install\.sh' README.md | sort -u | wc -l)" -eq 1`
-- A6: `python -m unittest tests.test_readme_install -v`
-- A7: `python -m unittest tests.test_readme_install -v`
-- A8: `python -m unittest discover -s tests`
-- A9: `bash -c test "$(git show --name-only --format= HEAD | sed '/^$/d' | sort | tr '\n' ' ')" = "README.md tests/test_cli.py tests/test_readme_install.py "`
-- A10: `bash -c for p in install.sh tests/test_install.py tests/test_check_cleanup.py CHANGELOG.md; do git show --name-only --format= HEAD | grep -qxF "$p" && exit 1; done; for p in install.sh tests/test_install.py tests/test_check_cleanup.py; do test -n "$(git status --porcelain -- "$p")" || exit 1; done; exit 0`
-- A11: review
-- A12: review
-- A13: `curl -fsSIL --max-time 20 -o /dev/null -w %{http_code} https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`
-- Command: `python -m unittest discover -s tests`
+- A1: README.md no longer contains the superseded `v0.1.0/install.sh` path: `python -c import pathlib,sys; t=pathlib.Path('README.md').read_text(encoding='utf-8'); sys.exit(0 if 'v0.1.0/install.sh' not in t and 'v0.1.0' not in t else 1)`
+- A4: the new README guard test passes against the corrected README.md: `python -m pytest tests/test_readme_install.py -q`
+- A6: the full repository test suite passes: `python -m pytest -q`
+- A2: the documented install command references the release installer and any version matches the newest CHANGELOG release: review
+- A3: the documented uninstall command references the release installer on the same terms as A2: review
+- A5: the guard test fails against a README documenting a superseded install path: review
+- A7: the guard test makes no network call, spawns no external binary and calls no git: review
+- A8: the done report lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py and leaves unrelated worktree changes uncommitted: review
+- Command: `python -m pytest -q`
 
 ## Acceptance Criteria
 
-- **AC-1**: A1: The first runnable command of the README `## Install` section is the canonical one-line installer.
-- **AC-2**: A2: The README `### Update` block contains the canonical one-line installer.
-- **AC-3**: A3: The README `### Uninstall` block contains exactly the canonical uninstall one-liner with `-s -- --uninstall`.
-- **AC-4**: A4: README.md contains no install-script path pinned to a release tag.
-- **AC-5**: A5: README.md documents exactly one distinct install-script URL.
-- **AC-6**: A6: No alternative main installation path precedes the one-liner in the install section, and none appears elsewhere except the Windows fallback and the `[test]` extra line.
-- **AC-7**: A7: The suite's README guard rejects a stale tag, a divergent tag and another branch, and those negative cases run in the same suite as the positive ones.
-- **AC-8**: A8: The whole test suite passes with the command README.md documents.
-- **AC-9**: A9: The task commit lists exactly README.md, tests/test_cli.py and tests/test_readme_install.py.
-- **AC-10**: A10: The commit contains none of install.sh, tests/test_install.py, tests/test_check_cleanup.py and CHANGELOG.md, and those pre-existing modifications remain in the worktree.
-- **AC-11**: A11: The commit message states the README install-command fix in English and carries no tool attribution or session reference.
-- **AC-12**: A12: The agent's report states the commit hash and which files remain modified.
-- **AC-13**: A13: The documented install-script URL serves install.sh from the repository's default branch.
+- **AC-1**: A1: README.md no longer contains `v0.1.0/install.sh`.
+- **AC-2**: A2: The documented install command in README.md references the release installer and, when versioned, that version matches the newest release recorded in CHANGELOG.md.
+- **AC-3**: A3: The documented uninstall command in README.md references the release installer on the same terms as A2.
+- **AC-4**: A4: The new guard test passes against the corrected README.md.
+- **AC-5**: A5: The new guard test fails when run against a README.md that documents a superseded install path.
+- **AC-6**: A6: The full test suite passes.
+- **AC-7**: A7: The guard test needs no network, no external binary and no git.
+- **AC-8**: A8: The agent's done report lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py as the change set, and unrelated worktree modifications are left uncommitted for the runtime completion decision.
 
 ## Scope Boundaries
 
-- The install, update and uninstall commands documented in README.md and the rule that all documented install-script URLs are one canonical, tag-free URL.
-- The README guard in tests/test_readme_install.py: it must fail, not skip, when a documented install-script URL carries a release tag or comes from another branch.
-- The self-executed completion contract: the agent stages and commits exactly README.md, tests/test_readme_install.py and tests/test_cli.py and verifies the commit.
-- Changing the PATH behaviour of install.sh: it is a separate change whose files are already modified in the worktree.
-- Publishing a release, creating or moving a tag, or assigning a version number.
-- Editing CHANGELOG.md: the release train owns the changelog and the file already carries unrelated modifications.
-- Changing the client's commands, output format or engine calls.
-- Rewriting the Windows fallback or any other README section beyond the install-script URLs.
+- Correct the documented install command in README.md to the current release installer.
+- Correct the documented uninstall command in README.md to the current release installer.
+- Add a README guard test in the repository test suite that asserts both documented commands use the release installer.
+- Keep the change set limited to README.md, tests/test_readme_install.py and tests/test_cli.py.
+- Report the exact changed paths in the agent's done report so the runtime completion step commits exactly those paths.
+- Changing install.sh behaviour or its arguments.
+- Publishing, tagging or rewriting any release; versions come from the release train and its release report.
+- Fetching the documented URL over the network to prove reachability.
+- Reworking unrelated README sections, the client code or the engine contract.
+- Running git write commands or any network client from the agent.
+- Adding a new CI configuration or a new test runner.
 
 ## Risks
 
-- The README read while writing this specification already names the canonical default-branch URL and the guard module already exists. If the committed tree already satisfies R1 to R9 the agent has no diff, and A9 and A10 cannot pass; the agent must report that state instead of manufacturing a change or padding the commit with unrelated files.
-- The fixed change set names tests/test_cli.py. If this work produces no diff there, a path-limited commit lists only two paths and A9 fails. The agent reports that discrepancy and never adds install.sh, tests/test_install.py, tests/test_check_cleanup.py or CHANGELOG.md to make the commit look bigger.
-- install.sh still defaults `FORGEL_CODE_TAG` to `v0.1.0` and its own header comment shows a `.../v0.1.0/install.sh` command, so the canonical README URL installs the v0.1.0 archive until the installer's default changes. That file belongs to another task's dirty change set and is out of scope here, but the audit finding is only partly closed by the documentation.
-- A path-limited `git commit -- <paths>` produces no commit when none of the three paths has a staged change; the agent must resolve that by doing the real work, not by widening the path list.
-- The URL reachability check needs outbound HTTPS; in an offline environment it fails for environmental reasons, not because of the documentation.
-- It is tempting to run `git add -A` or `git commit -a`; that pulls install.sh, the installer tests and the changelog into the commit and the reviewer rejects the task.
+- The tree contains only `releases/0.1.0`, so a versioned URL chosen by the agent could name a release that does not exist; preferring a versionless latest URL removes this risk.
+- If the release location does not serve a versionless installer URL, the guard test must compare against CHANGELOG.md instead of a literal, or the README will go stale again on the next release.
+- If the release installer does not support uninstall, restricting the guard to the install command leaves the uninstall documentation uncorrected and A3 cannot be met.
+- The guard test can become brittle if it parses prose loosely; it must target the fenced command block and must be shown to fail on the old README (A5).
+- Adding `tests/test_cli.py` to the change set without a genuine modification reintroduces the rejected scope problem; that path is declared only when it is actually changed.
+- Whoever reads this task may be tempted to reintroduce an agent-side commit or a `curl` probe; both are barred by R10, R11 and the constraints.
 
 ## Open Questions
 
-- None.
+- Does the release installer script provide an uninstall invocation on the same URL? If it does not, the guard test must be limited to the install command and A3 restated, which is a product-visible change to this task's intent.
 
 ## Assumptions
 
-- The intent allows either the current release installer or a versionless latest URL; the versionless default-branch URL is chosen because the repository's guard already treats a tag-pinned install-script path as a regression.
-- The change set is the three paths the accepted completion contract names; tests/test_cli.py is part of it because it carries the client-side command-table assertion that mirrors the README, and it stays green without a weakened test.
-- install.sh, tests/test_install.py, tests/test_check_cleanup.py and CHANGELOG.md are other work in the same worktree and belong to no commit of this task.
-- Python 3.9 or newer, a POSIX shell and git are available in the task environment, and the suite runs without an engine on PATH.
-- The repository's default branch is `main` and install.sh sits at its root, so the canonical URL resolves to this repository's installer.
+- The release installer is published as a script named `install.sh` at a release URL, and the same script serves both install and uninstall, which is why the task asks the guard to cover both commands.
+- A versionless latest-release URL form is preferable because it cannot go stale; if the release location does not offer one, the newest version recorded in CHANGELOG.md is used instead.
+- The README commands currently live in fenced code blocks whose text the guard test can extract with a small parser or a regular expression over the fenced block.
+- CHANGELOG.md is the in-repository source for the newest released version, since the `releases/` directory contains only 0.1.0.
+- The guard test may update `tests/test_cli.py` only if a shared helper or a CLI-documentation assertion already lives there; otherwise that file is untouched and still listed in the declared change set only if modified.
 
 ## Related Documents
 
+- README.md
+- install.sh
 - CHANGELOG.md
-- AGENTS.md
-- FORGEL.md
+- tests/test_readme_install.py
+- tests/test_cli.py
 - releases/0.1.0/release.md
+- FORGEL.md
+- AGENTS.md
+- code/FORGEL.md
+- code/AGENTS.md
 
 ## Revision History
 
-- v1: Initial specification of the README install-command fix and its guard test; it declared the agent's git read-only and left the commit to the runtime.
-- v2: R10 and R11 rewritten for the concrete defect the planner reported. The agent now performs the path-limited stage and commit of exactly README.md, tests/test_readme_install.py and tests/test_cli.py itself, verifies the commit with `git show --name-only --format= HEAD`, and reports the hash and the remaining modified files. The statements that the agent's git is read-only and that the runtime performs the commit are dropped; the rule that the whole working tree is never committed stays. R1 to R9 and all acceptance criteria are unchanged.
+- v1: initial specification requiring an agent-side `git commit --only` and a `curl` reachability check.
+- v2: rewritten after rejection — the commit is performed by the runtime completion step for the paths listed in the agent's done report (README.md, tests/test_readme_install.py, tests/test_cli.py), unrelated worktree changes stay uncommitted, and the agent-side git write and `curl` reachability steps are removed.
 
 ## External Dependencies
 
-- **git** — mode `unknown`; interface: Path-limited staging and commit, and `git show --name-only --format= HEAD` for verification; docs: https://git-scm.com/docs/git-commit; evidence: —
-- **curl** — mode `unknown`; interface: The documented one-liner fetches the installer script over HTTPS and pipes it to a shell; docs: https://curl.se/docs/; evidence: —
-- **GitHub raw file host (raw.githubusercontent.com)** — mode `unknown`; interface: Serves install.sh from the forgel-dev/code default branch at the path the README documents; docs: https://docs.github.com/; evidence: —
-- **pytest** — mode `unknown`; interface: Second documented runner of the suite; declares the `test` extra in pyproject.toml; docs: https://docs.pytest.org/; evidence: —
+- **Release installer script published as a release asset (`install.sh`) under the project's release URL on the public code repository host** — mode `unknown`; interface: HTTPS GET of a shell script from a release path; the documented command pipes or executes that script. Only the URL form is used in this task, never a live request.; docs: releases/0.1.0/release.md (release report describing the published install command); no 0.1.1 release report present in the tree; evidence: —
