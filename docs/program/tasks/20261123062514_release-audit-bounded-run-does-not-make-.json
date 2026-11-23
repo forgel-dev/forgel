@@ -142,10 +142,100 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-23T06:25:14+00:00",
   "started_at": "2026-11-23T10:41:36+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T11:13:16+00:00",
+  "result": {
+    "summary": "Made the watchdog's timeout decision authoritative in `bounded_run` and proved it with a real-installer regression test. The watchdog now records its decision in the private check directory (`timed-out` when the bound elapsed before the checked command exited, `finished` when the command won the race), and `bounded_run` waits with a new `await_decision` helper — bounded by `DECISION_WAIT`, derived from `VERIFY_GRACE` — before reading the outcome. A `timed-out` decision forces `CHECK_STATUS=124` regardless of the ordering between the child's exit and the marker write; a missing decision within the wait is also treated as 124, never as success, so a silent watchdog cannot turn a timed-out check into a pass nor hang the installer. The success path keeps the checked command's own exit status and captured output untouched. `verify_profile` reports 124 through `verification_failure`, which names the configured limit. `bounded_run` releases the watchdog, the checked process tree and the private directory on every exit path (including the failure and timeout paths), and the header comment now describes the decision-based bounded check. Added `InstallerBoundedTimeoutDecisionTest` in `tests/test_install.py`, which drives the real `install.sh` with a fresh-shell stand-in that outlives `FORGEL_CODE_TIMEOUT=1` and prints a success report, asserting a non-zero install, the `stopped after 1s` failure message, no success output and no leftover check directory; a second case covers a watchdog decision that never arrives. Verified with `python -m pytest -q` (204 passed, 137 subtests), `python -m pytest tests/test_install.py -k 'BoundedTimeoutDecision or Watchdog or BoundedCheck or BoundedTools'` (9 passed), and the suite's own `sh -n install.sh` and no-GNU-`timeout` checks.; uncommitted files outside the contract: install.sh, tests/test_install.py",
+    "files_changed": [],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_install.py",
+          "-q",
+          "-x",
+          "-k",
+          "outlives or never_arrives or bounded or timeout"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_install.py",
+          "-q",
+          "-k",
+          "BoundedTimeoutDecision or Watchdog or BoundedCheck or BoundedTools"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "...................................................... [ 26%]\n................................................. [ 50%]\n........................................................................ [ 85%]\n.............................                    [100%]\n204 passed, 137 subtests passed in 130.35s (0:02:10)\n",
+    "assumptions": [
+      "The existing `VERIFY_GRACE=2` is a sufficient upper bound for waiting on the watchdog's decision, exposed as `DECISION_WAIT` with a floor of one second; no new configuration variable was introduced.",
+      "The watchdog writes its decision before it starts signalling, so waiting for the decision and then `wait`ing on the watchdog keeps the timeout path free of leftover processes.",
+      "A test stand-in named like a handled shell (a `bash` stub in a temporary directory used as `$SHELL`) is the way to make the real `install.sh` run a fresh-shell check whose runtime deterministically exceeds a one-second bound."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 37,
+      "estimated_input_tokens": 1489761,
+      "provider_input_tokens": 1569090,
+      "provider_output_tokens": 267675,
+      "cache_hit_tokens": 1451520,
+      "cache_miss_tokens": 117570,
+      "estimated_tokens": 37440,
+      "state": "docs/program/agent/20261123062514_release-audit-bounded-run-does-not-make-.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "head": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "commit": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "commits": [
+        "580c644caac4427ea0e8b8da54e302a312bd99ab"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123062514_release-audit-bounded-run-does-not-make-.md"
+  },
   "request": ""
 }
