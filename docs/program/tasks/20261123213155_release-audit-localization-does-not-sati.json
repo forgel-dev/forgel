@@ -199,10 +199,232 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-23T21:31:55+00:00",
   "started_at": "2026-11-23T23:08:02+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T23:39:04+00:00",
+  "result": {
+    "summary": "Implemented owner-language replies in the interactive session across English, Russian, French and Spanish. `forgel_code/interactive.py` now detects the language from each owner message (Cyrillic → Russian; French/Spanish letters, characteristic words and French elisions; otherwise the current language, starting in English) and refreshes `self.lang` before any reply is composed. A new `MESSAGES` table carries every session-composed sentence — project line, task/release headings, plan headings, clarifications, failure framing, next-step guidance, the no-reply line and the closing line — in all four languages with the same key set and no cross-language fallback (`_message` looks the key up in the current language only). The owner's sentence still reaches the engine unaltered via `say --text`, and the engine's answer is printed verbatim. Engine refusals/diagnostics are no longer shown as session voice: the session states the failure and the next step in the current language and shows the engine's raw words as a distinctly marked, engine-attributed quotation. Engine data values (ids, states, versions) are rendered untouched. Added `tests/test_localization.py` covering detection, the four-language wording-set parity, French/Spanish/Russian/English replies, an unaltered Russian sentence reaching the engine, a signal-free message keeping French, a mid-session language switch, engine values shown as reported, and a French failure framed in French with the raw engine text only in the quotation. Removed the stray untracked `forgel_code/languages.py` left by the earlier attempt, which duplicated the detection now living in `interactive.py`. Updated `README.md` and `CHANGELOG.md` to describe the behavior. Verified with the full suite: `python3 -m unittest discover -s tests -t .` → 285 tests OK.; escalated unrelated changes for the planner: README.md, CHANGELOG.md",
+    "files_changed": [
+      "forgel_code/interactive.py",
+      "tests/test_localization.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 124
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_interactive",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_localization",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_localization",
+          "tests.test_interactive"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "README.md",
+          "CHANGELOG.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_localization",
+          "tests.test_interactive",
+          "tests.test_cli",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": ".............................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 285 tests in 176.805s\n\nOK\n",
+    "assumptions": [
+      "Language detection and the wording table live inside `forgel_code/interactive.py` rather than a new module, so the change stays one coherent file and no extra public surface is added.",
+      "French/Spanish are recognised by a combination of characteristic diacritics, language-specific words and French elisions; a message whose text carries no decisive signal keeps the current language, and an unanswered session starts in English.",
+      "The engine's diagnostic text is left in the engine's own words and only its framing is localized, as the client cannot translate engine strings; it is presented as an attributed quotation using each language's own quotation marks.",
+      "Engine data values such as task ids, states, versions and project keys are printed exactly as returned and never translated."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 44,
+      "estimated_input_tokens": 2178126,
+      "provider_input_tokens": 2248041,
+      "provider_output_tokens": 116938,
+      "cache_hit_tokens": 2120064,
+      "cache_miss_tokens": 127977,
+      "estimated_tokens": 48299,
+      "state": "docs/program/agent/20261123213155_release-audit-localization-does-not-sati.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [
+      {
+        "path": "README.md",
+        "reason": "Documents the new four-language session behavior, but the task spec's revision 3 explicitly dropped the user-documentation item and removed the documentation acceptance criterion, judging the task on observable behavior only; it is outside the required behavioral change set and is left for the planner."
+      },
+      {
+        "path": "CHANGELOG.md",
+        "reason": "Changelog entry for the four-language feature; user documentation was removed from this task's scope (spec revision 3) and it is not needed to implement the behavioral requirements, so the planner should decide whether to include it."
+      }
+    ],
+    "git": {
+      "base": "5219c7bb4faffe73c4df4a0172b0787db467ee83",
+      "head": "b060a351aba2d66d58a81c42f6756a44f2b2173a",
+      "commit": "b060a351aba2d66d58a81c42f6756a44f2b2173a",
+      "commits": [
+        "b060a351aba2d66d58a81c42f6756a44f2b2173a"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123213155_release-audit-localization-does-not-sati.md"
+  },
   "request": ""
 }
