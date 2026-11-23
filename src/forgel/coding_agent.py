@@ -723,7 +723,21 @@ class CodingAgent:
                     summary += f"; commit failed: {exc}"
         if status == "done" and not changed and not spec_issues:
             attempt = tasks.attempt_number(task)
-            if attempt > 0:
+            prior_git = (
+                previous_result.get("git")
+                if isinstance(previous_result.get("git"), dict)
+                else {}
+            )
+            prior_commits = [
+                str(item) for item in (prior_git.get("commits") or [])
+            ]
+            prior_commit = str(prior_git.get("commit") or "")
+            if prior_commit and prior_commit not in prior_commits:
+                prior_commits.append(prior_commit)
+            already_committed = bool(prior_commits) or (
+                git_ops.head_sha(repo) != base_sha
+            )
+            if attempt > 0 and not already_committed:
                 status = "failed"
                 failure_kind = "agent"
                 summary = (

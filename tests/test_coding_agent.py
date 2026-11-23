@@ -319,6 +319,72 @@ class CodingAgentTest(unittest.TestCase):
             all(float(event["cost"]) > 0 for event in events)
         )
 
+    def test_a_rework_with_the_work_already_committed_is_done(self) -> None:
+        (self.repo / ".gitignore").write_text(
+            "__pycache__/\n", encoding="utf-8"
+        )
+        (self.repo / "work.py").write_text(
+            "value = 1\n", encoding="utf-8"
+        )
+        _run(self.repo, "add", "-A")
+        _run(
+            self.repo,
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "the work is committed",
+        )
+        sha = _run(
+            self.repo, "rev-parse", "HEAD"
+        ).stdout.strip()
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout,
+            task["id"],
+            status="pending",
+            result={
+                "summary": "the work is already committed",
+                "files_changed": ["work.py"],
+                "rework_count": 1,
+                "git": {
+                    "base": sha,
+                    "head": sha,
+                    "commit": sha,
+                    "commits": [sha],
+                },
+            },
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {"action": "done", "summary": "already done"}
+                )
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        final = get_task(self.layout, task["id"])
+        assert final is not None
+        self.assertIn("work.py", final["result"]["files_changed"])
+        self.assertIn(
+            sha, final["result"]["git"]["commits"]
+        )
+
     def test_agent_executes_a_batch_of_actions(self) -> None:
         task = self._task()
         responses = self._responses()
