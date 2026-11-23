@@ -3,8 +3,8 @@
 - Task: `20261123213155_release-audit-forgel-code-interactive-py`
 - Status: `done`
 - Repository: `code`
-- Steps: 41
-- Finished: 2026-11-23T22:44:16+00:00
+- Steps: 11
+- Finished: 2026-11-23T23:00:41+00:00
 
 ## Requirements
 
@@ -20,31 +20,23 @@
 
 ## Assumptions
 
-- The prose vocabulary is finite and maintained in the client: the words that make the named benign examples benign are members, and 'abc', 'swordfish' and 'hunter2' are not, matching the specification's prose-vocabulary rule.
-- A word recognised as prose is compared case-insensitively after stripping quotes and trailing sentence punctuation, so 'updated.' in 'Password updated.' still counts as prose.
-- The separator branches (':', '=') remain unconditional, so 'Secret: rotation' masks while 'Secret rotation scheduled' does not, as the specification's assumptions state.
-- The quoted-run rule covers " ' ` and « »; an unclosed quote masks to the end of its line.
-- No documentation file needed a change: the specification already states the behaviour implemented.
+- A value that starts with a separator character is not treated as a value, so the bare-label prose rule keeps deciding those cases.
+- A quoted run is masked strictly between its quotes; for an unclosed quote the rest of the line after the opening quote is masked.
 
 ## Test Removals
 
-- tests/test_redact.py::RedactFormTest::test_a_colon_joined_value_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole
-- tests/test_redact.py::RedactFormTest::test_an_equals_joined_value_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole
-- tests/test_redact.py::RedactFormTest::test_a_whitespace_joined_value_still_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_a_bare_label_binds_a_word_that_is_not_prose
-- tests/test_redact.py::RedactFormTest::test_a_russian_label_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked
-- tests/test_redact.py::RedactFormTest::test_a_compound_label_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked
-- tests/test_redact.py::RedactFormTest::test_a_mentioned_label_is_left_alone: replaced -> tests/test_redact.py::RedactFormTest::test_benign_prose_is_displayed_unchanged
+- none
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 41
-- Estimated input tokens (all calls): 1970070
-- Provider input/output tokens: 1992696 / 57435
-- Provider cache hit/miss tokens: 1926272 / 66424
-- Estimated prompt at the end: 68932 tokens
+- Model calls: 11
+- Estimated input tokens (all calls): 345054
+- Provider input/output tokens: 353935 / 31793
+- Provider cache hit/miss tokens: 315136 / 38799
+- Estimated prompt at the end: 45855 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261123213155_release-audit-forgel-code-interactive-py.md`)
@@ -197,17 +189,15 @@ The owner reads an engine reply, task list, release state or error message as th
 
 ## Summary
 
-Addressed the remaining review failures on top of the previous attempt. `redact()` in `forgel_code/interactive.py` now separates a bound value from ordinary prose with one stated rule: a label binds the following word unless that word is recognised everyday prose (a fixed vocabulary of English/Russian function words plus ordinary narrative verbs and nouns such as 'updated' or 'rotation') that carries no key-material markers (digits, mixed case, value punctuation). Consequently a clause-initial or mid-sentence benign mention (`Password updated.`, `Secret rotation scheduled`, `the token is missing`) is displayed byte-for-byte unchanged, while the previously working whitespace form is masked wherever the label sits (`the token abc`, `set password swordfish`, `установлен пароль swordfish`). Colon/equals forms (including `==` and spaced `=`), authorization schemes (`Authorization: Bearer abc123`, `the token Bearer secretvalue`), Russian stem labels, compound/environment labels, quoted values (including unclosed quotes hiding the rest of the line) and copula forms (`the token is VALUE`) keep masking only the value. The prose exemption is applied after the scheme, copula, quote and separator branches so no masking form regressed; masking stays idempotent and total for empty text, and every engine reply, error and state line still passes through the single `write()` funnel that calls `redact()`. `tests/test_redact.py` was rewritten around the new specification: each acceptance criterion has an executable example, including the two previously failing directions (`Password updated.`/`Secret rotation scheduled` unchanged; `the token abc`/`set password swordfish` masked), a byte-for-byte check for secret-free text, idempotence, absence of the value as a substring, and session-level checks that an engine reply containing `токен: abc123` and `Authorization: Bearer abc123`, a task title carrying `password=hunter2`, and an engine error carrying `password: hunter2` all reach the screen masked. Verification: `python -m pytest -q tests/test_redact.py` (12 passed, 17 subtests), `python -m pytest -q tests/test_interactive.py` (37 passed, 10 subtests), and the full suite `python -m pytest -q` (267 passed, 172 subtests).
+Fixed the two remaining review failures in `redact()` and pinned both forms with executable tests. A quoted value is now masked only between its quotation marks, so the quote characters stay visible for every supported pair and for the bare-label form, and an unclosed quote keeps its opening quote while masking the rest of the line. A run of `:`/`=` separators (spaces included) is now consumed as visible text, so every separator character survives and only the following value is masked. `tests/test_redact.py` gained `test_a_quoted_value_is_masked_between_its_quotes`, `test_every_separator_character_stays_visible` and a one-marker-per-value test, and the existing idempotence test now covers the quoted form and `password==hunter2`. Verified with `python -m pytest -q tests/test_redact.py` (15 tests, 32 subtests, passed) and the full suite `python -m pytest -q` (270 passed, 187 subtests passed).
 
 ## Files Changed
 
 - `forgel_code/interactive.py`
+- `tests/test_redact.py`
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q", "tests/test_redact.py"]` → exit 0
-- `["python", "-m", "pytest", "-q", "tests/test_interactive.py"]` → exit 0
-- `["python", "-m", "pytest", "-q"]` → exit 0
 - `["python", "-m", "pytest", "-q", "tests/test_redact.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
 - `["python", "-m", "pytest", "-q", "tests/test_redact.py"]` → exit 0
@@ -215,19 +205,18 @@ Addressed the remaining review failures on top of the previous attempt. `redact(
 ## Final Test Output
 
 ```
-............                                            [100%]
-12 passed, 17 subtests passed in 1.96s
+...............                          [100%]
+15 passed, 32 subtests passed in 1.96s
 
 ```
 
 ## Actions
 
 - read_file: forgel_code/interactive.py
-- read_file: tests/test_redact.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py']
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_interactive.py']
-- run: ['python', '-m', 'pytest', '-q']
 - read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: tests/test_redact.py
 - write_file: forgel_code/interactive.py
+- write_file: tests/test_redact.py
 - run: ['python', '-m', 'pytest', '-q', 'tests/test_redact.py']
 - run: ['python', '-m', 'pytest', '-q']

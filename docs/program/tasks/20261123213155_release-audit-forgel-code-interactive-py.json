@@ -157,46 +157,17 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T21:31:55+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T22:55:38+00:00",
+  "finished_at": "2026-11-23T23:00:41+00:00",
   "result": {
-    "summary": "Addressed the remaining review failures on top of the previous attempt. `redact()` in `forgel_code/interactive.py` now separates a bound value from ordinary prose with one stated rule: a label binds the following word unless that word is recognised everyday prose (a fixed vocabulary of English/Russian function words plus ordinary narrative verbs and nouns such as 'updated' or 'rotation') that carries no key-material markers (digits, mixed case, value punctuation). Consequently a clause-initial or mid-sentence benign mention (`Password updated.`, `Secret rotation scheduled`, `the token is missing`) is displayed byte-for-byte unchanged, while the previously working whitespace form is masked wherever the label sits (`the token abc`, `set password swordfish`, `установлен пароль swordfish`). Colon/equals forms (including `==` and spaced `=`), authorization schemes (`Authorization: Bearer abc123`, `the token Bearer secretvalue`), Russian stem labels, compound/environment labels, quoted values (including unclosed quotes hiding the rest of the line) and copula forms (`the token is VALUE`) keep masking only the value. The prose exemption is applied after the scheme, copula, quote and separator branches so no masking form regressed; masking stays idempotent and total for empty text, and every engine reply, error and state line still passes through the single `write()` funnel that calls `redact()`. `tests/test_redact.py` was rewritten around the new specification: each acceptance criterion has an executable example, including the two previously failing directions (`Password updated.`/`Secret rotation scheduled` unchanged; `the token abc`/`set password swordfish` masked), a byte-for-byte check for secret-free text, idempotence, absence of the value as a substring, and session-level checks that an engine reply containing `токен: abc123` and `Authorization: Bearer abc123`, a task title carrying `password=hunter2`, and an engine error carrying `password: hunter2` all reach the screen masked. Verification: `python -m pytest -q tests/test_redact.py` (12 passed, 17 subtests), `python -m pytest -q tests/test_interactive.py` (37 passed, 10 subtests), and the full suite `python -m pytest -q` (267 passed, 172 subtests).; task review failed",
+    "summary": "Fixed the two remaining review failures in `redact()` and pinned both forms with executable tests. A quoted value is now masked only between its quotation marks, so the quote characters stay visible for every supported pair and for the bare-label form, and an unclosed quote keeps its opening quote while masking the rest of the line. A run of `:`/`=` separators (spaces included) is now consumed as visible text, so every separator character survives and only the following value is masked. `tests/test_redact.py` gained `test_a_quoted_value_is_masked_between_its_quotes`, `test_every_separator_character_stays_visible` and a one-marker-per-value test, and the existing idempotence test now covers the quoted form and `password==hunter2`. Verified with `python -m pytest -q tests/test_redact.py` (15 tests, 32 subtests, passed) and the full suite `python -m pytest -q` (270 passed, 187 subtests passed).",
     "files_changed": [
       "forgel_code/interactive.py",
       "tests/test_redact.py"
     ],
     "commands": [
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_redact.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_interactive.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q"
-        ],
-        "exit_code": 0
-      },
       {
         "command": [
           "python",
@@ -228,26 +199,23 @@
         "final_test": true
       }
     ],
-    "test_output": "............                                            [100%]\n12 passed, 17 subtests passed in 1.96s\n",
+    "test_output": "...............                          [100%]\n15 passed, 32 subtests passed in 1.96s\n",
     "assumptions": [
-      "The prose vocabulary is finite and maintained in the client: the words that make the named benign examples benign are members, and 'abc', 'swordfish' and 'hunter2' are not, matching the specification's prose-vocabulary rule.",
-      "A word recognised as prose is compared case-insensitively after stripping quotes and trailing sentence punctuation, so 'updated.' in 'Password updated.' still counts as prose.",
-      "The separator branches (':', '=') remain unconditional, so 'Secret: rotation' masks while 'Secret rotation scheduled' does not, as the specification's assumptions state.",
-      "The quoted-run rule covers \" ' ` and « »; an unclosed quote masks to the end of its line.",
-      "No documentation file needed a change: the specification already states the behaviour implemented."
+      "A value that starts with a separator character is not treated as a value, so the bare-label prose rule keeps deciding those cases.",
+      "A quoted run is masked strictly between its quotes; for an unclosed quote the rest of the line after the opening quote is masked."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 41,
-      "estimated_input_tokens": 1970070,
-      "provider_input_tokens": 1992696,
-      "provider_output_tokens": 57435,
-      "cache_hit_tokens": 1926272,
-      "cache_miss_tokens": 66424,
-      "estimated_tokens": 68932,
+      "model_calls": 11,
+      "estimated_input_tokens": 345054,
+      "provider_input_tokens": 353935,
+      "provider_output_tokens": 31793,
+      "cache_hit_tokens": 315136,
+      "cache_miss_tokens": 38799,
+      "estimated_tokens": 45855,
       "state": ""
     },
     "test_removals": [
@@ -285,12 +253,13 @@
     "spec_issues": [],
     "escalated": [],
     "git": {
-      "base": "ec4bd355192bae72b706ba5a7008b764fbb47687",
-      "head": "ef353bcb59451745439c86f4fe68c82ba19ee68a",
-      "commit": "ef353bcb59451745439c86f4fe68c82ba19ee68a",
+      "base": "ef353bcb59451745439c86f4fe68c82ba19ee68a",
+      "head": "5219c7bb4faffe73c4df4a0172b0787db467ee83",
+      "commit": "5219c7bb4faffe73c4df4a0172b0787db467ee83",
       "commits": [
         "ec4bd355192bae72b706ba5a7008b764fbb47687",
-        "ef353bcb59451745439c86f4fe68c82ba19ee68a"
+        "ef353bcb59451745439c86f4fe68c82ba19ee68a",
+        "5219c7bb4faffe73c4df4a0172b0787db467ee83"
       ]
     },
     "report": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.md",
@@ -489,7 +458,8 @@
       "message": "The redactor rewrite handles colon, equals, whitespace, authorization-scheme, Russian, compound and benign-prose forms correctly, and the environment checks pass. Two pinned forms are nevertheless wrong: a quoted value is masked together with its quotation marks (`password: \"hunter2 and more\"` renders `password: [redacted]` instead of `password: \"[redacted]\"`), and a repeated separator loses a character (`password==hunter2` renders `password=[redacted]` instead of `password==[redacted]`). Neither form is covered by the attributed tests, and the replacement tests cited in the developer justification are not present in the repository, so the change does not satisfy the quoted-value requirement and does not byte-preserve text outside the masked value for repeated separators.",
       "retryable": false
     },
-    "rework_count": 1
+    "rework_count": 1,
+    "failure": {}
   },
   "request": ""
 }
