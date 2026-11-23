@@ -512,7 +512,201 @@
       "kind": "infrastructure",
       "message": "model call failed: model endpoint returned an empty answer"
     },
-    "failure": {}
+    "failure": {},
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "Starting the client with no arguments shows a prompt and keeps the session open; no usage or help text appears in its place.",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "Replies follow the language of the owner's message.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The client stays thin: it does not call a model, read project files or run checks itself.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": true,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The attributed commit turns a bare `forgel-code` invocation into an interactive session and leaves every one-shot and `--json` path untouched. `cli.main` short-circuits empty argv to `run_interactive()`, so `--help`, `--version`, and every subcommand keep their previous parse and output. The new `forgel_code/commands.py` centralises the client-to-engine argv (say/plan/task accept/reject/retry/pause/resume/use) so the session and the one-shot wrappers cannot diverge, and `forgel_code/interactive.py` implements the prompt loop: it forwards free text to the engine's `say`, renders the engine's reply, shows the selected project and re-reads task/release state before each prompt (self-refresh), routes plain-language accept/rework/retry/pause/resume to the engine's own commands, shows clarifications for unmatched/ambiguous input, and redacts anything that names key material. Sensitive operations (adopt/create/secret/config) are never executed from free text; the session only points to the explicit command. Leaving or end-of-input ends the loop synchronously and keeps no transcript, so nothing half-started remains and no secret is persisted. The client still only shells out to `forgel ... --json` and never imports the engine or reads project files. Documentation (README section, CHANGELOG) matches the behavior, and the interactive tests including the switching-project scenario are present; QA passed all deterministic checks and both review-only criteria (thin client) are satisfied. No blocking defect or unrelated committed file was found.",
+      "requirements": [
+        {
+          "requirement": "FR-1 / AC-1: Starting with no arguments opens an interactive session with a prompt and no usage or help text.",
+          "verdict": "pass",
+          "note": "`cli.main` returns `run_interactive()` for empty argv before parsing; help/version and subcommands are unaffected."
+        },
+        {
+          "requirement": "FR-2 / AC-2: Free text is sent to the engine's project agent as one free-form request and the reply is shown; the session stays open.",
+          "verdict": "pass",
+          "note": "Interactive text is built as `say --text` via `commands.build` and the engine's reply is rendered; the loop continues afterwards."
+        },
+        {
+          "requirement": "FR-3 / AC-9: The selected project is shown and can be switched from inside the session; later requests and displayed state use the new project.",
+          "verdict": "pass",
+          "note": "Project is loaded from the persisted `Session`, shown at the prompt, and a switch updates the active project used by later scoped commands; a rejected `use` leaves the previous selection."
+        },
+        {
+          "requirement": "FR-4 / AC-4: A queued task is shown with its title and state.",
+          "verdict": "pass",
+          "note": "Task rendering pulls id/title/state from the engine answer."
+        },
+        {
+          "requirement": "FR-5 / AC-3: A plan is shown as its tasks in planned order with each task's state.",
+          "verdict": "pass",
+          "note": "Plan rendering walks the plan's task collection in order; test stub returns ordered plan tasks with states."
+        },
+        {
+          "requirement": "FR-6 / AC-5: Task and release state stay visible and refresh without an explicit status request.",
+          "verdict": "pass",
+          "note": "The session docstring and loop re-read task and release state after each request and before each prompt; RELEASE_KEYS/TASK_KEYS support it."
+        },
+        {
+          "requirement": "FR-7 / AC-6 / AC-7: Accept, rework with remarks, retry, pause and resume work from plain language and show the resulting state.",
+          "verdict": "pass",
+          "note": "ACTIONS map plain-language words to engine `task accept`/`task reject --notes`/`retry`/`resume`/`pause` via `commands.build`; state is re-read after the call."
+        },
+        {
+          "requirement": "FR-8 / AC-8: A failure shows a concrete cause and a next possible step and the session remains usable.",
+          "verdict": "pass",
+          "note": "EngineError message is shown with a next-step hint; the loop catches the error and continues accepting the next request without restart."
+        },
+        {
+          "requirement": "FR-9 / AC-15 (review-only): Every reply shown is in the language of the owner's message.",
+          "verdict": "pass",
+          "note": "Agent replies come through the engine unchanged (engine answers in the owner's language); the session's own labels/clarifications select en/ru variants from MESSAGES. No client-side reply is generated that ignores the owner's language."
+        },
+        {
+          "requirement": "FR-10 / AC-11: An unmatched or ambiguous request yields a clarification and performs no action.",
+          "verdict": "pass",
+          "note": "Intent matching produces a clarification message when zero or multiple actions match, without issuing an engine command."
+        },
+        {
+          "requirement": "FR-11 / AC-10: Adopt, create project, set secret and change configuration cannot be triggered by free text; the session may only point to them.",
+          "verdict": "pass",
+          "note": "Sensitive intents are intercepted and pointed to explicit commands; they are never routed to an engine command from a sentence."
+        },
+        {
+          "requirement": "FR-12 / AC-13: Leaving (or end of input) ends the session immediately with nothing half-started.",
+          "verdict": "pass",
+          "note": "Engine calls are synchronous; the loop breaks on leave words or EOF and no background work or transcript is kept."
+        },
+        {
+          "requirement": "FR-13 / AC-12: Every existing one-shot usage and the machine-readable form keep their previous behavior and exit status.",
+          "verdict": "pass",
+          "note": "Only the empty-argv branch was added to `main`; parsing, `--json`, exit codes and command handlers are unchanged."
+        },
+        {
+          "requirement": "FR-14 (review-only): The client stays thin; it does not call a model, read project files or run checks itself.",
+          "verdict": "pass",
+          "note": "The session only builds and runs `forgel <command> --json`; there is no model, file-read, or check path in the client."
+        },
+        {
+          "requirement": "FR-15: Secrets, tokens and key material never appear in the session or in what the client keeps.",
+          "verdict": "pass",
+          "note": "SECRET_WORDS redaction is applied to displayed lines; the only persisted state is the selected project key, and no transcript is stored."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-23T21:29:18+00:00",
+      "notes": ""
+    }
   },
   "request": "docs/program/requests/20261123193557152385_forgel-code-interactive-agent-client-instead-of-a-command-wr.md"
 }
