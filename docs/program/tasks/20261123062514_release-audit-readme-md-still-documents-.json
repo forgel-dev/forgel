@@ -114,10 +114,10 @@
     }
   ],
   "language": "",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "2026-11-23T12:00:28+00:00",
-  "finished_at": "2026-11-23T12:15:51+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "README.md now documents the install script of the release whose behavior it describes: both the install command (## Install) and the uninstall command (### Uninstall) use `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh`, so no reference to the stale `v0.1.0` install script remains anywhere in the file. The README diff is exactly two URL lines (install and uninstall); prose, command shape (`curl -fsSL <url> | sh` / `| sh -s -- --uninstall`), the Update line, options and section structure are untouched. tests/test_readme_install.py now anchors the current tag (v0.1.1) and adds the installer/uninstaller URL guards: `assert_single_install_script_url` rejects any `v0.1.0/install.sh` reference anywhere in the document, requires at least two install-script URLs, requires the tag selector to appear exactly once per URL and equal the current release, and requires every such URL to be identical; `assert_single_update_and_uninstall` now reads the install, update and uninstall commands structurally from their sections and requires them to be exactly the install/update/uninstall lines from that one URL. New negative cases prove the guards reject the stale tag, a mixed-tag install/uninstall and a stale URL in prose. tests/test_cli.py's `test_readme_has_a_pinned_install_command` pinned the stale `v0.1.0` URL; it now requires `v0.1.1/install.sh` and additionally forbids `v0.1.0/install.sh`, so the assertion was moved forward and tightened, not loosened. Verification: full suite `python -m pytest` → 211 passed, 137 subtests passed in 139.54s (exit 0), including tests/test_readme_install.py and the updated tests/test_cli.py.; uncommitted files outside the contract: install.sh, tests/test_check_cleanup.py, tests/test_cli.py, tests/test_install.py",
     "files_changed": [
@@ -213,13 +213,6 @@
         "replacement": "tests/test_readme_install.py::ReadmeInstallTest::test_one_update_line_and_one_uninstall_line"
       }
     ],
-    "spec_issues": [
-      {
-        "requirement": "A6: `git diff --name-only` lists only README.md and, optionally, tests/test_readme_install.py",
-        "problem": "tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command asserts that README.md contains `raw.githubusercontent.com/forgel-dev/code/v0.1.0/install.sh`. R1 makes the README free of that string, so the suite cannot pass (A5, R6) unless that assertion in tests/test_cli.py is updated, which A6 forbids.",
-        "proposal": "Allow tests/test_cli.py in the affected-files list for this task, or state that pinned-URL expectations outside tests/test_readme_install.py are updated in the same change so A5 and A6 stay consistent."
-      }
-    ],
     "git": {
       "base": "580c644caac4427ea0e8b8da54e302a312bd99ab",
       "head": "a60dc73517c3829e9d65efe302991c4dc79ad663",
@@ -228,8 +221,24 @@
         "a60dc73517c3829e9d65efe302991c4dc79ad663"
       ]
     },
-    "failure": {},
-    "report": "docs/program/agent/20261123062514_release-audit-readme-md-still-documents-.md"
+    "report": "docs/program/agent/20261123062514_release-audit-readme-md-still-documents-.md",
+    "spec_feedback": [
+      "the planner accepted the specification issue and rewrote the specification; implement the new version"
+    ],
+    "rework_count": 1,
+    "feedback": [
+      "Re-read the rewritten specification `docs/program/specs/20261123062514_release-audit-readme-md-still-documents-.md` (version created 2026-11-23T12:16:52) and implement the requirements it adds on top of the delivered change.",
+      "R9 / check A6: add exactly one English entry inside the `## [Unreleased]` section of CHANGELOG.md that describes the README install/uninstall documentation fix and the new installer-URL guard. CHANGELOG.md is currently absent from `git diff --name-only`.",
+      "R7 / check A4: update `tests/test_cli.py` `ReadmeTest::test_readme_has_a_pinned_install_command` so it expects the v0.1.1 install command, keep it a pinned full-command assertion (no looser substring check), and make sure the string `v0.1.0/install.sh` no longer occurs anywhere in that file.",
+      "FR-2/FR-3/FR-4: keep the `## Install`, `### Update` and `### Uninstall` commands exactly the install command, the byte-identical install command, and the same URL with `| sh -s -- --uninstall`; keep all three built from the single `INSTALL_TAG` constant in `tests/test_readme_install.py` (R10).",
+      "R5 / check A7: verify `https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh` resolves (HTTP 200). If it does not resolve, name the newest published tag instead and record the discrepancy in the task report.",
+      "Keep the change to README.md, tests/test_readme_install.py, tests/test_cli.py and CHANGELOG.md only, and finish with `python -m pytest -q` exiting 0 for the whole suite."
+    ],
+    "last_failure": {
+      "kind": "spec",
+      "message": "the planner accepted the specification issue and rewrote the specification; implement the new version",
+      "retryable": false
+    }
   },
   "request": ""
 }
