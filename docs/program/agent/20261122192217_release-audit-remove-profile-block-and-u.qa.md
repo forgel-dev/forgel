@@ -5,7 +5,7 @@
 - Runtime: local + environment.yaml
 - Verdict: **PASS**
 - Exit code: 0
-- Finished: 2026-11-23T05:16:06+00:00
+- Finished: 2026-11-23T06:11:23+00:00
 
 ## Checks
 
@@ -24,7 +24,7 @@
 ```
 $ python -m unittest discover -s tests
 # cwd: /Users/okalistratov/Documents/sites/metaharness
-[agent] 20261123051144_inspect-and-finish: context handoff to session 2 (~6084/3072 tokens)
+[agent] 20261123060334_inspect-and-finish: context handoff to session 2 (~6084/3072 tokens)
 [intake] running
 [intake] completed
 [jurisdiction] running
@@ -452,20 +452,20 @@ $ python -m unittest discover -s tests
 [done] running
 [done] completed
 [github] GitHub API is unreachable; the branch is pushed without pull-request checks
-[github] demo-aa142250: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
+[github] demo-56ce1323: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
 ..............................................................................error: unknown project 'missing-project'
 ..error: unknown project 'missing-project'
 ........error: say needs text: --text "..." or a trailing argument
-...........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+.................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 723 tests in 167.729s
+Ran 729 tests in 381.242s
 
 OK
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === SELF-HOSTING E2E ===
 PASS a milestone was planned [1]
-PASS the daemon ran the task [['selfhost-80f26d8a']]
+PASS the daemon ran the task [['selfhost-cc30ae6c']]
 PASS FORGEL_MODEL_MODE=script [script]
 PASS the task stopped at the staging approval gate [review]
 PASS task QA passed [pass]
@@ -476,45 +476,45 @@ PASS self-hosting gate is green and parked for human approval
 $ env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py
 # cwd: /Users/okalistratov/Documents/sites/metaharness
 === CLIENT E2E ===
-PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-7f861e25  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-7f861e25", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
+PASS the client reads the project list [{"command": "projects", "project": null, "ok": true, "result": {"ok": true, "kind": "projects", "text": "Projects: 1\n  client-e2e-e2df4af1  client e2e\n    gen 1  adopted", "error": "", "session": "local", "projects": [{"id": "client-e2e-e2df4af1", "name": "client e2e", "generation": 1, "state": "adopted", "selected": false}]}}
 ]
-PASS the client selects the project [{"command": "use", "project": "client-e2e-7f861e25", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-7f861e25) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-7f861e25", "name": "client e2e"}}}
+PASS the client selects the project [{"command": "use", "project": "client-e2e-e2df4af1", "ok": true, "result": {"ok": true, "kind": "use", "text": "Selected client e2e (client-e2e-e2df4af1) for session local.", "error": "", "session": "local", "project": {"id": "client-e2e-e2df4af1", "name": "client e2e"}}}
 ]
-PASS status carries the selected project [{"command": "status", "project": "client-e2e-7f861e25", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-7f861e25: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-7f861e25", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
+PASS status carries the selected project [{"command": "status", "project": "client-e2e-e2df4af1", "ok": true, "result": {"ok": true, "kind": "status", "text": "client-e2e-e2df4af1: adopted (generation 1, checkpoint none)", "error": "", "project": {"id": "client-e2e-e2df4af1", "name": "client e2e", "layout": "container", "recipe": null, "generation": 1, "checkpoint": "none", "state": "adopted", "task": null, "staging": null, "approvals": {"staging": null, "production": null}, "reconciliation": "none", "proposals": 0, "events": []}}}
 ]
-PASS the engine session points to the project [{"command": "session", "project": "client-e2e-7f861e25", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-7f861e25).", "error": "", "session": "local", "project": {"id": "client-e2e-7f861e25", "name": "client e2e"}}}
+PASS the engine session points to the project [{"command": "session", "project": "client-e2e-e2df4af1", "ok": true, "result": {"ok": true, "kind": "session", "text": "Session local selects client e2e (client-e2e-e2df4af1).", "error": "", "session": "local", "project": {"id": "client-e2e-e2df4af1", "name": "client e2e"}}}
 ]
-PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-7f861e25", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
+PASS say reaches the engine through --text [{"command": "say", "project": "client-e2e-e2df4af1", "ok": true, "result": {"ok": true, "kind": "answer", "text": "Integration answer.", "error": ""}}
 ]
-PASS the engine receives --project on status [status --project client-e2e-7f861e25 --json]
-PASS say sends --text and --project [say --text hello integration --project client-e2e-7f861e25 --json]
+PASS the engine receives --project on status [status --project client-e2e-e2df4af1 --json]
+PASS say sends --text and --project [say --text hello integration --project client-e2e-e2df4af1 --json]
 PASS client e2e is green
 $ python -m pytest -q tests/test_install.py -k unmatched_start_marker
 # cwd: /Users/okalistratov/Documents/sites/code
 .                                                                        [100%]
-1 passed, 53 deselected in 0.16s
+1 passed, 53 deselected in 0.50s
 $ python -m pytest -q tests/test_install.py -k removes_only_wellformed_block
 # cwd: /Users/okalistratov/Documents/sites/code
 .                                                                        [100%]
-1 passed, 53 deselected in 0.15s
+1 passed, 53 deselected in 0.41s
 $ python -m pytest -q tests/test_install.py -k orphan_end_marker
 # cwd: /Users/okalistratov/Documents/sites/code
 .                                                                        [100%]
-1 passed, 53 deselected in 0.15s
+1 passed, 53 deselected in 0.45s
 $ python -m pytest -q tests/test_install.py -k install_rerun_then_uninstall
 # cwd: /Users/okalistratov/Documents/sites/code
 .                                                                        [100%]
-1 passed, 53 deselected in 2.79s
+1 passed, 53 deselected in 8.12s
 $ python -m pytest -q tests/test_install.py -k is_idempotent
 # cwd: /Users/okalistratov/Documents/sites/code
 ...                                                                      [100%]
-3 passed, 51 deselected in 3.06s
+3 passed, 51 deselected in 4.07s
 $ python -m pytest -q tests
 # cwd: /Users/okalistratov/Documents/sites/code
 ...................................................... [ 26%]
 ................................................. [ 50%]
 ........................................................................ [ 86%]
 ...........................                      [100%]
-202 passed, 137 subtests passed in 98.52s (0:01:38)
+202 passed, 137 subtests passed in 95.64s (0:01:35)
 
 ```
