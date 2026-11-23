@@ -3,8 +3,8 @@
 - Task: `20261123164954_release-audit-install-sh-s-bounded-run-s`
 - Status: `failed`
 - Repository: `code`
-- Steps: 23
-- Finished: 2026-11-23T17:50:41+00:00
+- Steps: 11
+- Finished: 2026-11-23T18:09:09+00:00
 
 ## Requirements
 
@@ -20,10 +20,11 @@
 
 ## Assumptions
 
-- The regression test drives checked-step behavior through the installer's existing entry point with a controlled overrunning login-shell stub rather than performing a real installation, as the specification's Assumptions allow.
-- The clock override is done by placing a stub `date` first on PATH, since `date +%s%N` is the external interface `now_millis` reads; the stub answers a timestamp and advances by a fixed step per call, so no elapsed-time delay, scheduling luck or network access affects the verdict.
-- The form and location of the watchdog's timeout record were kept as-is; only the verdict decision changed.
-- Existing timeout/failure message wording was preserved.
+- The installer already exposed a configurable timeout and a way to record a timeout; only the verdict decision was wrong, as the spec's Assumptions state.
+- The verdict is derived from the measured duration of the check against the bound, not from the presence of the watchdog's record; the spec leaves the mechanism to the developer and the Risks section names re-polling as unsound.
+- The regression test drives the real installer entry point with a controlled overrunning step rather than performing a real installation, which the spec's Assumptions permit.
+- The stub `date` follows the real external interface (`+%s%N` answers nanoseconds since the epoch), so the test exercises the same clock the installer times with.
+- Existing timeout message wording was kept unchanged, as the spec's Assumptions require.
 
 ## Test Removals
 
@@ -32,14 +33,14 @@
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 2
-- Handoffs: 1
-- Model calls: 23
-- Estimated input tokens (all calls): 979928
-- Provider input/output tokens: 1031136 / 195994
-- Provider cache hit/miss tokens: 932352 / 98784
-- Estimated prompt at the end: 24200 tokens
-- State: `docs/program/agent/20261123164954_release-audit-install-sh-s-bounded-run-s.state.md`
+- Sessions: 1
+- Handoffs: 0
+- Model calls: 11
+- Estimated input tokens (all calls): 186710
+- Provider input/output tokens: 193782 / 3680
+- Provider cache hit/miss tokens: 172032 / 21750
+- Estimated prompt at the end: 23018 tokens
+- State: not needed
 
 ## Specification (`docs/program/specs/20261123164954_release-audit-install-sh-s-bounded-run-s.md`)
 
@@ -169,13 +170,20 @@ A user running the installer sees an explicit timeout failure with a nonzero res
 
 ## Summary
 
-Closed the installer's false-success window for overrunning checked steps and added the deterministic regression test.
+Closed the installer's false-success window for overrunning checked steps and added the deterministic regression test named by FR-6/FR-7.
 
-install.sh: `bounded_run` now times the checked step itself with the millisecond clock (`now_millis`) and derives the verdict from that measured duration: `CHECK_STATUS=124` whenever the elapsed time reached the bound, regardless of whether the watchdog had already written its `timed-out` marker when the step's result arrived. The watchdog's `timed-out`/`finished` records are still used, but only to decide which stop to expect and to sequence the cleanup, never as the verdict; a step that finished inside the bound keeps its own status, a nonzero one included. The header comment states the corrected behavior (the verdict is the measured duration, the absence of a recorded timeout proves nothing).
+install.sh: `bounded_run` now times the checked step itself with the millisecond clock (`now_millis`, which reads `date +%s%N`) and derives the verdict from that measured duration: `CHECK_STATUS=124` whenever the elapsed time reached the bound, regardless of whether the watchdog had already written its `timed-out` marker when the step's result arrived. The watchdog's `timed-out`/`finished` records are still used only to decide which stop to expect and to sequence the cleanup, never as the verdict. A step that finished inside the bound keeps its own status, a nonzero one included, so a legitimate failure is not relabelled a timeout. The header comment and the function comment state the corrected behaviour (the verdict is the measured duration; the absence of a recorded timeout proves nothing).
 
-tests/test_install_timeout_verdict.py: new regression test that forces the overrun-then-exit-before-timeout-recorded ordering explicitly by handing the installer a stub `date +%s%N` clock (the same external interface the installer times with): the clock reports a 3 s step under a 1 s bound while the checked shell exits at once, so only a `finished` record can exist. The test asserts the installation fails with the timeout message and no success message, and that the check directory is released. A second test forces a zero-length step with a nonzero (3) exit and asserts the step's own outcome is reported with no timeout verdict.
+tests/test_install_timeout_verdict.py: new regression test that forces the overrun-then-exit-before-timeout-recorded ordering explicitly by handing the installer a stub `date +%s%N` clock (the same external interface the installer times with). The clock reports a 3 s step under a 1 s bound while the checked shell exits at once, so only a `finished` record can exist; the test asserts a nonzero result, the timeout report, no success lines and no leftover check directory. A second test covers the fast path: a step inside the bound keeps its own nonzero status and produces no timeout verdict. Neither test waits for real time or touches the network.
 
-Verification: full suite `python -m pytest -q` -> 216 passed, 137 subtests passed (the whole pre-existing suite, including the installer, packaging and README install tests, which execute install.sh end to end and therefore exercise the shell parsing/execution path). The shell-syntax-only command was refused by the sandbox runner, so parsing is covered by those existing tests that run the script instead.; the completion step could not decide what to do with every uncommitted file
+Uncommitted-file decision, enumerated from `git status --porcelain --untracked-files=all --ignored`:
+- `install.sh` (M) — commit: the corrected timeout verdict, required by FR-1 to FR-5.
+- `tests/test_install_timeout_verdict.py` (??) — commit: the regression test required by FR-6/FR-7.
+- `tests/test_install.py`, `tests/test_check_cleanup.py` — not dirty; they are already committed fixtures the new test imports from, and nothing in them was modified by this task.
+- `.pytest_cache/**` and every `__pycache__/**` entry — ignore: already covered by the committed `.gitignore` rules; no new rule needed and nothing is tracked.
+No file is left undecided and no unrelated change is part of the change set.
+
+Verification: `python -m pytest -q` on the whole suite passed — 216 tests and 137 subtests, no failures, no existing test changed or removed. A narrow run of the touched install/cleanup/verdict modules also passed (60 tests). The installer is executed as `sh install.sh` throughout that suite, which covers AC-5; a standalone `sh -n install.sh` was refused by the sandbox's shell-command policy, so parse validity rests on those real runs.; the completion step could not decide what to do with every uncommitted file
 
 ## Files Changed
 
@@ -184,8 +192,10 @@ Verification: full suite `python -m pytest -q` -> 216 passed, 137 subtests passe
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q", "tests/test_install_timeout_verdict.py"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
+- `["git", "status", "--porcelain", "--untracked-files=all", "--ignored"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_install_timeout_verdict.py", "tests/test_install.py", "tests/test_check_cleanup.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
 
 ## Final Test Output
@@ -194,29 +204,18 @@ Verification: full suite `python -m pytest -q` -> 216 passed, 137 subtests passe
 ....................................................................................................... [ 47%]
 ........................................................................ [ 81%]
 .........................................        [100%]
-216 passed, 137 subtests passed in 164.94s (0:02:44)
+216 passed, 137 subtests passed in 167.22s (0:02:47)
 
 ```
 
 ## Actions
 
-- read_file: install.sh
-- read_file: tests/test_check_cleanup.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_readme_install.py
-- write_file: install.sh
-- run: ['sh', '-n', 'install.sh']
-- read_file: tests/test_stub_contract.py
-- write_file: tests/test_install_timeout_verdict.py
-- write_file: tests/test_install_timeout_verdict.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_install_timeout_verdict.py']
-- write_file: install.sh
-- write_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
+- run: ['git', 'status', '--porcelain']
 - read_file: install.sh
 - read_file: tests/test_install_timeout_verdict.py
 - run: ['python', '-m', 'pytest', '-q']
+- run: ['git', 'status', '--porcelain', '--untracked-files=all', '--ignored']
 - run: ['sh', '-n', 'install.sh']
+- read_file: install.sh
+- recall
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_install_timeout_verdict.py', 'tests/test_install.py', 'tests/test_check_cleanup.py']
