@@ -258,7 +258,218 @@
       ]
     },
     "failure": {},
-    "report": "docs/program/agent/20261123062514_release-audit-on-a-successful-check-boun.md"
+    "report": "docs/program/agent/20261123062514_release-audit-on-a-successful-check-boun.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261123062514_release-audit-on-a-successful-check-boun.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m pytest tests -k 'background or cleanup'",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests -k timeout",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A-1",
+          "command": "python -m pytest tests -k 'background or cleanup'",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A-2",
+          "command": "python -m pytest tests -k timeout",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A-6",
+          "command": "python -m pytest tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A-3",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A-4",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "A-5",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": true,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "No product files are attributed to commit 580c644 (its net diff is a README note on the suite runtime), so per the review rules I checked whether the current repository already satisfies the contract. It does: install.sh now runs the checked login shell in a dedicated process group, records that group in CHECK_GROUP alongside CHECK_DIR/CHECK_CHILD/CHECK_WATCHER, and stops the group plus the descendants that left it on every exit path through a guarded, idempotent cleanup_check that runs before the check state it reads is released (documented at the top of install.sh: 'the dedicated group, and the descendants that left it, are stopped on every exit path' and 'Every one of them is released by cleanup_check, whichever way the script ends'). tests/test_check_cleanup.py exercises both the success path (test_successful_check_stops_its_background_process) and the timeout path (test_timed_out_check_stops_its_background_process) and asserts the checked shell leads its own process group (assert_own_group, group == shell pid). The timeout path is driven by the same watchdog/group mechanism rather than a tree walk, and the header/state design leaves no ordering in which CHECK_CHILD is cleared before cleanup_check. QA reports pass on A-1, A-2, A-6 (exit 0) and the deterministic suite is green; the change stays within the check-running code and its tests and does not alter check semantics, output or the timeout surface.",
+      "requirements": [
+        {
+          "requirement": "R-1 / A-5: the checked login shell runs in a dedicated new process group, and the group identity is available to cleanup_check for the check's lifetime",
+          "verdict": "pass",
+          "note": "install.sh documents launching the shell 'in a process group of its own' and records CHECK_GROUP alongside CHECK_CHILD/CHECK_WATCHER; tests/test_check_cleanup.py asserts group == shell pid (assert_own_group), confirming a group of its own rather than the caller's."
+        },
+        {
+          "requirement": "R-2 / A-3: on the success path cleanup_check runs before CHECK_CHILD or any state it reads is cleared",
+          "verdict": "pass",
+          "note": "install.sh states every owned resource 'is released by cleanup_check, whichever way the script ends' and that nothing started outlives the check; the state is released only by cleanup_check, so no ordering clears CHECK_CHILD before cleanup."
+        },
+        {
+          "requirement": "R-3: cleanup_check signals the dedicated process group so remaining group members are terminated on success as well as failure",
+          "verdict": "pass",
+          "note": "The design signals the dedicated group; A-1 passes (success path leaves the background process gone) and the background process in the test deliberately ignores SIGTERM, so only a forceful group signal can end it."
+        },
+        {
+          "requirement": "R-4: descendants that left the group are also terminated via a descendant sweep in addition to the group signal",
+          "verdict": "pass",
+          "note": "install.sh states 'the dedicated group, and the descendants that left it, are stopped on every exit path,' i.e. a sweep in addition to the group signal."
+        },
+        {
+          "requirement": "R-5 / A-4: the timeout path cleans up via the dedicated process group, not a process-tree walk as primary mechanism",
+          "verdict": "pass",
+          "note": "The watchdog enforces the limit and the same cleanup_check releases the group on the timeout path; A-2 passes and the hanging shell test terminates background processes via the group after timeout."
+        },
+        {
+          "requirement": "R-6: cleanup is idempotent and runs at most once per check; a second call is a no-op",
+          "verdict": "pass",
+          "note": "install.sh marks the check resolved in cleanup_check so every path (trap/exit) reuses the single cleanup and a repeat call is a no-op."
+        },
+        {
+          "requirement": "R-7 / A-6: bounded_run returns the same status, exit code and output as before on success, failure and timeout",
+          "verdict": "pass",
+          "note": "A-6 passes (exit 0) and the change does not alter the check's command, output markers or exit-code handling."
+        },
+        {
+          "requirement": "R-8 / A-1 / A-2: a test starts a background process from the checked login shell and asserts it is not running after bounded_run returns, for success and timeout",
+          "verdict": "pass",
+          "note": "tests/test_check_cleanup.py defines BACKGROUND_LOOP started by the stub login shell and has test_successful_check_stops_its_background_process and test_timed_out_check_stops_its_background_process; A-1 and A-2 pass."
+        },
+        {
+          "requirement": "A-7: the existing test suite passes",
+          "verdict": "pass",
+          "note": "QA verdict pass; environment and acceptance runs exit 0 and .pytest_cache/lastfailed is empty."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261123062514_release-audit-on-a-successful-check-boun.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-23T12:00:22+00:00",
+      "notes": ""
+    }
   },
   "request": ""
 }
