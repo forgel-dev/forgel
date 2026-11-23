@@ -117,10 +117,148 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-23T06:25:14+00:00",
   "started_at": "2026-11-23T11:22:18+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T11:50:14+00:00",
+  "result": {
+    "summary": "Implemented and verified the check process cleanup contract. install.sh's bounded check now starts the checked login shell in a dedicated session/process group (start_check records CHECK_CHILD and CHECK_GROUP and keeps them for the whole check), and cleanup_check signals that dedicated group first (signal_group) followed by a descendant sweep (process_tree), so background processes started by the checked shell are stopped on the success path as well as on the failure and timeout paths. bounded_run calls cleanup_check before it clears CHECK_CHILD/CHECK_GROUP/CHECK_DIR, cleanup is guarded by CHECK_CLEANED so a second call is a no-op, and the timeout path drives stop_check through the dedicated group rather than a process-tree walk. Status/exit-code/output semantics are unchanged. Added tests/test_check_cleanup.py, which runs the real install.sh against a stub login shell that starts a TERM-ignoring background process and records its pid, its own pid and its process group: the success case asserts the background process is gone after bounded_run returns and that the shell ran in its own group; the timeout case asserts the same after a bound of one second and that no private check directory remains. Verified with `python -m pytest tests` (206 passed, 137 subtests passed).; uncommitted files outside the contract: install.sh, tests/test_check_cleanup.py, tests/test_install.py",
+    "files_changed": [],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests",
+          "-x",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_check_cleanup.py",
+          "-v",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_check_cleanup.py",
+          "-q",
+          "-k",
+          "timed_out"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_check_cleanup.py",
+          "-q",
+          "-k",
+          "timed_out"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_check_cleanup.py",
+          "-q",
+          "-k",
+          "timed_out"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_check_cleanup.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_check_cleanup.py",
+          "-q",
+          "--count",
+          "1"
+        ],
+        "exit_code": 4
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "============================= test session starts ==============================\nplatform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /Users/okalistratov/Documents/sites/code\nconfigfile: pyproject.toml\ncollected 206 items\n\ntests/test_check_cleanup.py ..                                           [  0%]\ntests/test_cli.py ...................................................... [ 27%]\n.................                                                        [ 35%]\ntests/test_cli_extra.py .........                                        [ 39%]\ntests/test_extras.py ......................                              [ 50%]\ntests/test_install.py .................................................. [ 74%]\n......                                                                   [ 77%]\ntests/test_packaging.py ..............                                   [ 84%]\ntests/test_packaging_types.py ..                                         [ 85%]\ntests/test_readme_install.py ..........................                  [ 98%]\ntests/test_stub_contract.py ....                                         [100%]\n\n======================= 206 passed in 149.72s (0:02:29) ========================\n",
+    "assumptions": [
+      "The audited symbols live in install.sh (POSIX shell) rather than a Python module, so bounded_run/cleanup_check were implemented and tested there.",
+      "The dedicated process group is created with setsid in a small Python helper (falling back to shell job control), because Python is already required by the installer; the group id equals the child pid.",
+      "Cleanup escalates to SIGKILL on every path, since a background process that ignores SIGTERM would otherwise survive the check.",
+      "The full suite is run with pytest as the repository's test command specifies; there is no Makefile in this repository, so `make test`/`make lint` have no target here."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 37,
+      "estimated_input_tokens": 1543045,
+      "provider_input_tokens": 1617831,
+      "provider_output_tokens": 169040,
+      "cache_hit_tokens": 1476352,
+      "cache_miss_tokens": 141479,
+      "estimated_tokens": 56191,
+      "state": "docs/program/agent/20261123062514_release-audit-on-a-successful-check-boun.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "git": {
+      "base": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "head": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "commit": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "commits": [
+        "580c644caac4427ea0e8b8da54e302a312bd99ab"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123062514_release-audit-on-a-successful-check-boun.md"
+  },
   "request": ""
 }
