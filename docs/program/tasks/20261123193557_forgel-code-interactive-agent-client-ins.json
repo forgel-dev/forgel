@@ -266,50 +266,253 @@
     }
   ],
   "language": "ru",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T19:35:57+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T20:19:56+00:00",
+  "finished_at": "2026-11-23T21:19:32+00:00",
   "result": {
-    "summary": "model call failed: model endpoint returned an empty answer",
-    "files_changed": [],
-    "commands": [],
-    "test_output": "",
+    "summary": "Completed the interactive agent client for Forgel Code, continuing from the previous attempt whose only unresolved failure was a wrong premise in one test. The changes: `forgel_code/commands.py` (single table translating a client intent into the engine's own argv, shared by the one-shot surface and the session), `forgel_code/interactive.py` (the interactive session: prompt that stays open, free-form requests forwarded to the engine's project agent, selected project shown and switchable inside the session, plans shown in plan order with states, tasks shown with title and state, self-refreshing task and release state, plain-language accept/rework/retry/pause/resume, failures shown with cause and next step while the session stays usable, clarification when a sentence matches no action or several, sensitive intents refused, secret redaction, immediate end on leave or end of input, replies following the owner's language, no model/project-file/check work in the client), `forgel_code/cli.py` (a bare invocation opens the session instead of printing usage; every one-shot command, its output, exit status and `--json` form unchanged), `tests/test_interactive.py` (coverage of every acceptance criterion against a stand-in engine that speaks the engine's machine-readable form), and documentation of the new default surface in `README.md` and `CHANGELOG.md`. The remaining failure was in the test itself: it asserted that the very first engine call of the session is the project switch, but the session re-reads task and release state before every prompt, so a state read legitimately precedes the switch. The assertion now locates the switch call and checks that every project-scoped call after it carries the new key, which is what the requirement actually says. No earlier work was repeated. Tested with `python -m unittest tests.test_interactive` (37 tests, OK), `python -m unittest discover -s tests -t .` (255 tests, OK) and the packaging tests (16 tests, OK).",
+    "files_changed": [
+      "CHANGELOG.md",
+      "README.md",
+      "forgel_code/cli.py",
+      "forgel_code/commands.py",
+      "forgel_code/interactive.py",
+      "tests/test_interactive.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          ".",
+          "-p",
+          "test_interactive.py"
+        ],
+        "exit_code": 5
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_packaging",
+          "tests.test_packaging_types"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-t",
+          "."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "...............................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 255 tests in 189.105s\n\nOK\n",
     "assumptions": [
       "The work belongs to the client repository, whose contents match this feature and the surrounding conversation.",
       "The requirements above follow the intent of the named feature document and the client's documented contract; the document itself remains the source of truth where it is more specific.",
       "The interactive session becomes the default surface, while the one-shot usages stay available unchanged.",
-      "The reference product is Claude Code, as recorded in the project decisions."
+      "The reference product is Claude Code, as recorded in the project decisions.",
+      "A bare invocation with no arguments is the interactive session; `--help`, `--version` and every subcommand keep their previous behavior.",
+      "The session resolves one sentence to at most one engine action (say, plan, accept, rework, retry, pause, resume, project switch or leave) and sends everything else to the engine's project agent verbatim.",
+      "Sensitive intents (adoption, project creation, secrets, configuration) are recognised and pointed to the explicit commands instead of being forwarded, so free text can never trigger them.",
+      "State is re-read from the engine before each prompt rather than on a timer, so the session shows current state without the owner asking and without a background thread that could outlive the session.",
+      "Secret-looking values are replaced before anything is written to the session, and no transcript is written to disk.",
+      "Replies are shown exactly as the engine produced them; the client only chooses the message language for its own session text from the owner's message."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 1,
-      "compactions": 0,
-      "model_calls": 2,
-      "estimated_input_tokens": 39209,
-      "provider_input_tokens": 24981,
-      "provider_output_tokens": 126,
-      "cache_hit_tokens": 12288,
-      "cache_miss_tokens": 12693,
-      "estimated_tokens": 14748,
-      "state": ""
+      "sessions": 5,
+      "compactions": 4,
+      "model_calls": 177,
+      "estimated_input_tokens": 8415754,
+      "provider_input_tokens": 8709646,
+      "provider_output_tokens": 421191,
+      "cache_hit_tokens": 8307968,
+      "cache_miss_tokens": 401678,
+      "estimated_tokens": 66035,
+      "state": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.state.md"
     },
-    "test_removals": [],
+    "test_removals": [
+      {
+        "test": "tests/test_interactive.py::SessionFlowTest::test_switching_project_applies_to_later_requests",
+        "reason": "wrong",
+        "replacement": "tests/test_interactive.py::SessionFlowTest::test_switching_project_applies_to_later_requests"
+      }
+    ],
     "spec_issues": [],
     "escalated": [],
     "git": {
       "base": "bca76aad514b05773e504105e88e4c5f2bf3228b",
-      "head": "bca76aad514b05773e504105e88e4c5f2bf3228b",
-      "commit": "",
-      "commits": []
+      "head": "5db451934dc45eff8ac4093ba131512cd3b16880",
+      "commit": "5db451934dc45eff8ac4093ba131512cd3b16880",
+      "commits": [
+        "5db451934dc45eff8ac4093ba131512cd3b16880"
+      ]
     },
     "report": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.md",
     "attempts": 1,
     "last_failure": {
       "kind": "infrastructure",
       "message": "model call failed: model endpoint returned an empty answer"
-    }
+    },
+    "failure": {}
   },
   "request": "docs/program/requests/20261123193557152385_forgel-code-interactive-agent-client-instead-of-a-command-wr.md"
 }

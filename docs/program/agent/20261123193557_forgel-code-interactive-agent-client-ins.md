@@ -1,10 +1,10 @@
 # Agent Run: Forgel Code: interactive agent client instead of a command wrapper
 
 - Task: `20261123193557_forgel-code-interactive-agent-client-ins`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 3
-- Finished: 2026-11-23T20:19:48+00:00
+- Steps: 177
+- Finished: 2026-11-23T21:19:32+00:00
 
 ## Requirements
 
@@ -24,22 +24,28 @@
 - The requirements above follow the intent of the named feature document and the client's documented contract; the document itself remains the source of truth where it is more specific.
 - The interactive session becomes the default surface, while the one-shot usages stay available unchanged.
 - The reference product is Claude Code, as recorded in the project decisions.
+- A bare invocation with no arguments is the interactive session; `--help`, `--version` and every subcommand keep their previous behavior.
+- The session resolves one sentence to at most one engine action (say, plan, accept, rework, retry, pause, resume, project switch or leave) and sends everything else to the engine's project agent verbatim.
+- Sensitive intents (adoption, project creation, secrets, configuration) are recognised and pointed to the explicit commands instead of being forwarded, so free text can never trigger them.
+- State is re-read from the engine before each prompt rather than on a timer, so the session shows current state without the owner asking and without a background thread that could outlive the session.
+- Secret-looking values are replaced before anything is written to the session, and no transcript is written to disk.
+- Replies are shown exactly as the engine produced them; the client only chooses the message language for its own session text from the owner's message.
 
 ## Test Removals
 
-- none
+- tests/test_interactive.py::SessionFlowTest::test_switching_project_applies_to_later_requests: wrong -> tests/test_interactive.py::SessionFlowTest::test_switching_project_applies_to_later_requests
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 1
-- Handoffs: 0
-- Model calls: 2
-- Estimated input tokens (all calls): 39209
-- Provider input/output tokens: 24981 / 126
-- Provider cache hit/miss tokens: 12288 / 12693
-- Estimated prompt at the end: 14748 tokens
-- State: not needed
+- Sessions: 5
+- Handoffs: 4
+- Model calls: 177
+- Estimated input tokens (all calls): 8415754
+- Provider input/output tokens: 8709646 / 421191
+- Provider cache hit/miss tokens: 8307968 / 401678
+- Estimated prompt at the end: 66035 tokens
+- State: `docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.state.md`
 
 ## Specification (`docs/program/specs/20261123193557_forgel-code-interactive-agent-client-ins.md`)
 
@@ -229,23 +235,144 @@ The owner starts Forgel Code without arguments and gets a prompt instead of usag
 
 ## Summary
 
-model call failed: model endpoint returned an empty answer
+Completed the interactive agent client for Forgel Code, continuing from the previous attempt whose only unresolved failure was a wrong premise in one test. The changes: `forgel_code/commands.py` (single table translating a client intent into the engine's own argv, shared by the one-shot surface and the session), `forgel_code/interactive.py` (the interactive session: prompt that stays open, free-form requests forwarded to the engine's project agent, selected project shown and switchable inside the session, plans shown in plan order with states, tasks shown with title and state, self-refreshing task and release state, plain-language accept/rework/retry/pause/resume, failures shown with cause and next step while the session stays usable, clarification when a sentence matches no action or several, sensitive intents refused, secret redaction, immediate end on leave or end of input, replies following the owner's language, no model/project-file/check work in the client), `forgel_code/cli.py` (a bare invocation opens the session instead of printing usage; every one-shot command, its output, exit status and `--json` form unchanged), `tests/test_interactive.py` (coverage of every acceptance criterion against a stand-in engine that speaks the engine's machine-readable form), and documentation of the new default surface in `README.md` and `CHANGELOG.md`. The remaining failure was in the test itself: it asserted that the very first engine call of the session is the project switch, but the session re-reads task and release state before every prompt, so a state read legitimately precedes the switch. The assertion now locates the switch call and checks that every project-scoped call after it carries the new key, which is what the requirement actually says. No earlier work was repeated. Tested with `python -m unittest tests.test_interactive` (37 tests, OK), `python -m unittest discover -s tests -t .` (255 tests, OK) and the packaging tests (16 tests, OK).
 
 ## Files Changed
 
-- none
+- `CHANGELOG.md`
+- `README.md`
+- `forgel_code/cli.py`
+- `forgel_code/commands.py`
+- `forgel_code/interactive.py`
+- `tests/test_interactive.py`
 
 ## Commands
 
-- none
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 1
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["python", "-m", "unittest", "tests.test_interactive"]` → exit 1
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", ".", "-p", "test_interactive.py"]` → exit 5
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["python", "-m", "unittest", "tests.test_interactive"]` → exit 1
+- `["python", "-m", "unittest", "tests.test_interactive"]` → exit 1
+- `["python", "-m", "unittest", "tests.test_interactive"]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["python", "-m", "unittest", "tests.test_packaging", "tests.test_packaging_types"]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests", "-t", "."]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-not run
+...............................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 255 tests in 189.105s
+
+OK
+
 ```
 
 ## Actions
 
-- list_files
+- read_file: forgel_code/session.py
 - read_file: forgel_code/cli.py
+- read_file: forgel_code/engine.py
+- read_file: forgel_code/render.py
+- read_file: tests/stub_engine.py
+- read_file: tests/test_cli.py
+- read_file: tests/test_cli_extra.py
+- read_file: tests/test_extras.py
+- read_file: README.md
+- read_file: tests/test_stub_contract.py
+- read_file: tests/test_packaging.py
+- read_file: CHANGELOG.md
+- read_file: forgel_code/__main__.py
+- read_file: tests/test_readme_install.py
+- read_file: tests/test_readme_install.py
+- write_file: forgel_code/commands.py
+- write_file: forgel_code/interactive.py
+- read_file: forgel_code/commands.py
+- write_file: forgel_code/commands.py
+- write_file: forgel_code/interactive.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- write_file: forgel_code/interactive.py
+- write_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/cli.py
+- read_file: forgel_code/commands.py
+- read_file: forgel_code/engine.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- recall
+- read_file: tests/test_cli_extra.py
+- read_file: forgel_code/session.py
+- read_file: forgel_code/__main__.py
+- read_file: README.md
+- list_files
+- read_file: CHANGELOG.md
+- read_file: tests/test_extras.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- run: ['python', '-m', 'unittest', 'tests.test_interactive']
+- read_file: tests/test_interactive.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.', '-p', 'test_interactive.py']
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/commands.py
+- read_file: forgel_code/cli.py
+- read_file: forgel_code/engine.py
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- list_files
+- read_file: forgel_code/__main__.py
+- read_file: forgel_code/session.py
+- read_file: tests/stub_engine.py
+- read_file: tests/test_cli.py
+- read_file: tests/test_cli_extra.py
+- read_file: tests/test_stub_contract.py
+- read_file: forgel_code/render.py
+- read_file: tests/test_extras.py
+- read_file: pyproject.toml
+- read_file: tests/test_install.py
+- read_file: README.md
+- read_file: tests/test_readme_install.py
+- list_files
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/cli.py
+- read_file: forgel_code/__main__.py
+- read_file: forgel_code/commands.py
+- read_file: forgel_code/engine.py
+- recall
+- read_file: tests/stub_engine.py
+- read_file: tests/test_cli_extra.py
+- recall
+- read_file: forgel_code/session.py
+- read_file: forgel_code/render.py
+- read_file: tests/test_packaging.py
+- write_file: forgel_code/interactive.py
+- write_file: forgel_code/cli.py
+- write_file: tests/test_interactive.py
+- run: ['python', '-m', 'unittest', 'tests.test_interactive']
+- write_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: tests/test_interactive.py
+- run: ['python', '-m', 'unittest', 'tests.test_interactive']
+- read_file: forgel_code/commands.py
+- read_file: forgel_code/engine.py
+- write_file: tests/test_interactive.py
+- run: ['python', '-m', 'unittest', 'tests.test_interactive']
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- read_file: forgel_code/cli.py
+- read_file: README.md
+- read_file: CHANGELOG.md
+- run: ['git', 'status', '--porcelain']
+- read_file: pyproject.toml
+- read_file: _build_backend.py
+- read_file: forgel_code/session.py
+- read_file: tests/test_readme_install.py
+- write_file: README.md
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- write_file: CHANGELOG.md
+- run: ['python', '-m', 'unittest', 'tests.test_packaging', 'tests.test_packaging_types']
+- run: ['python', '-m', 'unittest', 'discover', '-s', 'tests', '-t', '.']
+- run: ['git', 'status', '--porcelain']
