@@ -133,12 +133,12 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T12:30:20+00:00",
+  "finished_at": "2026-11-23T12:40:28+00:00",
   "result": {
-    "summary": "Completed the rewritten specification on top of the delivered README fix. README.md now names one install-script URL, https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh, in the `## Install` command, the byte-identical `### Update` command and the `### Uninstall` command (`| sh -s -- --uninstall`); the diff is the two URL lines only, so no `.../v0.1.0/install.sh` reference remains. tests/test_readme_install.py keeps the single `INSTALL_TAG = \"v0.1.1\"` constant the three expected commands are built from, and its guards reject a stale tag anywhere in the document, more than one install-script URL, a URL whose version selector is not the current release, and install/update/uninstall lines that differ (with negative cases proving each). Per the retry feedback I added the two missing pieces: `tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command` now asserts the pinned full command `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh` and no longer contains `v0.1.0/install.sh` anywhere, and CHANGELOG.md carries exactly one English entry under `## [Unreleased]` describing the README install/uninstall documentation fix and the new installer-URL guard. Verified: `python -m pytest -q` exits 0 with 211 passed and 137 subtests passed; `git diff --name-only` shows my four files (install.sh, tests/test_install.py and tests/test_check_cleanup.py in the tree come from other work, not from this task). I also probed the published installer URLs from a temporary probe test, then deleted it: v0.1.0 answers HTTP 200, main answers HTTP 200, v0.1.1 answers HTTP 404, so the tag the specification pins is not published yet.; uncommitted files outside the contract: install.sh, tests/test_check_cleanup.py, tests/test_install.py, tests/test_probe_release_url.py",
+    "summary": "README.md now documents one install-script URL, https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh, in the `## Install` command, the `### Update` command and the `### Uninstall` command (`| sh -s -- --uninstall`); the only README change is the URL in those lines, so no `.../v0.1.0/install.sh` reference remains. tests/test_cli.py's `ReadmeTest::test_readme_has_a_pinned_install_command` now pins the full v0.1.1 command instead of the v0.1.0 URL. CHANGELOG.md keeps exactly one English `## [Unreleased]` bullet recording the fix. tests/test_readme_install.py keeps the text-only guard built from the single `INSTALL_TAG = \"v0.1.1\"` constant and gains the two named rejection tests required by the spec: `test_stale_install_script_url_is_rejected` feeds the guard's own `assert_single_install_script_url` a document carrying `/v0.1.0/install.sh`, and `test_divergent_install_script_url_is_rejected` feeds it a document whose second install-script URL names another tag; both require the same assertion the positive path uses to raise, so the guard is proven by behaviour rather than message wording. The module imports only `re`, `unittest` and `pathlib` and fetches nothing. Verified with `python -m unittest -v tests.test_readme_install tests.test_cli.ReadmeTest` (37 tests OK) and the full `python -m unittest discover -s tests` (211 tests OK, ~141 s). Note: the documented installer URL currently answers HTTP 404 because the v0.1.1 tag is not published yet; that is recorded under spec_issues.; uncommitted files outside the contract: install.sh, tests/test_check_cleanup.py, tests/test_install.py",
     "files_changed": [
       "CHANGELOG.md",
       "README.md",
@@ -148,6 +148,55 @@
     "commands": [
       {
         "command": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "-v",
+          "tests.test_readme_install",
+          "tests.test_cli.ReadmeTest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "-v",
+          "tests.test_readme_install",
+          "tests.test_cli.ReadmeTest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
           "git",
           "diff",
           "--name-only"
@@ -164,47 +213,12 @@
       },
       {
         "command": [
-          "git",
-          "log",
-          "--oneline",
-          "-5"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "show",
-          "--stat",
-          "--oneline",
-          "HEAD"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "-U3",
-          "--",
-          "tests/test_cli.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
           "python",
           "-m",
-          "pytest",
-          "-q"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--name-only"
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
         ],
         "exit_code": 0
       },
@@ -214,8 +228,7 @@
           "diff",
           "--stat",
           "--",
-          "tests/test_cli.py",
-          "CHANGELOG.md"
+          "tests/test_readme_install.py"
         ],
         "exit_code": 0
       },
@@ -223,73 +236,33 @@
         "command": [
           "python",
           "-m",
-          "pytest",
-          "-q",
+          "unittest",
+          "discover",
           "-s",
-          "tests/test_probe_release_url.py"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "-s",
-          "tests/test_probe_release_url.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "-U2",
-          "--",
-          "tests/test_cli.py",
-          "CHANGELOG.md"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "status",
-          "--short"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q"
+          "tests"
         ],
         "exit_code": 0,
         "final_test": true
       }
     ],
-    "test_output": "....................................................................................................... [ 48%]\n........................................................................ [ 82%]\n....................................             [100%]\n211 passed, 137 subtests passed in 142.93s (0:02:22)\n",
+    "test_output": "...................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 211 tests in 141.855s\n\nOK\n",
     "assumptions": [
-      "The current release installer tag is v0.1.1, as the specification's Assumptions and tests/test_readme_install.py already encode; the README, the guard and the tests/test_cli.py pin all name it, so no release tag is assigned, created or moved.",
-      "Network probe result recorded as a discrepancy: with the network reachable, https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh returns HTTP 404 while v0.1.0 and main return HTTP 200. The README therefore names a tag the release train has not published yet, which the specification's Risks section anticipates; publishing it is outside this task.",
-      "The CHANGELOG entry sits in the existing `### Fixed` subsection of `## [Unreleased]`, because the change corrects already-shipped documentation rather than adding a feature.",
-      "tests/test_cli.py keeps a single pinned full-command assertion (no substring-only check) and drops the old `assertNotIn` for the v0.1.0 URL, since the string must no longer appear in the file at all."
+      "The README keeps naming the pinned tag v0.1.1 rather than the only currently published tag v0.1.0, because the specification's FR-1 to FR-3 state the v0.1.1 commands character for character and the acceptance criteria forbid any `/v0.1.0/` install-script path in README.md.",
+      "The guard's second install-script URL check is proven with a divergent tag (v0.1.2) on the uninstall line, since a divergent URL that keeps the current tag cannot exist under the single-tag rule the guard enforces.",
+      "Only the README URL lines, the one `tests/test_cli.py` pin, the one existing CHANGELOG bullet and the guard module are in scope; install.sh, its `FORGEL_CODE_TAG` default and its header comment stay untouched."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 35,
-      "estimated_input_tokens": 1176150,
-      "provider_input_tokens": 1246145,
-      "provider_output_tokens": 56138,
-      "cache_hit_tokens": 1188608,
-      "cache_miss_tokens": 57537,
-      "estimated_tokens": 55862,
+      "model_calls": 23,
+      "estimated_input_tokens": 656559,
+      "provider_input_tokens": 697116,
+      "provider_output_tokens": 34653,
+      "cache_hit_tokens": 661376,
+      "cache_miss_tokens": 35740,
+      "estimated_tokens": 36936,
       "state": ""
     },
     "test_removals": [
@@ -305,12 +278,13 @@
       }
     ],
     "git": {
-      "base": "a60dc73517c3829e9d65efe302991c4dc79ad663",
-      "head": "aff039dfcba7865ae23583cf8227a173f255ad7d",
-      "commit": "aff039dfcba7865ae23583cf8227a173f255ad7d",
+      "base": "aff039dfcba7865ae23583cf8227a173f255ad7d",
+      "head": "2e55f34302dc377531e8b2ffbeabfea31d3e672a",
+      "commit": "2e55f34302dc377531e8b2ffbeabfea31d3e672a",
       "commits": [
         "a60dc73517c3829e9d65efe302991c4dc79ad663",
-        "aff039dfcba7865ae23583cf8227a173f255ad7d"
+        "aff039dfcba7865ae23583cf8227a173f255ad7d",
+        "2e55f34302dc377531e8b2ffbeabfea31d3e672a"
       ]
     },
     "report": "docs/program/agent/20261123062514_release-audit-readme-md-still-documents-.md",
@@ -327,7 +301,20 @@
       "message": "Check A6 (`! grep -nE 'urllib|http.client|requests|socket|curl' tests/test_readme_install.py`) is unsatisfiable together with FR-6/FR-2/FR-3/FR-4: the module must assert the full expected commands `curl -fsSL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh | sh`, so the token `curl` always occurs and A6 can never pass; scope A6 to network/process capability (imports of urllib, http.client, requests, socket, and subprocess or shell invocation of an installer URL) instead of the word `curl`. Also resolve two scope gaps in the same version: (1) `tests/test_cli.py::ReadmeTest::test_readme_has_a_pinned_install_command` still pins the v0.1.0 URL, so FR-11 cannot hold unless that file is listed in Affected Files and Scope Boundaries and updated to v0.1.1; (2) the previous version required exactly one English CHANGELOG.md entry under `## [Unreleased]` (R9) and the delivered change contains it, while the current version neither requires nor drops it — state explicitly whether the entry is required or out of scope, so the expected diff is checkable. Finally, A5 asserts on the substring `stale install script` in the guard's failure output, which the guard does not have to word that way under FR-7 — pin the observable behaviour (a failing guard run) rather than that prose, or state the exact required message.",
       "retryable": false
     },
-    "spec_rework_count": 1
+    "spec_rework_count": 1,
+    "spec_issues": [
+      {
+        "requirement": "A3: the version selector in the README install-script URL equals the version documented as the current release, and the URL is fetchable (HTTP 200) from the public repository. Likewise task-contract R5: README must never advertise a tag that does not resolve.",
+        "problem": "The accepted specification (FR-1 to FR-4, FR-9) requires the URL https://raw.githubusercontent.com/forgel-dev/code/v0.1.1/install.sh, but a fetch of that URL returns HTTP 404: the repository has no v0.1.1 tag and only v0.1.0 is published. R5's fallback (name the newest published tag) is v0.1.0, which R1 and FR-4 forbid in the same document, so A3 and A6 cannot both hold on this tree.",
+        "proposal": "Either publish the v0.1.1 release (the runtime release train owns that) before the README change lands, or amend the contract so the fetchability check runs only against a published tag and R5/R1 no longer contradict each other — for example by allowing the newest published tag as the single documented URL until v0.1.1 exists."
+      },
+      {
+        "requirement": "Task-contract R5: if the chosen URL names a release tag that is not yet published at commit time, the README names the newest published tag instead.",
+        "problem": "R5 and R1 (README contains no `/v0.1.0/install.sh` reference) are mutually exclusive today: the newest published tag is v0.1.0, and v0.1.1 is not published, so any README satisfying R5 violates R1 and any README satisfying R1 violates R5.",
+        "proposal": "State one rule: the README names the tag the specification pins (v0.1.1) and R5 is dropped, or R1 is relaxed to allow the newest published tag when the pinned tag is not yet released."
+      }
+    ],
+    "failure": {}
   },
   "request": ""
 }
