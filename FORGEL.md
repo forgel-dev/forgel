@@ -91,6 +91,11 @@ the release policy changes.
   retry/restart/process/qa/review, release resume/audit/finalize and
   set_limit; a task can be retried or restarted from its requirements in any
   status.
+- **Documentation states behavior and contracts (D-109):** it may describe
+  commands, API endpoints and request/response formats, but never volatile
+  implementation details — internal structure, timings, runtime bounds, test
+  durations, local environment. A divergence is fixed by removing the detail,
+  not by changing code or tuning a limit.
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

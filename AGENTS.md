@@ -102,6 +102,28 @@ and conversation compaction.
 
 The same rule, in longer form, is in [docs/prompts.md](docs/prompts.md).
 
+## Documentation Rules (Non-Negotiable)
+
+Documentation describes the product's behavior and contracts: commands, API
+endpoints, request and response formats, configuration and user-visible
+behavior. These are stable interfaces a reader depends on.
+
+Documentation never carries concrete implementation details that change with
+the code: internal structure, file layout, algorithm steps, timing or runtime
+bounds, test durations, local environment specifics, measurements and other
+volatile internals. A detail belongs in documentation only when it is a stable
+interface, not when it is a copy of the current implementation.
+
+- If a documented detail diverges from the implementation, the documentation
+  is wrong: remove the detail. Do not change code, tune a limit or raise a
+  bound to match documentation.
+- A reviewer does not require such details; a reviewer reports a documented
+  volatile detail as a documentation defect.
+- The release audit does not treat the absence of a volatile detail as a
+  defect, and does not turn a documentation mismatch into a code task.
+- Every role that writes or reviews documentation receives this rule through
+  the project and repository instruction files.
+
 ## Release Rules
 
 - A published tag is immutable. A change after a release is a new version,

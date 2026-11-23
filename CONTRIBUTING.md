@@ -132,6 +132,11 @@ Small fixes (typos, broken links) can go straight to a PR.
 - **Every runtime operation is directly available (D-108):** no
   stage-specific allowlist; a task can be retried or restarted from its
   requirements in any status.
+- **Documentation states behavior and contracts (D-109):** commands, API
+  endpoints and request/response formats are fine; internal structure,
+  timings, runtime bounds, test durations and local environment are not. If a
+  detail diverges, remove the detail — do not change code or tune a limit to
+  match the documentation.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.
