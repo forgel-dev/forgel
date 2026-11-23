@@ -35,6 +35,8 @@ RULES = """Rules:
   interfaces the requirements do not name.
 - Documentation is text: do not add or require tests for it; the reviewer
   reads it.
+- A requirements document is functional only: no technical detail, including
+  an interface, contract, endpoint or request/response format.
 - Documentation states behavior and stable interfaces, never volatile
   implementation details such as timings, runtime bounds, internal structure
   or local environment; remove a stale detail instead of changing code to

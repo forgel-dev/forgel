@@ -137,6 +137,11 @@ Small fixes (typos, broken links) can go straight to a PR.
   timings, runtime bounds, test durations and local environment are not. If a
   detail diverges, remove the detail — do not change code or tune a limit to
   match the documentation.
+- **A requirements document is stricter (D-110):** a task specification or a
+  change request states functional requirements only, with no technical
+  detail at all — no interface, contract, endpoint, request/response format,
+  schema, command, file, identifier or runtime step. The stable-interface
+  permission above does not apply to a requirements document.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.

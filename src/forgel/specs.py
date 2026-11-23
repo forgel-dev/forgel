@@ -122,12 +122,15 @@ Rules:
 - Requirements, acceptance, constraints, goals, user stories, risks and open
   questions describe observable product behavior and outcomes only. Never put
   a command (shell, git, package manager), a file path, code, an identifier, a
-  tool or provider name, an environment variable, a commit/PR/worktree step
+  tool or provider name, an environment variable, an interface, a contract, an
+  endpoint, a request or response format, a schema, a commit/PR/worktree step
   or any other implementation detail into them. A verification command
   belongs only in the "checks" field, and the test command in
   "test_command". Runtime mechanics (git, commit, worktree, done report) are
-  never requirements. If the intent or the respec issue names a command, a
-  file or a runtime step, restate the behavior it must produce.
+  never requirements. This is a requirements document: the permission to
+  document a stable interface in user documentation does not apply. If the
+  intent or the respec issue names a command, a file or a runtime step,
+  restate the behavior it must produce.
 - Documentation is text and is verified by review. Never require or add a
   test, guard, assertion or automated check that reads a documentation file;
   a documentation task has review-only checks and no test command.

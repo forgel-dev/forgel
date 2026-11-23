@@ -124,6 +124,13 @@ interface, not when it is a copy of the current implementation.
 - Every role that writes or reviews documentation receives this rule through
   the project and repository instruction files.
 
+**Requirements documents are stricter.** A requirements document — a task
+specification or a change request — describes functional requirements only. It
+contains no technical detail at all, including an interface, contract,
+endpoint, request or response format, schema, command, file, identifier or
+runtime step. The permission above to document a stable interface applies to
+user documentation; it does not apply to a requirements document.
+
 ## Release Rules
 
 - A published tag is immutable. A change after a release is a new version,

@@ -96,6 +96,11 @@ the release policy changes.
   implementation details — internal structure, timings, runtime bounds, test
   durations, local environment. A divergence is fixed by removing the detail,
   not by changing code or tuning a limit.
+- **A requirements document is stricter (D-110):** a task specification or a
+  change request states functional requirements only, with no technical detail
+  at all — no interface, contract, endpoint, request/response format, schema,
+  command, file, identifier or runtime step. The stable-interface permission
+  above applies to user documentation, never to a requirements document.
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

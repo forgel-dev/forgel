@@ -317,9 +317,12 @@ For a change request:
   nothing to add.
 - Requirements, acceptance, constraints, goals, user stories, risks and open
   questions describe observable product behavior only. Never put a command, a
-  file path, code, a tool or provider name, an environment variable, a
-  commit/git/worktree step or any other implementation detail into them; a
-  verification command belongs in test_command.
+  file path, code, a tool or provider name, an environment variable, an
+  interface, a contract, an endpoint, a request or response format, a schema,
+  a commit/git/worktree step or any other implementation detail into them; a
+  verification command belongs in test_command. A change request is a
+  requirements document: the permission to document a stable interface in
+  user documentation does not apply.
 - Never require a test for a documentation change; documentation is verified
   by review of its text.
 - list the explicit functional requirements and acceptance criteria; do not
