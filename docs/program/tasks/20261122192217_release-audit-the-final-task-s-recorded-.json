@@ -139,14 +139,14 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-22T19:22:17+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T04:00:00+00:00",
+  "finished_at": "2026-11-23T04:08:36+00:00",
   "result": {
     "resume_count": 1,
     "resumed_at": "2026-11-23T00:05:45+00:00",
-    "summary": "Made the full suite finish inside the release audit's 120 s bound without weakening a single test, and recorded the change in the repository docs.\n\nDiagnosis (R10, measured before touching the docs, with per-test `--durations` and a temporary timing probe): `tests.test_install` dominated the run because every installer scenario copied the whole checkout and paid its own offline `pip` install, `InstallerOptOutTest` repeated the same opt-out install per test, `PlainPipInstallTest` copied the checkout again, and the bounded-check cases waited for the product's default limit. Pre-change numbers: the suite did not complete in 300 s at one attempt (124/partial), the completed run of 202 tests took 134.1 s, and `tests.test_install` alone took 91.4 s (`Ran 54 tests in 91.444s`).\n\nChange (`tests/test_install.py`, one prepared installation per scenario group, shared read-only artefacts only for tests that read them):\n- `_shared_source()` — one read-only copy of the checkout per run (atexit-cleaned), used by every installer scenario and by `PlainPipInstallTest`, instead of one copy per class/test.\n- `InstallerCase.plain_install()` — one real `install.sh` run shared by the group of tests that only read its result; `InstallerOptOutTest.opt_out_install()` likewise for the opt-out group. Tests that mutate the profile (`repeated install`, `second run`, byte stability, uninstall, shell detection, watchdog, bounded check) still run their own real `install.sh` in their own temporary HOME.\n- The bounded-check and watchdog cases already configure `FORGEL_CODE_TIMEOUT=1` (below the product default of ten) so they wait for their own bound.\nEvery installer scenario is unchanged in substance: the same real `install.sh`, real `pip` install into a temporary HOME, real detected login shell, the same assertions and the same test methods (54 in `tests/test_install.py`, 202 in the suite, no skips added, none removed).\n\nDocumentation: the README `## Tests` section now states that `python -m unittest discover -s tests` runs the whole suite, that the suite is bounded at two minutes (the audit's limit) and finishes inside it, and that the installer scenarios stay end to end while one checkout copy and one installation per scenario group are shared instead of rebuilt per test. `CHANGELOG.md` records the change under `[Unreleased]`.\n\nMeasured after the change (this machine): suite `python -m unittest discover -s tests` -> `Ran 202 tests in 81.750s`, `OK`, and under the bound -> 80.8 s, exit 0; per module: `tests.test_install` 53.5-55.1 s, `tests.test_cli` 18.6-19.2 s, `tests.test_stub_contract` 4.3 s, `tests.test_cli_extra` 2.9 s, `tests.test_extras` 1.6 s, `tests.test_packaging` 0.6 s, `tests.test_packaging_types` 0.2 s, `tests.test_readme_install` 0.1 s. Each module was also run on its own and exits 0, so tests stay independent.; uncommitted files outside the contract: tests/probe_timing.py; task QA failed: AC6: the README Tests section states the runtime bound [task code @ /Users/okalistratov/Documents/sites/code]",
+    "summary": "Finished the release-audit remediation by completing the README `## Tests` section (the only failing acceptance point, AC6), then re-verified the whole suite.\n\nREADME.md `## Tests` now states both contract points explicitly: the documented command `python -m unittest discover -s tests` \"runs the whole suite — no environment variable, marker or default option leaves a test out\" and \"completes in under 120 seconds (about two minutes)\", and that the budget covers the installer scenarios, which run the real `install.sh` with a real pip install into a temporary home and a real detected login shell. The existing `pip install ...[test]` + `python -m pytest -q` block and the unittest command the README guard tests require are unchanged.\n\nNothing else was touched in this session: `tests/test_install.py` (shared per-scenario-group installation, one read-only checkout copy, bounded-check limit configured below the product default) and the CHANGELOG `[Unreleased]` entry were already in place from the earlier session and were left as-is.\n\nDiagnosis and measurements (R10/AC8), measured before any change:\n- suite did not complete inside the audit bound: `timeout 120` produced partial progress and exit 124; one completed measurement of the pre-change 202 tests took 134.1 s with `tests.test_install` alone at 91.4 s (54 tests); per-test `--durations` plus a timing probe showed the cost was one full checkout copy + offline pip install per installer test, the opt-out install repeated per test in `InstallerOptOutTest`, another copy in `PlainPipInstallTest`, and bounded-check cases waiting the product's default limit.\n\nAfter the change (this session):\n- `python -m unittest discover -s tests` — exit 0, `Ran 202 tests in 84.017s`, `OK`.\n- same command under a 120 s bound (`subprocess.run(..., timeout=120)` with `sys.executable`) — exit 0, `elapsed 80.01s rc=0`, `OK`, so AC2 holds with margin.\n- `python -m unittest tests.test_install` — exit 0, `Ran 54 tests in 52.465s`, `OK`.\n- `python -m unittest tests.test_readme_install tests.test_install tests.test_cli -v` — exit 0, 151 tests, `OK`; the verbose output shows the install, re-install, uninstall, opt-out, byte-stability and fresh-login-shell cases plus the `--uninstall`/bounded-check/watchdog/profile-override cases all running (AC4, AC5, and the README guard suite green against the new text).\n- `python -m pytest -q` — exit 0, `202 passed, 137 subtests passed in 80.48s` (R7: the whole suite, no marker or default option excluding anything).\n- README AC6 check re-read from the file: the `## Tests` body contains \"120 seconds (about two minutes)\" and the whole-suite statement, so `sed -n '/^## Tests/,/^## /p' README.md | grep -Eiq 'minute|120'` matches.\n- CHANGELOG `[Unreleased]` keeps the `### Changed` entry recording the suite change and the README bound (AC7).\n\nNo test method, assertion, fixture check or scenario was removed, skipped, xfailed or relaxed, and no default opt-out, marker or environment variable was added.",
     "files_changed": [
       "CHANGELOG.md",
       "README.md",
@@ -157,277 +157,50 @@
         "command": [
           "python",
           "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import subprocess,sys,time\ns=time.monotonic()\ntry:\n    r=subprocess.run([sys.executable,'-m','unittest','discover','-s','tests'],capture_output=True,text=True,timeout=120)\n    print('elapsed %.2fs rc=%s' % (time.monotonic()-s, r.returncode))\n    print(r.stderr.strip().splitlines()[-1])\nexcept subprocess.TimeoutExpired:\n    print('TIMED OUT after %.2fs' % (time.monotonic()-s))"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_readme_install",
+          "tests.test_install",
+          "tests.test_cli",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "unittest",
+          "tests.test_install"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
           "pytest",
           "-q",
-          "tests",
-          "--durations=45",
           "-p",
           "no:cacheprovider"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "--durations=0",
-          "-p",
-          "no:cacheprovider",
-          "--no-header"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 124
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-v"
-        ],
-        "exit_code": 124
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-p",
-          "test_cli.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.test_cli"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-p",
-          "test_cli.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-p",
-          "test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-p",
-          "test_cli*.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-p",
-          "test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_install.py",
-          "--durations=0",
-          "-p",
-          "no:cacheprovider",
-          "--no-header"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.probe_timing",
-          "-v"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_cli.py",
-          "tests/test_cli_extra.py",
-          "tests/test_extras.py",
-          "tests/test_packaging.py",
-          "tests/test_packaging_types.py",
-          "tests/test_readme_install.py",
-          "tests/test_stub_contract.py",
-          "--durations=0",
-          "-p",
-          "no:cacheprovider",
-          "--no-header"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.probe_timing",
-          "-v"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.probe_timing",
-          "-v"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-p",
-          "test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.probe_timing"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.probe_timing"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "tests.probe_timing",
-          "-v"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import subprocess, sys, time\nmods=['tests.test_cli','tests.test_cli_extra','tests.test_extras','tests.test_install','tests.test_packaging','tests.test_packaging_types','tests.test_readme_install','tests.test_stub_contract']\nfor name in mods:\n    s=time.monotonic()\n    r=subprocess.run([sys.executable,'-m','unittest',name],capture_output=True,text=True,timeout=400)\n    d=time.monotonic()-s\n    tail=' | '.join(l for l in r.stderr.strip().splitlines() if l.startswith(('OK','FAILED','Ran ')))\n    print('%-30s %6.2fs rc=%s %s' % (name,d,r.returncode,tail))\ns=time.monotonic()\ntry:\n    r=subprocess.run([sys.executable,'-m','unittest','discover','-s','tests'],capture_output=True,text=True,timeout=120)\n    d=time.monotonic()-s\n    tail=' | '.join(l for l in r.stderr.strip().splitlines() if l.startswith(('OK','FAILED','Ran ')))\n    print('%-30s %6.2fs rc=%s %s' % ('discover (120s bound)',d,r.returncode,tail))\nexcept subprocess.TimeoutExpired:\n    print('discover TIMED OUT after %.2fs' % (time.monotonic()-s))"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-c",
-          "import subprocess, sys, time\ns=time.monotonic()\ntry:\n    r=subprocess.run([sys.executable,'-m','unittest','discover','-s','tests'],capture_output=True,text=True,timeout=120)\n    print('discover under 120s bound: %.2fs rc=%s' % (time.monotonic()-s, r.returncode))\n    print(r.stderr.strip().splitlines()[-1])\nexcept subprocess.TimeoutExpired:\n    print('TIMED OUT after %.2fs' % (time.monotonic()-s))\nfor name in ('tests.test_cli','tests.test_install'):\n    s=time.monotonic()\n    r=subprocess.run([sys.executable,'-m','unittest',name],capture_output=True,text=True,timeout=300)\n    print('%-18s %6.2fs rc=%s %s' % (name, time.monotonic()-s, r.returncode, r.stderr.strip().splitlines()[-1]))"
         ],
         "exit_code": 0
       },
@@ -444,35 +217,36 @@
         "final_test": true
       }
     ],
-    "test_output": "..........................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 202 tests in 82.941s\n\nOK\n",
+    "test_output": "..........................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 202 tests in 79.948s\n\nOK\n",
     "assumptions": [
-      "The 120 s figure is the budget the release audit applies to the whole recorded run; the suite's stated bound in the README is therefore two minutes, which leaves roughly 30 s of margin on a normal development machine.",
-      "Only the genuinely read-only expensive work is shared (one checkout copy, one plain install, one opt-out install); every scenario that writes profile state runs its own real install.sh in its own temporary HOME, so no test observes another test's installation or profile state.",
-      "tests/__init__.py, tests/test_extras.py, tests/test_packaging.py, tests/test_cli.py and tests/test_cli_extra.py are listed as affected but needed no change: their cost is per-test subprocess startup, not duplicated installation work, and the suite already fits the bound without touching them.",
-      "The temporary timing probe used for the measurement (tests/probe_timing.py) was scaffolding and is deleted, not committed."
+      "The README bound sentence names both \"120 seconds\" and \"about two minutes\" so the acceptance grep matches on either token.",
+      "The bound is documented as applying to a development machine, matching the specification's own assumption that the audit machine resembles one.",
+      "The `elapsed 80.01s rc=0` run under a 120 s timeout is the AC2 evidence, executed with `sys.executable` because `python` is not on `PATH` under `sh -c` in this environment (the earlier exit 127 was that, not the suite).",
+      "The pre-change timings (134.1 s suite, 91.4 s for `tests.test_install`, and the 124/partial run at the 120 s bound) were recorded in the earlier session before code was touched and are reported here as the \"before\" half of AC8."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 4,
-      "compactions": 3,
-      "model_calls": 96,
-      "estimated_input_tokens": 4952870,
-      "provider_input_tokens": 5292757,
-      "provider_output_tokens": 279810,
-      "cache_hit_tokens": 5041152,
-      "cache_miss_tokens": 251605,
-      "estimated_tokens": 75794,
-      "state": "docs/program/agent/20261122192217_release-audit-the-final-task-s-recorded-.state.md"
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 19,
+      "estimated_input_tokens": 532104,
+      "provider_input_tokens": 561957,
+      "provider_output_tokens": 9332,
+      "cache_hit_tokens": 532736,
+      "cache_miss_tokens": 29221,
+      "estimated_tokens": 35238,
+      "state": ""
     },
     "test_removals": [],
     "spec_issues": [],
     "git": {
-      "base": "9fbbf776b1ba19e30d2d3e78ddef4484ffc55ec4",
-      "head": "a8398afe47c51191a896ef3e05d32dc8c0980d64",
-      "commit": "a8398afe47c51191a896ef3e05d32dc8c0980d64",
+      "base": "a8398afe47c51191a896ef3e05d32dc8c0980d64",
+      "head": "580c644caac4427ea0e8b8da54e302a312bd99ab",
+      "commit": "580c644caac4427ea0e8b8da54e302a312bd99ab",
       "commits": [
-        "a8398afe47c51191a896ef3e05d32dc8c0980d64"
+        "a8398afe47c51191a896ef3e05d32dc8c0980d64",
+        "580c644caac4427ea0e8b8da54e302a312bd99ab"
       ]
     },
     "report": "docs/program/agent/20261122192217_release-audit-the-final-task-s-recorded-.md",
@@ -683,7 +457,8 @@
       "kind": "qa",
       "message": "task QA failed: AC6: the README Tests section states the runtime bound [task code @ /Users/okalistratov/Documents/sites/code]",
       "retryable": false
-    }
+    },
+    "failure": {}
   },
   "request": ""
 }
