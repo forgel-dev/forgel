@@ -154,6 +154,30 @@ def _attributed_diff(
     return "\n".join(parts).strip() or "No product changes in those commits."
 
 
+def _commit_series(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> str:
+    """Each attributed commit in order, so a superseded change is visible."""
+
+    _repo_id, repo = _repo(layout, task)
+    files, commits = _attributed(task)
+    if not commits:
+        return "No product commits were attributed to this task."
+    parts: list[str] = []
+    for commit in commits:
+        subject = _git_output(
+            repo, ["show", "-s", "--format=%h %s", commit]
+        ).strip()
+        command = ["show", "--format=", commit]
+        if files:
+            command += ["--", *files]
+        text = _git_output(repo, command).strip()
+        parts.append(
+            f"### {subject or commit}\n{text or '(no diff)'}"
+        )
+    return "\n\n".join(parts)
+
+
 def _reference_text(path: Path) -> str:
     try:
         text = path.read_text(encoding="utf-8")
@@ -451,8 +475,13 @@ Allowed reasons: "removed" (the scenario is gone), "replaced" (behavior
 changed; the replacement must exist in the attributed change), "wrong"
 (incorrect or duplicate test). An unjustified removal is a blocking defect.
 
-Attributed change (only this task's commits):
+Net change of the attributed work (the final state, parent of the first
+commit through the last commit):
 {_cap(task_diff(layout, task), MAX_DIFF_CHARS)}
+
+Commit series (history; a later commit may revert an earlier one, and the net
+change above is the final state):
+{_cap(_commit_series(layout, task), MAX_DIFF_CHARS)}
 
 Current relevant files:
 {_cap(_current_files_text(layout, task), MAX_FILE_CHARS * 2)}

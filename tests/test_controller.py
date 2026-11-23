@@ -75,6 +75,46 @@ class ControllerTest(unittest.TestCase):
         with self.assertRaises(ControllerError):
             self._decide(json.dumps({"operation": "deploy"}))
 
+    def test_the_controller_can_page_the_context(self) -> None:
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "context_page",
+                        "key": "failure",
+                        "page": 1,
+                    }
+                ),
+                json.dumps(
+                    {"operation": "stop", "reason": "seen the failure"}
+                ),
+            ]
+        )
+
+        decision = decide(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            "task_failure",
+            {
+                "failure": {
+                    "kind": "code",
+                    "message": "BOOM-MARKER",
+                }
+            },
+            client,
+            log=lambda _m: None,
+        )
+
+        self.assertEqual(decision.operation, "stop")
+        self.assertIn(
+            "context_page", client.requests[0][1].content
+        )
+        self.assertIn(
+            "BOOM-MARKER", client.requests[1][-1].content
+        )
+
     def test_every_operation_maps_for_both_stages(self) -> None:
         for operation in OPERATIONS:
             self.assertIn(task_action(operation), TASK_ACTIONS)

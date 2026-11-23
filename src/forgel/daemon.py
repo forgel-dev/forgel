@@ -621,30 +621,20 @@ def _apply_controller_decision(
         log(f"[controller] task {task_id}: {action}: {text}")
         return True
     if action == "accept":
-        if str(task.get("status") or "") == "review":
-            from .task_review import accept_task
+        # The controlling agent is the arbiter: it has the whole situation,
+        # including the review findings and the net diff. When it accepts,
+        # the work is accepted even if a finding was recorded; it may know
+        # the finding is invalid or already reverted.
+        from .task_review import accept_task
 
-            accept_task(
-                settings,
-                ledger,
-                project,
-                task,
-                actor="controller",
-                notes=str(decision.reason or decision.summary),
-            )
-        else:
-            # Accepting failed work means running the post-agent pipeline:
-            # QA and review decide, then acceptance takes it.
-            from .task_review import process_task_result
-
-            process_task_result(
-                settings,
-                ledger,
-                dict(project),
-                task,
-                client,
-                log,
-            )
+        accept_task(
+            settings,
+            ledger,
+            project,
+            task,
+            actor="controller",
+            notes=str(decision.reason or decision.summary),
+        )
         log(f"[controller] task {task_id}: accepted")
         return True
     if action == "reject":

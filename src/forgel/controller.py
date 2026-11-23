@@ -17,9 +17,14 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from . import limits, tasks
 from .config import Settings
+from .context_window import CONTEXT_ACTION, ContextWindow, Item
+from .environment import load_environment, render_environment
+from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import (
@@ -31,9 +36,7 @@ from .model import (
 )
 from .model_output import json_objects
 
-MAX_CONTEXT_CHARS = 24_000
-MAX_MESSAGE_CHARS = 2_000
-MAX_MESSAGES = 12
+MAX_CONTEXT_PAGES = 40
 
 OPERATIONS = (
     "retry",
@@ -108,6 +111,12 @@ Return exactly one JSON object:
 
 Use only the facts in the context. Do not repeat what is already proven to
 work. Do not ask the owner to choose between internal process options.
+
+The context is paged, not truncated. The manifest lists every item and its
+page count; the first pages that fit are shown. To read any page, answer only
+with {"action": "context_page", "key": "<item key>", "page": <n>}; the
+runtime returns that page and asks again. Use it before deciding when a fact
+you need is not shown.
 """
 
 
@@ -163,11 +172,22 @@ def release_action(operation: str) -> str:
     return "fix"
 
 
-def _cap(text: Any, limit: int) -> str:
-    value = str(text or "")
-    if len(value) <= limit:
-        return value
-    return value[:limit] + "\n... [truncated]"
+PERMISSIONS = """You decide the next step; you do not edit files, run commands or change a check.
+- retry: requeue the same work unchanged. The agent runs again with the same task and the same checks.
+- rework: send the work back with feedback. The same checks run again; feedback cannot change a check command, a limit or a missing tool.
+- respec: rewrite the specification text from "issue"; executable acceptance checks stay as they are.
+- set_limit {name, seconds}: raise a runtime limit (the limits item lists them).
+- accept/reject: decide on work that already meets or misses the requirements.
+- cancel/block/stop: end the work and report the state.
+Before retry or rework, compare the failure with the checks, the environment and the limits: if the same command would produce the same result, a repeat cannot help. Use set_limit when a limit cut the work; stop when the task cannot succeed as written.
+When the stop is a review rejection, verify every blocking finding against the net diff and the commit series. A finding about a change that a later commit reverted is invalid; a correct change that is merely unrelated to the task is not a defect in the work. Do not send work back for an invalid finding: accept the task when its requirements are met; reject it when the work itself is wrong."""
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
 
 
 def _conversation(layout: ProjectLayout) -> str:
@@ -175,7 +195,7 @@ def _conversation(layout: ProjectLayout) -> str:
     if not path.is_file():
         return ""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()[-MAX_MESSAGES:]
+        lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return ""
     turns: list[str] = []
@@ -190,27 +210,222 @@ def _conversation(layout: ProjectLayout) -> str:
         producer = str(
             item.get("agent") or item.get("role") or ""
         ).strip()
-        turns.append(f"{producer}: {_cap(text, MAX_MESSAGE_CHARS)}")
+        turns.append(f"{producer}: {text}")
     return "\n".join(turns)
 
 
-def _prompt(
+def _history(
+    ledger: Ledger, project_id: str, data: Mapping[str, Any]
+) -> str:
+    decisions: list[dict[str, Any]] = []
+    try:
+        events = ledger.events(project_id)
+    except Exception:  # noqa: BLE001 - history is optional context
+        events = []
+    for event in events[-40:]:
+        if str(event.get("stage")) != "controller":
+            continue
+        payload = event.get("payload") or {}
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                payload = {}
+        decisions.append(
+            {
+                "at": event.get("created_at"),
+                "stage": (payload or {}).get("stage"),
+                "operation": (payload or {}).get("operation"),
+            }
+        )
+    return json.dumps(
+        {
+            "attempts": data.get("attempts"),
+            "rework_count": data.get("rework_count"),
+            "resume_count": data.get("resume_count"),
+            "feedback": data.get("feedback"),
+            "last_failure": data.get("last_failure"),
+            "previous_controller_decisions": decisions[-10:],
+        },
+        ensure_ascii=False,
+        indent=1,
+    )
+
+
+def _task_id(context: Mapping[str, Any]) -> str:
+    task = context.get("task")
+    if not isinstance(task, Mapping):
+        return ""
+    return str(task.get("id") or "").strip()
+
+
+def _window(
     layout: ProjectLayout,
     project: Mapping[str, Any],
+    ledger: Ledger,
     stage: str,
     context: Mapping[str, Any],
-) -> str:
+) -> ContextWindow:
+    items: list[Item] = [
+        Item(
+            "failure",
+            "the failure that stopped the work",
+            json.dumps(
+                context.get("failure") or {},
+                ensure_ascii=False,
+                indent=1,
+            ),
+        ),
+        Item(
+            "situation",
+            "the stage context",
+            json.dumps(dict(context), ensure_ascii=False, indent=1),
+        ),
+    ]
+    task_id = _task_id(context)
+    if task_id:
+        task = tasks.get_task(layout, task_id)
+        if task is not None:
+            items.append(
+                Item(
+                    "task",
+                    "the full task record",
+                    json.dumps(task, ensure_ascii=False, indent=1),
+                )
+            )
+            result = task.get("result") or {}
+            items.append(
+                Item(
+                    "history",
+                    "attempts and previous decisions",
+                    _history(ledger, str(project.get("id")), result),
+                )
+            )
+            spec_ref = str(task.get("spec") or "").strip()
+            spec = _read(
+                layout.artifact(spec_ref)
+                if spec_ref
+                else layout.artifact(f"docs/program/specs/{task_id}.md")
+            )
+            if spec:
+                items.append(
+                    Item("specification", "the task specification", spec)
+                )
+            for suffix, key, title in (
+                ("", "agent_report", "the agent's report"),
+                (".qa.md", "qa_report", "the QA report"),
+                (".review.md", "review_report", "the review report"),
+            ):
+                text = _read(
+                    layout.artifact(
+                        f"docs/program/agent/{task_id}{suffix}.md"
+                    )
+                )
+                if text:
+                    items.append(Item(key, title, text))
+            try:
+                from .task_review import task_diff, _commit_series
+
+                diff = task_diff(layout, task)
+                series = _commit_series(layout, task)
+            except Exception:  # noqa: BLE001 - the diff is optional context
+                diff = ""
+                series = ""
+            if diff:
+                items.append(
+                    Item("diff", "the task's net change", diff)
+                )
+            if series:
+                items.append(
+                    Item(
+                        "commit_series",
+                        "the task's commits in order",
+                        series,
+                    )
+                )
+    try:
+        environment = load_environment(layout)
+    except Exception:  # noqa: BLE001 - a broken contract is context too
+        environment = None
+    if environment is not None:
+        items.append(
+            Item(
+                "environment",
+                "the environment contract",
+                render_environment(environment),
+            )
+        )
+    instructions = instruction_context(layout)
+    if instructions:
+        items.append(
+            Item(
+                "instructions",
+                "project and repository instructions",
+                instructions,
+            )
+        )
+    values = {**limits.LIMITS, **limits.load(layout)}
+    items.append(
+        Item(
+            "limits",
+            "runtime limits and how to raise them",
+            json.dumps(
+                {
+                    "values": values,
+                    "reasons": limits.REASONS,
+                    "set_with": (
+                        'set_limit {"name": "<limit>", "seconds": <n>}'
+                    ),
+                },
+                ensure_ascii=False,
+                indent=1,
+            ),
+        )
+    )
+    items.append(
+        Item(
+            "permissions",
+            "what you can and cannot change",
+            PERMISSIONS,
+        )
+    )
+    release = context.get("release")
+    if isinstance(release, Mapping):
+        items.append(
+            Item(
+                "release",
+                "the stopped release",
+                json.dumps(dict(release), ensure_ascii=False, indent=1),
+            )
+        )
+    release_tasks = context.get("tasks")
+    if isinstance(release_tasks, list):
+        items.append(
+            Item(
+                "release_tasks",
+                "the release's tasks",
+                json.dumps(
+                    release_tasks, ensure_ascii=False, indent=1
+                ),
+            )
+        )
     conversation = _conversation(layout)
+    if conversation:
+        items.append(
+            Item("conversation", "the project conversation", conversation)
+        )
+    return ContextWindow(items)
+
+
+def _prompt(
+    project: Mapping[str, Any], stage: str, window: ContextWindow
+) -> str:
     return (
         f"Project: {project.get('name')} ({project.get('id')})\n"
         f"Stage: {stage}\n\n"
-        f"Situation:\n"
-        + _cap(
-            json.dumps(dict(context), ensure_ascii=False, indent=1),
-            MAX_CONTEXT_CHARS,
-        )
-        + (f"\n\nRecent conversation:\n{conversation}" if conversation else "")
-        + "\n\nReturn the next-step JSON now."
+        + window.render()
+        + "\n\nReturn the next-step JSON now, or request a context page "
+        "with " + CONTEXT_ACTION + "."
     )
 
 
@@ -226,20 +441,76 @@ def decide(
 ) -> Decision:
     """Ask the controlling agent for the next step."""
 
+    window = _window(layout, project, ledger, stage, context)
     messages = [
         ModelMessage("system", SYSTEM_PROMPT),
-        ModelMessage(
-            "user", _prompt(layout, project, stage, context)
-        ),
+        ModelMessage("user", _prompt(project, stage, window)),
     ]
-    try:
-        raw = client.complete(
-            messages, model=project_model_name(layout.control)
+    input_tokens = 0
+    output_tokens = 0
+    cache_hit = 0
+    cache_miss = 0
+    calls = 0
+    data: Any = None
+    page_index: int | None = None
+    for _ in range(MAX_CONTEXT_PAGES):
+        try:
+            raw = client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError as exc:
+            raise ControllerError(
+                f"the controller call failed: {exc}"
+            ) from exc
+        calls += 1
+        usage = getattr(client, "last_usage", None)
+        if isinstance(usage, dict):
+            input_tokens += int(usage.get("prompt_tokens") or 0)
+            output_tokens += int(usage.get("completion_tokens") or 0)
+            hit, miss = cache_tokens(usage)
+            cache_hit += hit
+            cache_miss += miss
+        objects = json_objects(raw)
+        parsed = objects[-1] if objects else None
+        if (
+            isinstance(parsed, dict)
+            and str(parsed.get("action") or "") == "context_page"
+        ):
+            key = str(parsed.get("key") or "").strip()
+            try:
+                page = int(parsed.get("page") or 1)
+            except (TypeError, ValueError):
+                page = 0
+            try:
+                text = window.read(key, page)
+            except (KeyError, ValueError) as exc:
+                text = f"cannot read that context: {exc}"
+            messages.append(ModelMessage("assistant", raw))
+            if page_index is not None:
+                # Keep the working set to one page: the manifest lists every
+                # page, so a released page can be requested again.
+                messages[page_index] = ModelMessage(
+                    "user",
+                    "[the previous context page was released; request it "
+                    "again if you still need it]",
+                )
+            messages.append(
+                ModelMessage(
+                    "user",
+                    text + "\n\nReturn the next-step JSON now.",
+                )
+            )
+            page_index = len(messages) - 1
+            log(
+                f"[controller] {stage}: context {key} page {page}"
+            )
+            continue
+        data = parsed
+        break
+    else:
+        raise ControllerError(
+            "the controller kept requesting context without deciding"
         )
-    except ModelError as exc:
-        raise ControllerError(f"the controller call failed: {exc}") from exc
-    objects = json_objects(raw)
-    data = objects[-1] if objects else None
     if not isinstance(data, dict):
         raise ControllerError("the controller returned no decision")
     operation = str(data.get("operation") or "").strip().lower()
@@ -267,10 +538,6 @@ def decide(
         release_id=str(data.get("release_id") or "").strip(),
         args=args,
     )
-    usage = getattr(client, "last_usage", None)
-    if not isinstance(usage, dict):
-        usage = {}
-    hit, miss = cache_tokens(usage)
     ledger.append_event(
         str(project["id"]),
         "controller",
@@ -281,13 +548,11 @@ def decide(
         payload={
             "stage": stage,
             "operation": decision.operation,
-            "model_calls": 1,
-            "input_tokens": int(usage.get("prompt_tokens") or 0),
-            "output_tokens": int(
-                usage.get("completion_tokens") or 0
-            ),
-            "cache_hit_tokens": hit,
-            "cache_miss_tokens": miss,
+            "model_calls": calls,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_hit_tokens": cache_hit,
+            "cache_miss_tokens": cache_miss,
         },
         generation=ledger.current_generation(str(project["id"])),
     )

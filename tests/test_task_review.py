@@ -188,6 +188,9 @@ class TaskReviewTest(unittest.TestCase):
         diff = task_diff(self.layout, stored)
         self.assertIn("value = 2", diff)
         self.assertNotIn("unrelated", diff)
+        prompt = _review_prompt(self.layout, stored)
+        self.assertIn("Net change of the attributed work", prompt)
+        self.assertIn("Commit series", prompt)
 
     def test_the_review_diff_ignores_reverted_work(self) -> None:
         write_text(self.repo / "app.py", "value = 2\n")
