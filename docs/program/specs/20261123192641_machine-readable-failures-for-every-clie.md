@@ -1,3 +1,7 @@
+<!-- forgel:cancelled -->
+
+> **Cancelled.** This task was cancelled. The runtime does not accept this requirements document for work.
+
 # Task Spec: Machine-readable failures for every client command and a consistent selected project
 
 ## Document Information
