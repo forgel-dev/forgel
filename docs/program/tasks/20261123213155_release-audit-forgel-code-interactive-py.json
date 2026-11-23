@@ -152,10 +152,175 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-23T21:31:55+00:00",
   "started_at": "2026-11-23T21:31:55+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T22:22:42+00:00",
+  "result": {
+    "summary": "Rewrote `redact()` in `forgel_code/interactive.py` so every engine reply and engine error is masked before display. Secret-bearing labels are now recognized case-insensitively in English and Russian (Russian by stem), as single words or compound labels whose segments are joined by `_`, `.` or `-`, and a value bound to such a label by a colon, an equals sign (with or without spaces) or whitespace is replaced with the fixed marker `[redacted]` while the label stays visible. Whitespace/colon-bound authorization scheme words (e.g. `Bearer`) stay visible with only the credential after them masked. Prose that merely mentions a secret word (\"the token is missing\", \"rotate the password please\") is left intact, and secret-free text is returned unchanged and byte-for-byte; masking is idempotent and total for empty input. The mask already had a single funnel through `InteractiveSession.write()`, so every reply, error and state line continues to pass through it. The implementation no longer imports `re` (the client's stdlib allowlist forbids it), doing label scanning by hand instead. Added `tests/test_redact.py`, which checks each required form (colon, equals, whitespace, scheme-prefixed, Russian, compound labels), unchanged benign text, idempotency, and end-to-end that engine replies, engine state lines and engine errors reach the session screen with the value absent. Full suite `python -m pytest -q` passes: 267 passed, 172 subtests.",
+    "files_changed": [
+      "forgel_code/interactive.py",
+      "tests/test_redact.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 124
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py",
+          "tests/test_install_timeout_verdict.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact.py",
+          "tests/test_interactive.py"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact.py",
+          "tests/test_interactive.py"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact.py",
+          "tests/test_interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact.py",
+          "tests/test_interactive.py",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_install.py::InstallerBoundedCheckTest::test_shell_that_ignores_the_stop_is_still_bounded",
+          "tests/test_install_timeout_verdict.py::TimeoutVerdictOrderingTest::test_step_inside_the_bound_keeps_its_own_nonzero_outcome"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "............................................................................................... [ 35%]\n........................................................................ [ 62%]\n.............................................................. [ 85%]\n......................................                                                                  [100%]\n267 passed, 172 subtests passed in 204.73s (0:03:24)\n",
+    "assumptions": [
+      "The fixed mask marker stays the existing `[redacted]` placeholder.",
+      "Russian labels are matched by stem (парол, секрет, токен, ключ) so inflected forms are recognized.",
+      "The label segment separators for compound labels are underscore, dot and hyphen, as stated in the specification's scope.",
+      "A scheme word after a whitespace joiner binds a credential only when the following token is not an ordinary prose word (so \"bearer of good news\" stays untouched)."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 40,
+      "estimated_input_tokens": 1968224,
+      "provider_input_tokens": 2029889,
+      "provider_output_tokens": 291655,
+      "cache_hit_tokens": 1856768,
+      "cache_miss_tokens": 173121,
+      "estimated_tokens": 84812,
+      "state": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "5db451934dc45eff8ac4093ba131512cd3b16880",
+      "head": "ec4bd355192bae72b706ba5a7008b764fbb47687",
+      "commit": "ec4bd355192bae72b706ba5a7008b764fbb47687",
+      "commits": [
+        "ec4bd355192bae72b706ba5a7008b764fbb47687"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.md"
+  },
   "request": ""
 }
