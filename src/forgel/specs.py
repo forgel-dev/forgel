@@ -118,6 +118,10 @@ Rules:
   result is judged. Do not add features beyond the intent, and do not
   prescribe an implementation file list: state the required behavior, the
   developer chooses the files.
+- The coding agent edits files and runs repository commands; its git is
+  read-only. Do not put a git write command, "the agent commits" or any
+  commit step into the requirements: the runtime commits the selected change
+  set.
 - Give every acceptance criterion a check. Use a command when the criterion
   can be verified by one; use review only for a subjective criterion. Never
   use a vacuous check.
