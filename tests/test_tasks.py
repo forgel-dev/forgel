@@ -238,6 +238,33 @@ class TasksTest(unittest.TestCase):
             project_state(self.ledger, self.project), "task done"
         )
 
+    def test_current_task_prefers_the_running_task(self) -> None:
+        running = tasks.create_task(
+            self.layout,
+            "Running work",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            task_id="20260101000000_running",
+        )
+        tasks.update_task(
+            self.layout, running["id"], status="running"
+        )
+        newer = tasks.create_task(
+            self.layout,
+            "Newer work",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            task_id="20260101000001_newer",
+        )
+        tasks.update_task(self.layout, newer["id"], status="review")
+
+        current = tasks.current_task(self.layout)
+
+        assert current is not None
+        self.assertEqual(current["id"], running["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

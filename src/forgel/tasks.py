@@ -493,6 +493,20 @@ def latest_task(layout: ProjectLayout) -> dict[str, Any] | None:
     return tasks[-1] if tasks else None
 
 
+def current_task(layout: ProjectLayout) -> dict[str, Any] | None:
+    """The task the runtime is working on now: a running task, else the newest.
+
+    An implicit operation ("restart the current task") must target the running
+    task, not a newer pending one queued behind it.
+    """
+
+    tasks = list_tasks(layout)
+    for task in reversed(tasks):
+        if task.get("status") == "running":
+            return task
+    return tasks[-1] if tasks else None
+
+
 def cancel_task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
     task = get_task(layout, task_id)
     if task is None:

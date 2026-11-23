@@ -217,6 +217,34 @@ class RuntimeOpsTest(unittest.TestCase):
         ]
         self.assertIn("task_restart", stages)
 
+
+    def test_an_implicit_operation_targets_the_running_task(self) -> None:
+        running = self._task(status="running")
+        newer = create_task(
+            self.layout,
+            "Newer work",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            task_id="20260101000001_newer",
+        )
+        update_task(self.layout, newer["id"], status="review")
+
+        run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_retry",
+            {},
+        )
+
+        running_stored = get_task(self.layout, running["id"])
+        newer_stored = get_task(self.layout, newer["id"])
+        assert running_stored is not None
+        assert newer_stored is not None
+        self.assertEqual(running_stored["status"], "pending")
+        self.assertEqual(newer_stored["status"], "review")
+
     def test_every_documented_operation_is_unique(self) -> None:
         self.assertEqual(len(OPERATIONS), len(set(OPERATIONS)))
 

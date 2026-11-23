@@ -77,6 +77,7 @@ from .tasks import (
     cancel_task,
     commit_task,
     get_task,
+    current_task,
     latest_task,
     list_tasks,
     retry_task,
@@ -1875,7 +1876,7 @@ class CommandRouter:
             layout = ProjectLayout.detect(project["workspace"])
             task_id = str(args.get("task_id") or "").strip()
             if not task_id:
-                task = latest_task(layout)
+                task = current_task(layout)
                 if task is None:
                     return self._error(
                         chat_id, "chat_action_no_decision"
@@ -1891,7 +1892,7 @@ class CommandRouter:
             layout = ProjectLayout.detect(project["workspace"])
             task_id = str(args.get("task_id") or "").strip()
             if not task_id:
-                task = latest_task(layout)
+                task = current_task(layout)
                 if task is None:
                     return self._error(
                         chat_id, "chat_action_no_review_task"

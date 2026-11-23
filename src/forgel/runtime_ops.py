@@ -28,7 +28,7 @@ from .release_train import (
 )
 from .task_qa import run_task_qa
 from .task_review import process_task_result, rerun_review
-from .tasks import get_task, latest_task
+from .tasks import current_task, get_task
 
 Log = Callable[[str], None]
 
@@ -48,7 +48,7 @@ OPERATIONS = (
 
 def _task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
     task_id = str(task_id or "").strip()
-    task = get_task(layout, task_id) if task_id else latest_task(layout)
+    task = get_task(layout, task_id) if task_id else current_task(layout)
     if task is None:
         raise ValueError(
             f"unknown task {task_id!r}" if task_id else "there is no task"
