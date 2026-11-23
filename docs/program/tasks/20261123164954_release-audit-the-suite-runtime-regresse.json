@@ -1,0 +1,31 @@
+{
+  "id": "20261123164954_release-audit-the-suite-runtime-regresse",
+  "title": "Release audit: The suite runtime regressed past the bound the release established. Task 2026112",
+  "spec": "",
+  "summary": "Bring the suite back under the documented bound (or raise the bound consistently in README/acceptance and confirm the audit's timeout), then record a passing run of the full suite within that bound. Do not state 'under 120 seconds' while the final suite takes 163 s.",
+  "requirements": [
+    "The suite runtime regressed past the bound the release established. Task 20261122192217 required `python -m unittest discover -s tests` to exit 0 even under `timeout 120`, and README.md now states the suite completes 'under 120 seconds'; the final recorded runs are 130.35 s (204 tests), 149.72 s (206 tests) and 163.27 s (214 tests). The 79.9 s run that met the bound was undone by later test additions, so the documented bound and acceptance criterion AC2 are no longer verified and the audit command exceeds its 120 s limit. The earlier recorded timeout during task 20261122174453 has effectively returned."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The suite runtime regressed past the bound the release established. Task 20261122192217 required `python -m unittest discover -s tests` to exit 0 even under `timeout 120`, and README.md now states the suite completes 'under 120 seconds'; the final recorded runs are 130.35 s (204 tests), 149.72 s (206 tests) and 163.27 s (214 tests). The 79.9 s run that met the bound was undone by later test additions, so the documented bound and acceptance criterion AC2 are no longer verified and the audit command exceeds its 120 s limit. The earlier recorded timeout during task 20261122174453 has effectively returned.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-23T16:49:54+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

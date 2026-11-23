@@ -1,0 +1,145 @@
+{
+  "id": "20261123164954_release-audit-bounded-run-clears-check-c",
+  "title": "Release audit: bounded_run clears CHECK_CHILD before calling cleanup_check, and install.sh deli",
+  "spec": "docs/program/specs/20261123164954_release-audit-bounded-run-clears-check-c.md",
+  "summary": "Start the checked shell in a dedicated process group/session, record that group for cleanup, call cleanup_check before clearing CHECK_CHILD or any state it reads, signal the group plus a descendant sweep on every exit path, and commit tests that start a background process from the checked shell and assert it is gone on both success and timeout.",
+  "requirements": [
+    "The installer starts the checked login shell so that it leads a process group of its own, distinct from the installer's group.",
+    "In the checked login shell, the observed process group identifier equals the shell's own process identifier.",
+    "A successful check stops every process in that dedicated group, including background processes the checked login shell started, before the installer reports success.",
+    "A check that exceeds its time bound stops every process in that dedicated group, including background processes the checked login shell started, and the installation fails with a message stating the bound that elapsed.",
+    "The check's recorded state is released only after the stop attempt on every exit path — success, timeout, internal failure and interruption — and is released exactly once, so an interruption and the normal return cannot signal the same group twice.",
+    "No process started by the checked login shell is still running after the installer has exited, on either the success or the timeout path.",
+    "The private temporary check directory is removed on every exit path, so a timed-out check leaves no directory carrying the check's private prefix behind.",
+    "The script's own description of the check states that the checked shell is placed in a process group of its own and that the group is stopped on every exit path.",
+    "The installer never reads its standard input, so it stays safe to pipe into an interpreter.",
+    "All existing installer behavior unrelated to cleanup — login-shell and profile detection, the opt-out settings, re-install and uninstall — keeps working unchanged."
+  ],
+  "acceptance": [
+    "When the checked login shell starts a background process and then succeeds, the installer exits successfully and that background process is no longer running.",
+    "When the checked login shell starts a background process and then hangs past the time bound, the installer exits non-zero, its error output states the elapsed bound, and that background process is no longer running.",
+    "In both the successful and the timed-out case, the process group identifier recorded for the checked login shell equals the shell's own process identifier.",
+    "After a timed-out check, no directory carrying the check's private prefix remains in the temporary directory.",
+    "The regression tests for the successful and the timed-out check cleanup both pass.",
+    "The full existing test suite passes.",
+    "The script's description of the check no longer states that the checked shell is kept out of its own process group."
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [
+    {
+      "criterion": "When the checked login shell starts a background process and then succeeds, the installer exits successfully and that background process is no longer running.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_check_cleanup.py",
+        "-q",
+        "-k",
+        "successful"
+      ]
+    },
+    {
+      "criterion": "When the checked login shell starts a background process and then hangs past the time bound, the installer exits non-zero, its error output states the elapsed bound, and that background process is no longer running.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_check_cleanup.py",
+        "-q",
+        "-k",
+        "timed_out"
+      ]
+    },
+    {
+      "criterion": "In both the successful and the timed-out case, the process group identifier recorded for the checked login shell equals the shell's own process identifier.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_check_cleanup.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "After a timed-out check, no directory carrying the check's private prefix remains in the temporary directory.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_check_cleanup.py",
+        "-q",
+        "-k",
+        "timed_out"
+      ]
+    },
+    {
+      "criterion": "The regression tests for the successful and the timed-out check cleanup both pass.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_check_cleanup.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The full existing test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The script's description of the check no longer states that the checked shell is kept out of its own process group.",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "POSIX shell environment",
+      "interface": "Execute the installer and its shell functions with the system POSIX shell: `sh install.sh` or `subprocess.run([\"sh\", \"install.sh\"], ...)`. Process-group setup and signalling must use POSIX shell facilities such as `set -m` and `kill -- -PGID`. Tests exercise the same shell script.",
+      "docs": "POSIX.1 Shell Command Language (`sh`, `set -m`, `kill`).",
+      "mode": "direct",
+      "evidence": "The release audit finding for task 20261123062514 identifies `install.sh` as the installer containing `bounded_run` and `cleanup_check`, and notes its comment about not putting the checked shell in its own process group. `tests/test_install.py` is the existing pytest suite that exercises the installer.",
+      "stub": ""
+    },
+    {
+      "name": "Process observer",
+      "interface": "From pytest, call `os.getpgid(pid)` to read the process-group id of the checked shell and compare it with the child PID. From shell, use the POSIX `ps` interface: `ps -o pgid= -p \"$pid\"`.",
+      "docs": "POSIX `ps` specification (`ps -o pgid= -p pid`); Python standard library `os.getpgid`.",
+      "mode": "direct",
+      "evidence": "The audit cites pytest output and a missing `tests/test_check_cleanup.py`; the repository's tests are Python/pytest (`tests/test_install.py`, `tests/test_packaging.py`, etc.), so `os.getpgid` is available in the test runtime. The dependency declaration specifies the equivalent POSIX `ps` observation interface for shell-side checks.",
+      "stub": ""
+    }
+  ],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-23T16:49:54+00:00",
+  "started_at": "2026-11-23T16:49:54+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}

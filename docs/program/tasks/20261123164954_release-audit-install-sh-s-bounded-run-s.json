@@ -1,0 +1,31 @@
+{
+  "id": "20261123164954_release-audit-install-sh-s-bounded-run-s",
+  "title": "Release audit: install.sh's bounded_run still decides the timeout by testing for the timed-out",
+  "spec": "",
+  "summary": "Make the watchdog write the final decision (timeout marker plus status), have the parent wait for that decision within a small bound derived from VERIFY_GRACE, and force CHECK_STATUS=124 whenever the bound elapsed regardless of the order of the child exit and the marker write. Add and commit the test whose checked shell exits just after FORGEL_CODE_TIMEOUT and assert install.sh fails with a message naming the limit.",
+  "requirements": [
+    "install.sh's bounded_run still decides the timeout by testing for the timed-out marker immediately after wait returns for the checked child; when the marker is absent it terminates the watchdog and keeps the child's status. A checked shell that exits after FORGEL_CODE_TIMEOUT but before the watchdog writes the marker is therefore reported as a verified success. That is exactly the defect task 20261123062514_release-audit-bounded-run-does-not-make- was required to fix, but the task has files_changed: [] and its review describes a DECISION_WAIT mechanism that is absent from the final diff; no committed regression test for the race is evidenced."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: install.sh's bounded_run still decides the timeout by testing for the timed-out marker immediately after wait returns for the checked child; when the marker is absent it terminates the watchdog and keeps the child's status. A checked shell that exits after FORGEL_CODE_TIMEOUT but before the watchdog writes the marker is therefore reported as a verified success. That is exactly the defect task 20261123062514_release-audit-bounded-run-does-not-make- was required to fix, but the task has files_changed: [] and its review describes a DECISION_WAIT mechanism that is absent from the final diff; no committed regression test for the race is evidenced.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-23T16:49:54+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
