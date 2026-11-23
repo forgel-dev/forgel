@@ -198,12 +198,12 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-23T14:56:57+00:00",
+  "finished_at": "2026-11-23T15:03:22+00:00",
   "result": {
-    "summary": "stopped by the controller: The remaining failure is not in the work and not in the specification text. The README/guard work is finished and proven (214 tests via unittest and pytest, canonical versionless install-script URL, guard with rejection cases), and the sole failing acceptance item is 'the task repository is committed' with README.md, tests/test_cli.py and tests/test_readme_install.py uncommitted. Both routes to that commit are closed by this runtime: the agent reports that `git add --` and `git commit --only --` were rejected because only read-only git commands are permitted, and the runtime's own completion step reports it 'could not decide what to do with every uncommitted file' because the shared worktree carries other tasks' modifications (install.sh, tests/test_install.py, tests/test_check_cleanup.py, CHANGELOG.md). The spec was already rewritten once for exactly this (making the agent perform the path-limited commit instead of the runtime, FR-10/R10) and the blocker reproduced, so another respec or rework would only spend another cycle without changing a runtime capability; four reworks and two respecs have already gone to this same commit step.",
+    "summary": "README.md now documents one canonical install-script URL, https://raw.githubusercontent.com/forgel-dev/code/main/install.sh, in the install, update and uninstall commands (three occurrences of the same URL, no other install-script URL, no tag-pinned /v<x>/install.sh path and no reference to the v0.1.0 installer). The default-branch URL was chosen over a release-tag path because the repository's guard treats a tag-pinned installer URL as a regression and no newer tag is published locally (git tag lists only v0.1.0). The README diff is exactly the three URL lines. tests/test_readme_install.py now pins the canonical versionless URL, rejects any /v<digit>.../install.sh path anywhere in the document, rejects a stale-tag URL, a divergent-tag URL and an other-branch URL, and still requires at least two identical install-script URLs. tests/test_cli.py's ReadmeTest was updated to assert the same canonical URL. Verification: `python -m unittest discover -s tests` ran 214 tests, OK; `python -m pytest -q` was green on the same tree in the earlier run of this task. Limitation of this attempt: the commit required by R10/R11 was NOT performed. The runtime rejects write git commands ('only read-only git commands are allowed'), so `git commit --only -- README.md tests/test_readme_install.py tests/test_cli.py` failed and no commit hash or `git show --name-only HEAD` verification exists. Files remaining modified in the worktree: README.md, tests/test_cli.py, tests/test_readme_install.py (this task, uncommitted), plus install.sh, tests/test_install.py and the untracked tests/test_check_cleanup.py from other tasks, which stay untouched. CHANGELOG.md is clean. The completion must commit exactly README.md, tests/test_cli.py and tests/test_readme_install.py.; escalated unrelated changes for the planner: install.sh, tests/test_install.py, tests/test_check_cleanup.py",
     "files_changed": [
       "CHANGELOG.md",
       "README.md",
@@ -223,19 +223,10 @@
       {
         "command": [
           "git",
-          "log",
-          "--oneline",
-          "-8"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "show",
-          "--name-only",
-          "--format=%h %s",
-          "HEAD"
+          "diff",
+          "-U0",
+          "--",
+          "README.md"
         ],
         "exit_code": 0
       },
@@ -245,8 +236,27 @@
           "diff",
           "-U2",
           "--",
-          "README.md",
+          "tests/test_readme_install.py",
           "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-6"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--name-only",
+          "--format=%h%n%s",
+          "HEAD"
         ],
         "exit_code": 0
       },
@@ -258,25 +268,6 @@
           "discover",
           "-s",
           "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "-U2",
-          "--",
-          "tests/test_readme_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q"
         ],
         "exit_code": 0
       },
@@ -293,24 +284,24 @@
         "final_test": true
       }
     ],
-    "test_output": "......................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 214 tests in 195.250s\n\nOK\n",
+    "test_output": "......................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 214 tests in 140.204s\n\nOK\n",
     "assumptions": [
-      "The newer specification (FR-1 to FR-5, A4/A5) mandates a tag-free default-branch URL, so the versionless `main` installer is used instead of a pinned `v0.1.1` tag; this also satisfies R1, R2 and R5 of the task contract because v0.1.1 is not a published tag in this repository (git tag lists no v0.1.1).",
-      "CHANGELOG.md is owned by the release train and was left unmodified; the commit message and all artifacts are English with no tool attribution.",
-      "install.sh, tests/test_install.py and tests/test_check_cleanup.py are other work in the same worktree and are not part of this change set."
+      "The canonical URL is the versionless default-branch installer; no release tag names a published release newer than v0.1.0, and the guard treats tag-pinned installer URLs as the regression.",
+      "tests/test_cli.py's README assertions belong to this change because the old assertions pinned the v0.1.1 URL and would otherwise contradict the README.",
+      "install.sh, tests/test_install.py and the untracked tests/test_check_cleanup.py belong to other tasks and were left uncommitted and unmodified."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 17,
-      "estimated_input_tokens": 373823,
-      "provider_input_tokens": 393691,
-      "provider_output_tokens": 7052,
-      "cache_hit_tokens": 366336,
-      "cache_miss_tokens": 27355,
-      "estimated_tokens": 27779,
+      "model_calls": 12,
+      "estimated_input_tokens": 215273,
+      "provider_input_tokens": 226973,
+      "provider_output_tokens": 6002,
+      "cache_hit_tokens": 215040,
+      "cache_miss_tokens": 11933,
+      "estimated_tokens": 20014,
       "state": ""
     },
     "test_removals": [
@@ -332,12 +323,13 @@
     ],
     "git": {
       "base": "2e55f34302dc377531e8b2ffbeabfea31d3e672a",
-      "head": "2e55f34302dc377531e8b2ffbeabfea31d3e672a",
-      "commit": "",
+      "head": "81668fd0bd348b865d9fc4c483377173b0f07c2b",
+      "commit": "81668fd0bd348b865d9fc4c483377173b0f07c2b",
       "commits": [
         "a60dc73517c3829e9d65efe302991c4dc79ad663",
         "aff039dfcba7865ae23583cf8227a173f255ad7d",
-        "2e55f34302dc377531e8b2ffbeabfea31d3e672a"
+        "2e55f34302dc377531e8b2ffbeabfea31d3e672a",
+        "81668fd0bd348b865d9fc4c483377173b0f07c2b"
       ]
     },
     "report": "docs/program/agent/20261123062514_release-audit-readme-md-still-documents-.md",
@@ -360,14 +352,9 @@
     "last_summary": "README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the install, update and uninstall commands; the three `/v0.1.1/install.sh` occurrences were replaced, no `/v<tag>/install.sh` path remains, and the surrounding prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are untouched. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string, proven through `assertRaises` on the guard's own helpers in test_stale_install_script_url_is_rejected, test_divergent_install_script_url_is_rejected, test_another_branch_install_script_url_is_rejected, test_a_missing_install_script_url_is_rejected and test_rejects_a_stale_url_anywhere_in_the_document; the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest now asserts the canonical versionless URL, rejects tag-pinned install paths and no longer rejects the default branch. CHANGELOG.md, install.sh, tests/test_install.py and tests/test_check_cleanup.py were left as found (CHANGELOG.md has no net diff against HEAD) and the scratch probe file the earlier attempt created was deleted. Verified with `python -m unittest discover -s tests`: 214 tests, OK.; the completion step could not decide which uncommitted files belong to the task; task QA failed: the task repository is committed [task code @ /Users/okalistratov/Documents/sites/code]: the task repository still has the task's uncommitted files: README.md, tests/test_cli.py, tests/test_readme_install.py",
     "spec_issues": [
       {
-        "requirement": "R3: the install-script URL points at the current release with the version selector appearing exactly once in the URL",
-        "problem": "It contradicts the accepted specification's FR-4, FR-5 and A4/A5, which require that no install-script path is pinned to a tag and that exactly one distinct tag-free URL exists. Both cannot hold at once, and the README also cannot name v0.1.1 because that tag is not published.",
-        "proposal": "Keep the tag-free canonical default-branch URL as the specification's FR-1 to FR-5 require, and drop R3's version-selector requirement from the task contract."
-      },
-      {
-        "requirement": "R10/R11: the agent stages and commits exactly README.md, tests/test_readme_install.py and tests/test_cli.py and verifies the commit",
-        "problem": "The runtime in this environment allows only read-only git commands, so `git add --` and `git commit --only --` are rejected and no commit or `git show --name-only --format= HEAD` verification can be produced by the agent.",
-        "proposal": "Let the runtime perform the commit for the three paths the agent reports, and relax R10/R11 to require reporting the changed paths and test evidence rather than a self-executed commit and hash."
+        "requirement": "R10/R11: the agent itself stages and commits exactly README.md, tests/test_readme_install.py and tests/test_cli.py, then verifies with git show --name-only --format= HEAD; Technical Requirements: 'The agent's git is writable for this task and the agent performs the commit'.",
+        "problem": "The runtime permits only read-only git commands; git commit --only -- README.md tests/test_readme_install.py tests/test_cli.py returns 'error: only read-only git commands are allowed'. curl is likewise not permitted, so the URL reachability check A13 cannot be run from the agent. The requirement is therefore impossible to satisfy from the agent side in this environment.",
+        "proposal": "State that the commit is performed by the runtime's completion step, which commits exactly the paths listed in the agent's done report (README.md, tests/test_readme_install.py, tests/test_cli.py), and that unrelated worktree modifications stay uncommitted; drop the agent-side 'git add'/'git commit'/`git show` verification and the curl reachability step, or make them a runtime step."
       }
     ],
     "qa": {
@@ -391,9 +378,23 @@
       "review_required": false,
       "failure_kind": "code"
     },
-    "escalated": [],
+    "escalated": [
+      {
+        "path": "install.sh",
+        "reason": "Bounded fresh-shell check rework (watchdog, dedicated process group, cleanup on every exit path) is a separate task's change set, not part of the README install-URL fix."
+      },
+      {
+        "path": "tests/test_install.py",
+        "reason": "Late/login-shell and withheld-watchdog-decision installer tests belong to the same separate install.sh rework; the spec requires them to stay uncommitted here."
+      },
+      {
+        "path": "tests/test_check_cleanup.py",
+        "reason": "Untracked new test module asserting the reworked check's process-group cleanup; unrelated to this task and must remain uncommitted."
+      }
+    ],
     "attempts": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "failure": {}
   },
   "request": ""
 }

@@ -1,10 +1,10 @@
 # Agent Run: Release audit: README.md still documents `.../v0.1.0/install.sh` for the install command and fo
 
 - Task: `20261123062514_release-audit-readme-md-still-documents-`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 17
-- Finished: 2026-11-23T14:08:39+00:00
+- Steps: 12
+- Finished: 2026-11-23T15:03:22+00:00
 
 ## Requirements
 
@@ -20,9 +20,9 @@
 
 ## Assumptions
 
-- The newer specification (FR-1 to FR-5, A4/A5) mandates a tag-free default-branch URL, so the versionless `main` installer is used instead of a pinned `v0.1.1` tag; this also satisfies R1, R2 and R5 of the task contract because v0.1.1 is not a published tag in this repository (git tag lists no v0.1.1).
-- CHANGELOG.md is owned by the release train and was left unmodified; the commit message and all artifacts are English with no tool attribution.
-- install.sh, tests/test_install.py and tests/test_check_cleanup.py are other work in the same worktree and are not part of this change set.
+- The canonical URL is the versionless default-branch installer; no release tag names a published release newer than v0.1.0, and the guard treats tag-pinned installer URLs as the regression.
+- tests/test_cli.py's README assertions belong to this change because the old assertions pinned the v0.1.1 URL and would otherwise contradict the README.
+- install.sh, tests/test_install.py and the untracked tests/test_check_cleanup.py belong to other tasks and were left uncommitted and unmodified.
 
 ## Test Removals
 
@@ -33,11 +33,11 @@
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 17
-- Estimated input tokens (all calls): 373823
-- Provider input/output tokens: 393691 / 7052
-- Provider cache hit/miss tokens: 366336 / 27355
-- Estimated prompt at the end: 27779 tokens
+- Model calls: 12
+- Estimated input tokens (all calls): 215273
+- Provider input/output tokens: 226973 / 6002
+- Provider cache hit/miss tokens: 215040 / 11933
+- Estimated prompt at the end: 20014 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261123062514_release-audit-readme-md-still-documents-.md`)
@@ -217,7 +217,7 @@ A user opens the README, copies the single install command, the update command o
 
 ## Summary
 
-README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the `## Install` one-liner, the `### Update` block and the `### Uninstall` block; the previous `/v0.1.1/install.sh` paths were replaced and no `/v<tag>/install.sh` path remains. Prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are unchanged. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string; the rejection cases are proven by assertRaises on the guard itself (stale tag, divergent tag, another branch, missing URL, stale URL anywhere in the document) and the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest asserts the canonical versionless URL and rejects tag-pinned install paths. Verified with `python -m unittest discover -s tests` (214 tests, OK) and `python -m pytest -q` (214 passed, 137 subtests). The commit could not be executed: this runtime permits only read-only git commands, so `git add --` and `git commit --only --` were rejected; the three changed paths are unstaged and ready for the runtime commit. Worktree files left untouched and uncommitted by this task: install.sh, tests/test_install.py, tests/test_check_cleanup.py (other tasks' work).; the completion step could not decide what to do with every uncommitted file
+README.md now documents one canonical install-script URL, https://raw.githubusercontent.com/forgel-dev/code/main/install.sh, in the install, update and uninstall commands (three occurrences of the same URL, no other install-script URL, no tag-pinned /v<x>/install.sh path and no reference to the v0.1.0 installer). The default-branch URL was chosen over a release-tag path because the repository's guard treats a tag-pinned installer URL as a regression and no newer tag is published locally (git tag lists only v0.1.0). The README diff is exactly the three URL lines. tests/test_readme_install.py now pins the canonical versionless URL, rejects any /v<digit>.../install.sh path anywhere in the document, rejects a stale-tag URL, a divergent-tag URL and an other-branch URL, and still requires at least two identical install-script URLs. tests/test_cli.py's ReadmeTest was updated to assert the same canonical URL. Verification: `python -m unittest discover -s tests` ran 214 tests, OK; `python -m pytest -q` was green on the same tree in the earlier run of this task. Limitation of this attempt: the commit required by R10/R11 was NOT performed. The runtime rejects write git commands ('only read-only git commands are allowed'), so `git commit --only -- README.md tests/test_readme_install.py tests/test_cli.py` failed and no commit hash or `git show --name-only HEAD` verification exists. Files remaining modified in the worktree: README.md, tests/test_cli.py, tests/test_readme_install.py (this task, uncommitted), plus install.sh, tests/test_install.py and the untracked tests/test_check_cleanup.py from other tasks, which stay untouched. CHANGELOG.md is clean. The completion must commit exactly README.md, tests/test_cli.py and tests/test_readme_install.py.; escalated unrelated changes for the planner: install.sh, tests/test_install.py, tests/test_check_cleanup.py
 
 ## Files Changed
 
@@ -228,12 +228,11 @@ README.md now documents exactly one install-script URL, the versionless canonica
 ## Commands
 
 - `["git", "status", "--short"]` → exit 0
-- `["git", "log", "--oneline", "-8"]` → exit 0
-- `["git", "show", "--name-only", "--format=%h %s", "HEAD"]` → exit 0
-- `["git", "diff", "-U2", "--", "README.md", "tests/test_cli.py"]` → exit 0
+- `["git", "diff", "-U0", "--", "README.md"]` → exit 0
+- `["git", "diff", "-U2", "--", "tests/test_readme_install.py", "tests/test_cli.py"]` → exit 0
+- `["git", "log", "--oneline", "-6"]` → exit 0
+- `["git", "show", "--name-only", "--format=%h%n%s", "HEAD"]` → exit 0
 - `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["git", "diff", "-U2", "--", "tests/test_readme_install.py"]` → exit 0
-- `["python", "-m", "pytest", "-q"]` → exit 0
 - `["python", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
@@ -241,7 +240,7 @@ README.md now documents exactly one install-script URL, the versionless canonica
 ```
 ......................................................................................................................................................................................................................
 ----------------------------------------------------------------------
-Ran 214 tests in 195.250s
+Ran 214 tests in 140.204s
 
 OK
 
@@ -250,13 +249,10 @@ OK
 ## Actions
 
 - run: ['git', 'status', '--short']
-- run: ['git', 'log', '--oneline', '-8']
-- run: ['git', 'show', '--name-only', '--format=%h %s', 'HEAD']
-- run: ['git', 'diff', '-U2', '--', 'README.md', 'tests/test_cli.py']
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_readme_install.py
+- run: ['git', 'diff', '-U0', '--', 'README.md']
+- run: ['git', 'diff', '-U2', '--', 'tests/test_readme_install.py', 'tests/test_cli.py']
+- run: ['git', 'log', '--oneline', '-6']
+- run: ['git', 'show', '--name-only', '--format=%h%n%s', 'HEAD']
 - run: ['python', '-m', 'unittest', 'discover', '-s', 'tests']
-- run: ['git', 'diff', '-U2', '--', 'tests/test_readme_install.py']
+- run: ['git', 'commit', '--only', '-m', 'Document the canonical release installer URL in README', '-m', 'The README install, update and uninstall commands now fetch the canonical release installer at https://raw.githubusercontent.com/forgel-dev/code/main/install.sh instead of a release-tag-pinned path. tests/test_readme_install.py and tests/test_cli.py guard README.md against a stale, divergent or other-branch install-script URL.', '--', 'README.md', 'tests/test_readme_install.py', 'tests/test_cli.py']
 - run: ['curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}\n', 'https://raw.githubusercontent.com/forgel-dev/code/main/install.sh']
-- run: ['git', 'commit', '--only', '-m', 'Document the canonical release installer URL in README', '-m', 'The README install, update and uninstall commands now use the canonical release installer at https://raw.githubusercontent.com/forgel-dev/code/main/install.sh instead of a release-tag-pinned path. tests/test_readme_install.py and tests/test_cli.py guard README.md against a stale, divergent or other-branch install-script URL.', '--', 'README.md', 'tests/test_readme_install.py', 'tests/test_cli.py']
-- run: ['python', '-m', 'pytest', '-q']
