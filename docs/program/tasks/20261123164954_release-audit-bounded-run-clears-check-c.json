@@ -234,7 +234,234 @@
       ]
     },
     "failure": {},
-    "report": "docs/program/agent/20261123164954_release-audit-bounded-run-clears-check-c.md"
+    "report": "docs/program/agent/20261123164954_release-audit-bounded-run-clears-check-c.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261123164954_release-audit-bounded-run-clears-check-c.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m pytest tests/test_check_cleanup.py -q -k successful",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_check_cleanup.py -q -k timed_out",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_check_cleanup.py -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "When the checked login shell starts a background process and then succeeds, the installer exits successfully and that background process is no longer running.",
+          "command": "python -m pytest tests/test_check_cleanup.py -q -k successful",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "When the checked login shell starts a background process and then hangs past the time bound, the installer exits non-zero, its error output states the elapsed bound, and that background process is no longer running.",
+          "command": "python -m pytest tests/test_check_cleanup.py -q -k timed_out",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "In both the successful and the timed-out case, the process group identifier recorded for the checked login shell equals the shell's own process identifier.",
+          "command": "python -m pytest tests/test_check_cleanup.py -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The full existing test suite passes.",
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The script's description of the check no longer states that the checked shell is kept out of its own process group.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": true,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The change implements the requested cleanup fix coherently. install.sh now starts the checked login shell under a small Python launcher that calls setsid (falling back to setpgid), so the checked shell leads a dedicated process group whose id equals its own pid, while stdin/stdout/stderr are redirected so no terminal can hold it. bounded_run no longer clears CHECK_CHILD/CHECK_WATCHER before cleanup; instead cleanup_check is guarded by CHECK_CLEANED, stops the dedicated group (plus a descendant sweep) before clearing state, and removes the private check directory on every exit path including timeout. The watchdog records a 'timed-out'/'finished' decision in the private directory and the installer only reads the outcome once that decision exists, so a hanging shell reliably fails with the elapsed bound in the message. The script header and the bounded_run comment now describe the dedicated process group and its cleanup, and the old claim that the shell is kept out of its own group is gone. The new tests/test_check_cleanup.py exercises the success and timeout cleanup paths (asserting own-group placement, background-process termination, and no leftover check directory), and no existing test was removed. Only a minor, non-blocking observation: after the watcher has been reaped, bounded_run leaves CHECK_WATCHER set, so cleanup_check issues a TERM against an already-reaped pid; this is harmless in practice (kill returns ESRCH) and does not violate any stated requirement, but clearing CHECK_WATCHER after the wait would be tidier.",
+      "requirements": [
+        {
+          "requirement": "The installer starts the checked login shell so that it leads a process group of its own, distinct from the installer's group.",
+          "verdict": "pass",
+          "note": "start_check runs a Python launcher that calls os.setsid() (falling back to os.setpgid(0,0)) before exec'ing the shell, and redirects its three standard descriptors."
+        },
+        {
+          "requirement": "In the checked login shell, the observed process group identifier equals the shell's own process identifier.",
+          "verdict": "pass",
+          "note": "The new test records $$ and ps -o pgid for the checked shell and asserts they are equal; acceptance check passes."
+        },
+        {
+          "requirement": "A successful check stops every process in that dedicated group, including background processes, before the installer reports success.",
+          "verdict": "pass",
+          "note": "cleanup_check runs at the end of bounded_run and calls stop_check KILL on CHECK_GROUP before returning; the success-path test confirms the background process is gone."
+        },
+        {
+          "requirement": "A check that exceeds its time bound stops every process in the dedicated group and the installation fails with a message stating the elapsed bound.",
+          "verdict": "pass",
+          "note": "The watchdog records timed-out and performs TERM then KILL on the group; CHECK_STATUS becomes 124 and the timeout test asserts non-zero exit, 'stopped after 1s', and no surviving background process."
+        },
+        {
+          "requirement": "The check's recorded state is released only after the stop attempt on every exit path and is released exactly once.",
+          "verdict": "pass",
+          "note": "CHECK_CLEANED guards cleanup_check so the signal trap and exit trap cannot release twice; state fields are cleared only after the stop and directory removal."
+        },
+        {
+          "requirement": "No process started by the checked login shell is still running after the installer exits, on the success or timeout path.",
+          "verdict": "pass",
+          "note": "Group signal plus descendant sweep covers the check's processes; both regression tests confirm the background process is gone."
+        },
+        {
+          "requirement": "The private temporary check directory is removed on every exit path, including the timed-out check.",
+          "verdict": "pass",
+          "note": "cleanup_check removes CHECK_DIR after stopping; the timeout test asserts no CHECK_PREFIX directory remains."
+        },
+        {
+          "requirement": "The script's own description of the check states that the checked shell is placed in a process group of its own and that the group is stopped on every exit path.",
+          "verdict": "pass",
+          "note": "Header and bounded_run comment now describe the dedicated group and its stop on every exit path; review-only criterion verified by reading the file."
+        },
+        {
+          "requirement": "The script's description of the check no longer states that the checked shell is kept out of its own process group.",
+          "verdict": "pass",
+          "note": "The former 'deliberately not given its own process group' text was replaced; review-only criterion satisfied (AC-7)."
+        },
+        {
+          "requirement": "The installer never reads its standard input and stays safe to pipe into an interpreter.",
+          "verdict": "pass",
+          "note": "No added stdin reads; the launcher redirects the child's stdin from /dev/null."
+        },
+        {
+          "requirement": "All existing installer behavior unrelated to cleanup keeps working unchanged.",
+          "verdict": "pass",
+          "note": "Detection, opt-outs, re-install and uninstall paths are untouched; the full existing test suite passes."
+        },
+        {
+          "requirement": "The regression tests for the successful and timed-out check cleanup both pass.",
+          "verdict": "pass",
+          "note": "tests/test_check_cleanup.py adds both cases and both pass (AC-5)."
+        },
+        {
+          "requirement": "The full existing test suite passes.",
+          "verdict": "pass",
+          "note": "Acceptance reports the full suite passing; no tests were removed."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261123164954_release-audit-bounded-run-clears-check-c.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-23T17:06:03+00:00",
+      "notes": ""
+    }
   },
   "request": ""
 }
