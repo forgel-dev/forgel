@@ -1,30 +1,145 @@
 {
   "id": "20261123213155_release-audit-the-session-does-not-refre",
   "title": "Release audit: The session does not refresh task and release state on its own while the owner i",
-  "spec": "",
+  "spec": "docs/program/specs/20261123213155_release-audit-the-session-does-not-refre.md",
   "summary": "Poll the engine while waiting for input, for example with a timeout/select loop or a background state-refresh thread, and redraw when the state changes. Add a test that changes stub state between prompts without an owner request and verifies the update becomes visible.",
   "requirements": [
-    "The session does not refresh task and release state on its own while the owner is idle. `InteractiveSession.run()` refreshes once, prints the prompt and then blocks on `self.input.readline()`; state is re-read only before the next prompt and after a submitted request. If a task or release changes while the owner waits, nothing updates the session. This fails requirement 6 and acceptance 5. The test uses empty input lines to force another loop iteration, so it does not verify idle refresh."
+    "While the owner is idle and has submitted nothing, the client re-reads the project's task list and the current release state from the engine on its own.",
+    "A task or release change that happens while the owner waits becomes visible in the session without the owner submitting any sentence, including an empty one.",
+    "The refresh repeats for as long as the owner keeps waiting, so a second change after the first is also shown without input.",
+    "A refresh that finds the state unchanged adds no state text to the session; the visible output is unaffected.",
+    "The refreshed state is shown in the same form the session already uses for that state, so the owner cannot tell an idle update from a prompted one except that no prompt was answered.",
+    "A refresh while the owner is part-way through a sentence does not remove, repeat, reorder or alter the characters already typed, and the sentence the owner submits reaches the engine as typed.",
+    "When the owner's input ends, the session ends cleanly as it does today, with the session's closing notice and the same success outcome, and it neither hangs nor needs an extra sentence to stop.",
+    "If the engine cannot be reached or answers with a failure during an idle refresh, the session keeps running and the owner can still submit the next sentence; the failure is reported in the same cause-and-next-step form the session already uses for failures.",
+    "Idle waiting stays quiet and cheap: with no changes on the engine side, the owner's visible output and the machine's work stay essentially unchanged for the whole wait.",
+    "The behavior is the same whether the owner's input is an interactive terminal or a supplied stream of sentences.",
+    "The idle refresh is demonstrated by a session whose input provides no further sentences for the duration of the observation, so the evidence does not depend on empty sentences triggering another round."
   ],
   "acceptance": [
-    "The release audit finding is resolved: The session does not refresh task and release state on its own while the owner is idle. `InteractiveSession.run()` refreshes once, prints the prompt and then blocks on `self.input.readline()`; state is re-read only before the next prompt and after a submitted request. If a task or release changes while the owner waits, nothing updates the session. This fails requirement 6 and acceptance 5. The test uses empty input lines to force another loop iteration, so it does not verify idle refresh.",
-    "Existing tests pass"
+    "With the engine reporting one state, an observation is made of a session that supplies no further sentences; while it waits, the engine's reported task and release state change, and the new state appears in the session's output without any sentence being submitted.",
+    "In the same idle-waiting observation the engine's reported state changes a second time and the second change also appears, showing the refresh repeats.",
+    "With the engine reporting an unchanged state, the idle waiting period produces no repeated state text beyond what was already shown.",
+    "A sentence submitted after an idle refresh has occurred still reaches the engine exactly as typed, and the session outcome is the same success outcome it has today.",
+    "A session whose input ends immediately still shows its prompt, prints the closing notice and ends with the same success outcome as today.",
+    "An engine failure reported during an idle refresh does not end the session, is shown in the session's existing cause-and-next-step failure form, and the next submitted sentence still works.",
+    "The proof of the idle refresh does not rely on empty sentences: the supplying side stays silent for the observation window.",
+    "All tests that existed before the change still pass."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
   "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
   "release_class": "minor",
   "order": 0,
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "A state change on the engine side appears in the session while the owner supplies no sentences.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "A second change during the same idle wait also appears, showing the refresh repeats.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "Unchanged state produces no repeated state text during idle waiting.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "A sentence submitted after an idle refresh still reaches the engine exactly as typed and the session succeeds as today.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "A session whose input ends immediately still shows its prompt, prints the closing notice and ends successfully.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "An engine failure during an idle refresh keeps the session running, is reported in the cause-and-next-step form, and the next sentence still works.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "The idle refresh is demonstrated with an input that supplies no further sentences, so empty sentences are not the evidence.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "All tests that existed before the change still pass.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "Forgel engine command line (machine-readable form)",
+      "interface": "Spawn the installed Forgel engine CLI as a separate process (`forgel status --json`, or the equivalent `python -m forgel status --json`) and parse exactly one JSON object from its output. Use the object's success flag, its task collection (identifier, state, title per task), and its current release (version, state).",
+      "docs": "Project repository `main` — Forgel engine CLI; project dependency contract for the machine-readable status call.",
+      "mode": "direct",
+      "evidence": "The project repository inventory identifies `main` as an application repository and `code` as the client application repository, so the Forgel engine CLI is part of this project rather than an external service. The project `FORGEL.md` identifies the engine runtime under `src/forgel/`, and the dependency contract states that the client starts the engine separately and receives one JSON object per call containing the success flag, the task collection with identifier/state/title, and the current release with version/state.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-23T21:31:55+00:00",
-  "started_at": "",
+  "started_at": "2026-11-23T23:46:51+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
