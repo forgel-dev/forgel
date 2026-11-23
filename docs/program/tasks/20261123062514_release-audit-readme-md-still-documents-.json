@@ -198,12 +198,12 @@
     }
   ],
   "language": "",
-  "status": "failed",
+  "status": "blocked",
   "created_at": "2026-11-23T06:25:14+00:00",
   "started_at": "2026-11-23T13:58:25+00:00",
-  "finished_at": "2026-11-23T14:08:39+00:00",
+  "finished_at": "2026-11-23T14:09:05+00:00",
   "result": {
-    "summary": "README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the `## Install` one-liner, the `### Update` block and the `### Uninstall` block; the previous `/v0.1.1/install.sh` paths were replaced and no `/v<tag>/install.sh` path remains. Prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are unchanged. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string; the rejection cases are proven by assertRaises on the guard itself (stale tag, divergent tag, another branch, missing URL, stale URL anywhere in the document) and the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest asserts the canonical versionless URL and rejects tag-pinned install paths. Verified with `python -m unittest discover -s tests` (214 tests, OK) and `python -m pytest -q` (214 passed, 137 subtests). The commit could not be executed: this runtime permits only read-only git commands, so `git add --` and `git commit --only --` were rejected; the three changed paths are unstaged and ready for the runtime commit. Worktree files left untouched and uncommitted by this task: install.sh, tests/test_install.py, tests/test_check_cleanup.py (other tasks' work).; the completion step could not decide what to do with every uncommitted file",
+    "summary": "stopped by the controller: The remaining failure is not in the work and not in the specification text. The README/guard work is finished and proven (214 tests via unittest and pytest, canonical versionless install-script URL, guard with rejection cases), and the sole failing acceptance item is 'the task repository is committed' with README.md, tests/test_cli.py and tests/test_readme_install.py uncommitted. Both routes to that commit are closed by this runtime: the agent reports that `git add --` and `git commit --only --` were rejected because only read-only git commands are permitted, and the runtime's own completion step reports it 'could not decide what to do with every uncommitted file' because the shared worktree carries other tasks' modifications (install.sh, tests/test_install.py, tests/test_check_cleanup.py, CHANGELOG.md). The spec was already rewritten once for exactly this (making the agent perform the path-limited commit instead of the runtime, FR-10/R10) and the blocker reproduced, so another respec or rework would only spend another cycle without changing a runtime capability; four reworks and two respecs have already gone to this same commit step.",
     "files_changed": [
       "CHANGELOG.md",
       "README.md",
@@ -391,11 +391,7 @@
       "review_required": false,
       "failure_kind": "code"
     },
-    "escalated": [],
-    "failure": {
-      "kind": "agent",
-      "message": "README.md now documents exactly one install-script URL, the versionless canonical `https://raw.githubusercontent.com/forgel-dev/code/main/install.sh`, in the `## Install` one-liner, the `### Update` block and the `### Uninstall` block; the previous `/v0.1.1/install.sh` paths were replaced and no `/v<tag>/install.sh` path remains. Prose, command shape (`| sh`, `| sh -s -- --uninstall`), options and section structure are unchanged. tests/test_readme_install.py's text-only guard (`assert_single_install_script_url`) rejects a stale `v0.1.0` install-script path, any tag-pinned `/v<tag>/install.sh` path, fewer than two install-script URLs and any URL other than the single canonical string; the rejection cases are proven by assertRaises on the guard itself (stale tag, divergent tag, another branch, missing URL, stale URL anywhere in the document) and the module imports only re, unittest and pathlib, so it needs no network. tests/test_cli.py's ReadmeTest asserts the canonical versionless URL and rejects tag-pinned install paths. Verified with `python -m unittest discover -s tests` (214 tests, OK) and `python -m pytest -q` (214 passed, 137 subtests). The commit could not be executed: this runtime permits only read-only git commands, so `git add --` and `git commit --only --` were rejected; the three changed paths are unstaged and ready for the runtime commit. Worktree files left untouched and uncommitted by this task: install.sh, tests/test_install.py, tests/test_check_cleanup.py (other tasks' work).; the completion step could not decide what to do with every uncommitted file"
-    }
+    "escalated": []
   },
   "request": ""
 }
