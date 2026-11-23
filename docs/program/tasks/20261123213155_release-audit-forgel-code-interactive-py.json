@@ -157,10 +157,10 @@
     }
   ],
   "language": "",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-23T21:31:55+00:00",
-  "started_at": "2026-11-23T21:31:55+00:00",
-  "finished_at": "2026-11-23T22:22:42+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "Rewrote `redact()` in `forgel_code/interactive.py` so every engine reply and engine error is masked before display. Secret-bearing labels are now recognized case-insensitively in English and Russian (Russian by stem), as single words or compound labels whose segments are joined by `_`, `.` or `-`, and a value bound to such a label by a colon, an equals sign (with or without spaces) or whitespace is replaced with the fixed marker `[redacted]` while the label stays visible. Whitespace/colon-bound authorization scheme words (e.g. `Bearer`) stay visible with only the credential after them masked. Prose that merely mentions a secret word (\"the token is missing\", \"rotate the password please\") is left intact, and secret-free text is returned unchanged and byte-for-byte; masking is idempotent and total for empty input. The mask already had a single funnel through `InteractiveSession.write()`, so every reply, error and state line continues to pass through it. The implementation no longer imports `re` (the client's stdlib allowlist forbids it), doing label scanning by hand instead. Added `tests/test_redact.py`, which checks each required form (colon, equals, whitespace, scheme-prefixed, Russian, compound labels), unchanged benign text, idempotency, and end-to-end that engine replies, engine state lines and engine errors reach the session screen with the value absent. Full suite `python -m pytest -q` passes: 267 passed, 172 subtests.; task review failed",
     "files_changed": [
@@ -323,11 +323,6 @@
       "commits": [
         "ec4bd355192bae72b706ba5a7008b764fbb47687"
       ]
-    },
-    "failure": {
-      "kind": "review",
-      "message": "The change rewrites `redact()` into a label/binding parser that covers colon-, equals-, scheme-, Russian- and compound-label forms, and it adds `tests/test_redact.py` including session-level checks that replies, engine state and engine errors are masked before display. However, the prose/credential heuristics the implementation introduces break two opposing requirements. First, a clause-initial secret word followed by an ordinary word is treated as a bound value, so benign text such as `Password updated.` or `Secret rotation scheduled` is altered, which contradicts the requirement that text merely mentioning a secret word is displayed unchanged. Second, the previously working whitespace form is now gated on the label starting a clause or the value looking credential-like, so a mid-sentence form such as `the token abc` or `set password swordfish` is no longer masked, regressing the previously supported behavior and leaving the secret visible. The tests only cover the forms that happen to pass, so neither defect is caught.",
-      "retryable": false
     },
     "report": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.md",
     "qa": {
@@ -532,6 +527,16 @@
         "FR-4/FR-13/AC-10: the previously working whitespace form is no longer masked mid-sentence when the value is short and alphabetic (e.g. `the token abc`, `set password swordfish`), so the secret remains visible."
       ],
       "report": "docs/program/agent/20261123213155_release-audit-forgel-code-interactive-py.review.md"
+    },
+    "spec_rework_count": 1,
+    "feedback": [
+      "The specification was rewritten after an invalid check: … [truncated]\ndefines what distinguishes a bound value from prose. The rewrite must decide and state that distinction (for example: the whitespace form masks only a token that carries key-material markers such as digits, mixed case or value punctuation, while an ordinary word is left visible; and the previously supported whitespace form keeps masking regardless of where in the sentence the label appears), and must then make the acceptance criteria agree with that decision in both directions — a benign sentence such as `Password updated.` or `Secret rotation scheduled` displayed byte-for-byte unchanged, and a mid-sentence form such as `the token abc` or `set password swordfish` displayed with the value masked — so every listed form has one and only one expected outcome and no implementation has to guess.",
+      "Implement the new specification. Do not change code only to satisfy the old check."
+    ],
+    "last_failure": {
+      "kind": "review",
+      "message": "FR-4 and FR-9 are contradictory as written: both cover a secret label followed by whitespace and a single ordinary word, FR-4 requiring the word to be masked as a bound value and FR-9 requiring the message to be displayed unchanged, and the specification never defines what distinguishes a bound value from prose. The rewrite must decide and state that distinction (for example: the whitespace form masks only a token that carries key-material markers such as digits, mixed case or value punctuation, while an ordinary word is left visible; and the previously supported whitespace form keeps masking regardless of where in the sentence the label appears), and must then make the acceptance criteria agree with that decision in both directions — a benign sentence such as `Password updated.` or `Secret rotation scheduled` displayed byte-for-byte unchanged, and a mid-sentence form such as `the token abc` or `set password swordfish` displayed with the value masked — so every listed form has one and only one expected outcome and no implementation has to guess.",
+      "retryable": false
     }
   },
   "request": ""
