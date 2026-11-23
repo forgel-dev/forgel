@@ -135,6 +135,7 @@ class FreeTextSpecTest(unittest.TestCase):
                     }
                 ),
                 json.dumps({"action": "done", "summary": "added"}),
+                json.dumps({"files": ["feature.py"]}),
             ]
         )
         with patch(

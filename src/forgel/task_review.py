@@ -396,6 +396,8 @@ def _review_prompt(
         except OSError:
             spec_text = ""
     if spec_text:
+        spec_text = contract.without_affected_files(spec_text)
+    if spec_text:
         requirements = "- see the task specification below"
         acceptance = "- see the task specification below"
         constraints = "- see the task specification below"
@@ -525,6 +527,11 @@ Scope of responsibility:
   logical errors, architectural problems, security issues, and weakened or
   deleted tests without an allowed justification. Report a requirement that
   is not met and a feature that was not requested.
+- Judge the change as a whole against the requirements: does it include every
+  file the task needs to work, is it internally consistent, and is there an
+  unrelated, temporary, debug or generated file that must not be committed?
+  A missing needed file and an unrelated file are both blocking. There is no
+  fixed file list to compare against; the requirements are the authority.
 - A finding that asks for a different implementation, a simpler path or a
   style change is not a requirement. A change to the specification needs a
   concrete, verifiable defect; the specification is valid by default because

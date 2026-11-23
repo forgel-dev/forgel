@@ -591,7 +591,6 @@ asked to invent a composition, and no plugin outside the recipe was used.
 
     def stage_spec(self, project: dict[str, Any]) -> list[str]:
         feature = self._control(project) / FEATURE_REL
-        affected = self._affected_paths(project)
         profile = read_json(self._docs(project) / "jurisdiction" / "profile.json")
         pack_ref = f"{profile['id']}@{profile['version']}"
         allowed_label = "yes" if profile.get("production_allowed") else "no"
@@ -650,16 +649,6 @@ from a brief to a running staging artifact.
 - NFR-2: The acceptance check runs in under 10 seconds.
 - NFR-3: The app binds to `127.0.0.1` by default.
 
-## Affected Files
-
-- `{affected['api']}`
-- `{affected['web']}`
-- `{affected['e2e']}`
-- `{affected['dockerfile']}`
-- `{affected['compose']}`
-- `{affected['runner']}`
-- `{affected['scenario']}`
-
 ## Jurisdiction Requirements
 
 - Pack: `{pack_ref}` ({profile['status']})
@@ -705,7 +694,6 @@ See `docs/program/jurisdiction/requirements.md` and
             "## Goals",
             "## Non-Goals",
             "## Functional Requirements",
-            "## Affected Files",
             "## Jurisdiction Requirements",
             "## Acceptance Criteria",
             "## Open Questions",

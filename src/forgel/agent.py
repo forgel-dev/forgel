@@ -200,7 +200,6 @@ instructions say otherwise. Return exactly one JSON object:
   "tests": ["what must be tested"],
   "risks": ["what can make this fail or miss the goal"],
   "open_questions": ["only a question that cannot be decided reversibly"],
-  "affected_files": ["path or area"],
   "repo_id": "an existing repository id; required for a change_request",
   "release_class": "patch for a bug fix, minor for new functionality or changed behaviour; major only for the first product release or a breaking change after 1.0.0",
   "test_command": ["command", "arg"] or [],
@@ -311,9 +310,10 @@ For a change request:
   project and repository instructions even when the chat reply is in the
   the user's language. State the request as requirements and decisions; do
   not paste the user's raw message into the document.
-- Fill goals, non-goals, user stories, tests, risks, open questions and
-  affected files for the document. Leave a list empty only when the
-  conversation truly has nothing to add.
+- Fill goals, non-goals, user stories, tests, risks and open questions for
+  the document. Do not prescribe an implementation file list: state the
+  required behavior. Leave a list empty only when the conversation truly has
+  nothing to add.
 - list the explicit functional requirements and acceptance criteria; do not
   guess unstated features;
 - when the request depends on an external interface (a tool, a service, a
@@ -1686,7 +1686,6 @@ class ProjectAgent:
         tests = items("tests")
         risks = items("risks")
         open_questions = items("open_questions")
-        affected = items("affected_files")
         decisions = self._record_decisions(
             layout, answer.get("user_decisions"), actor, title
         )
@@ -1741,9 +1740,6 @@ class ProjectAgent:
             "risks": requirements_doc.bullets(risks, "None stated."),
             "open_questions": requirements_doc.bullets(
                 open_questions, "None."
-            ),
-            "affected_files": requirements_doc.bullets(
-                affected, "Not identified yet."
             ),
             "assumptions": requirements_doc.bullets(
                 assumptions, "None; the request was explicit enough."

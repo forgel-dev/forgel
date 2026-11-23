@@ -71,6 +71,11 @@ the release policy changes.
   staged, committed or attributed to a task. Committing everything makes the
   reviewer reject the extra file and the runtime commit again, forever. This
   has been tried and rejected repeatedly; do not do it, ever.
+- **A specification states behavior, never an implementation file list.**
+  There is no "Affected Files" section. The developer and the reviewer judge
+  the change as a whole: every file the task needs is present, the change is
+  internally consistent, and unrelated, temporary, debug or generated files
+  are excluded (D-104).
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

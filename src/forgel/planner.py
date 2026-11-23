@@ -555,7 +555,6 @@ def _blocked_spec(
         "user_decisions": [],
         "user_stories": [],
         "open_questions": [reason],
-        "affected_files": [],
         "related_documents": [],
         "revision_history": [
             "1.0.0 — blocked: the specification needs a decision"

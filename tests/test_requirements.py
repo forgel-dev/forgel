@@ -22,7 +22,6 @@ class RequirementsTemplateTest(unittest.TestCase):
             "## Scope Boundaries",
             "## Risks",
             "## Open Questions",
-            "## Affected Files",
             "## Assumptions",
             "## Related Documents",
             "## Revision History",

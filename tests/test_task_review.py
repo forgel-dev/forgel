@@ -715,6 +715,9 @@ class TaskReviewTest(unittest.TestCase):
             json.dumps(
                 {"action": "done", "summary": "added the note"}
             ),
+            json.dumps(
+                {"files": ["note.md", ".gitignore"]}
+            ),
             PASS,
         ]
         processed = run_once(

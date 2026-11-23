@@ -111,10 +111,14 @@ Small fixes (typos, broken links) can go straight to a PR.
 ## Commit Messages
 
 - **Never commit the whole working tree.** Stage only the files the task's
-  specification lists (D-097). Unrelated changes are never attributed to a
+  coherent change needs (D-097). Unrelated changes are never attributed to a
   task and never committed with it. Committing everything makes the reviewer
   reject the extra file and the cycle never ends; this has been tried and
   rejected repeatedly. Never do it.
+- **A specification states behavior, never an implementation file list.**
+  There is no "Affected Files" section (D-104). The developer and the reviewer
+  judge the change as a whole: every needed file present, internally
+  consistent, no unrelated, temporary, debug or generated files.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.

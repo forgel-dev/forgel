@@ -187,6 +187,7 @@ class CodingAgentTest(unittest.TestCase):
                     "assumptions": ["The calculator is a plain module"],
                 }
             ),
+            json.dumps({"files": ["calc.py", "tests/test_calc.py"]}),
         ]
 
     def test_agent_implements_a_task(self) -> None:
@@ -295,6 +296,7 @@ class CodingAgentTest(unittest.TestCase):
                             "summary": "rewrote add",
                         }
                     ),
+                    json.dumps({"files": ["calc.py"]}),
                 ]
             ),
         ).run(self.project, current, log=lambda _m: None)
@@ -319,8 +321,11 @@ class CodingAgentTest(unittest.TestCase):
 
     def test_agent_executes_a_batch_of_actions(self) -> None:
         task = self._task()
-        actions = [json.loads(item) for item in self._responses()]
-        client = ScriptedModelClient([json.dumps(actions)])
+        responses = self._responses()
+        actions = [json.loads(item) for item in responses[:-1]]
+        client = ScriptedModelClient(
+            [json.dumps(actions), responses[-1]]
+        )
         result = CodingAgent(self.settings, self.ledger, client).run(
             self.project, task, log=lambda _m: None
         )
@@ -407,6 +412,7 @@ class CodingAgentTest(unittest.TestCase):
             json.dumps(
                 {"action": "done", "summary": "added the page"}
             ),
+            json.dumps({"files": ["page.py"]}),
         ]
         result = CodingAgent(
             self.settings,
@@ -635,6 +641,7 @@ class CodingAgentTest(unittest.TestCase):
                 json.dumps(
                     {"action": "done", "summary": "added feature.py"}
                 ),
+                json.dumps({"files": ["feature.py"]}),
             ]
         )
         run_daemon(
@@ -1303,7 +1310,12 @@ class CodingAgentTest(unittest.TestCase):
         stored = get_task(self.layout, task["id"])
         assert stored is not None
         client = ScriptedModelClient(
-            [json.dumps({"action": "done", "summary": "already written"})]
+            [
+                json.dumps(
+                    {"action": "done", "summary": "already written"}
+                ),
+                json.dumps({"files": ["leftover/note.py"]}),
+            ]
         )
         result = CodingAgent(
             self.settings, self.ledger, client

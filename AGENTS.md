@@ -48,6 +48,12 @@ shim and is not part of the public repository.
   unrelated files into the task; the reviewer rejects the extra file; the
   runtime commits again; the cycle never ends. This has been tried and
   rejected repeatedly. Do not do it, ever.
+- **A specification states behavior, never an implementation file list.**
+  There is no "Affected Files" section. The developer and the reviewer judge
+  the change as a whole: does it include every file the task needs to work,
+  is it internally consistent, and does it exclude unrelated, temporary,
+  debug or generated files? A hard file list was the root of endless
+  rejections: a correct but unlisted file was dropped or rejected forever.
 
 ## Prompt Rules (Non-Negotiable)
 
@@ -108,10 +114,11 @@ A main-chat prompt without this block is incomplete.
 4. Run `make test` and `make lint`.
 5. Update `PLAN.md` and related docs when a decision changes.
 6. Commit in English, imperative mood, with `git commit -s`.
-7. Stage only the files this task's specification lists. Never `git add -A`,
-   never commit the working tree, never commit a file that belongs to another
-   task (D-097). A needed change outside the contract stops the task so the
-   specification is corrected; it is not committed with unrelated work.
+7. Stage only the files this coherent change needs. Never `git add -A`, never
+   commit the working tree, never commit a file that belongs to another task
+   (D-097). The completion step chooses the exact set from the reviewer's
+   context; a needed file the specification omitted is included, an unrelated
+   file is left uncommitted.
 
 ## Layout
 

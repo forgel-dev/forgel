@@ -371,7 +371,6 @@ class AgentTest(unittest.TestCase):
             "## Functional Requirements",
             "## Tests",
             "## Risks",
-            "## Affected Files",
             "## Revision History",
         ):
             self.assertIn(heading, text)

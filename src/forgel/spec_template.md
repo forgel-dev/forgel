@@ -76,10 +76,6 @@
 
 {{open_questions}}
 
-## Affected Files
-
-{{affected_files}}
-
 ## Assumptions
 
 {{assumptions}}

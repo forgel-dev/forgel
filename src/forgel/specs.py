@@ -103,7 +103,6 @@ Return exactly one JSON object:
   ],
   "user_stories": ["as a ... I want ... so that ..."],
   "open_questions": ["only a question that cannot be decided reversibly"],
-  "affected_files": ["path or area"],
   "related_documents": ["path"],
   "revision_history": ["version and what changed"],
   "checks": [
@@ -116,7 +115,9 @@ Return exactly one JSON object:
 
 Rules:
 - Requirements must be explicit and testable; acceptance must say how the
-  result is judged. Do not add features beyond the intent.
+  result is judged. Do not add features beyond the intent, and do not
+  prescribe an implementation file list: state the required behavior, the
+  developer chooses the files.
 - Give every acceptance criterion a check. Use a command when the criterion
   can be verified by one; use review only for a subjective criterion. Never
   use a vacuous check.
@@ -296,7 +297,6 @@ def _normalize_spec(
         ],
         "user_stories": _strings(data.get("user_stories")),
         "open_questions": _strings(data.get("open_questions")),
-        "affected_files": _strings(data.get("affected_files")),
         "related_documents": _strings(data.get("related_documents")),
         "revision_history": _strings(data.get("revision_history")),
         "checks": checks,
@@ -761,9 +761,6 @@ def render_spec(
         "risks": requirements_doc.bullets(spec.get("risks") or []),
         "open_questions": requirements_doc.bullets(
             spec.get("open_questions") or [], "None."
-        ),
-        "affected_files": requirements_doc.bullets(
-            spec.get("affected_files") or [], "Not identified yet."
         ),
         "assumptions": requirements_doc.bullets(
             spec.get("assumptions") or []

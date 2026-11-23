@@ -49,19 +49,15 @@ class ContractTest(unittest.TestCase):
             )
             digest = contract.digest(layout, task)
             self.assertIn("Do not refactor the harness", digest)
-            self.assertIn("install.sh", digest)
-            self.assertIn("one logical change", digest)
-            self.assertTrue(
-                contract.in_scope("install.sh", ["install.sh"])
+            self.assertIn("Include every file the task needs", digest)
+            self.assertIn("against a file list", digest)
+            # An old file list is context only, never a contract.
+            self.assertNotIn("install.sh", digest)
+            stripped = contract.without_affected_files(
+                layout.artifact(spec).read_text(encoding="utf-8")
             )
-            self.assertTrue(
-                contract.in_scope(
-                    "tests/test_install.py", ["tests/test_install.py"]
-                )
-            )
-            self.assertFalse(
-                contract.in_scope("tests/test_zz_probe.py", ["install.sh"])
-            )
+            self.assertNotIn("## Affected Files", stripped)
+            self.assertIn("Do not refactor the harness", stripped)
 
 
 if __name__ == "__main__":

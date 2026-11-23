@@ -659,13 +659,7 @@ class CodingAgent:
             dirty_product = sorted(
                 path for path in dirty if _task_path(path)
             )
-            affected = contract.affected_files(layout, task)
-            needs_decision = any(
-                path not in changed
-                or (affected and not contract.in_scope(path, affected))
-                for path in dirty_product
-            )
-            if dirty_product and needs_decision:
+            if dirty_product:
                 selected = self._completion_files(
                     task, layout, repo, changed, dirty_product, log
                 )
@@ -679,26 +673,6 @@ class CodingAgent:
                 else:
                     changed = sorted(selected)
             if status == "done" and changed:
-                if affected:
-                    outside = sorted(
-                        path
-                        for path in changed
-                        if not contract.in_scope(path, affected)
-                    )
-                    if outside:
-                        # The completion step is the authority on the task's
-                        # coherent change; a file the specification omitted but
-                        # the task needs is committed and the gap is recorded.
-                        summary += (
-                            "; the specification omitted files the task "
-                            "needs, committed with it: "
-                            + ", ".join(outside[:10])
-                        )
-                        log(
-                            f"[agent] {task['id']}: specification omitted "
-                            "files committed with the task: "
-                            + ", ".join(outside[:10])
-                        )
                 try:
                     commit_sha = git_ops.commit_paths(
                         repo, changed, f"Agent: {task['title']}"

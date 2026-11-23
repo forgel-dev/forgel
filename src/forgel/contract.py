@@ -1,13 +1,14 @@
 """The task contract, shared by the developer and the reviewer.
 
-Both roles receive the same short block: requirements, acceptance, constraints,
-non-goals and the files the specification allows. The runtime also uses the
-file list to keep commits inside the contract.
+Both roles receive the same short block: requirements, acceptance, constraints
+and non-goals. A specification states behavior, not an implementation file
+list: the developer and the reviewer judge the change as a whole against the
+requirements — whether a needed file is missing and whether an unrelated,
+temporary or generated file is present.
 """
 
 from __future__ import annotations
 
-import fnmatch
 import re
 from pathlib import Path
 from typing import Any, Mapping
@@ -25,13 +26,15 @@ def is_control_path(value: str) -> bool:
     return path in CONTROL_FILES or path.startswith(CONTROL_PREFIXES)
 
 RULES = """Rules:
-- Change only the files the specification lists; make one logical change.
-- Stage and commit only those files. Never `git add -A` and never commit the
-  whole working tree; an unrelated change is never attributed to this task.
+- Make one coherent change that implements the requirements.
+- Include every file the task needs to work; exclude unrelated, temporary,
+  debug or generated files.
+- Stage and commit only the changed files. Never `git add -A` and never commit
+  the whole working tree; an unrelated change is never attributed to this task.
 - Do not refactor unrelated code or the test harness, and do not add
-  interfaces the specification does not name.
-- Never commit temporary, probe, debug or generated scratch files.
-- The reviewer judges the committed change against this contract."""
+  interfaces the requirements do not name.
+- The reviewer judges the change as a whole against the requirements, not
+  against a file list."""
 
 
 def _spec_text(layout: ProjectLayout, task: Mapping[str, Any]) -> str:
@@ -51,6 +54,22 @@ def _section(text: str, heading: str) -> str:
         re.MULTILINE | re.DOTALL,
     )
     return match.group(1).strip() if match else ""
+
+
+def without_affected_files(text: str) -> str:
+    """Drop an implementation file list left in an older specification.
+
+    The specification states behavior. A file list from an earlier version is
+    context at most; neither the developer nor the reviewer compares against
+    it.
+    """
+
+    return re.sub(
+        r"^##\s+Affected Files\s*$\n.*?(?=^##\s|\Z)",
+        "",
+        text,
+        flags=re.MULTILINE | re.DOTALL,
+    ).strip() + "\n"
 
 
 PLACEHOLDERS = {
@@ -77,12 +96,6 @@ def _bullets(section: str) -> list[str]:
     return items
 
 
-def affected_files(
-    layout: ProjectLayout, task: Mapping[str, Any]
-) -> list[str]:
-    return _bullets(_section(_spec_text(layout, task), "Affected Files"))
-
-
 def non_goals(
     layout: ProjectLayout, task: Mapping[str, Any]
 ) -> list[str]:
@@ -96,7 +109,6 @@ def digest(layout: ProjectLayout, task: Mapping[str, Any]) -> str:
     acceptance = [str(item) for item in task.get("acceptance") or []]
     constraints = [str(item) for item in task.get("constraints") or []]
     goals = non_goals(layout, task)
-    files = affected_files(layout, task)
 
     def block(title: str, values: list[str]) -> str:
         body = "\n".join(f"- {item}" for item in values) or "- see the spec"
@@ -108,20 +120,6 @@ def digest(layout: ProjectLayout, task: Mapping[str, Any]) -> str:
         block("Acceptance criteria", acceptance),
         block("Constraints", constraints),
         block("Non-goals", goals),
-        block("Affected files", files),
         RULES,
     ]
     return "\n\n".join(parts)
-
-
-def in_scope(path: str, affected: list[str]) -> bool:
-    value = str(path or "").strip().lstrip("./")
-    for entry in affected:
-        item = entry.strip().lstrip("./")
-        if not item:
-            continue
-        if value == item or value.startswith(item.rstrip("/") + "/"):
-            return True
-        if fnmatch.fnmatch(value, item):
-            return True
-    return False
