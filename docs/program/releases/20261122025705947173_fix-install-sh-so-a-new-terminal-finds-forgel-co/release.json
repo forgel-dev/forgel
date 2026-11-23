@@ -86,7 +86,11 @@
     ],
     "errors": 0
   },
-  "control_push": {},
+  "control_push": {
+    "status": "pushed",
+    "branch": "main",
+    "detail": ""
+  },
   "finalized_at": "2026-11-23T18:57:45+00:00",
   "detail": "",
   "next_at": ""
