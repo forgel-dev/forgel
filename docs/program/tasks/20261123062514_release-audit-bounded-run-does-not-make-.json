@@ -1,0 +1,31 @@
+{
+  "id": "20261123062514_release-audit-bounded-run-does-not-make-",
+  "title": "Release audit: `bounded_run` does not make the watchdog's timeout decision authoritative. After",
+  "spec": "",
+  "summary": "Have the watchdog record the final child/timeout status and wait for that status before deciding success, or measure the deadline in the parent and fail on any overrun; add a test whose checked shell returns just after FORGEL_CODE_TIMEOUT.",
+  "requirements": [
+    "`bounded_run` does not make the watchdog's timeout decision authoritative. After the checked shell exits, the parent immediately kills the watchdog if the `timed-out` marker is absent. If the shell finishes after the configured limit but before the watchdog has written the marker, the check can be reported as successful, so the hard bound and the rule that a timed-out check is a failure are not guaranteed."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: `bounded_run` does not make the watchdog's timeout decision authoritative. After the checked shell exits, the parent immediately kills the watchdog if the `timed-out` marker is absent. If the shell finishes after the configured limit but before the watchdog has written the marker, the check can be reported as successful, so the hard bound and the rule that a timed-out check is a failure are not guaranteed.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-23T06:25:14+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

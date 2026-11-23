@@ -1,0 +1,31 @@
+{
+  "id": "20261123062514_release-audit-on-a-successful-check-boun",
+  "title": "Release audit: On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check`",
+  "spec": "",
+  "summary": "Run the checked shell in its own process group/session (with stdin/stdout detached so an interactive shell does not stop) and terminate that group after every outcome, including success; otherwise reliably enumerate and kill descendants before clearing `CHECK_CHILD`. Add a test with a profile that starts a background process.",
+  "requirements": [
+    "On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check` and never signals the checked login shell's process group or descendants. A profile that starts a background process leaves that process running after the check, contrary to the requirement that no process started by the check remains. The timeout path also relies on a process-tree walk and does not preserve a dedicated group for cleanup."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check` and never signals the checked login shell's process group or descendants. A profile that starts a background process leaves that process running after the check, contrary to the requirement that no process started by the check remains. The timeout path also relies on a process-tree walk and does not preserve a dedicated group for cleanup.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Fix install.sh so a new terminal finds forgel-code on PATH",
+  "release_id": "20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co",
+  "release_class": "patch",
+  "order": 0,
+  "depends_on": [],
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-23T06:25:14+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

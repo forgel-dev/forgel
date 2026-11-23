@@ -24,9 +24,12 @@ The installer currently completes while the launcher directory never reaches PAT
 - `20261122174453_make-the-install-sh-path-check-strictly-` — Make the install.sh PATH check strictly bounded and keep the profile byte-identical on re-install (code, done)
 - `20261122192217_release-audit-remove-profile-block-and-u` — Release audit: `remove_profile_block` and `uninstall_profile` remove a block whenever `# >>> fo (code, done)
 - `20261122192217_release-audit-the-final-task-s-recorded-` — Release audit: The final task's recorded test run shows only `timed out after 120s` and partial (code, done)
+- `20261123062514_release-audit-bounded-run-does-not-make-` — Release audit: `bounded_run` does not make the watchdog's timeout decision authoritative. After (code, pending)
+- `20261123062514_release-audit-on-a-successful-check-boun` — Release audit: On a successful check, `bounded_run` clears `CHECK_CHILD` before `cleanup_check` (code, pending)
+- `20261123062514_release-audit-readme-md-still-documents-` — Release audit: README.md still documents `.../v0.1.0/install.sh` for the install command and fo (code, pending)
 
 ## Audit
 
-- Rounds: 0
-- Verdict: not run
+- Rounds: 1
+- Verdict: fail
 - Report: `docs/program/releases/20261122025705947173_fix-install-sh-so-a-new-terminal-finds-forgel-co/audit.md`
