@@ -1,26 +1,35 @@
 {
   "id": "20261123192641_machine-readable-failures-for-every-clie",
   "title": "Machine-readable failures for every client command and a consistent selected project",
-  "spec": "docs/program/requests/20261123192641615617_machine-readable-failures-for-every-client-command-and-a-con.md",
+  "spec": "docs/program/specs/20261123192641_machine-readable-failures-for-every-clie.md",
   "summary": "Every client command failure, including an argument-parse error, must end in a non-zero exit and, in machine-readable mode, exactly one structured report with a false success flag, the command the user asked for and the project in effect; human-readable mode prints the message on the error channel only. The selected project must be passed to the engine by every command that acts on a project and must not be passed by a command that does not, and the reported project must equal the project actually sent.",
   "requirements": [
-    "A client command that acts on a project always sends the selected project to the engine, and the project reported to the caller is the same one that was sent.",
-    "A client command that does not act on a project never sends a project.",
-    "Any failed invocation — unknown command, missing required argument, malformed numeric limit, remarks that contain no text — exits with a non-zero code.",
-    "In machine-readable mode every failed invocation prints exactly one structured report with a false success flag and a readable message, and nothing else on the standard output stream.",
-    "That failure report names the command the user asked for and the project in effect at the time of the invocation, whenever the invocation determines them; a value stays empty only when the invocation itself cannot determine it.",
-    "In human-readable mode a failed invocation prints the message on the error stream and no structured report.",
-    "No failed invocation ends through an unhandled parser exit or prints a language traceback.",
-    "A structured refusal from the engine remains a failure even when the engine itself reports success, and keeps the engine's own error fields.",
-    "The successful answer of every command keeps its current shape and content."
+    "Every client command that acts on a project sends the selected project to the engine, and the project reported to the caller is exactly the project that was sent.",
+    "Every client command that does not act on a project sends no project to the engine and reports none.",
+    "Every failed invocation exits with a non-zero status. Failures include at least: an unknown command, a missing required argument, a numeric limit given a non-numeric value, remarks for a returned task that contain no text, and a refusal reported by the engine.",
+    "In machine-readable mode every failed invocation produces exactly one structured failure report in the machine-readable output and nothing else in that output.",
+    "That failure report carries a success indication set to false and a readable message stating what went wrong.",
+    "That failure report names the command the user asked for and the project in effect at the time of the invocation whenever the invocation determines them; a value stays empty only when the invocation itself cannot determine it.",
+    "In human-readable mode a failed invocation prints the readable message on the error output and produces no structured report.",
+    "No failed invocation ends through an unhandled argument error, and no failed invocation shows an internal error trace in either output mode.",
+    "A refusal reported by the engine remains a failure even when the engine itself reports success, and the failure report keeps the engine's own error details unchanged.",
+    "The successful answer of every command keeps its current shape and content, and successful invocations continue to exit with success.",
+    "Asking for machine-readable output with a missing required argument produces one structured failure report with a false success indication, the requested command, the project in effect and a readable message, and a non-zero exit status.",
+    "Asking for machine-readable output with an unknown command produces the same structured failure report, naming the command exactly as the user typed it.",
+    "A non-numeric limit passed to a command produces the same structured failure report instead of an internal error trace.",
+    "Returning a task with remarks that carry no text is refused with the same structured failure report and no request reaches the engine.",
+    "In human-readable mode each of these same failures prints the message on the error output, produces no structured report, and exits with a non-zero status."
   ],
   "acceptance": [
-    "Asking for machine-readable output with a missing required argument produces one structured object with a false success flag, the requested command, the project in effect, a message, and a non-zero exit code.",
-    "Asking for machine-readable output with an unknown command produces the same structured failure with the command the user typed.",
-    "A non-numeric limit passed to a command produces the same structured failure instead of a traceback.",
-    "In human-readable mode the same failures print the message on the error stream and print no structured object.",
-    "Every command that acts on a project sends the selected project to the engine, and the reported project equals the sent one; a command that does not act on a project sends none.",
-    "Sending a task back with remarks that carry no text is refused with the same structured failure.",
+    "With machine-readable output requested and a required argument missing, the invocation exits non-zero and produces exactly one structured failure report carrying a false success indication, the requested command, the project in effect and a readable message.",
+    "With machine-readable output requested and an unknown command, the invocation exits non-zero and produces the same structured failure report, naming the command exactly as the user typed it.",
+    "A numeric limit given a non-numeric value produces the same structured failure report instead of an internal error trace.",
+    "Returning a task whose remarks contain no text produces the same structured failure report and no request reaches the engine.",
+    "In human-readable mode each of the above failures prints the message on the error output, produces no structured report, and exits non-zero.",
+    "Every command that acts on a project sends the selected project to the engine and reports exactly that project; every command that does not act on a project sends none.",
+    "A refusal reported by the engine whose own success indication is true is still reported as a failure, with the engine's own error details preserved.",
+    "Successful answers of every command keep their current shape and content and exit with success.",
+    "The failure message is readable and states what went wrong.",
     "The whole test suite passes."
   ],
   "constraints": [
@@ -32,10 +41,8 @@
   "test_command": [
     "python",
     "-m",
-    "unittest",
-    "discover",
-    "-s",
-    "tests"
+    "pytest",
+    "-q"
   ],
   "assumptions": [
     "The next requirement is the first item of the recorded priority list: the project in all commands together with machine-readable argument errors.",
@@ -49,12 +56,109 @@
   "release_class": "minor",
   "order": 0,
   "depends_on": [],
-  "checks": [],
+  "checks": [
+    {
+      "criterion": "With machine-readable output requested and a required argument missing, the invocation exits non-zero and produces exactly one structured failure report carrying a false success indication, the requested command, the project in effect and a readable message.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "With machine-readable output requested and an unknown command, the invocation exits non-zero and produces the same structured failure report, naming the command exactly as the user typed it.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A numeric limit given a non-numeric value produces the same structured failure report instead of an internal error trace.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Returning a task whose remarks contain no text produces the same structured failure report and no request reaches the engine.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "In human-readable mode each of the above failures prints the message on the error output, produces no structured report, and exits non-zero.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Every command that acts on a project sends the selected project to the engine and reports exactly that project; every command that does not act on a project sends none.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A refusal reported by the engine whose own success indication is true is still reported as a failure, with the engine's own error details preserved.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Successful answers of every command keep their current shape and content and exit with success.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The failure message is readable and states what went wrong.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The whole test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    }
+  ],
   "external_dependencies": [],
   "language": "ru",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-23T19:26:41+00:00",
-  "started_at": "",
+  "started_at": "2026-11-23T19:26:41+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": "docs/program/requests/20261123192641615617_machine-readable-failures-for-every-client-command-and-a-con.md"
 }
