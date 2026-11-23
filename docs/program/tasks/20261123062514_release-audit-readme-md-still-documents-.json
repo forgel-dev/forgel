@@ -198,10 +198,10 @@
     }
   ],
   "language": "",
-  "status": "blocked",
+  "status": "pending",
   "created_at": "2026-11-23T06:25:14+00:00",
-  "started_at": "2026-11-23T13:58:25+00:00",
-  "finished_at": "2026-11-23T14:09:05+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "stopped by the controller: The remaining failure is not in the work and not in the specification text. The README/guard work is finished and proven (214 tests via unittest and pytest, canonical versionless install-script URL, guard with rejection cases), and the sole failing acceptance item is 'the task repository is committed' with README.md, tests/test_cli.py and tests/test_readme_install.py uncommitted. Both routes to that commit are closed by this runtime: the agent reports that `git add --` and `git commit --only --` were rejected because only read-only git commands are permitted, and the runtime's own completion step reports it 'could not decide what to do with every uncommitted file' because the shared worktree carries other tasks' modifications (install.sh, tests/test_install.py, tests/test_check_cleanup.py, CHANGELOG.md). The spec was already rewritten once for exactly this (making the agent perform the path-limited commit instead of the runtime, FR-10/R10) and the blocker reproduced, so another respec or rework would only spend another cycle without changing a runtime capability; four reworks and two respecs have already gone to this same commit step.",
     "files_changed": [
@@ -344,7 +344,7 @@
     "spec_feedback": [
       "the planner accepted the specification issue and rewrote the specification; implement the new version"
     ],
-    "rework_count": 4,
+    "rework_count": 0,
     "feedback": [
       "The specification was rewritten after an invalid check: … [truncated]\ntting exactly README.md, tests/test_readme_install.py and tests/test_cli.py with a path-limited `git add --` / `git commit -- <paths>` (or equivalent) that never adds install.sh, tests/test_install.py, tests/test_check_cleanup.py or CHANGELOG.md; the commit message states the README install-command fix without tool attribution; the agent verifies with `git show --name-only --format= HEAD` that the commit lists exactly those three paths and reports the commit hash and the remaining dirty files in its report. Drop the statement that the agent's git is read-only and the statement that the runtime performs the commit, keep the rule that the whole working tree is never committed, and leave FR-1 to FR-11 and all acceptance checks unchanged so the existing README canonical-URL work remains valid.",
       "Implement the new specification. Do not change code only to satisfy the old check."
@@ -391,7 +391,9 @@
       "review_required": false,
       "failure_kind": "code"
     },
-    "escalated": []
+    "escalated": [],
+    "attempts": 0,
+    "manual_retries": 1
   },
   "request": ""
 }
