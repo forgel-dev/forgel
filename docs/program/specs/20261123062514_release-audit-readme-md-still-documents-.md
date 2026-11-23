@@ -12,23 +12,23 @@
 | Depends on | none |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-23T15:03:53+00:00 |
+| Created | 2026-11-23T15:33:53+00:00 |
 | Source | Plan `` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-README.md still documents the install and uninstall commands against the superseded release installer at `.../v0.1.0/install.sh`. A reader who copies those commands installs a stale release, so a new terminal may not have the current `forgel-code`, and nothing in the test suite notices when the documented commands drift away from the release installer again. The previous specification of this task also demanded agent-side git writes and a `curl` reachability probe, which the agent runtime does not permit.
+The project's public documentation and the automated check that protects it have drifted from the release contract. The documented install, update and uninstall instructions point at a mutable in-development location rather than a published release, so a reader who copies them gets an unreproducible snapshot that is not the release the page describes and that silently ships unverified changes. The guard that should keep the documented release line trustworthy was inverted: it now forbids naming any release at all, so it would fight the next legitimate release update instead of catching the stale one it exists to catch. The release record must also agree with what the documentation actually says.
 
-**Outcome:** README.md documents the install and uninstall commands against the current release installer (a versionless latest URL, or the released version recorded in CHANGELOG.md, never a superseded tag), a repository test guards those documented commands against regressing to a superseded or non-installer source, the full test suite passes, and the change set is committed by the runtime completion step from the paths named in the agent's done report (README.md, tests/test_readme_install.py, tests/test_cli.py), leaving unrelated worktree changes uncommitted.
+**Outcome:** The documentation page's install, update and uninstall instructions name the current published release; the guard accepts that release-identifying form and fails only for a superseded release or for no release at all; the release record matches the documented instructions; and no unrelated pending change is included in or attributed to the delivered result.
 
 ## Product Intent
 
-A user who copies the documented install command gets the current released `forgel-code` on PATH, and the documentation cannot silently fall behind a release again.
+A reader of the public documentation installs and removes exactly the published release the page describes, reproducibly and verifiably, and the automated guard keeps the page pinned to the current release across future releases.
 
 ## User Experience
 
-A new user finds the install line in README.md, pastes it into a fresh terminal, and afterwards runs `forgel-code` successfully, because the line points at the current release installer rather than an old tag.
+A new user opens the documentation page, copies the install line, and gets the published release described on that page. Copying the update or uninstall line behaves consistently with that same release. Nothing about the page changes silently between releases; a stale page is caught by the project's own checks before it reaches a reader.
 
 ## Roadmap
 
@@ -36,131 +36,101 @@ A new user finds the install line in README.md, pastes it into a fresh terminal,
 
 ## Goals
 
-- The documented install and uninstall commands point at the current release installer.
-- Documentation drift on those commands is caught by a repository test instead of by a user.
-- The change lands as a single small change set that the runtime completion step commits without agent git writes or network access.
+- Make the documentation page point at the current published release for install, update and uninstall.
+- Restore the guard so it protects the release-identifying documentation form and rejects superceded releases.
+- Make the release record agree with the documentation.
 
 ## Non-Goals
 
-- Changing install.sh behaviour or its arguments.
-- Publishing, tagging or rewriting any release; versions come from the release train and its release report.
-- Fetching the documented URL over the network to prove reachability.
-- Reworking unrelated README sections, the client code or the engine contract.
-- Running git write commands or any network client from the agent.
-- Adding a new CI configuration or a new test runner.
+- Changing the installer's behavior
+- Publishing, moving or retagging any release
+- Choosing or changing any release version
+- Changing the packaging, the client behavior or the command line
+- Adding new documentation pages or new user-facing features
+- Rewriting unrelated parts of the documentation page
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | The client is a Python client installed as `forgel-code`, so the documented install command installs the `forgel-code` package. | User decision log, D-004 (2026-11-16 18:34) |
-| — | The client repository is public and lives in the same organization as the engine, so the documented install URL points at a publicly resolvable release location. | User decision log, D-005 (2026-11-16 21:14) |
+| — | A published release is immutable: a change after a release is a new version, never a rewrite of the released version; the release process computes and publishes the next version, and agents do not assign, promise or rewrite release versions. | Project FORGEL.md and AGENTS.md, Release Rules / Releases |
+| — | A task delivers only the change selected for that task; unrelated changes are never staged, committed or attributed, and every uncommitted product file gets one decision at completion. | FORGEL.md / AGENTS.md native rules (D-097, D-105) |
+| — | A specification states behavior, never an implementation file list. | FORGEL.md / AGENTS.md (D-104) |
+| — | Never weaken a test to make it pass; fix the product or the test's premise. | Repository code AGENTS.md |
+| — | All committed project artifacts are English. | Project AGENTS.md (D-025) |
 
 ## Functional Requirements
 
-- **FR-1**: R1: README.md contains no install command that references a superseded release path; in particular the string `v0.1.0/install.sh` does not appear in README.md.
-- **FR-2**: R2: The documented install command in README.md invokes the release installer script (`install.sh`) from the release location and is presented as a copy-pasteable, complete shell command.
-- **FR-3**: R3: The documented uninstall command in README.md invokes the same release installer script from the release location and is presented as a copy-pasteable, complete shell command.
-- **FR-4**: R4: The installer location used in README.md is either a versionless latest-release URL or a URL whose version equals the newest released version recorded in CHANGELOG.md; the agent does not introduce, promise or invent a version.
-- **FR-5**: R5: A guard test in `tests/` reads README.md, extracts the documented install and uninstall commands, and fails when either command does not reference the release installer script or references a superseded release path.
-- **FR-6**: R6: The guard test fails for the pre-change README.md (a README documenting `v0.1.0/install.sh` does not satisfy it) and passes for the corrected README.md.
-- **FR-7**: R7: The guard test performs no network access, spawns no external binary and makes no git call, so it runs under the repository's normal test command.
-- **FR-8**: R8: The full repository test suite passes after the change.
-- **FR-9**: R9: The change set is exactly README.md, tests/test_readme_install.py and tests/test_cli.py; these three paths are listed in the agent's done report and the runtime completion step commits exactly the listed paths, leaving every other worktree modification uncommitted.
-- **FR-10**: R10: The agent inspects the worktree with read-only git commands only (`git status`, `git diff`, `git show`, `git log`) and never runs `git add`, `git commit`, `git reset` or `git checkout`.
-- **FR-11**: R11: No reachability or network proof of the documented URL is part of the task; the URL correctness is judged by the documented form and by the guard test, not by a live request.
-
-## Technical Requirements
-
-- The agent's git access is read-only; the runtime completion step performs the commit for the paths named in the done report.
-- The agent has no network client available; no `curl`, `wget` or HTTP fetch is part of the change or its verification.
-- A published tag is immutable; the task never rewrites a release and never assigns a version.
-- Never commit the whole working tree; the change set is the three named paths only.
-- Artifacts are written in English.
-- The repository test framework is pytest; the guard test uses it and nothing else.
-- The specification states behaviour, not an implementation file list; the developer chooses the guard test's internal structure inside `tests/`.
+- **FR-1**: The documented install instruction names the current published release, either by that release's version-pinned location or by a versionless latest location that resolves to the current published release.
+- **FR-2**: The documented install instruction does not take its source from an in-development or otherwise mutable location that is not a published release.
+- **FR-3**: The documented uninstall instruction uses the same release-identifying form as the documented install instruction.
+- **FR-4**: The documented update instruction, where the page provides one, uses the same release-identifying form as the documented install instruction.
+- **FR-5**: The guard asserts that the documented install and uninstall instructions use the released installer rather than an in-development location.
+- **FR-6**: The guard accepts the release-identifying form that names the current published release.
+- **FR-7**: The guard fails when a documented instruction names a release superseded by the current published release, and when it names no release at all.
+- **FR-8**: The release record agrees with the release-identifying form and instructions the documentation actually shows.
+- **FR-9**: The release record states no release identifier or instruction form that contradicts the documentation.
+- **FR-10**: The delivered result is confined to the documentation page, the guard and the release record; any unrelated pending change in the project is not included in it or attributed to it.
 
 ## User Stories
 
-- As a new user, I want the README install line to point at the current release installer, so that a fresh terminal ends up with a working `forgel-code` on PATH.
-- As a maintainer, I want a test that fails when the documented install or uninstall command regresses to an old release, so that the docs cannot silently fall behind a release.
-
-## Tests
-
-- A1: README.md no longer contains the superseded `v0.1.0/install.sh` path: `python -c import pathlib,sys; t=pathlib.Path('README.md').read_text(encoding='utf-8'); sys.exit(0 if 'v0.1.0/install.sh' not in t and 'v0.1.0' not in t else 1)`
-- A4: the new README guard test passes against the corrected README.md: `python -m pytest tests/test_readme_install.py -q`
-- A6: the full repository test suite passes: `python -m pytest -q`
-- A2: the documented install command references the release installer and any version matches the newest CHANGELOG release: review
-- A3: the documented uninstall command references the release installer on the same terms as A2: review
-- A5: the guard test fails against a README documenting a superseded install path: review
-- A7: the guard test makes no network call, spawns no external binary and calls no git: review
-- A8: the done report lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py and leaves unrelated worktree changes uncommitted: review
-- Command: `python -m pytest -q`
+- As a new user, I want the documented install instruction to give me the published release the page describes, so that I install something reproducible and verified.
+- As a new user, I want the documented uninstall instruction to match the release I installed, so that removal is predictable.
+- As a maintainer, I want the guard to fail when the page goes stale, so that a release update cannot be forgotten and an older release cannot linger.
+- As a release auditor, I want the release record to state what the page actually shows, so that the record is trustworthy.
 
 ## Acceptance Criteria
 
-- **AC-1**: A1: README.md no longer contains `v0.1.0/install.sh`.
-- **AC-2**: A2: The documented install command in README.md references the release installer and, when versioned, that version matches the newest release recorded in CHANGELOG.md.
-- **AC-3**: A3: The documented uninstall command in README.md references the release installer on the same terms as A2.
-- **AC-4**: A4: The new guard test passes against the corrected README.md.
-- **AC-5**: A5: The new guard test fails when run against a README.md that documents a superseded install path.
-- **AC-6**: A6: The full test suite passes.
-- **AC-7**: A7: The guard test needs no network, no external binary and no git.
-- **AC-8**: A8: The agent's done report lists exactly README.md, tests/test_readme_install.py and tests/test_cli.py as the change set, and unrelated worktree modifications are left uncommitted for the runtime completion decision.
+- **AC-1**: The documented install instruction identifies the current published release rather than an in-development location.
+- **AC-2**: The documented uninstall instruction carries the same release identifier as the documented install instruction.
+- **AC-3**: Any documented update instruction carries the same release identifier as the documented install instruction.
+- **AC-4**: The guard passes against the updated documentation.
+- **AC-5**: The guard fails against a documentation variant that names a superseded release, and against a variant that names no release.
+- **AC-6**: The release record and the documentation agree on the release identifier and instruction form.
+- **AC-7**: The delivered result contains only the documentation page, the guard and the release record, while unrelated pending changes remain undelivered and unattributed.
 
 ## Scope Boundaries
 
-- Correct the documented install command in README.md to the current release installer.
-- Correct the documented uninstall command in README.md to the current release installer.
-- Add a README guard test in the repository test suite that asserts both documented commands use the release installer.
-- Keep the change set limited to README.md, tests/test_readme_install.py and tests/test_cli.py.
-- Report the exact changed paths in the agent's done report so the runtime completion step commits exactly those paths.
-- Changing install.sh behaviour or its arguments.
-- Publishing, tagging or rewriting any release; versions come from the release train and its release report.
-- Fetching the documented URL over the network to prove reachability.
-- Reworking unrelated README sections, the client code or the engine contract.
-- Running git write commands or any network client from the agent.
-- Adding a new CI configuration or a new test runner.
+- The documentation page's install instruction
+- The documentation page's update instruction, when present
+- The documentation page's uninstall instruction
+- The automated guard that asserts the documented install, update and uninstall instructions name a published release
+- The release record's statement of the documented release-identifying form and instructions
+- Changing the installer's behavior
+- Publishing, moving or retagging any release
+- Choosing or changing any release version
+- Changing the packaging, the client behavior or the command line
+- Adding new documentation pages or new user-facing features
+- Rewriting unrelated parts of the documentation page
 
 ## Risks
 
-- The tree contains only `releases/0.1.0`, so a versioned URL chosen by the agent could name a release that does not exist; preferring a versionless latest URL removes this risk.
-- If the release location does not serve a versionless installer URL, the guard test must compare against CHANGELOG.md instead of a literal, or the README will go stale again on the next release.
-- If the release installer does not support uninstall, restricting the guard to the install command leaves the uninstall documentation uncorrected and A3 cannot be met.
-- The guard test can become brittle if it parses prose loosely; it must target the fenced command block and must be shown to fail on the old README (A5).
-- Adding `tests/test_cli.py` to the change set without a genuine modification reintroduces the rejected scope problem; that path is declared only when it is actually changed.
-- Whoever reads this task may be tempted to reintroduce an agent-side commit or a `curl` probe; both are barred by R10, R11 and the constraints.
+- The guard could derive the current release from a source that also drifts, passing while the page is stale; it must be compared against the release the project currently publishes.
+- The release record may live outside this project, in which case the reconciliation half of the task cannot be completed here and must be escalated to the planner.
+- If the documentation adopts a versionless latest form, superseded-release detection cannot be a version comparison and needs a different signal that still fails for a stale page.
+- A versionless latest form trades reproducibility for automatic currency; if a reader must be able to reproduce the exact release afterwards, only the version-pinned form satisfies that, and the choice is a product decision not yet recorded.
+- Unrelated pending changes present when the task starts could be swept into the delivered result, contradicting the recorded rule against delivering everything in progress.
 
 ## Open Questions
 
-- Does the release installer script provide an uninstall invocation on the same URL? If it does not, the guard test must be limited to the install command and A3 restated, which is a product-visible change to this task's intent.
+- Should the documented instructions use a version-pinned release location or a versionless latest location? Both identify a published release and the page must pick one; only the version-pinned form lets a reader reproduce the exact release afterwards.
 
 ## Assumptions
 
-- The release installer is published as a script named `install.sh` at a release URL, and the same script serves both install and uninstall, which is why the task asks the guard to cover both commands.
-- A versionless latest-release URL form is preferable because it cannot go stale; if the release location does not offer one, the newest version recorded in CHANGELOG.md is used instead.
-- The README commands currently live in fenced code blocks whose text the guard test can extract with a small parser or a regular expression over the fenced block.
-- CHANGELOG.md is the in-repository source for the newest released version, since the `releases/` directory contains only 0.1.0.
-- The guard test may update `tests/test_cli.py` only if a shared helper or a CLI-documentation assertion already lives there; otherwise that file is untouched and still listed in the declared change set only if modified.
+- The documentation may identify the release either as a version-pinned location or as a versionless latest location, since both identify a published release; the guard therefore accepts the adopted form and rejects only superseded releases and non-release locations.
+- The current published release is the one the existing release record already describes; this task reconciles the documentation to it rather than choosing a version.
+- The release record is a project artifact; if it lives outside this project, the planner must say so.
+- The guard can tell a superseded release from the current one only if the current release identifier is discoverable in the project, so the guard derives it from existing release information instead of inventing a new version.
 
 ## Related Documents
 
 - README.md
 - install.sh
 - CHANGELOG.md
-- tests/test_readme_install.py
-- tests/test_cli.py
 - releases/0.1.0/release.md
-- FORGEL.md
-- AGENTS.md
-- code/FORGEL.md
-- code/AGENTS.md
+- releases/0.1.0/plan.md
 
 ## Revision History
 
-- v1: initial specification requiring an agent-side `git commit --only` and a `curl` reachability check.
-- v2: rewritten after rejection — the commit is performed by the runtime completion step for the paths listed in the agent's done report (README.md, tests/test_readme_install.py, tests/test_cli.py), unrelated worktree changes stay uncommitted, and the agent-side git write and `curl` reachability steps are removed.
-
-## External Dependencies
-
-- **Release installer script published as a release asset (`install.sh`) under the project's release URL on the public code repository host** — mode `unknown`; interface: HTTPS GET of a shell script from a release path; the documented command pipes or executes that script. Only the URL form is used in this task, never a live request.; docs: releases/0.1.0/release.md (release report describing the published install command); no 0.1.1 release report present in the tree; evidence: —
+- v3: removed implementation-level wording (version control and delivery mechanics) from problem, outcome, requirements, acceptance, constraints, goals, user stories, risks and assumptions; verification commands kept only in checks.
+- v2: rewritten for the reported defect — release-identifying documentation restored, guard turned back to protect the release form and reject only superseded releases, release record reconciled with the documentation, change confined to the documentation and its guard.
