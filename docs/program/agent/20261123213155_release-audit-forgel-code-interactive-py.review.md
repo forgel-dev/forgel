@@ -3,38 +3,42 @@
 - Task: `20261123213155_release-audit-forgel-code-interactive-py`
 - Project: `forgel-1d2bf685`
 - Verdict: **FAIL**
-- Finished: 2026-11-23T22:31:07+00:00
+- Finished: 2026-11-23T22:54:38+00:00
 
 ## Summary
 
-The change rewrites `redact()` into a label/binding parser that covers colon-, equals-, scheme-, Russian- and compound-label forms, and it adds `tests/test_redact.py` including session-level checks that replies, engine state and engine errors are masked before display. However, the prose/credential heuristics the implementation introduces break two opposing requirements. First, a clause-initial secret word followed by an ordinary word is treated as a bound value, so benign text such as `Password updated.` or `Secret rotation scheduled` is altered, which contradicts the requirement that text merely mentioning a secret word is displayed unchanged. Second, the previously working whitespace form is now gated on the label starting a clause or the value looking credential-like, so a mid-sentence form such as `the token abc` or `set password swordfish` is no longer masked, regressing the previously supported behavior and leaving the secret visible. The tests only cover the forms that happen to pass, so neither defect is caught.
+The redactor rewrite handles colon, equals, whitespace, authorization-scheme, Russian, compound and benign-prose forms correctly, and the environment checks pass. Two pinned forms are nevertheless wrong: a quoted value is masked together with its quotation marks (`password: "hunter2 and more"` renders `password: [redacted]` instead of `password: "[redacted]"`), and a repeated separator loses a character (`password==hunter2` renders `password=[redacted]` instead of `password==[redacted]`). Neither form is covered by the attributed tests, and the replacement tests cited in the developer justification are not present in the repository, so the change does not satisfy the quoted-value requirement and does not byte-preserve text outside the masked value for repeated separators.
 
 ## Requirements
 
-- FR-1: a bound value is replaced by one fixed mask marker while the label is preserved.: pass — The rewritten `redact()` splices `[redacted]` over the bound span and keeps the label text; the tests confirm the label stays next to the mask.
-- FR-2: a value after a secret keyword and a colon, with or without whitespace, is masked.: pass — Covered by `test_a_colon_joined_value_is_masked`; the `:` branch in `_binding` does not depend on surrounding prose.
-- FR-3: a value after a secret keyword and an equals sign, with or without surrounding whitespace, is masked.: pass — Covered by `test_an_equals_joined_value_is_masked` and by the compound-label cases.
-- FR-4: a value after a recognized secret keyword and whitespace (the previously supported single-token form) continues to be masked.: fail — The whitespace branch requires the label to stand alone or the next word to look credential-like (`_stands_alone` / `_looks_like_credential`). `the token abc`, `set password swordfish` or `установлен пароль swordfish` therefore stay unmasked, although the previous implementation masked the following token in any position.
-- FR-5: a value after a secret keyword plus colon or whitespace and an authorization scheme word is masked, scheme word may stay.: pass — `test_an_authorization_scheme_stays_visible` shows `Authorization: Bearer [redacted]` and `the token Bearer [redacted]`.
-- FR-6: English and Russian secret labels are recognized for colon, equals and whitespace forms.: pass — Russian stems are matched case-insensitively and the colon/equals cases pass; the whitespace Russian case shares the FR-4 defect and is reported there.
-- FR-7: a compound label with a secret keyword as one segment has its value masked.: pass — `_segments`/`_secret_label` handle `_`, `.` and `-`, and the compound cases in `test_a_compound_label_is_masked` pass.
-- FR-8: label recognition is case-insensitive, including non-English labels.: pass — Labels are lower-cased before matching; `Пароль=hunter2` is masked.
-- FR-9: text not bound to a recognized secret-bearing label is displayed unchanged, including ordinary sentences that merely mention a secret word.: fail — A clause-initial label followed by any word that is not in the prose list is treated as bound: `Password updated.` becomes `Password [redacted].` and `Secret rotation scheduled` is altered. That is an ordinary sentence mentioning the label without a value, and it violates this requirement.
-- FR-10: the label text is preserved next to the mask.: pass — The label span is never replaced; only the value span is.
-- FR-11/AC-9 (review-only): every engine reply and every engine error is masked before it reaches the session display.: pass — The attributed session tests exercise the reply path, the engine-state path and the error path and assert the values are absent and `[redacted]` is present; the diff does not remove any display-side redaction call.
-- FR-12: masking empty or secret-free text returns it unchanged and masking twice neither errors nor reveals a value.: pass — `redact('')` returns early, `_span` recognizes an existing `[redacted]` span, and `test_redaction_is_idempotent`/`test_secret_free_text_is_unchanged` pass.
-- FR-13: previously working session behavior, including the masking forms that already worked, does not regress.: fail — The old implementation masked the token following a secret keyword anywhere in the text; the new standalone/credential heuristic drops that for mid-sentence occurrences, so a previously masked form now leaks.
-- AC-6: a message that merely mentions a secret word without binding a value is displayed unchanged.: fail — Only the three chosen sample sentences are tested; `Password updated.` is a counterexample that is masked.
-- AC-7: a message with no secret-bearing label is displayed byte-for-byte unchanged.: fail — Messages with no secret at all are preserved, but the requirement is contradicted for ordinary messages mentioning a label: `Token expired` is rewritten to `Token [redacted]`.
-- AC-10: for each recognized form the secret value does not appear as a substring of what the user is shown.: fail — The whitespace-joined form leaks when it appears mid-sentence and the value is short and alphabetic, e.g. `the token abc` is displayed unchanged.
+- Masking replaces the value bound to a recognized secret-bearing label with the fixed marker and preserves the label.: pass — Colon, equals, whitespace, scheme, Russian and compound forms replace the value and keep the label.
+- A value after a secret keyword and a colon, with or without whitespace, is masked.: pass — `token:abc123` and `password: hunter2` mask the value.
+- A value after a secret keyword and an equals sign, with or without surrounding whitespace, is masked.: pass — `password=hunter2` and `password = hunter2` mask the value; the repeated-separator case is reported separately.
+- The previously supported whitespace single-token form continues to mask.: pass — `token abc` masks `abc`.
+- An authorization scheme word after a label or separator stays visible and the credential after it is masked.: pass — `Authorization: Bearer abc123` and `the token Bearer secretvalue` keep the scheme word and mask the credential.
+- Russian and compound labels are recognized case-insensitively and masked.: pass — `пароль:`, `Пароль=`, `токен`, `db_password=`, `aws.secret.key:`, `api-key=` and `AWS_SECRET_ACCESS_KEY=` all mask.
+- Text not bound to a recognized secret-bearing label is displayed unchanged.: pass — `Password updated.`, `Secret rotation scheduled`, `the token is missing`, `rotate the password please`, `send the secret later`, `release: 0.1.1 open`, empty text and the Russian sentence are unchanged.
+- Masking is idempotent, and empty or secret-free text is returned unchanged.: pass — The idempotence and secret-free cases in tests/test_redact.py pass for the covered forms.
+- Every engine reply and every engine error that reaches the session display is masked.: pass — The session tests check an engine reply, a task title and an engine error; the QA e2e checks pass.
+- Previously working session behavior continues to work.: pass — The QA local and e2e checks pass, and tests/test_interactive.py is unchanged.
+- A quoted value is masked whole while its quotation marks stay visible.: fail — `_span` returns a span that includes the opening and closing quote, so `password: "hunter2 and more"` is rendered `password: [redacted]` instead of `password: "[redacted]"`, contrary to FR-1, FR-4 and AC-6; tests/test_redact.py has no quoted-value case.
+- A run of separator characters binds the following value and the separators are preserved (`password==hunter2` -> `password==[redacted]`).: fail — `_binding` passes the position after the first separator to `_bound_value`, which treats the second `=` as the first character of the value; `password==hunter2` is rendered `password=[redacted]`, altering a character outside the masked value (FR-1, FR-3, AC-1).
+- For each recognized form the secret value does not appear as a substring anywhere in the displayed text.: pass — The masked spans remove the value; the two failures above concern the characters left around the mask, not the value appearing.
+- Each listed masking form is demonstrable as an executable example in the client's test area, and the replacement tests named in the developer justification exist.: fail — tests/test_redact.py has no quoted-value test and no exact assertion for `password==hunter2`; the cited replacements (`test_separator_bound_values_are_masked_whole`, `test_a_bare_label_binds_a_word_that_is_not_prose`, `test_russian_and_compound_labels_are_masked`, `test_benign_prose_is_displayed_unchanged`) are absent from the repository.
 
 ## Blocking
 
-- FR-9/AC-6/AC-7: a clause-initial secret label followed by an ordinary word is masked as if bound, so benign text such as `Password updated.` or `Secret rotation scheduled` is altered instead of displayed unchanged.
-- FR-4/FR-13/AC-10: the previously working whitespace form is no longer masked mid-sentence when the value is short and alphabetic (e.g. `the token abc`, `set password swordfish`), so the secret remains visible.
+- Quoted values lose their quotation marks: `redact('password: "hunter2 and more"')` yields `password: [redacted]`, not the required `password: "[redacted]"` (FR-1, FR-4, AC-6), and no test covers the form.
+- Repeated separators are altered: `redact('password==hunter2')` yields `password=[redacted]`, not `password==[redacted]` (FR-1, FR-3, AC-1), because the second `=` is treated as the start of the value.
+- The attributed test file does not exercise the quoted-value form or pin the `password==hunter2` rendering, and the replacement tests named in the developer justification are not present in the attributed change.
 
 ## Test Removals
 
 - none
 
-
+- tests/test_redact.py::RedactFormTest::test_a_colon_joined_value_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole
+- tests/test_redact.py::RedactFormTest::test_an_equals_joined_value_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_separator_bound_values_are_masked_whole
+- tests/test_redact.py::RedactFormTest::test_a_whitespace_joined_value_still_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_a_bare_label_binds_a_word_that_is_not_prose
+- tests/test_redact.py::RedactFormTest::test_a_russian_label_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked
+- tests/test_redact.py::RedactFormTest::test_a_compound_label_is_masked: replaced -> tests/test_redact.py::RedactFormTest::test_russian_and_compound_labels_are_masked
+- tests/test_redact.py::RedactFormTest::test_a_mentioned_label_is_left_alone: replaced -> tests/test_redact.py::RedactFormTest::test_benign_prose_is_displayed_unchanged
