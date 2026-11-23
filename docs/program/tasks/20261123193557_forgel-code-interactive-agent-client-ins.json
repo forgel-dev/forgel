@@ -266,10 +266,49 @@
     }
   ],
   "language": "ru",
-  "status": "running",
+  "status": "failed",
   "created_at": "2026-11-23T19:35:57+00:00",
   "started_at": "2026-11-23T20:18:20+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-23T20:19:48+00:00",
+  "result": {
+    "summary": "model call failed: model endpoint returned an empty answer",
+    "files_changed": [],
+    "commands": [],
+    "test_output": "",
+    "assumptions": [
+      "The work belongs to the client repository, whose contents match this feature and the surrounding conversation.",
+      "The requirements above follow the intent of the named feature document and the client's documented contract; the document itself remains the source of truth where it is more specific.",
+      "The interactive session becomes the default surface, while the one-shot usages stay available unchanged.",
+      "The reference product is Claude Code, as recorded in the project decisions."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 2,
+      "estimated_input_tokens": 39209,
+      "provider_input_tokens": 24981,
+      "provider_output_tokens": 126,
+      "cache_hit_tokens": 12288,
+      "cache_miss_tokens": 12693,
+      "estimated_tokens": 14748,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "bca76aad514b05773e504105e88e4c5f2bf3228b",
+      "head": "bca76aad514b05773e504105e88e4c5f2bf3228b",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "infrastructure",
+      "message": "model call failed: model endpoint returned an empty answer"
+    },
+    "report": "docs/program/agent/20261123193557_forgel-code-interactive-agent-client-ins.md"
+  },
   "request": "docs/program/requests/20261123193557152385_forgel-code-interactive-agent-client-instead-of-a-command-wr.md"
 }
