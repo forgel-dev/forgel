@@ -185,7 +185,7 @@ def _responses() -> list[str]:
         json.dumps(CRITIC),
         json.dumps(AGENT_WRITE),
         json.dumps(AGENT_DONE),
-        json.dumps({"files": ["greeting.py"]}),
+        json.dumps({"commit": ["greeting.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}),
         json.dumps(REVIEW),
     ]
 

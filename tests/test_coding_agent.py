@@ -187,7 +187,7 @@ class CodingAgentTest(unittest.TestCase):
                     "assumptions": ["The calculator is a plain module"],
                 }
             ),
-            json.dumps({"files": ["calc.py", "tests/test_calc.py"]}),
+            json.dumps({"commit": ["calc.py", "tests/test_calc.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}),
         ]
 
     def test_agent_implements_a_task(self) -> None:
@@ -296,7 +296,7 @@ class CodingAgentTest(unittest.TestCase):
                             "summary": "rewrote add",
                         }
                     ),
-                    json.dumps({"files": ["calc.py"]}),
+                    json.dumps({"commit": ["calc.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}),
                 ]
             ),
         ).run(self.project, current, log=lambda _m: None)
@@ -412,7 +412,7 @@ class CodingAgentTest(unittest.TestCase):
             json.dumps(
                 {"action": "done", "summary": "added the page"}
             ),
-            json.dumps({"files": ["page.py"]}),
+            json.dumps({"commit": ["page.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}),
         ]
         result = CodingAgent(
             self.settings,
@@ -579,7 +579,7 @@ class CodingAgentTest(unittest.TestCase):
             json.dumps(
                 {"action": "done", "summary": "inspected and done"}
             ),
-            json.dumps({"files": []}),
+            json.dumps({"commit": [".gitignore"], "revert": ["large.txt"], "ignore": [], "escalate": []}),
         ]
         result = CodingAgent(
             self.settings,
@@ -641,7 +641,7 @@ class CodingAgentTest(unittest.TestCase):
                 json.dumps(
                     {"action": "done", "summary": "added feature.py"}
                 ),
-                json.dumps({"files": ["feature.py"]}),
+                json.dumps({"commit": ["feature.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}),
             ]
         )
         run_daemon(
@@ -860,7 +860,7 @@ class CodingAgentTest(unittest.TestCase):
             for number in range(1, 6)
         ] + [
             json.dumps({"action": "done", "summary": "read"}),
-            json.dumps({"files": []}),
+            json.dumps({"commit": [".gitignore"], "revert": ["notes.txt"], "ignore": [], "escalate": []}),
         ]
         client = ScriptedModelClient(responses)
         result = CodingAgent(
@@ -1172,7 +1172,7 @@ class CodingAgentTest(unittest.TestCase):
                     }
                 ),
                 json.dumps({"action": "done", "summary": "finished"}),
-                json.dumps({"files": ["work.py"]}),
+                json.dumps({"commit": ["work.py", ".gitignore"], "revert": [], "ignore": [], "escalate": [{"path": "parallel.py", "reason": "unrelated"}]}),
             ]
         )
         result = CodingAgent(
@@ -1260,7 +1260,7 @@ class CodingAgentTest(unittest.TestCase):
                 ),
                 json.dumps({"action": "done", "summary": "finished"}),
                 json.dumps(
-                    {"files": ["work.py", "leftover/note.py"]}
+                    {"commit": ["work.py", "leftover/note.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}
                 ),
             ]
         )
@@ -1286,6 +1286,176 @@ class CodingAgentTest(unittest.TestCase):
             "",
         )
         self.assertIn("leftover/note.py", result.files_changed)
+
+    def test_completion_reverts_temporary_files(self) -> None:
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 1\n",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "probe.py",
+                        "content": "print('probe')\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+                json.dumps(
+                    {
+                        "commit": ["work.py", ".gitignore"],
+                        "revert": ["probe.py"],
+                        "ignore": [],
+                        "escalate": [],
+                    }
+                ),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertFalse((self.repo / "probe.py").exists())
+        self.assertNotIn("probe.py", result.files_changed)
+        tracked = _run(self.repo, "ls-files", "work.py").stdout.strip()
+        self.assertEqual(tracked, "work.py")
+
+    def test_completion_ignores_an_artifact(self) -> None:
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 1\n",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "debug.log",
+                        "content": "a log\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+                json.dumps(
+                    {
+                        "commit": ["work.py"],
+                        "revert": [],
+                        "ignore": ["debug.log"],
+                        "escalate": [],
+                    }
+                ),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        self.assertTrue((self.repo / "debug.log").exists())
+        tracked = _run(self.repo, "ls-files", "debug.log").stdout.strip()
+        self.assertEqual(tracked, "")
+        gitignore = (self.repo / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/debug.log", gitignore)
+        self.assertIn(".gitignore", result.files_changed)
+        status = _run(self.repo, "status", "--porcelain").stdout
+        self.assertNotIn("debug.log", status)
+
+    def test_completion_escalates_unrelated_work(self) -> None:
+        (self.repo / "other.py").write_text(
+            "other = 1\n", encoding="utf-8"
+        )
+        task = create_task(
+            self.layout,
+            "Add a work file",
+            ["Add a work file"],
+            ["The work file is committed"],
+            repo_id="main",
+            test_command=[],
+        )
+        update_task(
+            self.layout, task["id"], status="pending", result={}
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": "work.py",
+                        "content": "value = 1\n",
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+                json.dumps(
+                    {
+                        "commit": ["work.py", ".gitignore"],
+                        "revert": [],
+                        "ignore": [],
+                        "escalate": [
+                            {
+                                "path": "other.py",
+                                "reason": "unrelated parallel work",
+                            }
+                        ],
+                    }
+                ),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        data = stored.get("result") or {}
+        self.assertEqual(
+            [item["path"] for item in data.get("escalated") or []],
+            ["other.py"],
+        )
+        self.assertTrue((self.repo / "other.py").exists())
+        status = _run(self.repo, "status", "--porcelain").stdout
+        self.assertIn("other.py", status)
+        artifact = self.layout.artifact(
+            f"docs/program/escalations/{task['id']}.md"
+        )
+        self.assertTrue(artifact.exists())
+        stages = [
+            event["stage"]
+            for event in self.ledger.events(self.project_id)
+        ]
+        self.assertIn("escalation", stages)
 
     def test_a_retry_commits_files_left_by_an_earlier_attempt(self) -> None:
         leftover = self.repo / "leftover"
@@ -1314,7 +1484,7 @@ class CodingAgentTest(unittest.TestCase):
                 json.dumps(
                     {"action": "done", "summary": "already written"}
                 ),
-                json.dumps({"files": ["leftover/note.py"]}),
+                json.dumps({"commit": ["leftover/note.py", ".gitignore"], "revert": [], "ignore": [], "escalate": []}),
             ]
         )
         result = CodingAgent(

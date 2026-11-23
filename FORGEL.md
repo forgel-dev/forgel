@@ -76,6 +76,10 @@ the release policy changes.
   the change as a whole: every file the task needs is present, the change is
   internally consistent, and unrelated, temporary, debug or generated files
   are excluded (D-104).
+- **Every uncommitted product file is decided at completion (D-105):**
+  commit, revert (temporary/debug), ignore (artifact; a .gitignore rule is
+  committed), or escalate (unrelated; the planner decides). Nothing is
+  silently left or silently committed.
 - All committed project artifacts are English; local working notes outside
   the repository may be Russian.
 

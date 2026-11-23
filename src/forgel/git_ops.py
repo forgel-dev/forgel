@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -324,6 +325,69 @@ def _known_path(repo: Path, path: str) -> bool:
         return True
     result = _run(repo, "ls-files", "--error-unmatch", "--", path)
     return result.returncode == 0
+
+
+def is_tracked(repo: Path, path: str) -> bool:
+    """True when git tracks the path, even if it was deleted."""
+
+    result = _run(repo, "ls-files", "--error-unmatch", "--", path)
+    return result.returncode == 0
+
+
+def revert_paths(repo: Path, paths: list[str]) -> list[str]:
+    """Restore tracked files and delete untracked ones.
+
+    Used when the completion step decides a dirty path is temporary work that
+    must not survive: the file is restored to its committed state or removed.
+    """
+
+    handled: list[str] = []
+    for path in paths:
+        if is_tracked(repo, path):
+            _ok(repo, "checkout", "--", path)
+        else:
+            target = repo / path
+            try:
+                if target.is_dir():
+                    shutil.rmtree(target)
+                elif target.exists():
+                    target.unlink()
+            except OSError as exc:
+                raise GitOperationError(
+                    f"cannot remove {path}: {exc}"
+                ) from exc
+        handled.append(path)
+    return handled
+
+
+def add_ignores(repo: Path, paths: list[str]) -> list[str]:
+    """Add exact repository-relative paths to ``.gitignore``.
+
+    Returns the paths that needed a new entry. The file itself stays on disk;
+    only the ignore rule is a repository change.
+    """
+
+    file = repo / ".gitignore"
+    lines = (
+        file.read_text(encoding="utf-8").splitlines()
+        if file.is_file()
+        else []
+    )
+    added: list[str] = []
+    for path in paths:
+        ignored = _run(repo, "check-ignore", "-q", "--", path)
+        if ignored.returncode == 0:
+            continue
+        entry = "/" + path.lstrip("/")
+        if entry in lines:
+            continue
+        lines.append(entry)
+        added.append(path)
+    if added:
+        file.write_text(
+            "\n".join(lines).rstrip() + "\n", encoding="utf-8"
+        )
+    return added
 
 
 def commit_paths(repo: Path, paths: list[str], message: str) -> str:

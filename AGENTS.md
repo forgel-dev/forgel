@@ -54,6 +54,12 @@ shim and is not part of the public repository.
   is it internally consistent, and does it exclude unrelated, temporary,
   debug or generated files? A hard file list was the root of endless
   rejections: a correct but unlisted file was dropped or rejected forever.
+- **Every uncommitted product file gets one decision at completion (D-105):**
+  commit (needed), revert (temporary or debug work made for the task),
+  ignore (a useful artifact that must not be in the repository; add it to
+  `.gitignore` and commit the rule), or escalate (unrelated; leave it
+  uncommitted with a reason for the planner). No file is silently left or
+  silently committed.
 
 ## Prompt Rules (Non-Negotiable)
 

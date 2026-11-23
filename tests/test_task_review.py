@@ -716,7 +716,7 @@ class TaskReviewTest(unittest.TestCase):
                 {"action": "done", "summary": "added the note"}
             ),
             json.dumps(
-                {"files": ["note.md", ".gitignore"]}
+                {"commit": ["note.md", ".gitignore"], "revert": [], "ignore": [], "escalate": []}
             ),
             PASS,
         ]

@@ -413,6 +413,21 @@ def _window(
                 ),
             )
         )
+    escalations = layout.artifact("docs/program/escalations")
+    if escalations.is_dir():
+        blocks = []
+        for path in sorted(escalations.glob("*.md"))[-5:]:
+            text = _read(path)
+            if text.strip():
+                blocks.append(f"--- {path.name} ---\n{text[:4_000]}")
+        if blocks:
+            items.append(
+                Item(
+                    "escalations",
+                    "changes escalated to the planner",
+                    "\n\n".join(blocks),
+                )
+            )
     conversation = _conversation(layout)
     if conversation:
         items.append(

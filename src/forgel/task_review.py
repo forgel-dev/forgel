@@ -443,6 +443,12 @@ def _review_prompt(
         + (f" -> {item['replacement']}" if item["replacement"] else "")
         for item in test_removals(task)
     ) or "- none"
+    escalated_text = "\n".join(
+        f"- {item.get('path')} — "
+        f"{item.get('reason') or 'not related to the task'}"
+        for item in (result.get("escalated") or [])
+        if isinstance(item, dict) and item.get("path")
+    ) or "- none"
     return f"""Project and repository instructions:
 {instructions or "- none"}
 
@@ -464,6 +470,9 @@ Assumptions recorded:
 Files attributed to this task: {files}
 Commits attributed to this task: {commits}
 Worktree: {worktree}
+Escalated changes (unrelated to this task; left uncommitted for the planner,
+not part of the committed diff):
+{escalated_text}
 QA verdict: {qa.get('status', 'not run')} ({qa.get('runtime', 'n/a')})
 
 Acceptance checks:

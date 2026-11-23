@@ -655,23 +655,63 @@ class CodingAgent:
             }
         )
         commit_sha = ""
+        escalated: list[dict[str, str]] = []
         if status == "done":
             dirty_product = sorted(
                 path for path in dirty if _task_path(path)
             )
             if dirty_product:
-                selected = self._completion_files(
+                decision = self._completion_files(
                     task, layout, repo, changed, dirty_product, log
                 )
-                if selected is None:
+                if decision is None:
                     status = "failed"
                     failure_kind = "agent"
                     summary += (
-                        "; the completion step could not decide which "
-                        "uncommitted files belong to the task"
+                        "; the completion step could not decide what to do "
+                        "with every uncommitted file"
                     )
                 else:
-                    changed = sorted(selected)
+                    try:
+                        if decision["revert"]:
+                            git_ops.revert_paths(
+                                repo, decision["revert"]
+                            )
+                            summary += (
+                                "; reverted temporary files: "
+                                + ", ".join(decision["revert"][:10])
+                            )
+                        if decision["ignore"]:
+                            added = git_ops.add_ignores(
+                                repo, decision["ignore"]
+                            )
+                            summary += (
+                                "; kept out of the repository "
+                                "(in .gitignore): "
+                                + ", ".join(decision["ignore"][:10])
+                            )
+                            if added and ".gitignore" not in decision["commit"]:
+                                decision["commit"].append(".gitignore")
+                        escalated = list(decision["escalate"])
+                    except git_ops.GitOperationError as exc:
+                        status = "failed"
+                        failure_kind = "infrastructure"
+                        summary += (
+                            f"; could not apply the completion decision: {exc}"
+                        )
+                    else:
+                        changed = sorted(decision["commit"])
+                        if escalated:
+                            self._record_escalation(
+                                layout, project, task, escalated, log
+                            )
+                            summary += (
+                                "; escalated unrelated changes for the "
+                                "planner: "
+                                + ", ".join(
+                                    item["path"] for item in escalated[:10]
+                                )
+                            )
             if status == "done" and changed:
                 try:
                     commit_sha = git_ops.commit_paths(
@@ -748,6 +788,7 @@ class CodingAgent:
                 "context": context_stats,
                 "test_removals": list(merged_removals.values()),
                 "spec_issues": spec_issues,
+                "escalated": escalated,
                 "git": {
                     "base": base_sha,
                     "head": git_ops.head_sha(repo),
@@ -861,15 +902,20 @@ class CodingAgent:
         changed: Sequence[str],
         candidates: Sequence[str],
         log: Callable[[str], None],
-    ) -> list[str] | None:
-        """Let the model decide the task's coherent change set.
+    ) -> dict[str, Any] | None:
+        """Decide every uncommitted product file: commit, revert, ignore or escalate.
 
-        The model sees the task, its contract, the files the agent already
-        reported, and a bounded diff of every uncommitted product file. It
-        returns the subset that implements this task: a file the
-        specification's affected-files list omitted is included when the task
-        needs it, and unrelated or parallel work is excluded. Only that set is
-        committed (D-097).
+        The model reasons with the reviewer's own system prompt and context,
+        plus the uncommitted candidates and their diffs, so the two decisions
+        cannot diverge. Every candidate gets exactly one decision:
+
+        - ``commit``: needed for this task; it enters the commit and review.
+        - ``revert``: temporary or debug work made for this task; restore or
+          delete it.
+        - ``ignore``: useful but must not live in the repository; add it to
+          ``.gitignore`` and keep it on disk.
+        - ``escalate``: unrelated to this task; leave it uncommitted and give
+          a reason for the planner to decide separately.
         """
 
         previews: list[str] = []
@@ -897,11 +943,15 @@ class CodingAgent:
             if used >= 12_000:
                 break
         attributed = "\n".join(f"- {item}" for item in changed) or "- none"
-        candidates_text = "\n".join(f"- {item}" for item in candidates) or "- none"
-        # The completion step decides the same question the reviewer judges:
-        # what belongs to this task. It reasons with the reviewer's own system
-        # prompt and context, plus the uncommitted candidates and their diffs,
-        # so the two decisions cannot diverge.
+        candidates_text = (
+            "\n".join(
+                f"- {item} ("
+                + ("tracked" if git_ops.is_tracked(repo, item) else "untracked")
+                + ")"
+                for item in candidates
+            )
+            or "- none"
+        )
         from .task_review import SYSTEM_PROMPT as REVIEW_SYSTEM_PROMPT
         from .task_review import _review_prompt
 
@@ -910,11 +960,22 @@ class CodingAgent:
             ModelMessage(
                 "system",
                 REVIEW_SYSTEM_PROMPT
-                + "\n\nAlso return a `files` array in the same JSON object: "
-                "the candidate paths that belong to this task's change set. "
-                "Include a candidate the specification omitted when the task "
-                "needs it; exclude unrelated or parallel work. Use only "
-                "paths from the candidate list.",
+                + "\n\nAlso decide every uncommitted candidate exactly once, "
+                "in the same JSON object:\n"
+                '{"commit": ["path"], "revert": ["path"], '
+                '"ignore": ["path"], '
+                '"escalate": [{"path": "path", "reason": "why"}]}\n'
+                "- commit: needed for this task; it enters the commit and the "
+                "review diff.\n"
+                "- revert: temporary or debug work created for this task; it "
+                "is restored or deleted.\n"
+                "- ignore: useful but must not be in the repository (a log, a "
+                "build artifact); it is added to .gitignore and stays on disk.\n"
+                "- escalate: unrelated to this task; it stays uncommitted and "
+                "the reason lets the planner decide separately (a task of its "
+                "own, or removal).\n"
+                "Every candidate must appear exactly once. An ignored path "
+                "must be untracked. Never omit a candidate.",
             ),
             ModelMessage(
                 "user",
@@ -938,20 +999,137 @@ class CodingAgent:
             return None
         objects = json_objects(raw)
         data = objects[-1] if objects else None
-        files = data.get("files") if isinstance(data, dict) else None
-        if not isinstance(files, list):
+        if not isinstance(data, dict):
             return None
         allowed = set(candidates)
-        selected: list[str] = []
-        for item in files:
-            path = _task_path(str(item))
-            if path in allowed and path not in selected:
-                selected.append(path)
-        log(
-            f"[agent] {task['id']}: completion selected "
-            f"{len(selected)} of {len(candidates)} uncommitted file(s)"
+
+        def _paths(value: Any) -> list[str] | None:
+            if not isinstance(value, list):
+                return None
+            result: list[str] = []
+            for item in value:
+                path = _task_path(str(item))
+                if path in allowed and path not in result:
+                    result.append(path)
+            return result
+
+        def _escalations(value: Any) -> list[dict[str, str]] | None:
+            if not isinstance(value, list):
+                return None
+            result: list[dict[str, str]] = []
+            seen: set[str] = set()
+            for item in value:
+                if isinstance(item, dict):
+                    path = _task_path(str(item.get("path") or ""))
+                    reason = str(item.get("reason") or "").strip()
+                else:
+                    path = _task_path(str(item))
+                    reason = ""
+                if path in allowed and path not in seen:
+                    seen.add(path)
+                    result.append({"path": path, "reason": reason})
+            return result
+
+        commit = _paths(data.get("commit"))
+        revert = _paths(data.get("revert"))
+        ignore = _paths(data.get("ignore"))
+        escalate = _escalations(data.get("escalate"))
+        if (
+            commit is None
+            or revert is None
+            or ignore is None
+            or escalate is None
+        ):
+            return None
+        assigned = (
+            commit
+            + revert
+            + ignore
+            + [item["path"] for item in escalate]
         )
-        return selected
+        if len(assigned) != len(set(assigned)) or set(assigned) != allowed:
+            log(
+                f"[agent] {task['id']}: the completion step did not decide "
+                "every uncommitted file"
+            )
+            return None
+        tracked_ignored = [
+            path for path in ignore if git_ops.is_tracked(repo, path)
+        ]
+        if tracked_ignored:
+            log(
+                f"[agent] {task['id']}: cannot ignore tracked files: "
+                + ", ".join(tracked_ignored[:10])
+            )
+            return None
+        log(
+            f"[agent] {task['id']}: completion decided "
+            f"{len(commit)} commit, {len(revert)} revert, "
+            f"{len(ignore)} ignore, {len(escalate)} escalate"
+        )
+        return {
+            "commit": commit,
+            "revert": revert,
+            "ignore": ignore,
+            "escalate": escalate,
+        }
+
+    def _record_escalation(
+        self,
+        layout: ProjectLayout,
+        project: Mapping[str, Any],
+        task: Mapping[str, Any],
+        escalated: Sequence[Mapping[str, str]],
+        log: Callable[[str], None],
+    ) -> None:
+        """Write the out-of-scope changes down for the planner to decide."""
+
+        task_id = str(task["id"])
+        lines = [
+            "# Escalated changes",
+            "",
+            f"- Task: `{task_id}`",
+            f"- Title: {task.get('title') or task_id}",
+            "",
+            "These files stayed uncommitted because they are unrelated to the "
+            "task. The planner decides: a separate task when the change is "
+            "needed, or removal when it is unnecessary, partial or harmful.",
+            "",
+            "| Path | Reason |",
+            "|---|---|",
+        ]
+        for item in escalated:
+            reason = str(item.get("reason") or "").strip() or (
+                "not related to the task"
+            )
+            lines.append(f"| `{item['path']}` | {reason} |")
+        path = layout.artifact(
+            f"docs/program/escalations/{task_id}.md"
+        )
+        write_text(path, "\n".join(lines) + "\n")
+        try:
+            self.ledger.append_event(
+                str(project["id"]),
+                "escalation",
+                status="recorded",
+                payload={
+                    "task": task_id,
+                    "files": [item["path"] for item in escalated],
+                    "reasons": [
+                        str(item.get("reason") or "")
+                        for item in escalated
+                    ],
+                },
+                generation=self.ledger.current_generation(
+                    str(project["id"])
+                ),
+            )
+        except Exception:  # noqa: BLE001 - the artifact is the record
+            pass
+        log(
+            f"[agent] {task_id}: escalated {len(escalated)} unrelated "
+            "file(s) for the planner"
+        )
 
     def _converse(
         self,

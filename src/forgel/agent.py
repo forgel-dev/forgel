@@ -784,6 +784,24 @@ def build_context(
             )
         parts.append("Releases:\n" + "\n".join(lines))
 
+    escalations_dir = layout.artifact("docs/program/escalations")
+    if escalations_dir.is_dir():
+        blocks = []
+        for path in sorted(escalations_dir.glob("*.md"))[-5:]:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if text.strip():
+                blocks.append(
+                    f"--- {path.name} ---\n{text[:4_000]}"
+                )
+        if blocks:
+            parts.append(
+                "Escalated changes awaiting a planning decision:\n"
+                + "\n\n".join(blocks)
+            )
+
     plans_dir = layout.artifact("docs/program/plans")
     plans = (
         [

@@ -119,6 +119,10 @@ Small fixes (typos, broken links) can go straight to a PR.
   There is no "Affected Files" section (D-104). The developer and the reviewer
   judge the change as a whole: every needed file present, internally
   consistent, no unrelated, temporary, debug or generated files.
+- **Every uncommitted product file is decided at completion (D-105):**
+  commit (needed), revert (temporary/debug), ignore (artifact; the .gitignore
+  rule is committed), or escalate (unrelated; the planner decides a separate
+  task or removal). Nothing is silently left or silently committed.
 - English, imperative mood, subject at most 72 characters.
 - The body explains **why**, not what the diff already shows.
 - Sign off with `-s`.
