@@ -1,30 +1,130 @@
 {
   "id": "20261124053445_release-audit-sensitive-markers-is-engli",
   "title": "Release audit: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `cré",
-  "spec": "",
+  "spec": "docs/program/specs/20261124053445_release-audit-sensitive-markers-is-engli.md",
   "summary": "Localize the sensitive-operation marker set for all supported languages, including multi-word terms, and test that these phrases never become `say` and only point to the explicit command.",
   "requirements": [
-    "`SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `crée un projet`, `crear un proyecto`, `définir le mot de passe` or `cambiar la configuración` are not refused or pointed to explicit commands; they fall through to `say` and are sent to the engine's project agent. The explicit-action guarantee is therefore not enforced for languages the session now accepts."
+    "A free-text input that expresses a sensitive explicit action is refused and redirected in every language the session accepts, at minimum English, Russian, French and Spanish.",
+    "Sensitive explicit actions covered are at least: creating or scaffolding a project, setting or defining credentials such as a password, token or key, and changing configuration or settings.",
+    "For each of those action families the common French and Spanish phrasings are detected, including 'crée un projet', 'crear un proyecto', 'définir le mot de passe' and 'cambiar la configuración'.",
+    "Detection within a supported language covers ordinary variation in verb form and word order for those actions and is not limited to one fixed phrase per action.",
+    "Detection is insensitive to letter case, accents and diacritics, and to leading, trailing or repeated whitespace, so a French or Spanish phrase written without diacritics is detected as well.",
+    "A refused input is never passed onward: nothing derived from it reaches the engine's free-text entry.",
+    "The refusal tells the user that the action is not performed from free text and points to the explicit commands that perform it, in the same style as the refusal the session already produces for sensitive English and Russian requests.",
+    "English and Russian detection keeps producing exactly the results it produces today for the same inputs.",
+    "Free-text input that does not express a sensitive action still reaches the engine unchanged in all four languages, including ordinary French and Spanish conversation.",
+    "Refusal and forwarding decisions are deterministic for the same input within a session.",
+    "The existing automated tests keep their expectations and pass."
   ],
   "acceptance": [
-    "The release audit finding is resolved: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `crée un projet`, `crear un proyecto`, `définir le mot de passe` or `cambiar la configuración` are not refused or pointed to explicit commands; they fall through to `say` and are sent to the engine's project agent. The explicit-action guarantee is therefore not enforced for languages the session now accepts.",
-    "Existing tests pass"
+    "Typing 'crée un projet' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+    "Typing 'crear un proyecto' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+    "Typing 'définir le mot de passe' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+    "Typing 'cambiar la configuración' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+    "Low-variation forms of the same French and Spanish requests — a different verb form, a different word order, and the same text written without diacritics — are also refused and pass nothing onward.",
+    "The refusal answer names the explicit commands the user can use for the requested action and reads in the same style as the existing sensitive-request refusal.",
+    "Sensitive requests phrased in English and in Russian are refused exactly as before, and the pre-existing test expectations still hold.",
+    "Ordinary French and Spanish conversation, for example a greeting or a question unrelated to projects, passwords or configuration, is still forwarded as free text and answered normally.",
+    "During the refused cases no outgoing request derived from the refused input exists, as observed in the automated tests."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
   "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
   "release_class": "minor",
   "order": 0,
-  "checks": [],
+  "checks": [
+    {
+      "criterion": "Typing 'crée un projet' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "Typing 'crear un proyecto' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "Typing 'définir le mot de passe' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "Typing 'cambiar la configuración' in an interactive session produces the refusal-and-redirect answer and passes nothing onward.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "Low-variation forms of the same French and Spanish requests are also refused and pass nothing onward.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "The refusal answer names the explicit commands the user can use for the requested action and reads in the same style as the existing sensitive-request refusal.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Sensitive requests phrased in English and in Russian are refused exactly as before, and the pre-existing test expectations still hold.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "Ordinary French and Spanish conversation is still forwarded as free text and answered normally.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "During the refused cases no outgoing request derived from the refused input exists.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    }
+  ],
   "external_dependencies": [],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-24T05:34:45+00:00",
-  "started_at": "",
+  "started_at": "2026-11-24T10:00:00+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
