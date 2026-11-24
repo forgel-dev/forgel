@@ -1,0 +1,81 @@
+{
+  "id": "20261124131129_release-audit-forgel-code-cli-py-changes",
+  "title": "Release audit: `forgel_code/cli.py` changes the argparse description to include `Run it without",
+  "spec": "docs/program/specs/20261124131129_release-audit-forgel-code-cli-py-changes.md",
+  "summary": "Restore the original parser description so `forgel-code --help` output is byte-for-byte unchanged; interactive documentation belongs in README/CHANGELOG rather than in existing help output. Keep a test that pins the one-shot help output if the contract requires it.",
+  "requirements": [
+    "The help output of the command line program contains the same description text as the previous release, with no added sentence about an interactive session and no other wording change.",
+    "Running the command line program with no command still opens the interactive session.",
+    "Every existing one-shot usage produces the same output as in the previous release, including successful runs, failure messages and exit statuses.",
+    "No automated test asserts the presence of the removed interactive-session sentence in the help output.",
+    "The change set contains no unrelated, temporary or generated files."
+  ],
+  "acceptance": [
+    "The help output of the command line program no longer contains the sentence advertising the interactive session.",
+    "The help output's description text is identical to the previous release, confirmed by comparison with the previously released text and by review that no other wording was touched.",
+    "Running the program with no command still opens the interactive session.",
+    "All tests in the project's test suite pass.",
+    "The change set contains only the restoration of the description wording and any test adjustment needed by it."
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "pytest"
+  ],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [
+    {
+      "criterion": "The help output no longer contains the sentence advertising the interactive session.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-c",
+        "import subprocess,sys;out=subprocess.run([sys.executable,'-m','forgel_code','--help'],capture_output=True,text=True).stdout;sys.exit(1 if 'Run it without a command' in out else 0)"
+      ]
+    },
+    {
+      "criterion": "The help output's description text is identical to the previous release with no other wording change.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Running the program with no command still opens the interactive session.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_interactive.py"
+      ]
+    },
+    {
+      "criterion": "All tests in the project's test suite pass.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest"
+      ]
+    },
+    {
+      "criterion": "The change set contains only the restoration of the description wording and any test adjustment needed by it.",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-24T13:11:29+00:00",
+  "started_at": "2026-11-24T13:11:29+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}

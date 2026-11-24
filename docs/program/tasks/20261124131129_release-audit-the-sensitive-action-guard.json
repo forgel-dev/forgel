@@ -1,0 +1,30 @@
+{
+  "id": "20261124131129_release-audit-the-sensitive-action-guard",
+  "title": "Release audit: The sensitive-action guard is incomplete for required explicit actions. `SENSITI",
+  "spec": "",
+  "summary": "Extend sensitive-action detection with verb-plus-object handling for English and Russian, including the missing key, config, and scaffold terms, and add tests that these requests are refused and produce no outgoing engine `say` request while ordinary mentions remain forwarded.",
+  "requirements": [
+    "The sensitive-action guard is incomplete for required explicit actions. `SENSITIVE_MARKERS`, `CREDENTIAL_NOUNS`, `CONFIG_NOUNS` and the create/change stems do not cover bare `key`/`ключ`, `config`, or `scaffold`, so free-text requests such as `change config`, `create a key`, `создай ключ`, or `scaffold a project` are not refused and can be sent to the engine as ordinary `say` requests. This violates the requirement that setting key material and changing configuration or creating/scaffolding a project never happen from free text alone. No tests assert no-passthrough for these forms."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The sensitive-action guard is incomplete for required explicit actions. `SENSITIVE_MARKERS`, `CREDENTIAL_NOUNS`, `CONFIG_NOUNS` and the create/change stems do not cover bare `key`/`ключ`, `config`, or `scaffold`, so free-text requests such as `change config`, `create a key`, `создай ключ`, or `scaffold a project` are not refused and can be sent to the engine as ordinary `say` requests. This violates the requirement that setting key material and changing configuration or creating/scaffolding a project never happen from free text alone. No tests assert no-passthrough for these forms.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-24T13:11:29+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
