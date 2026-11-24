@@ -1,0 +1,114 @@
+{
+  "id": "20261124123936_release-audit-the-redactor-recognizes-th",
+  "title": "Release audit: The redactor recognizes the French password label only as the whitespace-separat",
+  "spec": "docs/program/specs/20261124123936_release-audit-the-redactor-recognizes-th.md",
+  "summary": "Treat the joined forms as the French password label: fold case and diacritics and accept whitespace, `-` and `_` between the words in `_secret_label`/`_phrase_end` (or normalize the label before matching). Add direct and session-level tests asserting that a value following `mot_de_passe`, `mot-de-passe` or `MOT_DE_PASSE` is absent from both the displayed and the retained text.",
+  "requirements": [
+    "The French password label is recognized as a secret label when written as separate words, when joined with underscores, and when joined with hyphens, regardless of letter case.",
+    "A value adjacent to a joined French password label is redacted with the same placeholder used for other secret values and is not present in the rendered message nor in the retained session text.",
+    "Redaction of a joined French password label works with the value forms and separators already handled for the spaced form: delimited assignment, colon or equals separator, quoted values, bare values, and a label wrapped in quotes or brackets.",
+    "A joined French password label with no adjacent value does not cause any part of the surrounding message to be redacted.",
+    "All previously supported secret labels in every supported language continue to be redacted exactly as before.",
+    "The full test suite passes."
+  ],
+  "acceptance": [
+    "For a message containing a hyphen-joined French password label followed by a value, the rendered output and the retained session text contain the redaction placeholder instead of the value.",
+    "For a message containing an underscore-joined French password label followed by a value, the rendered output and the retained session text contain the redaction placeholder instead of the value.",
+    "The spaced French password label and all other supported secret labels still redact as before.",
+    "A joined French password label without an adjacent value leaves the message unchanged.",
+    "Quoted and bracketed joined French password labels are redacted the same way as their spaced equivalents.",
+    "The full test suite passes."
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [
+    {
+      "criterion": "For a message containing a hyphen-joined French password label followed by a value, the rendered output and retained session text contain the redaction placeholder instead of the value.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact_french_spanish.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "For a message containing an underscore-joined French password label followed by a value, the rendered output and the retained session text contain the redaction placeholder instead of the value.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact_french_spanish.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The spaced French password label and all other supported secret labels still redact as before.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact.py",
+        "tests/test_redact_french_spanish.py",
+        "tests/test_localization.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A joined French password label without an adjacent value leaves the message unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact_french_spanish.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Quoted and bracketed joined French password labels are redacted the same way as their spaced equivalents.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact_quoted_bare.py",
+        "tests/test_redact_french_spanish.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The full test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    }
+  ],
+  "external_dependencies": [],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-24T12:39:36+00:00",
+  "started_at": "2026-11-24T12:39:36+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}
