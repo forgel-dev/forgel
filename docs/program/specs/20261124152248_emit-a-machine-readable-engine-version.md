@@ -11,23 +11,23 @@
 | Repository | `main` |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-24T15:22:48+00:00 |
+| Created | 2026-11-24T18:08:23+00:00 |
 | Source | Plan `20261124145600_make-forgel-and-forgel-code-install-and-` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-The engine knows its own version only as human-readable text, so an installer or the Forgel Code client cannot reliably read and compare the installed engine version against another version without parsing prose. This blocks the later version-comparison and startup-check work.
+To install, upgrade or refuse to run, a program must first learn which Forgel engine is installed. Today the engine offers no report of its own version that another program can read directly, so the only way to compare versions is to interpret human-readable text. A later part of the milestone needs a strictly-newer comparison and a startup minimum-version decision, and both depend on the engine stating its version in a form a program can read. At the same time, the correctness of the install instructions in the user documentation is currently decided by an automated check that reads that text; the project treats documentation as text judged by reading, so that check goes and nothing replaces it.
 
-**Outcome:** On request the engine reports its own version as stable machine-readable output that a program can read and order-compare directly, without a project, a session, a model, a sandbox or a network connection; the value agrees with the version the engine declares elsewhere, and every existing human-readable report is unchanged.
+**Outcome:** Another program can obtain the engine's own version directly, without interpreting human-readable text, and that value is the version the release declares; the report works on a machine with nothing set up and leaves nothing behind. The verification run no longer contains any automated check of the documentation text about installation, no such check replaced it, and every other check and test still passes unchanged.
 
 ## Product Intent
 
-Forgel (the engine) and Forgel Code (the client) must install and run as one working pair: the pair needs a trustworthy way to compare engine versions so the client can refuse a too-old engine and the combined installer can decide whether an installed engine is worth replacing.
+Make Forgel and Forgel Code install and run as one working pair: the engine must state its own identity so the Forgel Code installer can compare versions, install only a strictly newer engine, and refuse a missing or too-old one with a clear message instead of an unexplained executable-not-found failure. Documentation stays text, judged by reading, so a wording change in the install instructions can never break the verification run.
 
 ## User Experience
 
-A person installing or updating the pair never has to read a version string out of prose: the installer and the client obtain the engine's version as data, compare it, and act on the comparison, so the eventual messages about a missing or out-of-date engine are actionable rather than an unexplained failure.
+A person pairing the two tools never has to read the engine's version as prose and interpret it: the installer reads it and decides, and a missing or too-old engine becomes an explicit decision. Nobody has to keep the install instructions and an automated check of those instructions in step; the instructions are accepted by reading them, and a correction to their wording is a documentation decision, not a build failure.
 
 ## Roadmap
 
@@ -35,79 +35,82 @@ A person installing or updating the pair never has to read a version string out 
 
 ## Goals
 
-- Give the engine a stable machine-readable version report that a program, not a human, consumes.
-- Keep the reported version identical to the version the engine already declares and shows.
-- Make the report usable off a fresh machine, with no configuration, project or network.
+- Another program can obtain the engine's version directly and compare it with another version without interpreting human-readable text.
+- The version a caller obtains is the one the release declares.
+- The engine states its version on a machine with nothing set up, without side effects and without model or network access.
+- The verification run contains no automated check of the documentation text, and every other check still passes unchanged.
 
 ## Non-Goals
 
-- Installing anything, including the engine installer.
-- Comparing two engine versions or enforcing a minimum engine version.
-- Any change in the client repository, the combined install mode or the startup check.
-- Changing the declared version value, tagging, releasing or promising a release version.
-- Adding new machine-readable reports for commands other than the version.
-- Changing the existing human-readable output of any command.
-- Documentation work beyond what the changed behaviour requires.
+- The Forgel Code installer's combined install mode, its idempotent comparison and its strictly-newer rule.
+- The declared minimum supported engine version and the startup check that turns a missing or too-old engine into an actionable message.
+- Rewording, correcting or extending the install instructions in the user documentation.
+- Changing the behaviour of the installer or of the client.
+- Changing any existing program-facing report or any human-readable output of the engine.
+- Deciding a new human-readable rendering of the version.
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | The base parameterized command line (`forgel <command>`) stays in the engine. | D-003, user 2026-11-16 18:31 |
-| — | The single free-text engine entry point is free-text `say`; every client-facing operation is a parameterized command with an optional single JSON object on stdout; the active project is an engine-side session with the default key `local`. | D-007, user 2026-11-16 18:34 |
-| — | The work happens in order: machine-readable engine commands first, then the client repository, then removal of the replaced chat mode from the engine. | D-006, user 2026-11-16 18:34 |
+| — | Every client-facing operation is a parameterized engine command whose result another program can read; the single free-text entry point stays the say operation. | User decision log, D-007 (accepted proposal, 2026-11-16 18:34) |
+| — | The base parameterized command line stays in the engine; the separate client replaces only the interactive chat mode. | User decision log, D-003 (accepted proposal, 2026-11-16 18:34) |
+| — | The client imports nothing from the engine, so anything the client needs from the engine must be obtainable as the result of an engine command. | User decision log, D-004 (accepted proposal, 2026-11-16 18:34) |
+| — | The work happens in order: machine-readable engine commands first, then the client repository and the console move, then removal of the replaced chat mode from the engine. | User decision log, D-006 (accepted proposal, 2026-11-16 18:34) |
 
 ## Functional Requirements
 
-- **FR-1**: On request the engine reports its own version in a machine-readable form and exits successfully.
-- **FR-2**: The machine-readable form is a single JSON object on standard output, in the same convention the engine's other client-facing commands use, and standard output carries no other content.
-- **FR-3**: On a successful report nothing is written to standard error and nothing is written to the user's project, home or working tree.
-- **FR-4**: The machine-readable report is obtainable in an otherwise unconfigured environment with no project, no session, no model access, no sandbox and no network, and succeeds there.
-- **FR-5**: The version value carried by the machine-readable report is identical to the version the engine declares for itself and to the version shown by the human-readable reports; the task makes these agree and does not change the declared value.
-- **FR-6**: The version value is a dotted sequence of at least three non-negative integers, optionally followed by a pre-release or build suffix, so that two engine versions can be ordered by their numeric components alone.
-- **FR-7**: The machine-readable report names the engine whose version it is, so a reader cannot mistake a client version for an engine version.
-- **FR-8**: Asking for the version the human-readable way continues to work and shows the same version value as before this change.
-- **FR-9**: The report is repeatable: two consecutive requests in the same environment produce the same version value, and the second one behaves identically to the first.
-- **FR-10**: The report needs no new third-party dependency.
+- **FR-1**: On request, the engine states its own version in a form another program reads directly, without interpreting human-readable text.
+- **FR-2**: The stated version is the version the release declares; the engine does not keep a second, independently editable statement of that version that can disagree with it.
+- **FR-3**: The version is expressed so that two versions can be compared component by component.
+- **FR-4**: The version can be obtained on a machine with no project, no stored configuration, no model credential, no pre-existing user data and no network, from any working directory, and obtaining it leaves no state behind.
+- **FR-5**: Obtaining the version neither starts model work nor reads or changes project, task or account records.
+- **FR-6**: When the version cannot be stated, the failure is signalled to the caller as a failure and carries its reason in the same place as the engine's other program-facing reports.
+- **FR-7**: The engine's other program-facing reports and its human-readable outputs keep their current behaviour.
+- **FR-8**: The automated check that reads the install instructions in the user documentation is removed, together with any helper data that reproduces the documentation text for that check.
+- **FR-9**: No other automated check of the documentation text is added in its place: whether the documented install instructions are correct is decided by reading the text, not by an automated check.
+- **FR-10**: No other check or test is removed, weakened or relaxed; the behaviour of the installer and of the client stays as it is.
 
 ## User Stories
 
-- As the Forgel Code installer or client, I want to obtain the engine's version as data, so that I can compare versions without parsing prose.
-- As a maintainer, I want one source of truth for the version, so that the human-readable and machine-readable reports never disagree.
-- As an operator on a fresh machine, I want the version report to work before anything is configured, so that install and diagnosis do not depend on project state.
+- As the Forgel Code installer I want to learn the installed engine's version directly so that I can compare versions and install only a strictly newer engine.
+- As the Forgel Code client I want the engine's version to come from an engine command result so that I keep importing nothing from the engine.
+- As a Forgel Code user I want the pairing decision to rest on the engine's real version so that a too-old engine is reported clearly instead of failing with an unexplained executable-not-found error.
+- As a maintainer I want the install instructions judged by reading them so that a wording change never breaks the verification run.
+- As a maintainer I want every other check to stay exactly as strict as before so that removing the documentation check hides no real regression.
 
 ## Acceptance Criteria
 
-- **AC-1**: A single request to the engine for its version in machine-readable form yields one JSON object on standard output, parseable without preprocessing, with nothing else emitted on standard output, nothing on standard error, and a successful exit status.
-- **AC-2**: A reader taking the version value from that object obtains the same string as the engine's own declared version and as the human-readable version report.
-- **AC-3**: The version value splits into at least three numeric components and can be ordered against another value of the same shape without reading prose.
-- **AC-4**: The same request run in a clean environment with no project, no session, no model configuration and no network access still yields the version report and succeeds.
-- **AC-5**: After the request, no file was created or modified in the working directory, the project artifacts or the user's Forgel home.
-- **AC-6**: The existing human-readable version output is unchanged in content and exit status.
-- **AC-7**: Automated tests exercise the machine-readable report's shape, its value agreement and its availability without configuration; the project test suite passes.
+- **AC-1**: A program obtains the engine's own version directly, without interpreting human-readable text, and the value equals the version the release declares.
+- **AC-2**: The version is obtainable on a machine with no project, no stored configuration, no model access and no network, from any working directory, and obtaining it leaves nothing behind.
+- **AC-3**: The verification run contains no check that reads the documentation text about installation.
+- **AC-4**: All remaining checks pass unchanged.
+- **AC-5**: The documented install instructions are accepted or returned for correction on the basis of reading their text.
 
 ## Scope Boundaries
 
-- A stable machine-readable report of the engine's own version, produced on request.
-- The reported version agrees with the version the engine declares for itself and with what the human-readable reports show.
-- The report is available in a fresh, unconfigured environment and needs no project, session, model, sandbox, ledger content or network access.
-- The report writes nothing to the user's project, home or working tree and produces no partial or duplicated output.
-- Automated coverage of the machine-readable report's shape and value.
-- Installing anything, including the engine installer.
-- Comparing two engine versions or enforcing a minimum engine version.
-- Any change in the client repository, the combined install mode or the startup check.
-- Changing the declared version value, tagging, releasing or promising a release version.
-- Adding new machine-readable reports for commands other than the version.
-- Changing the existing human-readable output of any command.
-- Documentation work beyond what the changed behaviour requires.
+- The engine states its own version in a form another program reads directly and compares.
+- The stated version is the version the release declares, not a second statement kept separately that can drift.
+- Versions are expressed so that two of them can be compared component by component.
+- Obtaining the version works with nothing set up: no project, no stored configuration, no model access, no network, any working directory, and no state left behind.
+- Obtaining the version neither starts model work nor reads or changes project, task or account records.
+- The existing program-facing reports and human-readable outputs keep their current behaviour and wording.
+- Removal of the automated check that reads the install instructions in the user documentation, together with any helper data that reproduced that text for the check.
+- Assurance that no automated check of the documentation text replaced it, and that no other check or test was removed, weakened or relaxed.
+- The Forgel Code installer's combined install mode, its idempotent comparison and its strictly-newer rule.
+- The declared minimum supported engine version and the startup check that turns a missing or too-old engine into an actionable message.
+- Rewording, correcting or extending the install instructions in the user documentation.
+- Changing the behaviour of the installer or of the client.
+- Changing any existing program-facing report or any human-readable output of the engine.
+- Deciding a new human-readable rendering of the version.
 
 ## Risks
 
-- The machine-readable report may be built from a second version literal that drifts from the declared one, making the installer's comparison wrong; the single-source requirement and its acceptance criterion guard against this.
-- The engine has no published tag yet, so a consumer cannot rely on a released version string; this task makes the local report reliable and does not solve the distribution question, which belongs to the installer tasks.
-- The request could accidentally take the configured startup path and fail in a clean environment; the acceptance criterion for the clean environment exposes this.
-- If the machine-readable variant is added without keeping the existing human-readable output intact, installed scripts that grep the old text break.
-- A version suffix convention beyond dotted integers could make ordering ambiguous for a client that assumes plain numeric components; this is recorded as an assumption and left to the comparison tasks.
+- The engine states its version in more than one place today; if the report and the release disagree, the installer compares against the wrong value and the pairing decision is wrong.
+- The automated check of the install instructions may be entangled with unrelated assertions; removing it carelessly can remove or weaken other verification, which this task forbids.
+- Obtaining the version that loads configuration, touches stored data or waits on anything would fail before a machine has been set up, which is exactly where the installer needs it.
+- Judging the install instructions by reading is slower and less mechanical than a check; a reviewer may accept text an automated check would have caught, and the project accepts that trade deliberately.
+- This task alone does not deliver the pairing behaviour the milestone promises: the combined install mode, the strictly-newer comparison and the startup minimum-version message remain in later tasks.
 
 ## Open Questions
 
@@ -115,19 +118,23 @@ A person installing or updating the pair never has to read a version string out 
 
 ## Assumptions
 
-- The machine-readable form is requested by the same flag convention the engine already uses for its other client-facing commands, so the version report has a machine-readable variant of the version request rather than a new top-level command family.
-- The version is carried as the value of a top-level member named "version" inside the single JSON object, and the object also carries a success indication and the identity of the engine; the remaining members follow the existing client-facing shape.
-- The request is served by the installed engine binary itself, not by a separate helper program.
-- The existing human-readable version output is already produced by the engine and only needs to stay unchanged.
-- Version ordering is by numeric components; suffix handling beyond treating a suffixed version as ordered relative to its unsuffixed core is left for the tasks that compare versions.
+- The owner's correction is binding for this task: removing the automated check of the install instructions belongs to this change even though the task is about the engine's version.
+- The version statement is one of the engine's program-facing reports, so it follows their existing conventions instead of inventing new ones.
+- A caller may also ask for the version in the human-readable form the engine already uses, unchanged in behaviour.
+- The version the release declares is the single authority; everything that reports or compares a version takes it from there.
+- The documentation criteria are judged by reading, as the project requires, so they are review-only and carry no automated check.
 
 ## Related Documents
 
 - README.md
-- pyproject.toml
+- PLAN.md
 - FORGEL.md
 - AGENTS.md
+- CONTRIBUTING.md
+- docs/program/commands.md
 
 ## Revision History
 
-- 1 — initial specification for emitting a machine-readable engine version.
+- v3 - validator feedback applied: the specification is treated as documentation-bearing, so every acceptance criterion carries a review-only check and the task declares no test command; every technical detail (output shapes, naming, packaging, code and paths) removed from requirements, acceptance, constraints, goals, stories, risks and assumptions.
+- v2 - owner correction applied: the automated check that reads the install instructions in the user documentation, and the helper data that reproduced that text for it, are removed; no automated check of documentation text replaces it; every other check stays untouched.
+- v1 - initial specification of the machine-readable engine version report.

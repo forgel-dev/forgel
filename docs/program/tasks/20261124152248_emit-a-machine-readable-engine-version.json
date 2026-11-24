@@ -3,17 +3,36 @@
   "title": "Emit a machine-readable engine version",
   "spec": "docs/program/specs/20261124152248_emit-a-machine-readable-engine-version.md",
   "summary": "The `forgel` engine reports its version in a stable machine-readable form that an installer or a client can read and compare without parsing prose. This is the foundation for the version comparison and the startup check in later tasks.",
-  "requirements": [],
-  "acceptance": [],
-  "constraints": [],
-  "repo_id": "main",
-  "test_command": [
-    "python",
-    "-m",
-    "unittest",
-    "discover",
-    "-q"
+  "requirements": [
+    "On request, the engine states its own version in a form another program reads directly, without interpreting human-readable text.",
+    "The stated version is the version the release declares; the engine does not keep a second, independently editable statement of that version that can disagree with it.",
+    "The version is expressed so that two versions can be compared component by component.",
+    "The version can be obtained on a machine with no project, no stored configuration, no model credential, no pre-existing user data and no network, from any working directory, and obtaining it leaves no state behind.",
+    "Obtaining the version neither starts model work nor reads or changes project, task or account records.",
+    "When the version cannot be stated, the failure is signalled to the caller as a failure and carries its reason in the same place as the engine's other program-facing reports.",
+    "The engine's other program-facing reports and its human-readable outputs keep their current behaviour.",
+    "The automated check that reads the install instructions in the user documentation is removed, together with any helper data that reproduces the documentation text for that check.",
+    "No other automated check of the documentation text is added in its place: whether the documented install instructions are correct is decided by reading the text, not by an automated check.",
+    "No other check or test is removed, weakened or relaxed; the behaviour of the installer and of the client stays as it is."
   ],
+  "acceptance": [
+    "A program obtains the engine's own version directly, without interpreting human-readable text, and the value equals the version the release declares.",
+    "The version is obtainable on a machine with no project, no stored configuration, no model access and no network, from any working directory, and obtaining it leaves nothing behind.",
+    "The verification run contains no check that reads the documentation text about installation.",
+    "All remaining checks pass unchanged.",
+    "The documented install instructions are accepted or returned for correction on the basis of reading their text."
+  ],
+  "constraints": [
+    "The engine states the released version; it never invents, rounds or renumbers a version of its own.",
+    "The version is obtainable at no cost and with no access: no project, no stored configuration, no credential, no network.",
+    "The engine's existing conventions for program-facing reports are reused, not redefined by this task.",
+    "Documentation is text and is judged by reading it; no automated check may read a documentation file.",
+    "Existing behaviour of the installer and of the client stays as it is.",
+    "Existing program-facing reports and human-readable outputs keep their current behaviour and wording.",
+    "The change touches nothing the task does not need."
+  ],
+  "repo_id": "main",
+  "test_command": [],
   "assumptions": [],
   "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
   "plan_goal": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
@@ -22,99 +41,38 @@
   "order": 1,
   "checks": [
     {
-      "criterion": "A single request to the engine for its version in machine-readable form yields one JSON object on standard output, parseable without preprocessing, with nothing else emitted on standard output, nothing on standard error, and a successful exit status.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "A reader taking the version value from that object obtains the same string as the engine's own declared version and as the human-readable version report.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The version value splits into at least three numeric components and can be ordered against another value of the same shape without reading prose.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The same request run in a clean environment with no project, no session, no model configuration and no network access still yields the version report and succeeds.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "After the request, no file was created or modified in the working directory, the project artifacts or the user's Forgel home.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The existing human-readable version output is unchanged in content and exit status.",
+      "criterion": "A program obtains the engine's own version directly, without interpreting human-readable text, and the value equals the version the release declares.",
       "verification": "review",
       "command": []
     },
     {
-      "criterion": "Automated tests exercise the machine-readable report's shape, its value agreement and its availability without configuration; the project test suite passes.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-q"
-      ]
-    }
-  ],
-  "external_dependencies": [
-    {
-      "name": "Semantic-style dotted version ordering",
-      "interface": "Order two engine versions by their numeric components: split the reported dotted string on '.', convert each component with int(), and compare the resulting tuples/numbers. This is pure Python standard-library logic (int(), str.split(), tuple comparison) with no third-party package, command or service involved, so an installer or client can compare the reported engine version against another version deterministically.",
-      "docs": "https://semver.org/ ; Python standard library comparison semantics (int()/str.split()/tuple ordering)",
-      "mode": "direct",
-      "evidence": "The task's dependency entry states the contract: 'an installer or client reads the reported version value and orders it against another engine version by its numeric components; docs: https://semver.org/'. The project's own instructions (FORGEL.md, 'Runtime Process Model') reference the engine source as `src/forgel/runtime_model.py`, i.e. the engine is a Python package under `src/forgel/`, so numeric-component ordering is available locally from the Python standard library (split on '.', int() each part, compare tuples) without installing anything. semver.org defines the dotted numeric ordering being consumed.",
-      "stub": ""
+      "criterion": "The version is obtainable on a machine with no project, no stored configuration, no model access and no network, from any working directory, and obtaining it leaves nothing behind.",
+      "verification": "review",
+      "command": []
     },
     {
-      "name": "JSON",
-      "interface": "Emit the machine-readable version report as exactly one JSON object on standard output, produced with Python's standard-library `json` module (json.dumps), and read/parsed with json.loads. No third-party JSON library, external command or service is used.",
-      "docs": "Python standard library `json` module (https://docs.python.org/3/library/json.html)",
-      "mode": "direct",
-      "evidence": "The task's dependency entry states the contract explicitly: 'the machine-readable report is one JSON object on standard output; reading it uses only the standard library; docs: —'. The engine is a Python package under `src/forgel/` (FORGEL.md refers to `src/forgel/runtime_model.py`), so the standard-library `json` module is present in the runtime and satisfies the 'only the standard library' clause; no installation or external interface is required.",
-      "stub": ""
+      "criterion": "The verification run contains no check that reads the documentation text about installation.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "All remaining checks pass unchanged.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The documented install instructions are accepted or returned for correction on the basis of reading their text.",
+      "verification": "review",
+      "command": []
     }
   ],
+  "external_dependencies": [],
   "language": "en",
   "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
   "started_at": "",
   "finished_at": "",
-  "result": {}
+  "result": {
+    "manual_restarts": 1
+  }
 }
