@@ -72,10 +72,188 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T13:11:29+00:00",
   "started_at": "2026-11-24T13:11:29+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T13:27:51+00:00",
+  "result": {
+    "summary": "Restored the argparse description in `forgel_code/cli.py` to the previous release's exact wording (`Thin console client for Forgel over the engine's machine-readable commands.`) by dropping only the added sentence `Run it without a command to open the interactive session.` Nothing else in the file, the parser, the commands, the fall-through into the interactive session on an empty argv, or the one-shot output/exit-status paths was touched. Added `tests/test_cli_help_description.py`, which pins the released description text in the parser and in `--help` (both in-process and as a real `python -m forgel_code --help` process) and asserts the help output no longer mentions the interactive session; no existing test asserted the removed sentence, so none was weakened or deleted. Verified with `git diff forgel_code/cli.py` (single-line description change), `python -m forgel_code --help` (prints the released description, no interactive sentence), and the full suite `python -m pytest`: 382 passed.",
+    "files_changed": [
+      "forgel_code/cli.py",
+      "tests/test_cli_help_description.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-n",
+          "15",
+          "--",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "5db4519",
+          "--",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "--ignore=tests/test_install.py",
+          "--ignore=tests/test_install_timeout_verdict.py",
+          "--ignore=tests/test_extras.py",
+          "--ignore=tests/test_packaging.py",
+          "--ignore=tests/test_packaging_types.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "forgel_code",
+          "--help"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cli_help_description.py",
+          "tests/test_cli.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cli.py",
+          "tests/test_cli_extra.py",
+          "tests/test_interactive.py",
+          "tests/test_stub_contract.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "============================= test session starts ==============================\nplatform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /Users/okalistratov/Documents/sites/code\nconfigfile: pyproject.toml\ncollected 382 items\n\ntests/test_check_cleanup.py ..                                           [  0%]\ntests/test_cli.py ...................................................... [ 14%]\n.................                                                        [ 19%]\ntests/test_cli_extra.py .........                                        [ 21%]\ntests/test_cli_help_description.py ....                                  [ 22%]\ntests/test_extras.py ......................                              [ 28%]\ntests/test_idle_refresh.py ....                                          [ 29%]\ntests/test_install.py .................................................. [ 42%]\n......                                                                   [ 43%]\ntests/test_install_timeout_verdict.py ....                               [ 45%]\ntests/test_interactive.py .....................................          [ 54%]\ntests/test_localization.py ..........................                    [ 61%]\ntests/test_packaging.py ..............                                   [ 65%]\ntests/test_packaging_types.py ..                                         [ 65%]\ntests/test_readme_install.py ..................................          [ 74%]\ntests/test_redact.py ..................................                  [ 83%]\ntests/test_redact_descriptor.py ..........                               [ 86%]\ntests/test_redact_french_joined.py .........                             [ 88%]\ntests/test_redact_french_spanish.py ........................             [ 94%]\ntests/test_redact_quoted_bare.py ..........                              [ 97%]\ntests/test_retained_text.py ......                                       [ 98%]\ntests/test_stub_contract.py ....                                         [100%]\n\n======================= 382 passed in 197.34s (0:03:17) ========================\n",
+    "assumptions": [
+      "The previous-release description is recoverable from repository history (`5db4519` shows the pre-change text), so it was restored verbatim rather than approximated.",
+      "No existing test asserted the removed interactive-session sentence, so no test adjustment was required; a new test pinning the restored description and the absence of the sentence was added instead.",
+      "The module docstring in `forgel_code/cli.py` and the README's interactive-session section were left unchanged: the requirement covers the command line help output, and the interactive session must still be reachable with no command.",
+      "Files were left for the runtime to commit; only the two files named here are part of this change set."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 38,
+      "estimated_input_tokens": 1822344,
+      "provider_input_tokens": 1926636,
+      "provider_output_tokens": 41261,
+      "cache_hit_tokens": 1851648,
+      "cache_miss_tokens": 74988,
+      "estimated_tokens": 71966,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "151244ed57a6d6f45a0e420dab50f1f403284976",
+      "head": "176eb6f39fc408f9f96470e3a0e9dab3199b8de8",
+      "commit": "176eb6f39fc408f9f96470e3a0e9dab3199b8de8",
+      "commits": [
+        "176eb6f39fc408f9f96470e3a0e9dab3199b8de8"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124131129_release-audit-forgel-code-cli-py-changes.md"
+  },
   "request": ""
 }
