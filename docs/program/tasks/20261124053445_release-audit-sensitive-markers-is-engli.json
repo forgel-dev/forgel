@@ -121,10 +121,116 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T05:34:45+00:00",
   "started_at": "2026-11-24T10:00:00+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T10:44:05+00:00",
+  "result": {
+    "summary": "Widened the interactive session's sensitive explicit-action boundary to French and Spanish, leaving English and Russian detection byte-for-byte as it was. `forgel_code/interactive.py` now folds input (lower-case, diacritics stripped, whitespace collapsed) and refuses a sentence that names, in either word order and in any ordinary inflection, both an action verb (create/start, set/define/assign/enter, change/update/modify) and the object it acts on (a project, a credential such as a password/token/key, or a configuration/settings), with separate families per action so a bare mention of a project stays ordinary conversation; the refusal is written in the message's own language and nothing of the refused input reaches the engine's free-text entry. Because the session's own refusal sentence is static wording rather than owner or engine text, it is now printed as written instead of being run through the secret-masking pass, which previously turned its tail into `[redacted]`; engine- and owner-derived text is still masked. `tests/test_localization.py` covers the audited phrases, low-variation forms (other verb form, other word order, no diacritics), the refusal-and-redirect answer per language, the absence of any outgoing request derived from a refused input, ordinary French/Spanish conversation still reaching the engine unchanged, and English/Russian results unchanged. `CHANGELOG.md` records the fix. Verified with `python -m pytest -q`: 343 passed, 425 subtests passed.",
+    "files_changed": [
+      "CHANGELOG.md",
+      "forgel_code/interactive.py",
+      "tests/test_localization.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_localization.py",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 2
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_localization.py",
+          "tests/test_interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "============================= test session starts ==============================\nplatform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /Users/okalistratov/Documents/sites/code\nconfigfile: pyproject.toml\ncollected 343 items\n\ntests/test_check_cleanup.py ..                                           [  0%]\ntests/test_cli.py ...................................................... [ 16%]\n.................                                                        [ 21%]\ntests/test_cli_extra.py .........                                        [ 23%]\ntests/test_extras.py ......................                              [ 30%]\ntests/test_idle_refresh.py ....                                          [ 31%]\ntests/test_install.py .................................................. [ 46%]\n......                                                                   [ 47%]\ntests/test_install_timeout_verdict.py ....                               [ 48%]\ntests/test_interactive.py .....................................          [ 59%]\ntests/test_localization.py ........................                      [ 66%]\ntests/test_packaging.py ..............                                   [ 70%]\ntests/test_packaging_types.py ..                                         [ 71%]\ntests/test_readme_install.py ..................................          [ 81%]\ntests/test_redact.py ..................................                  [ 91%]\ntests/test_redact_descriptor.py ..........                               [ 94%]\ntests/test_redact_quoted_bare.py ..........                              [ 97%]\ntests/test_retained_text.py ......                                       [ 98%]\ntests/test_stub_contract.py ....                                         [100%]\n\n======================= 343 passed in 215.21s (0:03:35) ========================\n",
+    "assumptions": [
+      "The refusal keeps the wording the session already produces in each of its four languages; it states that the action is never carried out from a sentence and points to the client's own command run outside the session, so English and Russian refusals stay exactly as before.",
+      "Detection stays phrase-based and conservative: a sensitive request needs both an action verb and its object, so mentions of a project, a password or the configuration alone remain ordinary conversation.",
+      "The session's own fixed sentences are shown as written, while text coming from the owner or the engine still passes through the secret-masking pass."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 3,
+      "compactions": 2,
+      "model_calls": 52,
+      "estimated_input_tokens": 2669492,
+      "provider_input_tokens": 2755087,
+      "provider_output_tokens": 360331,
+      "cache_hit_tokens": 2523776,
+      "cache_miss_tokens": 231311,
+      "estimated_tokens": 84704,
+      "state": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [
+      {
+        "requirement": "AC-6: the refusal answer names the explicit commands the user can use for the requested action.",
+        "problem": "The client's documented surface has no per-action explicit commands for adopting a repository, creating a project or setting a secret (README lists no such client command, and the engine's commands for them are outside this repository), so naming them would invent an interface; adding names only for the actions that do exist would also change the English and Russian refusal wording that AC-7 requires to stay exactly as before.",
+        "proposal": "State that the refusal points to the client's own explicit commands in general terms and keeps the wording the session already uses, with detection language coverage as the only thing this change alters."
+      }
+    ],
+    "escalated": [],
+    "git": {
+      "base": "e4571370f6407fa626f1dbb9272327162c284f74",
+      "head": "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a",
+      "commit": "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a",
+      "commits": [
+        "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.md"
+  },
   "request": ""
 }
