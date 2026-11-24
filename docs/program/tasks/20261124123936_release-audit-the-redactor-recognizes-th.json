@@ -231,7 +231,218 @@
       ]
     },
     "failure": {},
-    "report": "docs/program/agent/20261124123936_release-audit-the-redactor-recognizes-th.md"
+    "report": "docs/program/agent/20261124123936_release-audit-the-redactor-recognizes-th.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261124123936_release-audit-the-redactor-recognizes-th.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -m pytest tests/test_redact_french_spanish.py -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_redact.py tests/test_redact_french_spanish.py tests/test_localization.py -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_redact_quoted_bare.py tests/test_redact_french_spanish.py -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "For a message containing a hyphen-joined French password label followed by a value, the rendered output and retained session text contain the redaction placeholder instead of the value.",
+          "command": "python -m pytest tests/test_redact_french_spanish.py -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The spaced French password label and all other supported secret labels still redact as before.",
+          "command": "python -m pytest tests/test_redact.py tests/test_redact_french_spanish.py tests/test_localization.py -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "Quoted and bracketed joined French password labels are redacted the same way as their spaced equivalents.",
+          "command": "python -m pytest tests/test_redact_quoted_bare.py tests/test_redact_french_spanish.py -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The full test suite passes.",
+          "command": "python -m pytest -q",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": false,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The attributed change is small and directly addresses the audited leak. `forgel_code/interactive.py` adds a `_joined_phrase` helper and consults it from `_secret_label`, so a label whose segments are the words of an existing multi-word secret phrase joined only by `_` or `-` (in any case, since the label is already folded/lowered) is now treated as a secret label; the value after such a single-token label then takes the ordinary secret-label redaction path with the existing `[redacted]` placeholder. The recognition is derived from the existing `SECRET_PHRASES`, so no new vocabulary or language is introduced, dotted spellings still fall through to the previous segment logic, and dotted or extra-segment compounds are not newly matched. A dedicated test module covers both joiners in several cases, upper/lower casing, every value form the spaced label already supported (colon, equals, double-equals, quoted, bare, copula, bracketed, multiline, plural), quoted and bracketed labels, idempotency, the no-adjacent-value case, and unchanged behavior for the other labels in English, Russian, French and Spanish. It also drives the real `InteractiveSession` against stub engines to prove the value is masked both on display and in the retained state for replies, task titles and errors. The CHANGELOG entry is an accurate English behavioral note without volatile implementation detail, no unrelated, temporary or generated file was committed, no test was removed or weakened, and QA reports the full suite and the acceptance checks green. The only nit is an unused `json` import in the new test module, which is not a requirement failure.",
+      "requirements": [
+        {
+          "requirement": "The French password label is recognized as a secret label when written as separate words, joined with underscores and joined with hyphens, regardless of letter case.",
+          "verdict": "pass",
+          "note": "`_joined_phrase` compares the joined segments against the existing `SECRET_PHRASES` after the label is lowered and folded, so `mot_de_passe`, `mot-de-passe`, `MOT_DE_PASSE` and `Mot-De-Passe` are recognized; the spaced form keeps its existing phrase path. Tests cover the four spellings."
+        },
+        {
+          "requirement": "A value adjacent to a joined French password label is redacted with the same placeholder and is absent from the rendered message and from the retained session text.",
+          "verdict": "pass",
+          "note": "The joined label now flows through the ordinary single-token secret-label redaction, so `REDACTED` is used; the session tests assert the value is absent from the printed output and from `last_state` / `idle_failure` for a reply, a task title and an engine error."
+        },
+        {
+          "requirement": "Redaction of a joined label works with the value forms and separators already handled for the spaced form: delimited assignment, colon or equals separator, quoted values, bare values, quoted and bracketed labels.",
+          "verdict": "pass",
+          "note": "`test_a_joined_label_matches_its_spaced_equivalent` compares the joined rendering with the spaced rendering for eighteen forms, including `=`, `==`, `:`, quoted, bare, copula, bracketed, quoted-label, bracketed-label and multiline values."
+        },
+        {
+          "requirement": "A joined French password label with no adjacent value causes no part of the surrounding message to be redacted.",
+          "verdict": "pass",
+          "note": "`test_a_joined_label_without_a_value_is_left_alone` asserts the message is returned unchanged for bare, plural and in-sentence joined labels."
+        },
+        {
+          "requirement": "All previously supported secret labels in every supported language continue to be redacted exactly as before.",
+          "verdict": "pass",
+          "note": "The change only adds a positive branch in `_secret_label`; segment and stem matching is untouched. The new test asserts exact outputs for the spaced French form, French `clé`, English `password`, Russian `пароль`, Spanish `contraseña` and the compound `db_password`, and the existing redaction suites remain in place with QA green."
+        },
+        {
+          "requirement": "The full test suite passes.",
+          "verdict": "pass",
+          "note": "QA reports the environment test and e2e checks green and the full-suite acceptance check exits 0."
+        },
+        {
+          "requirement": "AC-1: hyphen-joined label with a value yields the redaction placeholder in both rendered output and retained text.",
+          "verdict": "pass",
+          "note": "Acceptance check passed (exit 0); the session tests assert `mot-de-passe: [redacted]` in output and state."
+        },
+        {
+          "requirement": "AC-2: underscore-joined label with a value yields the redaction placeholder in both rendered output and retained text.",
+          "verdict": "pass",
+          "note": "Covered by `test_a_joined_reply_is_masked_before_display` (`mot_de_passe=[redacted]`) and `test_the_joined_state_is_retained_masked` (`mot_de_passe : [redacted]`), both passing within the green suite."
+        },
+        {
+          "requirement": "AC-5: quoted and bracketed joined labels are redacted the same way as their spaced equivalents.",
+          "verdict": "pass",
+          "note": "The equivalence test includes `'mot de passe'`, `\"mot de passe\"` and `[mot de passe]` forms and compares joined against spaced output; the acceptance check passed."
+        },
+        {
+          "requirement": "Non-goals respected: no new language or secret vocabulary, no change to the placeholder, strategy or context, no engine change, no architectural rewrite or internal renaming, no user-facing vocabulary documentation.",
+          "verdict": "pass",
+          "note": "Recognition reuses `SECRET_PHRASES`, the placeholder and context logic are untouched, only `_secret_label` and one new helper changed, and the only documentation touched is the CHANGELOG entry."
+        },
+        {
+          "requirement": "The change is internally consistent, includes every file it needs, and excludes unrelated, temporary, debug or generated files; no test is deleted or weakened.",
+          "verdict": "pass",
+          "note": "The diff is limited to the redactor, one new self-contained test module and its CHANGELOG entry; the test-removal scan reports none, and no unrelated artifact appears in the attributed commit."
+        },
+        {
+          "requirement": "Documentation is accurate, English and behavioral, with no volatile implementation detail.",
+          "verdict": "pass",
+          "note": "The CHANGELOG bullet states the behavior (joined spellings recognized in any case, masked before display and retention, unchanged behavior elsewhere) without interfaces, timings or internal structure, and is verified by reading per D-106."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261124123936_release-audit-the-redactor-recognizes-th.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-24T13:05:30+00:00",
+      "notes": ""
+    }
   },
   "request": ""
 }
