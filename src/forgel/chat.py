@@ -122,16 +122,31 @@ DRAIN_ACTIONS = {
     "release_resume",
 }
 
+DRAIN_RUNTIME_OPERATIONS = {
+    "drive",
+    "task_retry",
+    "task_restart",
+    "task_process",
+    "release_resume",
+    "release_audit",
+    "release_finalize",
+}
+
 
 def _wants_runtime(result: Any) -> bool:
     """Whether the agent's decision asks the runtime to continue."""
 
     if str(getattr(result, "kind", "")) == "change_request":
         return True
-    return any(
-        str(item.get("action") or "") in DRAIN_ACTIONS
-        for item in (getattr(result, "actions", None) or [])
-    )
+    for item in getattr(result, "actions", None) or []:
+        action = str(item.get("action") or "")
+        if action in DRAIN_ACTIONS:
+            return True
+        if action == "runtime":
+            args = item.get("action_args") or {}
+            if str(args.get("operation") or "") in DRAIN_RUNTIME_OPERATIONS:
+                return True
+    return False
 
 
 class CommandRouter:
@@ -2029,7 +2044,7 @@ class CommandRouter:
                 )
             except ValueError as exc:
                 return self._error(chat_id, "chat_error", error=exc)
-            return combine(Reply(text))
+            return Reply(text)
         if action == "peak":
             policy = str(args.get("policy") or "").strip()
             return combine(self._peak(chat_id, policy, actor))

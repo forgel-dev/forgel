@@ -219,7 +219,13 @@ def _restart_from_requirements(
             client,
             log,
         )
-    return f"Task {task_id} restarted from its requirements."
+    finished = tasks.get_task(layout, task_id) or stored
+    status = (
+        str(finished.get("status") or "unknown")
+        if finished is not None
+        else "unknown"
+    )
+    return f"Task {task_id}: restarted; status {status}."
 
 
 def _rewrite_task_requirements(

@@ -630,7 +630,7 @@ class SelectionAndAgentTest(unittest.TestCase):
             "forgel.chat.run_operation", return_value="ran"
         ):
             reply = runtime.handle(7, "Один шаг", "@tester")
-        self.assertFalse(reply.drain)
+        self.assertTrue(reply.drain)
 
     def test_plan_command_queues_a_backlog(self) -> None:
         router = self._router()
