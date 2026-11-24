@@ -110,10 +110,122 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T00:38:49+00:00",
   "started_at": "2026-11-24T04:28:48+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T04:44:41+00:00",
+  "result": {
+    "summary": "The interactive session now masks engine-derived text before it is retained in memory. `show_state` builds the state text with `redact(...)` before comparing it to and storing it in `last_state`, and the forced refresh path in `refresh` stores `redact(...)` as well, so the retained state equals what the screen showed and a later repeat only shows the mask. `idle_refresh` masks the engine error message (`redact(exc.message)`) before keeping it in `idle_failure`; the once-per-message comparison uses the masked text, so an already-masked retained failure stays unchanged and the displayed text is the retained text. Secret-free text is unaffected because `redact` is idempotent and returns it unchanged. Added `tests/test_retained_text.py`, which drives real stub engine processes and asserts that retained state and retained idle failure contain no readable secret, that a repeat of the retained text shows the same masked text, that re-masking leaves it unchanged, and that secret-free state is retained and shown exactly as before. Full suite: `python -m pytest -q` -> 314 passed, 293 subtests passed.",
+    "files_changed": [
+      "forgel_code/interactive.py",
+      "tests/test_retained_text.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_retained_text.py"
+        ],
+        "exit_code": 4
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_retained_text.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": ".............................................................................................. [ 29%]\n........................................................................ [ 52%]\n.......................................................................................... [ 81%]\n................................................... [ 97%]\n.......                                          [100%]\n314 passed, 293 subtests passed in 208.58s (0:03:28)\n",
+    "assumptions": [
+      "The two engine-derived texts the client keeps for the session are the last state text and the last idle-refresh failure text, as named in the audit finding; no other engine text is retained, so only these two sites needed masking.",
+      "The existing `redact` routine is reused unchanged; masking rules, the mask marker and the secret label set stay as they are."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 40,
+      "estimated_input_tokens": 1695265,
+      "provider_input_tokens": 1739632,
+      "provider_output_tokens": 126169,
+      "cache_hit_tokens": 1628160,
+      "cache_miss_tokens": 111472,
+      "estimated_tokens": 44087,
+      "state": "docs/program/agent/20261124003849_release-audit-the-session-keeps-unredact.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "19a7f6509a25de41d00a75c14d51c9f55e3246a2",
+      "head": "03a7bc9a2c5ea3492273005636019de4ea38b37b",
+      "commit": "03a7bc9a2c5ea3492273005636019de4ea38b37b",
+      "commits": [
+        "03a7bc9a2c5ea3492273005636019de4ea38b37b"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124003849_release-audit-the-session-keeps-unredact.md"
+  },
   "request": ""
 }
