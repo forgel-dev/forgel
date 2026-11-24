@@ -1,30 +1,116 @@
 {
   "id": "20261124131129_release-audit-the-sensitive-action-guard",
   "title": "Release audit: The sensitive-action guard is incomplete for required explicit actions. `SENSITI",
-  "spec": "",
+  "spec": "docs/program/specs/20261124131129_release-audit-the-sensitive-action-guard.md",
   "summary": "Extend sensitive-action detection with verb-plus-object handling for English and Russian, including the missing key, config, and scaffold terms, and add tests that these requests are refused and produce no outgoing engine `say` request while ordinary mentions remain forwarded.",
   "requirements": [
-    "The sensitive-action guard is incomplete for required explicit actions. `SENSITIVE_MARKERS`, `CREDENTIAL_NOUNS`, `CONFIG_NOUNS` and the create/change stems do not cover bare `key`/`ключ`, `config`, or `scaffold`, so free-text requests such as `change config`, `create a key`, `создай ключ`, or `scaffold a project` are not refused and can be sent to the engine as ordinary `say` requests. This violates the requirement that setting key material and changing configuration or creating/scaffolding a project never happen from free text alone. No tests assert no-passthrough for these forms."
+    "A free-text request that asks to create, set or change key material is refused, including requests that use only the bare key wording rather than a credential term, in English and in Russian.",
+    "A free-text request that asks to change configuration is refused, including requests that use only the bare configuration wording, in English and in Russian.",
+    "A free-text request that asks to create or scaffold a project is refused, including requests phrased with the bare scaffolding wording, in English and in Russian.",
+    "A refused request is not sent to the engine: the client makes no engine request for it and reports no action result.",
+    "The refusal tells the user that the requested action needs the dedicated explicit operation, and names the operation to use, so the user can act without guessing.",
+    "The refusal is presented in the language the rest of the interface uses for that user.",
+    "Requests outside the guarded categories continue to be forwarded to the engine exactly as before, and no existing refusal is narrowed or lost.",
+    "Automated tests assert, for every recognized form in each covered language and category, that the request is refused and that no engine request is made.",
+    "The existing test suite passes unchanged in meaning: no test is weakened or deleted to accommodate the new behavior."
   ],
   "acceptance": [
-    "The release audit finding is resolved: The sensitive-action guard is incomplete for required explicit actions. `SENSITIVE_MARKERS`, `CREDENTIAL_NOUNS`, `CONFIG_NOUNS` and the create/change stems do not cover bare `key`/`ключ`, `config`, or `scaffold`, so free-text requests such as `change config`, `create a key`, `создай ключ`, or `scaffold a project` are not refused and can be sent to the engine as ordinary `say` requests. This violates the requirement that setting key material and changing configuration or creating/scaffolding a project never happen from free text alone. No tests assert no-passthrough for these forms.",
-    "Existing tests pass"
+    "Typing a free-text request to change configuration, in English or in Russian, is refused in the client and no engine request is made.",
+    "Typing a free-text request to create or set key material, including the bare key wording, in English or in Russian, is refused and no engine request is made.",
+    "Typing a free-text project creation or scaffolding request, including the bare scaffolding wording, in English or in Russian, is refused and no engine request is made.",
+    "Each refusal names the explicit operation the user should use to perform the action.",
+    "The refusal appears in the interface language of the session.",
+    "Ordinary conversational messages that are not requests of the guarded categories still reach the engine and are answered as before.",
+    "Automated tests cover every listed form and assert both the refusal and the absence of an engine request.",
+    "The full existing test suite passes."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "tests"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
   "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
   "release_class": "minor",
   "order": 0,
-  "checks": [],
+  "checks": [
+    {
+      "criterion": "Free-text configuration-change requests are refused with no engine request, in English and Russian.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "Free-text key material requests, including bare key wording, are refused with no engine request, in English and Russian.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "Free-text project creation/scaffolding requests, including bare scaffolding wording, are refused with no engine request, in English and Russian.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "Each refusal names the explicit operation to use.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The refusal appears in the session's interface language.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Ordinary conversational messages still reach the engine and are answered as before.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    },
+    {
+      "criterion": "Automated tests cover every listed form and assert both refusal and absence of an engine request.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The full existing test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests"
+      ]
+    }
+  ],
   "external_dependencies": [],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-24T13:11:29+00:00",
-  "started_at": "",
+  "started_at": "2026-11-24T13:34:52+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
