@@ -1,7 +1,7 @@
 # Session State: Add the combined engine and client install mode
 
 - Task: `20261124152248_add-the-combined-engine-and-client-insta`
-- Session: 1
+- Session: 5
 - Status: in progress
 
 ## Goal
@@ -11,53 +11,52 @@ truth; re-read files with read_file when needed.
 
 ## Requirements
 
-- Running the client installation with no mode selection installs the client and, in the same run, brings an engine the client supports into place.
-- The engine source used by the run is a configuration with a documented default; when the configuration is unset the project's own public engine source is used.
-- The run determines, without installing anything, which engine version the configured engine source provides, and determines which version of an engine is already in place if one is.
-- When no engine is in place, the run installs the available engine.
-- When an engine is in place at a version equal to or above the available one and satisfies the declared minimum, the run keeps it untouched and reports it as kept.
-- When the available version is strictly newer than the engine in place, the run replaces it with the available version.
-- A successful run never leaves an engine below the client's declared minimum supported engine version.
-- When the finished state cannot satisfy the declared minimum, the run exits with a non-zero status and prints one message that names the required minimum, the engine version found and the action the user can take.
-- A successful run states the engine version left in place and how it was obtained: installed, kept or replaced.
-- The client installation has a mode that installs the client alone; in that mode it never installs, replaces or otherwise touches an engine and succeeds whether or not an engine or the engine project's installation mechanism is available.
-- When the engine project's installation mechanism cannot be found or fails, a default run exits with a non-zero status and an actionable message that names the client-only mode as the way to proceed without an engine, rather than silently installing only the client.
-- Uninstalling removes the client installation and its path entry and leaves any installed engine in place.
-- Re-running the default installation is idempotent: the client installation is replaced rather than duplicated, exactly one path entry remains, and an engine that is kept is not reinstalled.
-- The declared minimum supported engine version has exactly one source, which both the installation and the client's startup check honour.
-- Two engine versions are ordered numerically component by component; one leading version marker and trailing zero components do not affect the comparison; a version that cannot be ordered numerically is treated as not satisfying the minimum.
-- The installation's own usage text describes the combined mode as the default, the client-only mode, and the engine source with its default.
-- The user documentation presents exactly one one-command installation as the main path, and that path installs the client and the engine together.
-- The one-command installation the documentation presents is served by the release of this project that contains the combined mode, not by an earlier release that installed the client alone; the update and uninstall instructions name the same release location.
-- The documentation shows how to install only the client, states that this route touches no engine and that the user then supplies an engine meeting the declared minimum, and states that uninstalling leaves the engine in place.
-- The documentation states the engine source default and how to point the run at another engine source, states that an already installed supported engine is kept and a strictly older one replaced, and states that the run reports the engine version it leaves in place.
-- The documentation no longer tells the user that a working engine must already be present before the one-command installation.
-- The project's existing installation-documentation standards keep their full strength: the main path is still led by the one-command installation, the update and uninstall routes are still documented, exactly one current-release location is named, no alternative main installation route is introduced, and no editable installation is proposed. Any disagreement with those standards is resolved by bringing the documentation in line with the delivered behaviour, never by dropping, loosening or rephrasing a standard into a weaker one; the only change permitted to the documented current-release location is its advance to the release that carries the combined mode.
-- The changelog records the combined installation, the client-only mode, the keep/replace behaviour and the reported engine version.
+- FR-1: The default client installation also ensures a supported engine is in place in the same run.
+- FR-2: The installation learns which engine version the configured engine source offers without changing anything on the machine.
+- FR-3: When no engine is present, the installation obtains the offered engine version.
+- FR-4: When an engine is present and the offered version is not strictly newer, the installation keeps the present engine and changes nothing about the engine installation.
+- FR-5: When the offered version is strictly newer than the present engine, the installation replaces the present engine with that newer one.
+- FR-6: The installation never installs an engine older than, or equal to, the one already present.
+- FR-7: The finished state always satisfies the client's declared minimum supported engine version; when it cannot, the installation ends as a failure instead of reporting the pair as installed.
+- FR-8: A failed engine outcome reports the required minimum version, the version that was found or offered, and a concrete action the user can take, and is clearly distinguishable from a successful run.
+- FR-9: A successful installation states the engine version in place and how it was obtained: installed, kept or replaced.
+- FR-10: Engine versions are ordered numerically component by component, tolerating one leading version prefix and trailing zero components; a version that cannot be ordered never counts as satisfying the minimum.
+- FR-11: The documented client-only installation installs the client and neither queries nor changes any engine.
+- FR-12: Removing the client installs nothing and leaves any engine in place.
+- FR-13: The documented option that keeps the user's startup configuration unchanged does not disable the engine part of the installation.
+- FR-14: The engine source the installation resolves against is documented configuration with a stated default and a documented way to point it elsewhere.
+- FR-15: Repeating the default installation changes nothing about an engine that needs no change, and leaves exactly one client installation and one startup entry.
+- FR-16: The user documentation presents the default installation as the way to obtain a working client-and-engine pair, documents the client-only installation and the engine source configuration, and no longer instructs the user to supply an engine separately.
+- FR-17: The project's automated checks contain no check that reads documentation text, and no automated check of documentation text is added in its place.
+- FR-18: The correctness of the installation instructions is accepted or returned solely by review of their text.
+- FR-19: Every other automated check stays in place and unchanged, and the installer and client behavior outside the combined installation is unchanged.
 
 ## Acceptance Criteria
 
-- On a machine with no engine, a default run against a configured engine source that provides a supported version leaves an installed client and an installed engine at that version, and reports the version and that it was installed.
-- On a machine whose engine is at or above the available version and satisfies the minimum, a default run leaves the installed engine untouched and reports it as kept.
-- On a machine whose engine is older than the available version, a default run replaces it and reports the new version as installed.
-- When the run cannot leave an engine meeting the declared minimum, it exits non-zero and its single message names the required minimum, the version found and the action the user can take.
-- A client-only run succeeds with no engine and no engine installation mechanism available, installs the client, and leaves an engine that is present unchanged.
-- A default run with no engine installation mechanism available exits non-zero with a message that names the client-only route as the way to proceed.
-- Running the default installation twice leaves the kept engine unchanged and exactly one path entry in the profile.
-- Engine versions that differ only by a leading marker or trailing zero components compare equal, a strictly newer available version wins, and a non-numeric version never satisfies the minimum.
-- Uninstalling removes the client installation and its path entry and leaves the installed engine in place.
-- The installation's usage text describes the combined default, the client-only mode and the engine source default.
-- The documentation's single main one-command installation installs the client and the engine together.
-- The documentation shows how to install only the client and says that route touches no engine.
-- The documentation names the default engine source and its override, the keep-supported and replace-strictly-older behaviour, the reported engine version and the fact that uninstalling keeps the engine; it no longer requires a pre-installed engine for the one-command installation.
-- The documented installation, update and uninstall instructions all name the release that carries the combined mode, and no earlier release that installed the client alone is named.
-- No existing installation-documentation standard has been dropped, loosened or rephrased into a weaker one; the only change to the documented current-release location is its advance to the release carrying the combined mode.
-- The changelog records the combined installation, the client-only mode, the comparison behaviour and the reported engine version.
-- The whole test suite passes, including the existing installation and packaging expectations.
+- AC-1: Starting the default installation on a machine with no engine ends successfully, leaves a usable client, leaves an engine at or above the declared minimum, and reports that version and that it was installed.
+- AC-2: Starting the default installation with an engine already present at exactly the offered version ends successfully, leaves the engine installation unchanged, and reports the engine as kept with its version.
+- AC-3: Starting the default installation with an engine present below the offered version ends successfully, leaves the strictly newer offered engine in place, and reports it as replaced.
+- AC-4: Starting the default installation with an engine present above the offered version and at or above the declared minimum ends successfully, leaves the engine installation unchanged, and reports the engine as kept.
+- AC-5: When the offered version is below the declared minimum and no suitable engine is present, the installation ends as a failure whose message names the required minimum, the version found or offered, and the action the user can take.
+- AC-6: When obtaining the engine fails, the installation ends as a failure with a message naming what went wrong and the next action, and never reports the pair as installed.
+- AC-7: Choosing the documented client-only installation installs the client, performs no engine version query, and leaves an engine present beforehand unchanged.
+- AC-8: Running the default installation twice in a row leaves exactly one client installation and one startup entry, and the second run does not change the engine the first run left.
+- AC-9: Versions differing only by a leading version prefix or by trailing zero components are treated as the same version, and a version that cannot be ordered never satisfies the minimum.
+- AC-10: Removing a client installed with an engine leaves the engine in place and leaves no client artifacts behind.
+- AC-11: The documentation presents the default installation as producing a working client alongside a supported engine, states that the engine version in place and how it was obtained are reported, and describes what a successful installation reports.
+- AC-12: The documentation states that an absent engine is obtained, that a present engine is kept when the offered version is not strictly newer, that a strictly newer offered engine replaces it, and that the finished state always satisfies the declared minimum or the installation fails with an actionable message naming the minimum and the version found or offered.
+- AC-13: The documentation documents the client-only installation, the engine source with its default and how to point it elsewhere, and the option that keeps the user's startup configuration unchanged; it no longer instructs the user to supply an engine separately for the default installation.
+- AC-14: The automated checks contain no check that reads documentation text, and no automated check of documentation text replaces the removed one.
+- AC-15: All other automated checks run unchanged and pass, and installer and client behavior outside the combined installation is unchanged.
+- AC-16: The installation instructions are accepted or returned solely by review of their text; a passing or failing verdict on their wording comes from a person reading them, never from an automated check.
 
 ## Constraints
 
-- none
+- No automated check reads documentation text; the installation instructions are verified by review of their text only, and no automated documentation check is added in place of the removed one.
+- The removed documentation check is deleted in full, including the supporting data that reproduces the documentation text.
+- No other automated check is removed, weakened or skipped, and installer and client behavior outside the combined installation is unchanged.
+- The combined installation is idempotent, never installs an engine older than or equal to the one present, and always ends at or above the declared minimum or as a failure.
+- All project artifacts are written in English, regardless of chat language.
 
 ## Assumptions
 
@@ -65,6 +64,7 @@ truth; re-read files with read_file when needed.
 
 ## Files Changed
 
+- README.md
 - forgel_code/__init__.py
 - install.sh
 - tests/stub_engine_install.py
@@ -74,29 +74,45 @@ truth; re-read files with read_file when needed.
 
 ## Actions
 
-- recall
-- recall
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_cli.py
+- read_file: tests/stub_engine_install.py
 - read_file: install.sh
-- run: ['git', 'status', '--porcelain']
-- run: ['python3', '-m', 'pytest', '-q']
-- read_file: README.md
-- read_file: CHANGELOG.md
-- read_file: README.md
+- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
 - read_file: install.sh
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- read_file: install.sh
+- run: ['git', 'grep', '-n', '--', 'client-only', 'tests']
+- run: ['git', 'grep', '-n', 'client-only', '--', 'tests']
+- read_file: tests/test_install.py
+- read_file: install.sh
+- run: ['python3', '-m', 'pytest', '-q', '--collect-only', 'tests/test_install.py']
+- run: ['sh', '-n', 'install.sh']
 - read_file: README.md
+- read_file: tests/test_install.py
+- run: ['python3', '-m', 'pytest', 'tests/test_install.py', '-q']
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- list_files
 
 ## Commands
 
-- `['git', 'status', '--porcelain']` -> exit 0
-- `['python3', '-m', 'pytest', '-q']` -> exit 0
+- `['python3', '-m', 'unittest', 'discover', '-s', 'tests']` -> exit 0
+- `['git', 'diff', '--', 'install.sh']` -> exit 0
+- `['git', 'diff', '--', 'tests/test_install.py']` -> exit 0
+- `['python3', '-m', 'unittest', 'tests.test_install']` -> exit 0
+- `['python3', '-m', 'unittest', 'tests.test_install', '-k', 'client', '-v']` -> exit 5
+- `['git', 'diff', '--', 'forgel_code/__init__.py']` -> exit 0
+- `['git', 'diff', '--', 'tests/test_cli.py']` -> exit 0
+- `['python3', '-m', 'pytest', '-q', '--collect-only', 'tests/test_install.py']` -> exit 0
+- `['python3', '-m', 'pytest', 'tests/test_install.py', '-q']` -> exit 0
+- `['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']` -> exit 4
 
 ## Recent Observations
 
-- read_file README.md: README.md: lines 200-267 of 267
-- read_file install.sh: install.sh: lines 700-1251 of 1251
-- read_file README.md: README.md: lines 130-201 of 267
+- read_file tests/test_install.py: tests/test_install.py: lines 280-424 of 1937
+- run python3 -m pytest tests/test_install_engine.py -q -> exit 4
+- list_files: .gitignore
 
 ## Next Step
 

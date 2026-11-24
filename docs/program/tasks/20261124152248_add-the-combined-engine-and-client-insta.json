@@ -59,10 +59,10 @@
   "order": 5,
   "external_dependencies": [],
   "language": "en",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-24T21:24:37+00:00",
-  "finished_at": "2026-11-24T22:34:09+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "manual_restarts": 3,
     "restarted_at": "2026-11-24T21:24:37+00:00",
@@ -513,10 +513,13 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.md",
+    "last_failure": {
       "kind": "agent",
       "message": "context session limit reached"
     },
-    "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.md"
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   }
 }
