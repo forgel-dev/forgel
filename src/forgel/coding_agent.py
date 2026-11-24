@@ -261,8 +261,9 @@ Rules:
 - Tests are normally only added. Deleting a test requires a justification in
   done.test_removals, with one of: "removed" (the scenario is genuinely
   removed), "replaced" (the behavior changed and a new test replaces it; name
-  the replacement), or "wrong" (the test was incorrect or duplicated). Never
-  delete or weaken a test just to make the run pass.
+  the replacement), or "wrong" (the test was incorrect, duplicated or invalid
+  under the project or repository rules). Never delete or weaken a test just
+  to make the run pass.
 - Keep the change small and readable.
 """
 
