@@ -107,10 +107,148 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T13:11:29+00:00",
   "started_at": "2026-11-24T13:34:52+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T14:01:15+00:00",
+  "result": {
+    "summary": "Completed the sensitive-action guard for the three explicit action families in English and Russian, and proved it with tests.\n\nProduct change in `forgel_code/interactive.py`: added a verb+object recognizer (`SENSITIVE_EN_RU_ACTIONS`, `CREATE_VERB_*`, `CHANGE_VERB_*`, `KEY_NOUNS`, `CONFIGURATION_NOUNS`, `SCAFFOLD_NOUNS` and their Russian stems) that `resolve()` consults after the existing marker and French/Spanish checks. It refuses a sentence that names both an action verb and the object it acts on: setting/changing a key (bare `key`/`ключ`, no credential term needed), changing configuration (bare `config`/`настройки`/`параметры`), and creating or scaffolding a project (including bare scaffolding words such as `scaffold`, `bootstrap`, `init`, `каркас`). A sentence naming only the noun stays ordinary conversation, so ordinary conversation is unaffected. The English and Russian `sensitive` refusal messages were updated so each names the action family and the explicit operation to use (`forgel-code`), in the session's language; the French and Spanish wording was left as it was and every previously guarded phrase still resolves to `sensitive`.\n\nTests: new `tests/test_sensitive_actions.py` drives a stand-in engine that logs every argv. Subtests assert, for every listed English and Russian form in each of the three categories, that the request is decided as `sensitive`, that the session shows the refusal without any action result (no `say` request at all, no collision with the engine's answer, one explicit-operation mention per refused phrase), that the refusal text matches the session language (`en` and `ru`), and that ordinary English and Russian messages still reach the engine and are answered. It also re-asserts the previously guarded phrases.\n\nVerification: `python -m pytest tests -q` -> 390 passed, 643 subtests passed (existing 382 tests unchanged and passing). `CHANGELOG.md` gained one `Unreleased / Fixed` entry describing the behavior.",
+    "files_changed": [
+      "CHANGELOG.md",
+      "forgel_code/interactive.py",
+      "tests/test_sensitive_actions.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-c",
+          "print(1)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests",
+          "-x",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_sensitive_actions.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=3",
+          "--",
+          "CHANGELOG.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=2",
+          "--",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "============================= test session starts ==============================\nplatform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /Users/okalistratov/Documents/sites/code\nconfigfile: pyproject.toml\ncollected 390 items\n\ntests/test_check_cleanup.py ..                                           [  0%]\ntests/test_cli.py ...................................................... [ 14%]\n.................                                                        [ 18%]\ntests/test_cli_extra.py .........                                        [ 21%]\ntests/test_cli_help_description.py ....                                  [ 22%]\ntests/test_extras.py ......................                              [ 27%]\ntests/test_idle_refresh.py ....                                          [ 28%]\ntests/test_install.py .................................................. [ 41%]\n......                                                                   [ 43%]\ntests/test_install_timeout_verdict.py ....                               [ 44%]\ntests/test_interactive.py .....................................          [ 53%]\ntests/test_localization.py ..........................                    [ 60%]\ntests/test_packaging.py ..............                                   [ 63%]\ntests/test_packaging_types.py ..                                         [ 64%]\ntests/test_readme_install.py ..................................          [ 73%]\ntests/test_redact.py ..................................                  [ 81%]\ntests/test_redact_descriptor.py ..........                               [ 84%]\ntests/test_redact_french_joined.py .........                             [ 86%]\ntests/test_redact_french_spanish.py ........................             [ 92%]\ntests/test_redact_quoted_bare.py ..........                              [ 95%]\ntests/test_retained_text.py ......                                       [ 96%]\ntests/test_sensitive_actions.py ........                                 [ 98%]\ntests/test_stub_contract.py ....                                         [100%]\n\n======================= 390 passed in 222.86s (0:03:42) ========================\n",
+    "assumptions": [
+      "The guard keys on an action verb plus the guarded object rather than on a lone noun, because the specification's Risks section forbids refusing a sentence that merely mentions a key, configuration or project; the Russian object is therefore matched by stem (inflected forms) and the English object by listed word.",
+      "The existing single refusal message key `sensitive` was extended instead of adding per-category messages, because the Non-Goals rule out redesigning refusal wording and the message already carries the structure (statement + explicit command) the acceptance criteria ask for; one message names all guarded families and the explicit operation.",
+      "The refusal names the client's own explicit command surface `forgel-code`, which is the operation surface the client exposes for these actions, so the user can act without guessing.",
+      "The `CHANGELOG.md` entry is the release-notes part this change requires; no other documentation was touched."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 49,
+      "estimated_input_tokens": 2161547,
+      "provider_input_tokens": 2209297,
+      "provider_output_tokens": 130961,
+      "cache_hit_tokens": 2085760,
+      "cache_miss_tokens": 123537,
+      "estimated_tokens": 63471,
+      "state": "docs/program/agent/20261124131129_release-audit-the-sensitive-action-guard.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "176eb6f39fc408f9f96470e3a0e9dab3199b8de8",
+      "head": "ebae48bae33acbac77b046024099530c2e1b513d",
+      "commit": "ebae48bae33acbac77b046024099530c2e1b513d",
+      "commits": [
+        "ebae48bae33acbac77b046024099530c2e1b513d"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124131129_release-audit-the-sensitive-action-guard.md"
+  },
   "request": ""
 }
