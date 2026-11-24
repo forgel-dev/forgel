@@ -1,0 +1,30 @@
+{
+  "id": "20261124053445_release-audit-the-redactor-recognizes-on",
+  "title": "Release audit: The redactor recognizes only English secret words and Russian stems (`SECRET_WOR",
+  "spec": "",
+  "summary": "Extend label recognition with French/Spanish secret terms, including multi-word `mot de passe`, and add direct, session-level and retained-state tests for these forms; ensure the same redactor is applied on every engine display path.",
+  "requirements": [
+    "The redactor recognizes only English secret words and Russian stems (`SECRET_WORDS`, `SECRET_STEMS`). The session now speaks French and Spanish, but replies such as `mot de passe : hunter2`, `clé: ...` or `contraseña: hunter2` are not recognized and are displayed unchanged, and can also be retained in state or error text. This violates the requirement that masking hold in every language the session speaks and the release's no-secret-on-screen requirement."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The redactor recognizes only English secret words and Russian stems (`SECRET_WORDS`, `SECRET_STEMS`). The session now speaks French and Spanish, but replies such as `mot de passe : hunter2`, `clé: ...` or `contraseña: hunter2` are not recognized and are displayed unchanged, and can also be retained in state or error text. This violates the requirement that masking hold in every language the session speaks and the release's no-secret-on-screen requirement.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-24T05:34:45+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

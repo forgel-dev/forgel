@@ -24,10 +24,13 @@ The Forgel Code client stops being only a set of one-shot, argument-driven wrapp
 - `20261124003849_release-audit-quoted-secret-labels-are-n` — Release audit: Quoted secret labels are not fully redacted. For a message such as `'token': 'ab (code, done)
 - `20261124003849_release-audit-redaction-misses-values-se` — Release audit: Redaction misses values separated from a secret label by a newline and values be (code, done)
 - `20261124003849_release-audit-the-session-keeps-unredact` — Release audit: The session keeps unredacted engine text in memory. `show_state` assigns the raw (code, done)
-- `20261124045451_release-audit-redact-in-forgel-code-inte` — Release audit: `redact()` in `forgel_code/interactive.py` treats the first word after a recogni (code, pending)
+- `20261124045451_release-audit-redact-in-forgel-code-inte` — Release audit: `redact()` in `forgel_code/interactive.py` treats the first word after a recogni (code, done)
+- `20261124053445_release-audit-in-quoted-binding-after-a-` — Release audit: In `_quoted_binding`, after a quoted label and whitespace, a bare next token ret (code, pending)
+- `20261124053445_release-audit-sensitive-markers-is-engli` — Release audit: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `cré (code, pending)
+- `20261124053445_release-audit-the-redactor-recognizes-on` — Release audit: The redactor recognizes only English secret words and Russian stems (`SECRET_WOR (code, pending)
 
 ## Audit
 
-- Rounds: 3
+- Rounds: 4
 - Verdict: fail
 - Report: `docs/program/releases/20261123193557155149_forgel-code-interactive-agent-client-instead-of-/audit.md`

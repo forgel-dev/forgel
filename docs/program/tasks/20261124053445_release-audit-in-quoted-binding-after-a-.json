@@ -1,0 +1,137 @@
+{
+  "id": "20261124053445_release-audit-in-quoted-binding-after-a-",
+  "title": "Release audit: In `_quoted_binding`, after a quoted label and whitespace, a bare next token ret",
+  "spec": "docs/program/specs/20261124053445_release-audit-in-quoted-binding-after-a-.md",
+  "summary": "After skipping the gap, bind a bare value using the same `_span`/`_descriptor_span` and prose/no-value guard used for unquoted labels; add tests for single- and double-quoted labels followed by whitespace and an unquoted value, including display and retained state.",
+  "requirements": [
+    "After a quoted label, whitespace and a bare unquoted value, the binding is treated as a credential binding and the value is masked in the output shown to the user.",
+    "Single-quoted labels and double-quoted labels are treated identically in that detection.",
+    "A quoted label followed by a separator and a value is still masked.",
+    "A quoted label followed by a quoted value is still masked.",
+    "An unquoted label followed by a bare value is still masked.",
+    "A quoted word that is not followed by a value, such as a quoted word at the end of a line or one followed by punctuation, is not treated as a credential binding and is left unchanged.",
+    "Output that contains no credential binding is returned unchanged.",
+    "No existing automated test is weakened, removed or modified to obtain the result.",
+    "The full existing test suite passes."
+  ],
+  "acceptance": [
+    "A line made of a single-quoted label, whitespace and a bare value has the value masked in the produced output.",
+    "A line made of a double-quoted label, whitespace and a bare value has the value masked in the produced output.",
+    "A quoted label followed by a separator and a value is still masked.",
+    "A quoted label followed by a quoted value is still masked.",
+    "An unquoted label followed by a bare value is still masked.",
+    "A quoted word with no value after it is not masked.",
+    "Output without any credential binding is unchanged.",
+    "The full existing test suite passes.",
+    "No existing test was weakened, removed or modified to obtain the pass."
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [
+    {
+      "criterion": "A line made of a single-quoted label, whitespace and a bare value has the value masked in the produced output.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A line made of a double-quoted label, whitespace and a bare value has the value masked in the produced output.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A quoted label followed by a separator and a value is still masked.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A quoted label followed by a quoted value is still masked.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "An unquoted label followed by a bare value is still masked.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A quoted word with no value after it is not masked.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Output without any credential binding is unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The full existing test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "No existing test was weakened, removed or modified to obtain the pass.",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-24T05:34:45+00:00",
+  "started_at": "2026-11-24T05:34:45+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}

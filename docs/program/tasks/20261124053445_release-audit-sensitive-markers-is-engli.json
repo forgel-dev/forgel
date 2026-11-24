@@ -1,0 +1,30 @@
+{
+  "id": "20261124053445_release-audit-sensitive-markers-is-engli",
+  "title": "Release audit: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `cré",
+  "spec": "",
+  "summary": "Localize the sensitive-operation marker set for all supported languages, including multi-word terms, and test that these phrases never become `say` and only point to the explicit command.",
+  "requirements": [
+    "`SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `crée un projet`, `crear un proyecto`, `définir le mot de passe` or `cambiar la configuración` are not refused or pointed to explicit commands; they fall through to `say` and are sent to the engine's project agent. The explicit-action guarantee is therefore not enforced for languages the session now accepts."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `crée un projet`, `crear un proyecto`, `définir le mot de passe` or `cambiar la configuración` are not refused or pointed to explicit commands; they fall through to `say` and are sent to the engine's project agent. The explicit-action guarantee is therefore not enforced for languages the session now accepts.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-24T05:34:45+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
