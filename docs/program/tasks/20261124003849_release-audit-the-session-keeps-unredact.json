@@ -1,30 +1,119 @@
 {
   "id": "20261124003849_release-audit-the-session-keeps-unredact",
   "title": "Release audit: The session keeps unredacted engine text in memory. `show_state` assigns the raw",
-  "spec": "",
+  "spec": "docs/program/specs/20261124003849_release-audit-the-session-keeps-unredact.md",
   "summary": "Store the redacted form, or a hash, for comparison and deduplication, and never assign raw engine text to long-lived session attributes.",
   "requirements": [
-    "The session keeps unredacted engine text in memory. `show_state` assigns the raw joined state to `self.last_state`, and `idle_refresh` assigns raw `exc.message` to `self.idle_failure`; if engine output or an error contains key material, it remains in the client for the session, violating the requirement that secrets never appear in anything the client keeps."
+    "Any text produced by the engine that the client keeps in memory for the session is masked before it is kept, so the in-memory copy never contains a value the client would mask on screen.",
+    "The retained state text shown by the state display is the masked text; repeating the display later does not reveal the secret.",
+    "The retained idle-refresh failure text is masked before retention, and any later display of that failure shows only the mask.",
+    "Masking applies equally to engine answers and engine error messages.",
+    "Text that carries no key material is retained and shown unchanged, apart from the masking applied today.",
+    "Masking an already-masked retained text leaves it unchanged: no second marker appears and no content is lost.",
+    "What the user sees on a later repeat of retained text equals what the client retained; there is no path where the retained copy is more revealing than the display.",
+    "No other client behavior changes, and the existing test suite passes."
   ],
   "acceptance": [
-    "The release audit finding is resolved: The session keeps unredacted engine text in memory. `show_state` assigns the raw joined state to `self.last_state`, and `idle_refresh` assigns raw `exc.message` to `self.idle_failure`; if engine output or an error contains key material, it remains in the client for the session, violating the requirement that secrets never appear in anything the client keeps.",
-    "Existing tests pass"
+    "When the engine returns an answer whose text contains key material, nothing the client retains for the session contains that value in readable form; the user sees only the mask.",
+    "When the engine fails with an error message containing key material, the failure text the client retains and any later display of it contain only the mask.",
+    "An answer or error without key material is retained and shown exactly as before.",
+    "Masking retained text a second time yields the same text, with one marker per masked value.",
+    "Repeating a retained state or failure display later shows the same masked text that was retained.",
+    "All pre-existing tests pass."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
   "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
   "release_class": "minor",
   "order": 0,
-  "checks": [],
-  "external_dependencies": [],
+  "checks": [
+    {
+      "criterion": "When the engine returns an answer whose text contains key material, nothing the client retains for the session contains that value in readable form.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "When the engine fails with an error message containing key material, the retained failure text and its later display contain only the mask.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "An answer or error without key material is retained and shown exactly as before.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Masking retained text a second time yields the same text, with one marker per masked value.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Repeating a retained state or failure display later shows the same masked text that was retained.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "All pre-existing tests pass.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    }
+  ],
+  "external_dependencies": [
+    {
+      "name": "Forgel engine commands",
+      "interface": "Invoke the Forgel engine command interface exposed by the project’s `main` application repository: pass a command name and parameters, receive the returned text answer, and on failure catch the engine error and read `message`. Both the text and the error message must be masked before retention.",
+      "docs": "Project repository list; FORGEL.md — Runtime Process Model and D-108.",
+      "mode": "direct",
+      "evidence": "The project repository contract lists the Forgel application repositories (`main: application`, `code: application`). FORGEL.md states the runtime is code-owned in `src/forgel/runtime_model.py` and that runtime operations are directly available (D-108: `drive`, `task ...`, `release ...`). The task dependency contract defines the engine invocation result as a text answer or an error `message`.",
+      "stub": ""
+    }
+  ],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-24T00:38:49+00:00",
-  "started_at": "",
+  "started_at": "2026-11-24T04:28:48+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
