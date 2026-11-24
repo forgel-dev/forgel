@@ -1216,6 +1216,9 @@ def cmd_adopt(args: argparse.Namespace) -> int:
                 args.url,
                 brief=args.brief,
                 name=args.name,
+                model_client=build_model_client(
+                    settings.home, log=lambda _m: None
+                ),
             )
         except (AdoptError, ProviderError) as exc:
             print(_say("cli_error", error=exc), file=sys.stderr)
@@ -1306,6 +1309,9 @@ def cmd_repo(args: argparse.Namespace) -> int:
                     role=args.role,
                     description=args.description,
                     path=args.path,
+                    model_client=build_model_client(
+                        settings.home, log=lambda _m: None
+                    ),
                 )
             except (AdoptError, ProviderError, GithubAuthError) as exc:
                 print(_say("cli_error", error=exc), file=sys.stderr)
@@ -1407,6 +1413,9 @@ def cmd_repo(args: argparse.Namespace) -> int:
                 repo_id=args.id,
                 depends_on=depends,
                 role=args.role,
+                model_client=build_model_client(
+                    settings.home, log=lambda _m: None
+                ),
             )
         except (AdoptError, ProviderError) as exc:
             print(_say("cli_error", error=exc), file=sys.stderr)
@@ -1795,16 +1804,6 @@ def cmd_plan(args: argparse.Namespace) -> int:
                     task=identifier,
                 )
             )
-            checks = item.get("checks") or []
-            if checks:
-                print(
-                    _say(
-                        "cli_plan_checks",
-                        checks="; ".join(
-                            check["criterion"] for check in checks
-                        ),
-                    )
-                )
         if result.artifact:
             print(
                 _say(

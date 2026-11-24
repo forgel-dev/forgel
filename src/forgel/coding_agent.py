@@ -53,6 +53,7 @@ from .model import (
     project_model_name,
 )
 from .pricing import token_cost
+from .program_manifest import entries as manifest_entries
 from .proc import merge_output
 from .project_config import ConfigError, load_project_config
 from .repo_tools import READ_DEFAULT_LINES, read_text_page
@@ -179,7 +180,7 @@ JSON actions below.
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
-{"action": "done", "summary": "what was implemented and how it was tested", "files": ["relative/path changed or created by this task"], "assumptions": ["what you decided where the task was silent"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}], "spec_issues": [{"requirement": "the requirement or contract point", "problem": "why it cannot be implemented as written", "proposal": "what the specification should say instead"}]}
+{"action": "done", "summary": "what was implemented and how it was tested", "files": ["relative/path changed or created by this task"], "assumptions": ["what you decided where the task was silent"], "test_command": ["command", "arg"], "test_removals": [{"test": "tests/test_x.py::test_y", "reason": "removed|replaced|wrong", "replacement": "tests/test_x.py::test_z"}], "spec_issues": [{"requirement": "the requirement or contract point", "problem": "why it cannot be implemented as written", "proposal": "what the specification should say instead"}]}
 {"action": "fail", "reason": "why the task cannot be completed"}
 
 Context:
@@ -231,6 +232,9 @@ Rules:
   or setup install the dependency instead of faking it.
 - Write tests for the requirements and run them. Call done only after the
   tests pass and the requirements are implemented.
+- Leave done.test_command empty by default. Set it only when the task's tests
+  are not covered by the repository test gate; the runtime runs the repository
+  test commands first, then this command.
 - The accepted specification is the contract. Follow it. A deviation is an
   exception, not a normal choice: report it in done.spec_issues only for a
   concrete, verifiable defect that makes a requirement impossible,
@@ -1464,6 +1468,19 @@ class CodingAgent:
                                     ).strip(),
                                 }
                             )
+                        reported_command = action.get("test_command")
+                        if isinstance(reported_command, list):
+                            values = [
+                                str(item)
+                                for item in reported_command
+                                if str(item).strip()
+                            ]
+                            task["test_command"] = values
+                            tasks.update_task(
+                                layout,
+                                str(task["id"]),
+                                test_command=values,
+                            )
                         terminal = True
                         break
                     if kind == "fail":
@@ -1585,14 +1602,32 @@ class CodingAgent:
 
         test_output = ""
         if status == "done":
-            test_command = [
+            repository_commands: list[list[str]] = []
+            repository_entry = next(
+                (
+                    item
+                    for item in manifest_entries(layout)
+                    if item["id"] == repo_id
+                ),
+                None,
+            )
+            if repository_entry is not None:
+                repository_commands = [
+                    shlex.split(command)
+                    for command in repository_entry.get("test") or []
+                    if str(command).strip()
+                ]
+            task_test = [
                 str(item) for item in task.get("test_command", [])
             ]
-            if test_command:
+            final_commands = list(repository_commands)
+            if task_test:
+                final_commands.append(task_test)
+            for final_command in final_commands:
                 code, output = self._run_command(
                     layout,
                     repo,
-                    test_command,
+                    final_command,
                     timeout=max(
                         60.0,
                         limits.get(
@@ -1604,10 +1639,10 @@ class CodingAgent:
                     runner=runner,
                     extra_env=environment.env_map if environment else None,
                 )
-                test_output = output
+                test_output += output
                 commands.append(
                     {
-                        "command": test_command,
+                        "command": final_command,
                         "exit_code": code,
                         "final_test": True,
                     }
@@ -1615,7 +1650,10 @@ class CodingAgent:
                 if code != 0:
                     status = "failed"
                     failure_kind = "qa"
-                    summary += f"; final test command exited {code}"
+                    summary += (
+                        f"; final test command exited {code}"
+                    )
+                    break
         context_stats = {
             "window": window,
             "usable": budget.usable,
@@ -1794,6 +1832,19 @@ class CodingAgent:
             else ""
         )
         test_command = task.get("test_command") or []
+        repository_entry = next(
+            (
+                item
+                for item in manifest_entries(layout)
+                if item["id"] == repo_id
+            ),
+            None,
+        )
+        repository_tests = (
+            list(repository_entry.get("test") or [])
+            if repository_entry is not None
+            else []
+        )
         tree = self._list(repo)
         branch = git_ops.current_branch(repo)
         answer_language = language.name(str(task.get("language") or ""))
@@ -1819,7 +1870,9 @@ Constraints:
 Assumptions already recorded at intake (do not re-ask):
 {assumptions}
 {feedback_section}{previous_section}
-Final test command: {json.dumps(test_command)}
+Repository test commands (project gate): {json.dumps(repository_tests)}
+Task test command (extra tests only; empty by default):
+{json.dumps(test_command)}
 Repository: {repo_id} at {repo} (branch {branch})
 
 The user's chat language is {answer_language}. The project and repository

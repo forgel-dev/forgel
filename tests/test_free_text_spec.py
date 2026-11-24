@@ -42,14 +42,6 @@ SPEC = {
     "open_questions": [],
     "related_documents": [],
     "revision_history": ["1.0.0 — initial"],
-    "checks": [
-        {
-            "criterion": "The fixture command exits 0",
-            "verification": "command",
-            "command": ["python", "-c", "print('ok')"],
-        }
-    ],
-    "test_command": [],
     "external_dependencies": [],
 }
 
@@ -153,7 +145,9 @@ class FreeTextSpecTest(unittest.TestCase):
         assert stored is not None
         self.assertTrue(stored["spec"].endswith("docs/program/specs/task-1.md"))
         self.assertEqual(stored["request"], "docs/program/requests/req.md")
-        self.assertEqual(len(stored["checks"]), 1)
+        self.assertEqual(
+            stored["requirements"], SPEC["requirements"]
+        )
         self.assertEqual(stored["status"], "done")
         self.assertTrue((self.repo / "feature.py").exists())
 

@@ -35,10 +35,6 @@ SPEC = {
     "affected_files": ["app.py"],
     "related_documents": [],
     "revision_history": ["1.0.0 — initial"],
-    "checks": [
-        {"criterion": "The thing works", "verification": "review"}
-    ],
-    "test_command": [],
 }
 
 
@@ -247,10 +243,6 @@ class PlannerGateTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("The thing works", text)
-        self.assertEqual(len(stored["checks"]), len(SPEC["checks"]))
-        self.assertEqual(
-            stored["checks"][0]["criterion"],
-            SPEC["checks"][0]["criterion"],
-        )
-        self.assertEqual(stored["test_command"], SPEC["test_command"])
+        self.assertEqual(stored["requirements"], SPEC["requirements"])
+        self.assertEqual(stored["acceptance"], SPEC["acceptance"])
 

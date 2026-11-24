@@ -361,7 +361,8 @@ class RepositoryEnvironmentTest(unittest.TestCase):
         self.assertEqual(environment.build, "environment")
         self.assertEqual(environment.mounts, ("code",))
         self.assertEqual(
-            environment.test, ("python -m unittest discover -s tests",)
+            environment.test,
+            ("python3 -m unittest discover -s tests",),
         )
         self.assertEqual(environment.env_map, {"PYTHONPATH": "src"})
         self.assertTrue((REPO_ROOT / "environment" / "Dockerfile").is_file())

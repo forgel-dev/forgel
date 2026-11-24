@@ -14,58 +14,6 @@
   "release_id": "20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o",
   "release_class": "minor",
   "order": 7,
-  "checks": [
-    {
-      "criterion": "Reviewing the install part of the page, its first installation route is a single action that the text says installs the engine and the client together, and no other installation route appears before it.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the install part of the page, nothing tells the reader they must first obtain or pre-install the engine in order to install the client.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the install part of the page, the engine's standalone install is documented as its own separate path.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the install part of the page, exactly one concrete minimum supported engine version is stated, together with the statement that an older engine is refused.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the install part of the page, the repeat-install paragraph states that the engine is installed only when missing or strictly older and that an equal or newer installed engine is left untouched.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the install part of the page, both the missing-engine message and the too-old-engine message are described and each is actionable.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the page as a whole, it states that version and diagnostic output work without an engine while engine-backed commands fail with the actionable message.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the page as a whole, the added prose contains no internal structure, step ordering, timing, duration, runtime bound or local environment detail, and no reference to a release that has not been published.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the client's changelog, its entry for changes not yet released covers the four recorded user-visible changes.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reviewing the whole change, every documented statement agrees with the behaviour of the shipped product, and no previously correct installation statement was made false.",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "external_dependencies": [],
   "language": "en",
   "status": "pending",

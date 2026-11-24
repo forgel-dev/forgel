@@ -34,33 +34,6 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [
-    {
-      "criterion": "Review of the project's documentation finds no statement of a suite completion time, duration or runtime bound anywhere.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Review of the guidance on running the suite finds it still telling the reader that one documented command runs the whole suite with nothing left out, that the installer situations are covered and perform a real installation into a throwaway home location with a real detected login shell, and that a run from a source checkout needs only the Python standard library and no network access.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Review finds every remaining statement about how to run the suite and about the coverage of such a run consistent with what the project actually does.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Review finds the documented client commands, options, output form, session behaviour and the installer's install, update and uninstall behaviour unchanged.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Review finds the documentation written in English.",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "external_dependencies": [],
   "language": "",
   "status": "done",

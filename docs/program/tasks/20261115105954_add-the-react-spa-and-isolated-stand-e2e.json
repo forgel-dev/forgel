@@ -34,39 +34,6 @@
   "depends_on": [
     "20261115105954_add-the-django-drf-backend-skeleton-temp"
   ],
-  "checks": [
-    {
-      "criterion": "Structural test covers web, qa profile, scenario file and e2e command",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_template_django_drf_react",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "The template environment.yaml parses through src/forgel/environment.py with a test and an e2e command",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_environment",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "The e2e scenario passes in the isolated compose stand, with actual output in the task report",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T17:18:18+00:00",

@@ -56,14 +56,6 @@ def _spec_for(intent: dict) -> dict:
         "constraints": [],
         "assumptions": [],
         "risks": [],
-        "checks": [
-            {
-                "criterion": "The outcome is observable",
-                "verification": "command",
-                "command": ["python", "-c", "print('ok')"],
-            }
-        ],
-        "test_command": [],
     }
 
 
@@ -561,69 +553,6 @@ class PlannerTest(unittest.TestCase):
         self.assertNotIn("task_id", result.tasks[0])
         self.assertEqual(result.artifact, "")
         self.assertEqual(list_tasks(self.layout), [])
-
-    def test_a_task_without_checks_is_recorded_as_blocked(self) -> None:
-        payload = {
-            "tasks": [
-                {
-                    "title": "No checks",
-                    "requirements": ["x"],
-                    "acceptance": ["y"],
-                    "repo_id": "main",
-                }
-            ]
-        }
-        result = self._plan(
-            payload,
-            specs=[
-                {
-                    "requirements": ["x"],
-                    "acceptance": ["y"],
-                    "checks": [],
-                }
-            ],
-        )
-        self.assertTrue(result.blocked)
-        self.assertTrue(result.blockers)
-        tasks = list_tasks(self.layout)
-        self.assertEqual(len(tasks), 1)
-        self.assertEqual(tasks[0]["status"], "blocked")
-
-    def test_a_review_only_check_is_accepted(self) -> None:
-        payload = {
-            "tasks": [
-                {
-                    "title": "Docs",
-                    "requirements": ["Write the docs"],
-                    "acceptance": ["The prose is accurate"],
-                    "repo_id": "main",
-                    "checks": [
-                        {
-                            "criterion": "The prose is accurate",
-                            "verification": "review",
-                        }
-                    ],
-                }
-            ]
-        }
-        result = self._plan(
-            payload,
-            specs=[
-                {
-                    "requirements": ["Write the docs"],
-                    "acceptance": ["The prose is accurate"],
-                    "checks": [
-                        {
-                            "criterion": "The prose is accurate",
-                            "verification": "review",
-                        }
-                    ],
-                }
-            ],
-        )
-        self.assertEqual(
-            result.tasks[0]["checks"][0]["verification"], "review"
-        )
 
     def test_unknown_repository_is_rejected(self) -> None:
         payload = {

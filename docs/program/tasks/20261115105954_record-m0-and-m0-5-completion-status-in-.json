@@ -22,13 +22,6 @@
   "plan_goal": "Довести проект до выхода на M1 (публичная OSS-альфа): вертикальный срез Django/DRF + React SPA + Postgres + S3 на Yandex Cloud, multi-repo, независимый e2e QA в изолированном стенде, staging с подтверждением человеком, учёт стоимости и приёмок, самохостинг Forgel на самом себе. Первой задачей — проставить в PLAN.md и README отметки о том, что из M0/M0.5 уже сделано, чтобы список отражал реальность.",
   "order": 1,
   "depends_on": [],
-  "checks": [
-    {
-      "criterion": "Status claims are backed by evidence in the project tree",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T11:15:11+00:00",

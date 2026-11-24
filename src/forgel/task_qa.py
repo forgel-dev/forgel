@@ -1,18 +1,14 @@
 """Independent QA for a coding task.
 
 The coding agent runs its own final test; this pass runs the project's
-environment contract again, plus the task's explicit acceptance checks and its
-test command, from a clean process after the agent has committed.
+environment contract again, the repository test commands and the task's
+additional test command, from a clean process after the agent has committed.
 
-Acceptance checks are ordinary commands stored in the task record, outside the
-agent's write scope: the agent cannot weaken them from the repository. A check
-whose criterion cannot be automated is marked ``verification: review`` and is
-verified by the independent reviewer from the evidence in the task report; it
-is not a separate human evidence gate.
-
-The verdict is authoritative: a green agent run with a red QA becomes a failed
-task, with the QA report attached. When there is nothing to run, the verdict is
-``skipped`` rather than a false pass.
+The repository test commands are the project gate; the task test command is
+only for tests the task adds outside that gate. The verdict is authoritative:
+a green agent run with a red QA becomes a failed task, with the QA report
+attached. When there is nothing to run, the verdict is ``skipped`` rather than
+a false pass.
 """
 
 from __future__ import annotations
@@ -27,7 +23,6 @@ from typing import Any, Callable, Sequence
 
 from . import capabilities
 from .artifacts import write_text
-from .check_commands import check_problems
 from .config import Settings
 from .environment import (
     Environment,
@@ -177,20 +172,19 @@ def _qa_checks(
             add("environment test", command, "environment", root, env_repo)
         for command in environment.e2e:
             add("environment e2e", command, "e2e", root, env_repo)
-    for check in task.get("checks", []):
-        criterion = str(check.get("criterion", "")).strip() or "check"
-        if check.get("verification") == "review":
-            review.append(
-                {"criterion": criterion, "verification": "review"}
+    repository_entry = next(
+        (entry for entry in entries(layout) if entry["id"] == repo_id),
+        None,
+    )
+    if repository_entry is not None:
+        for command in repository_entry.get("test") or []:
+            add(
+                "repository test",
+                command,
+                "repo",
+                task_root,
+                repo_id,
             )
-            continue
-        add(
-            criterion,
-            shlex.join(check.get("command", [])),
-            "task",
-            task_root,
-            repo_id,
-        )
     test_command = [str(item) for item in task.get("test_command", [])]
     if test_command:
         add(
@@ -552,7 +546,7 @@ def run_task_qa(
     task: dict[str, Any],
     log: Callable[[str], None] = print,
 ) -> TaskQAResult:
-    """Run the project gate and the task's acceptance checks."""
+    """Run the project gate and the task's additional test command."""
 
     layout = ProjectLayout.detect(project["workspace"])
     task = get_task(layout, str(task["id"])) or task
@@ -738,43 +732,6 @@ def run_task_qa(
         first = skip_message.splitlines()[0] if skip_message else "e2e skipped"
         log(
             f"[qa] {project['id']}: task {task['id']}: {first}"
-        )
-    task_checks = [
-        item for item in executable if item.get("scope") == "task"
-    ]
-    problems = check_problems(layout, repo_id, task_checks)
-    if problems:
-        detail = "\n".join(f"- {problem}" for problem in problems)
-        workdir = str(
-            layout.repo_path(repo_id) if repo_id else layout.root
-        )
-        checks = [
-            {
-                "criterion": "check command runs in the task repository",
-                "command": "",
-                "exit_code": 2,
-                "verdict": "fail",
-                "scope": "task",
-                "repo": repo_id,
-                "workdir": workdir,
-                "output": detail,
-                "failure": "spec",
-            }
-        ]
-        return _record(
-            ledger,
-            layout,
-            project,
-            task,
-            TaskQAResult(
-                status="fail",
-                runtime="preflight",
-                output=detail,
-                checks=checks,
-                failure_kind="spec",
-            ),
-            2,
-            log,
         )
     results: list[tuple[dict[str, Any], int, str]]
     if docker_runner(settings) is not None:

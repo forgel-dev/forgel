@@ -203,7 +203,6 @@ instructions say otherwise. Return exactly one JSON object:
   "open_questions": ["only a question that cannot be decided reversibly"],
   "repo_id": "an existing repository id; required for a change_request",
   "release_class": "patch for a bug fix, minor for new functionality or changed behaviour; major only for the first product release or a breaking change after 1.0.0",
-  "test_command": ["command", "arg"] or [],
   "assumptions": ["what you decided where the request was silent"]
 }
 
@@ -329,10 +328,9 @@ For a change request:
   questions describe observable product behavior only. Never put a command, a
   file path, code, a tool or provider name, an environment variable, an
   interface, a contract, an endpoint, a request or response format, a schema,
-  a commit/git/worktree step or any other implementation detail into them; a
-  verification command belongs in test_command. A change request is a
-  requirements document: the permission to document a stable interface in
-  user documentation does not apply.
+  a commit/git/worktree step or any other implementation detail into them.
+  A change request is a requirements document: the permission to document a
+  stable interface in user documentation does not apply.
 - Never require a test for a documentation change; documentation is verified
   by review of its text.
 - list the explicit functional requirements and acceptance criteria; do not
@@ -352,8 +350,6 @@ For a change request:
   Before 1.0.0 a breaking change is still a minor release. Use "major" only
   when the user explicitly asks for the first product release or, after
   1.0.0, for a change that breaks a published contract;
-- set test_command only when the project's test command is evident from the
-  context, otherwise leave it empty;
 - the runtime release train owns release versions, tags and publication. Do
   not state, promise or choose a version or tag yourself; report the queued
   change and let the release report carry the version;
@@ -377,8 +373,8 @@ Rules:
 - Give the mechanism from the evidence in the context. Connect cause to
   effect: why that made the task impossible to finish. Distinguish the root
   cause from the symptom.
-- Use the task requirements, acceptance criteria, checks, actions, command
-  exits, QA report, review defects and plan state together. Do not explain one
+- Use the task requirements, acceptance criteria, actions, command exits,
+  QA report, review defects and plan state together. Do not explain one
   field in isolation.
 - Then state the consequence for the milestone and the concrete unblock: what
   the runtime does automatically, what needs a retry or a criteria change, and
@@ -990,9 +986,6 @@ def parse_answer(raw: str) -> dict[str, Any]:
     constraints = data.get("constraints")
     if not isinstance(constraints, list):
         constraints = []
-    test_command = data.get("test_command")
-    if not isinstance(test_command, list):
-        test_command = []
     assumptions = data.get("assumptions")
     if not isinstance(assumptions, list):
         assumptions = []
@@ -1019,9 +1012,6 @@ def parse_answer(raw: str) -> dict[str, Any]:
         ],
         "repo_id": str(data.get("repo_id", "")).strip(),
         "release_class": str(data.get("release_class", "")).strip().lower(),
-        "test_command": [
-            str(item) for item in test_command if str(item).strip()
-        ],
         "assumptions": [
             str(item) for item in assumptions if str(item).strip()
         ],
@@ -1728,14 +1718,9 @@ class ProjectAgent:
         decisions = self._record_decisions(
             layout, answer.get("user_decisions"), actor, title
         )
-        test_command = [str(item) for item in (answer.get("test_command") or [])]
 
         created = datetime.now(timezone.utc).isoformat(timespec="seconds")
         test_text = requirements_doc.bullets(tests)
-        if test_command:
-            test_text += (
-                "\n- Command: `" + " ".join(test_command) + "`"
-            )
         values = {
             "kind": "Feature",
             "title": title,
@@ -1841,7 +1826,6 @@ class ProjectAgent:
             "Keep the change inside the selected repository",
             "Do not add unrequested features",
         ]
-        test_command = answer.get("test_command") or []
         task = tasks.create_task(
             layout,
             title,
@@ -1849,7 +1833,6 @@ class ProjectAgent:
             [str(item) for item in acceptance],
             [str(item) for item in constraints],
             repo_id=repo_id,
-            test_command=[str(item) for item in test_command],
             assumptions=[
                 str(item) for item in (answer.get("assumptions") or [])
             ],

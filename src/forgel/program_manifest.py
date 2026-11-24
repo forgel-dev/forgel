@@ -92,6 +92,11 @@ def _normalize(entry: dict[str, Any]) -> dict[str, Any]:
         "url": str(entry.get("url") or ""),
         "depends_on": [str(item) for item in depends_on if str(item).strip()],
         "contracts": normalized_contracts,
+        "test": [
+            str(item).strip()
+            for item in (entry.get("test") or [])
+            if str(item).strip()
+        ],
     }
     if entry.get("path"):
         normalized["path"] = str(entry["path"])
@@ -181,6 +186,13 @@ def render_program(
         depends_on = entry.get("depends_on") or []
         rendered = ", ".join(depends_on) if depends_on else ""
         lines.append(f"    depends_on: [{rendered}]")
+        test_commands = entry.get("test") or []
+        if test_commands:
+            lines.append("    test:")
+            for command in test_commands:
+                lines.append(f"      - {json.dumps(command)}")
+        else:
+            lines.append("    test: []")
         if entry.get("preset"):
             lines.append(f"    preset: {entry['preset']}")
         contracts = entry.get("contracts") or {}

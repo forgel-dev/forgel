@@ -37,58 +37,6 @@
   "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
   "release_class": "minor",
   "order": 0,
-  "checks": [
-    {
-      "criterion": "A label followed by an ordinary descriptor and then a credential is displayed with the label and descriptor visible and the credential replaced by the placeholder.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_redact.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Text the client retains, including the background-refresh failure text, contains the placeholder instead of the credential for those shapes.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_retained_text.py",
-        "tests/test_idle_refresh.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Sentences that previously masked correctly still produce the same masked output and prose without a value is unchanged.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_redact.py",
-        "tests/test_interactive.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The existing automated test suite passes.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Masked output keeps the surrounding sentence readable and uses the placeholder the client already uses.",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "external_dependencies": [],
   "language": "",
   "status": "done",

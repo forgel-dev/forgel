@@ -33,34 +33,6 @@
   "depends_on": [
     "20261115105954_add-the-react-spa-and-isolated-stand-e2e"
   ],
-  "checks": [
-    {
-      "criterion": "Registry validation and selection tests pass",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_registry",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "hello-web selection still works for the M0 demo requirements",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_e2e",
-        "-v"
-      ]
-    }
-  ],
   "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T17:24:20+00:00",

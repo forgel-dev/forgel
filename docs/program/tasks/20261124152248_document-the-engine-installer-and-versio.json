@@ -14,63 +14,6 @@
   "release_id": "20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o",
   "release_class": "minor",
   "order": 6,
-  "checks": [
-    {
-      "criterion": "A reader with no prior knowledge of the repository can obtain a working engine by satisfying the listed prerequisites and performing the one presented install step, and the section names no second step required for that result.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The text says where the engine's entry point is placed, how the engine is run afterwards, and what the user does when that location is not reachable from the shell the user is in.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The text shows how the user confirms the install by reading the version the engine reports.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The text states that the engine reports its version in a form another program consumes directly without interpreting human-oriented text, that this is the supported compatibility judgement for other tools, and that it needs no project, no model credential and no particular working directory.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The text states how the version that a configured source or release ref would provide is determined before anything is installed, and that this value is what an installed engine is compared against.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The text states that only a strictly newer available version replaces an installed engine, and that an equal or older available version leaves the installed engine untouched.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The text states how to remove the engine and its entry point and which of the user's configuration and project material are kept.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "A reviewer finds no documented behaviour that the shipped installer and engine do not perform, and no shipped install, version or removal behaviour that the text contradicts.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The user-visible release notes contain an entry covering the single install step, the entry point and shell reachability, removal, the directly consumable version inquiry and pre-install version determination.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "No internal structure, timing, runtime bound, test duration or local environment detail appears in the new text.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "Reading the project's user-facing introduction end to end after the change yields no statement that contradicts the shipped installer or the shipped version behaviour, and no previously accurate section is weakened.",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "external_dependencies": [],
   "language": "en",
   "status": "pending",

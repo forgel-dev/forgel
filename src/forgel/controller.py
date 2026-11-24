@@ -196,9 +196,9 @@ def release_action(operation: str) -> str:
 
 
 PERMISSIONS = """You decide the next step; you do not edit files, run commands or change a check.
-- retry: requeue the same work unchanged. The agent runs again with the same task and the same checks.
-- rework: send the work back with feedback. The same checks run again; feedback cannot change a check command, a limit or a missing tool.
-- respec: rewrite the specification text from "issue"; executable acceptance checks stay as they are. The issue states the behavior defect in plain product terms: never a command, file path, code, tool name or runtime mechanic.
+- retry: requeue the same work unchanged. The agent runs again with the same task and the same repository tests.
+- rework: send the work back with feedback. The same repository tests run again; feedback cannot change a test command, a limit or a missing tool.
+- respec: rewrite the specification text from "issue"; the repository test commands and the environment gate stay as they are. The issue states the behavior defect in plain product terms: never a command, file path, code, tool name or runtime mechanic.
 - set_limit {name, seconds}: raise a runtime limit (the limits item lists them).
 - accept/reject: decide on work that already meets or misses the requirements.
 - cancel/block/stop: end the work and report the state.

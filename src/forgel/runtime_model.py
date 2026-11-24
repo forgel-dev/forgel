@@ -46,7 +46,7 @@ PROCESS: tuple[tuple[str, str, str], ...] = (
     (
         "verification",
         "QA, reviewer and acceptor",
-        "run deterministic checks and environment e2e, then an independent "
+        "run repository tests and environment e2e, then an independent "
         "review, then acceptance (automatic or human). A failure reworks the "
         "task or schedules a retry with backoff.",
     ),

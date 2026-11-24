@@ -367,7 +367,11 @@ class CommandRouter:
         url, _, brief = rest.partition("|")
         try:
             result = adopt_repository(
-                self.settings, self.ledger, url.strip(), brief.strip()
+                self.settings,
+                self.ledger,
+                url.strip(),
+                brief.strip(),
+                model_client=self._review_client(),
             )
         except (AdoptError, ProviderError) as exc:
             return self._error(
@@ -575,6 +579,7 @@ class CommandRouter:
                         depends_on=depends_on,
                         description=description,
                         path=path,
+                        model_client=self._review_client(),
                     )
                     return Reply(
                         self._text(
@@ -669,6 +674,7 @@ class CommandRouter:
                 url,
                 repo_id=repo_id,
                 depends_on=depends_on,
+                model_client=self._review_client(),
             )
         except (AdoptError, ProviderError) as exc:
             return self._error(
@@ -1595,14 +1601,7 @@ class CommandRouter:
         if result.notes:
             lines.append(result.notes)
         for index, item in enumerate(result.tasks, 1):
-            checks = item.get("checks") or []
-            suffix = (
-                self._text(
-                    chat_id, "chat_plan_checks", count=len(checks)
-                )
-                if checks
-                else ""
-            )
+            suffix = ""
             if item.get("blocked"):
                 suffix += self._text(
                     chat_id, "chat_plan_blocked_task"

@@ -17,7 +17,6 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import requirements as requirements_doc
 from .artifacts import write_text
-from .check_commands import check_problems
 from .instructions import instruction_context
 from .layout import ProjectLayout
 from .model_output import json_objects
@@ -41,7 +40,6 @@ SPEC_KEYS = {
     "requirements",
     "acceptance",
     "constraints",
-    "checks",
     "external_dependencies",
 }
 SPEC_DIR = "docs/program/specs"
@@ -113,13 +111,7 @@ Return exactly one JSON object:
   "user_stories": ["as a ... I want ... so that ..."],
   "open_questions": ["only a truly undecidable choice, never a way to avoid deciding"],
   "related_documents": ["path"],
-  "revision_history": ["version and what changed"],
-  "checks": [
-    {"criterion": "which acceptance criterion",
-     "verification": "command" | "review",
-     "command": ["command", "arg"]}
-  ],
-  "test_command": ["command", "arg"] or []
+  "revision_history": ["version and what changed"]
 }
 
 Rules:
@@ -132,16 +124,16 @@ Rules:
   a command (shell, git, package manager), a file path, code, an identifier, a
   tool or provider name, an environment variable, an interface, a contract, an
   endpoint, a request or response format, a schema, a commit/PR/worktree step
-  or any other implementation detail into them. A verification command
-  belongs only in the "checks" field, and the test command in
-  "test_command". Runtime mechanics (git, commit, worktree, done report) are
-  never requirements. This is a requirements document: the permission to
-  document a stable interface in user documentation does not apply. If the
-  intent or the respec issue names a command, a file or a runtime step,
-  restate the behavior it must produce.
+  or any other implementation detail into them. Runtime mechanics (git,
+  commit, worktree, done report) are never requirements. This is a
+  requirements document: the permission to document a stable interface in
+  user documentation does not apply. If the intent or the respec issue names
+  a command, a file or a runtime step, restate the behavior it must produce.
 - Documentation is text and is verified by review. Never require or add a
-  test, guard, assertion or automated check that reads a documentation file;
-  a documentation task has review-only checks and no test command.
+  test, guard, assertion or automated check that reads a documentation file.
+- Acceptance criteria describe observable outcomes. The repository test gate
+  and the reviewer judge them; the specification does not carry a test
+  command or an automated check.
 - A respec issue is a binding decision: the rewritten requirements and
   acceptance must remove the option the issue rejected and must not leave a
   product choice open when the acceptance depends on it. Requirements and
@@ -234,47 +226,16 @@ def _strings(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
-def _check(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, dict):
-        return None
-    criterion = str(raw.get("criterion", "")).strip()
-    if not criterion:
-        return None
-    verification = str(raw.get("verification", "command")).strip().lower()
-    if verification not in {"command", "review"}:
-        verification = "command"
-    command = raw.get("command", [])
-    if isinstance(command, str):
-        command = [command]
-    if not isinstance(command, list):
-        command = []
-    command = [str(item) for item in command if str(item).strip()]
-    if verification == "command" and not command:
-        return None
-    return {
-        "criterion": criterion,
-        "verification": verification,
-        "command": command,
-    }
-
-
 def _normalize_spec(
     data: Mapping[str, Any],
     intent: Mapping[str, Any],
 ) -> dict[str, Any]:
     requirements = _strings(data.get("requirements"))
     acceptance = _strings(data.get("acceptance"))
-    checks = [
-        item
-        for item in (_check(raw) for raw in data.get("checks") or [])
-        if item is not None
-    ]
     if not requirements:
         raise SpecError("the specification has no requirements")
     if not acceptance:
         raise SpecError("the specification has no acceptance criteria")
-    if not checks:
-        raise SpecError("the specification has no checks")
     external_dependencies = [
         {
             "name": str(item.get("name") or "").strip(),
@@ -288,14 +249,6 @@ def _normalize_spec(
         if isinstance(item, dict)
         and str(item.get("name") or "").strip()
     ]
-    if external_dependencies and not any(
-        item["verification"] == "command" and item["command"]
-        for item in checks
-    ):
-        raise SpecError(
-            "an external dependency needs at least one command check that "
-            "exercises the real interface"
-        )
     return {
         "title": str(intent.get("title") or "").strip(),
         "summary": str(intent.get("summary") or "").strip(),
@@ -333,8 +286,6 @@ def _normalize_spec(
         "open_questions": _strings(data.get("open_questions")),
         "related_documents": _strings(data.get("related_documents")),
         "revision_history": _strings(data.get("revision_history")),
-        "checks": checks,
-        "test_command": _strings(data.get("test_command")),
     }
 
 
@@ -466,25 +417,6 @@ def documentation_problems(
     if not documentation_task(intent, spec):
         return []
     problems: list[str] = []
-    if spec.get("test_command"):
-        problems.append("a documentation task has no test_command")
-    for check in spec.get("checks") or []:
-        criterion = str(check.get("criterion") or "")
-        command = " ".join(
-            str(item) for item in (check.get("command") or [])
-        )
-        if str(check.get("verification") or "") != "review":
-            problems.append(
-                "a documentation check must be review-only: "
-                f"{criterion[:120]}"
-            )
-        if DOCUMENTATION_WORDS.search(
-            criterion + " " + command
-        ) and TEST_WORDS.search(criterion + " " + command):
-            problems.append(
-                "documentation is verified by review, not by a test: "
-                f"{criterion[:120]}"
-            )
     for field in (
         "requirements",
         "acceptance",
@@ -597,6 +529,11 @@ def write_task_spec(
             + (
                 "The owner requires these changes to the specification:\n"
                 f"{requested_changes}\n\n"
+                "Apply only these changes. Keep every other requirement, "
+                "acceptance criterion, constraint, check and test command "
+                "exactly as it is: do not reword, reformulate, remove or add "
+                "anything else, and do not change the task's nature or "
+                "scope.\n\n"
                 if requested_changes
                 else ""
             )
@@ -705,13 +642,6 @@ def write_task_spec(
                 documentation = documentation_problems(intent, parsed)
                 if documentation:
                     raise SpecError("; ".join(documentation[:5]))
-                problems = check_problems(
-                    layout,
-                    str(intent.get("repo_id") or ""),
-                    parsed.get("checks") or [],
-                )
-                if problems:
-                    raise SpecError("; ".join(problems))
                 break
             except SpecError as exc:
                 if retries >= MAX_SPEC_RETRIES:
@@ -739,18 +669,14 @@ def write_task_spec(
                         "environment variable, commit/git/worktree/done-report "
                         "step and other implementation detail from "
                         "requirements, acceptance, constraints, goals, user "
-                        "stories, risks, open questions and assumptions; a "
-                        "verification command belongs only in checks. A "
-                        "documentation task is text: it has review-only "
-                        "checks, no test command and no test or guard that "
-                        "reads a documentation file. A respec issue is "
+                        "stories, risks, open questions and assumptions. "
+                        "A documentation task is text and is verified by "
+                        "review; never require a test or guard that reads a "
+                        "documentation file. A respec issue is "
                         "binding: remove the option it rejected and keep "
                         "requirements and acceptance consistent. Return "
-                        "a complete JSON specification. Every command check "
-                        "must run in the task repository "
-                        f"'{intent.get('repo_id') or 'project root'}' and "
-                        "must not point at files that exist only in another "
-                        "repository.",
+                        "a complete JSON specification without a test "
+                        "command or an automated check.",
                     )
                 )
                 retries += 1
@@ -788,7 +714,7 @@ def write_task_spec(
                 ModelMessage(
                     "user",
                     "Return a complete JSON specification with explicit "
-                    "requirements, acceptance criteria and checks.",
+                    "requirements and acceptance criteria.",
                 )
             )
             retries += 1

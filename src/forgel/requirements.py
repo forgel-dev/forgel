@@ -74,25 +74,3 @@ def decisions_table(decisions: Sequence[Any]) -> str:
         "|----|----------|--------|\n"
         + "\n".join(rows)
     )
-
-
-def checks_text(
-    checks: Sequence[Mapping[str, Any]], test_command: Sequence[str] = ()
-) -> str:
-    lines: list[str] = []
-    for item in checks:
-        criterion = str(item.get("criterion") or "").strip()
-        if not criterion:
-            continue
-        if str(item.get("verification") or "command") == "review":
-            lines.append(f"- {criterion}: review")
-        else:
-            command = " ".join(
-                str(value) for value in (item.get("command") or [])
-            )
-            lines.append(f"- {criterion}: `{command}`")
-    if test_command:
-        lines.append(
-            "- Command: `" + " ".join(str(value) for value in test_command) + "`"
-        )
-    return "\n".join(lines) or "- None stated."

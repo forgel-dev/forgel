@@ -211,16 +211,11 @@ class TaskQATest(unittest.TestCase):
             ["Do it"],
             ["It is done"],
             repo_id="code",
-            checks=[
-                {
-                    "criterion": "task marker",
-                    "command": [
-                        "python",
-                        "-c",
-                        "from pathlib import Path; "
-                        "Path('task.marker').write_text('task')",
-                    ],
-                }
+            test_command=[
+                "python",
+                "-c",
+                "from pathlib import Path; "
+                "Path('task.marker').write_text('task')",
             ],
         )
         update_task(self.layout, task["id"], status="done")
@@ -242,9 +237,9 @@ class TaskQATest(unittest.TestCase):
             str(self.layout.root),
         )
         self.assertEqual(
-            by_criterion["task marker"]["workdir"], str(code)
+            by_criterion["task test command"]["workdir"], str(code)
         )
-        self.assertEqual(by_criterion["task marker"]["repo"], "code")
+        self.assertEqual(by_criterion["task test command"]["repo"], "code")
 
     def test_a_task_module_check_runs_in_the_task_repository(self) -> None:
         code = self._add_code_repo()
@@ -265,16 +260,11 @@ class TaskQATest(unittest.TestCase):
             ["Do it"],
             ["It is done"],
             repo_id="code",
-            checks=[
-                {
-                    "criterion": "The client tests pass",
-                    "command": [
-                        "python",
-                        "-m",
-                        "unittest",
-                        "tests.test_cli",
-                    ],
-                }
+            test_command=[
+                "python",
+                "-m",
+                "unittest",
+                "tests.test_cli",
             ],
         )
         update_task(self.layout, task["id"], status="done")
@@ -499,16 +489,11 @@ class TaskQATest(unittest.TestCase):
             ["Do it"],
             ["It is done"],
             repo_id="code",
-            checks=[
-                {
-                    "criterion": "The sibling repository is mounted",
-                    "command": [
-                        "python",
-                        "-c",
-                        "import os; print("
-                        "os.environ.get('FORGEL_REPO_CODE', 'MISSING'))",
-                    ],
-                }
+            test_command=[
+                "python",
+                "-c",
+                "import os; print("
+                "os.environ.get('FORGEL_REPO_CODE', 'MISSING'))",
             ],
         )
         update_task(self.layout, task["id"], status="done")
@@ -522,48 +507,6 @@ class TaskQATest(unittest.TestCase):
         self.assertEqual(result.status, "pass", result.output)
         self.assertIn(str(code), result.output)
 
-    def test_a_cross_repository_check_is_a_spec_defect(self) -> None:
-        self._add_code_repo()
-        tests = self.layout.repo_path("main") / "tests"
-        tests.mkdir(parents=True, exist_ok=True)
-        (tests / "__init__.py").write_text("", encoding="utf-8")
-        (tests / "test_cli.py").write_text("", encoding="utf-8")
-        task = create_task(
-            self.layout,
-            "Client change",
-            ["Do it"],
-            ["It is done"],
-            repo_id="code",
-            checks=[
-                {
-                    "criterion": "The client tests pass",
-                    "command": [
-                        "python",
-                        "-m",
-                        "unittest",
-                        "tests.test_cli",
-                    ],
-                }
-            ],
-        )
-        update_task(self.layout, task["id"], status="done")
-        result = run_task_qa(
-            self.settings,
-            self.ledger,
-            self.project,
-            task,
-            log=lambda _m: None,
-        )
-        self.assertEqual(result.status, "fail")
-        self.assertEqual(result.failure_kind, "spec")
-        self.assertIn("exists in repository 'main'", result.output)
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(
-            stored["result"]["failure"]["kind"], "spec"
-        )
-        self.assertFalse(stored["result"].get("rework_count"))
-
     def test_failure_feedback_carries_the_command_and_output(self) -> None:
         task = create_task(
             self.layout,
@@ -571,15 +514,10 @@ class TaskQATest(unittest.TestCase):
             ["Do it"],
             ["It is done"],
             repo_id="main",
-            checks=[
-                {
-                    "criterion": "Fails loudly",
-                    "command": [
-                        "python",
-                        "-c",
-                        "import sys; print('CHECK-OUTPUT'); sys.exit(4)",
-                    ],
-                }
+            test_command=[
+                "python",
+                "-c",
+                "import sys; print('CHECK-OUTPUT'); sys.exit(4)",
             ],
         )
         update_task(self.layout, task["id"], status="done")
@@ -598,7 +536,7 @@ class TaskQATest(unittest.TestCase):
             for item in stored["result"]["qa"]["checks"]
             if item["verdict"] == "fail"
         )
-        self.assertEqual(failing["criterion"], "Fails loudly")
+        self.assertEqual(failing["criterion"], "task test command")
         self.assertEqual(
             failing["workdir"], str(self.layout.repo_path("main"))
         )
@@ -638,19 +576,14 @@ class TaskQATest(unittest.TestCase):
         self.assertEqual(result.status, "pass", result.output)
         self.assertNotIn("environment.yaml", result.runtime)
 
-    def test_a_task_check_is_executed(self) -> None:
+    def test_task_test_command_is_executed(self) -> None:
         task = create_task(
             self.layout,
             "Check it",
             ["Do it"],
             ["It passes"],
             repo_id="main",
-            checks=[
-                {
-                    "criterion": "The check passes",
-                    "command": ["python", "-c", "print('check')"],
-                }
-            ],
+            test_command=["python", "-c", "print('check')"],
         )
         update_task(self.layout, task["id"], status="done")
         result = run_task_qa(
@@ -663,28 +596,23 @@ class TaskQATest(unittest.TestCase):
         self.assertEqual(result.status, "pass", result.output)
         self.assertTrue(
             any(
-                item["criterion"] == "The check passes"
+                item["criterion"] == "task test command"
                 and item["verdict"] == "pass"
                 for item in result.checks
             )
         )
 
-    def test_a_failing_check_fails_qa(self) -> None:
+    def test_a_failing_test_command_fails_qa(self) -> None:
         task = create_task(
             self.layout,
             "Check it",
             ["Do it"],
             ["It passes"],
             repo_id="main",
-            checks=[
-                {
-                    "criterion": "The check passes",
-                    "command": [
-                        "python",
-                        "-c",
-                        "import sys; sys.exit(3)",
-                    ],
-                }
+            test_command=[
+                "python",
+                "-c",
+                "import sys; sys.exit(3)",
             ],
         )
         update_task(self.layout, task["id"], status="done")
@@ -701,37 +629,6 @@ class TaskQATest(unittest.TestCase):
         self.assertEqual(stored["status"], "failed")
         self.assertEqual(
             stored["result"]["failure"]["kind"], "check"
-        )
-
-    def test_a_review_only_check_requires_review(self) -> None:
-        task = create_task(
-            self.layout,
-            "Review it",
-            ["Write docs"],
-            ["The prose is accurate"],
-            repo_id="main",
-            checks=[
-                {
-                    "criterion": "The prose is accurate",
-                    "verification": "review",
-                }
-            ],
-        )
-        update_task(self.layout, task["id"], status="done")
-        result = run_task_qa(
-            self.settings,
-            self.ledger,
-            self.project,
-            task,
-            log=lambda _m: None,
-        )
-        self.assertEqual(result.status, "review")
-        self.assertTrue(result.review_required)
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(stored["status"], "done")
-        self.assertTrue(
-            stored["result"]["qa"]["review_required"]
         )
 
     def test_without_anything_to_run_qa_is_skipped(self) -> None:

@@ -38,170 +38,8 @@ VALID = {
     "affected_files": ["forgel_code/cli.py"],
     "related_documents": [],
     "revision_history": ["1.0.0 — initial"],
-    "checks": [
-        {"criterion": "The change is present", "verification": "review"}
-    ],
-    "test_command": [],
     "external_dependencies": [],
 }
-
-
-class SpecCheckValidationTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp.cleanup)
-        self.settings = Settings(
-            home=Path(self._tmp.name),
-            registry_path=REPO_ROOT / "registry" / "recipes.json",
-            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
-            jurisdiction_path=REPO_ROOT / "jurisdiction",
-            qa_runtime="local",
-        )
-        self.ledger = Ledger(self.settings.db_path)
-        self.addCleanup(self.ledger.close)
-        project_id = create_project(
-            self.settings,
-            self.ledger,
-            "Spec demo",
-            "A demo project.",
-            mode="brownfield",
-        )
-        project = self.ledger.get_project(project_id)
-        assert project is not None
-        self.layout = ProjectLayout.detect(project["workspace"])
-        set_entries(
-            self.layout,
-            [
-                {
-                    "id": "main",
-                    "role": "application",
-                    "provider": "local",
-                    "url": "",
-                    "depends_on": [],
-                },
-                {
-                    "id": "code",
-                    "role": "application",
-                    "provider": "local",
-                    "url": "",
-                    "depends_on": [],
-                },
-            ],
-        )
-        main = self.layout.repo_path("main")
-        code = self.layout.repo_path("code")
-        (main / "tests").mkdir(parents=True, exist_ok=True)
-        (main / "tests" / "__init__.py").write_text("", encoding="utf-8")
-        (main / "tests" / "test_cli.py").write_text(
-            "", encoding="utf-8"
-        )
-        code.mkdir(parents=True, exist_ok=True)
-
-    def _intent(self) -> dict:
-        return {
-            "title": "Client change",
-            "summary": "Change the client.",
-            "repo_id": "code",
-            "depends_on": [],
-        }
-
-    def test_the_spec_prompt_carries_project_instructions(self) -> None:
-        self.layout.control.mkdir(parents=True, exist_ok=True)
-        (self.layout.control / "FORGEL.md").write_text(
-            "SPEC-RULE-MARKER\n", encoding="utf-8"
-        )
-        client = ScriptedModelClient([json.dumps(VALID)])
-        write_task_spec(
-            self.settings,
-            self.layout,
-            "Goal",
-            "",
-            self._intent(),
-            client,
-            log=lambda _m: None,
-        )
-        self.assertIn(
-            "SPEC-RULE-MARKER", client.requests[0][1].content
-        )
-
-    def test_a_sibling_repository_check_is_retried_in_the_spec(self) -> None:
-        invalid = dict(VALID)
-        invalid["checks"] = [
-            {
-                "criterion": "The client tests pass",
-                "command": ["python", "-m", "unittest", "tests.test_cli"],
-            }
-        ]
-        client = ScriptedModelClient(
-            [json.dumps(invalid), json.dumps(VALID)]
-        )
-        spec = write_task_spec(
-            self.settings,
-            self.layout,
-            "Goal",
-            "",
-            self._intent(),
-            client,
-            log=lambda _m: None,
-        )
-        self.assertEqual(spec["checks"][0]["verification"], "review")
-        retry = client.requests[1][-1].content
-        self.assertIn("exists in repository 'main'", retry)
-        self.assertIn("task repository 'code'", retry)
-
-    def test_an_external_dependency_needs_a_command_check(self) -> None:
-        review_only = dict(VALID)
-        review_only["external_dependencies"] = [
-            {"name": "weather", "interface": "HTTP forecast"}
-        ]
-        valid = dict(review_only)
-        valid["checks"] = [
-            {
-                "criterion": "The forecast interface answers",
-                "verification": "command",
-                "command": ["python", "-c", "print('ok')"],
-            }
-        ]
-        client = ScriptedModelClient(
-            [json.dumps(review_only), json.dumps(valid)]
-        )
-        spec = write_task_spec(
-            self.settings,
-            self.layout,
-            "Goal",
-            "",
-            self._intent(),
-            client,
-            log=lambda _m: None,
-        )
-        self.assertEqual(spec["checks"][0]["verification"], "command")
-        retry = client.requests[1][-1].content
-        self.assertIn("command check", retry)
-
-    def test_a_persistent_sibling_check_fails_the_spec(self) -> None:
-        invalid = dict(VALID)
-        invalid["checks"] = [
-            {
-                "criterion": "The client tests pass",
-                "command": ["python", "-m", "unittest", "tests.test_cli"],
-            }
-        ]
-        client = ScriptedModelClient(
-            [json.dumps(invalid)] * (MAX_SPEC_RETRIES + 1)
-        )
-        with self.assertRaises(SpecError) as caught:
-            write_task_spec(
-                self.settings,
-                self.layout,
-                "Goal",
-                "",
-                self._intent(),
-                client,
-                log=lambda _m: None,
-            )
-        self.assertIn("exists in repository 'main'", str(caught.exception))
-
-
 
 
 class ImplementationDetailTest(unittest.TestCase):
@@ -238,9 +76,7 @@ class ImplementationDetailTest(unittest.TestCase):
 
 
 class DocumentationRuleTest(unittest.TestCase):
-    def test_a_documentation_task_rejects_command_checks_and_tests(
-        self,
-    ) -> None:
+    def test_a_documentation_task_rejects_a_documentation_test(self) -> None:
         problems = documentation_problems(
             {
                 "title": "Update README.md install instructions",
@@ -249,28 +85,13 @@ class DocumentationRuleTest(unittest.TestCase):
             {
                 "problem": "README.md is stale",
                 "outcome": "The documentation is current",
-                "requirements": [
-                    "The documentation names the current release."
-                ],
+                "requirements": ["Add a test that reads README.md."],
                 "acceptance": ["A reader sees the current release."],
-                "checks": [
-                    {
-                        "criterion": "A guard test reads the README",
-                        "verification": "command",
-                        "command": [
-                            "python",
-                            "-m",
-                            "pytest",
-                            "tests/test_readme.py",
-                        ],
-                    }
-                ],
-                "test_command": ["python", "-m", "pytest", "tests"],
             },
         )
         self.assertTrue(problems)
 
-    def test_a_documentation_task_with_review_checks_is_clean(self) -> None:
+    def test_a_documentation_task_without_tests_is_clean(self) -> None:
         self.assertEqual(
             documentation_problems(
                 {
@@ -284,20 +105,12 @@ class DocumentationRuleTest(unittest.TestCase):
                         "The documentation names the current release."
                     ],
                     "acceptance": ["A reader sees the current release."],
-                    "checks": [
-                        {
-                            "criterion": "The documentation is current",
-                            "verification": "review",
-                            "command": [],
-                        }
-                    ],
-                    "test_command": [],
                 },
             ),
             [],
         )
 
-    def test_a_code_task_with_command_checks_is_clean(self) -> None:
+    def test_a_code_task_is_clean(self) -> None:
         self.assertEqual(
             documentation_problems(
                 {"title": "Add a module", "summary": "Code"},
@@ -306,14 +119,6 @@ class DocumentationRuleTest(unittest.TestCase):
                     "outcome": "The module exists",
                     "requirements": ["The module exists."],
                     "acceptance": ["The module works."],
-                    "checks": [
-                        {
-                            "criterion": "The module test passes",
-                            "verification": "command",
-                            "command": ["python", "-m", "unittest"],
-                        }
-                    ],
-                    "test_command": ["python", "-m", "unittest"],
                 },
             ),
             [],

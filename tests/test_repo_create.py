@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ from forgel.artifacts import write_text
 from forgel.config import Settings
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
+from forgel.model import ScriptedModelClient
 from forgel.program_manifest import entries, set_entries
 from forgel.projects import create_project
 from forgel.providers.github_api import GithubAPIError
@@ -89,6 +91,42 @@ class RepoCreateTest(unittest.TestCase):
         assert self.project is not None
         self.layout = ProjectLayout.detect(self.project["workspace"])
         self.auth = AuthToken(token="tok", kind="pat")
+
+    def test_create_repository_records_a_verified_test_command(self) -> None:
+        api = FakeAPI()
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "run",
+                        "command": ["python3", "-c", "pass"],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "action": "done",
+                        "test": ["python3 -c pass"],
+                    }
+                ),
+            ]
+        )
+        with patch("forgel.adopt.git_ops.push"):
+            result = create_repository(
+                self.settings,
+                self.ledger,
+                self.project,
+                "billing",
+                org="acme",
+                api=api,
+                auth=self.auth,
+                model_client=client,
+            )
+        self.assertEqual(result.entry["test"], ["python3 -c pass"])
+        program = (
+            self.layout.control / "program.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("test:", program)
+        self.assertIn("python3 -c pass", program)
 
     def test_create_repository_creates_remote_local_repo_and_entry(self) -> None:
         api = FakeAPI()

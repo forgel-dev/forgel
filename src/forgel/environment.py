@@ -528,7 +528,7 @@ def command_argv(command: str) -> list[str]:
     Forgel, so a committed contract stays portable across hosts where only one
     of those names exists. The same holds when the interpreter is wrapped in
     ``env`` after its ``NAME=value`` assignments (``env PYTHONPATH=src python
-    -m unittest``), which is how acceptance checks set extra variables.
+    -m unittest``), which is how test commands set extra variables.
     """
 
     argv = shlex.split(command)

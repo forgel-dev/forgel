@@ -217,6 +217,8 @@ class RuntimeOpsTest(unittest.TestCase):
             f"docs/program/specs/{task['id']}.md"
         )
         self.assertTrue(spec_path.exists())
+        prompt = client.requests[0][-1].content
+        self.assertIn("The current specification is", prompt)
         stages = [
             event["stage"]
             for event in self.ledger.events(self.project["id"])
@@ -239,6 +241,8 @@ class RuntimeOpsTest(unittest.TestCase):
         prompt = client.requests[0][-1].content
         self.assertIn("The owner requires these changes", prompt)
         self.assertIn(changes, prompt)
+        self.assertIn("Apply only these changes", prompt)
+        self.assertIn("exactly as it is", prompt)
 
     def test_task_restart_uses_the_explicit_task(self) -> None:
         first = self._task(status="done")

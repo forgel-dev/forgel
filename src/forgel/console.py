@@ -170,7 +170,6 @@ def _task_observation(task: dict, layout: ProjectLayout) -> dict:
         "requirements": list(task.get("requirements") or []),
         "acceptance": list(task.get("acceptance") or []),
         "constraints": list(task.get("constraints") or []),
-        "checks": list(task.get("checks") or []),
         "summary": _cap_text(result.get("summary"), 2600),
         "failure": result.get("failure") or {},
         "last_failure": result.get("last_failure") or {},

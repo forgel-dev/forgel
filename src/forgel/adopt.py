@@ -28,6 +28,7 @@ from .config import Settings
 from .environment import load_environment
 from .layout import ProjectLayout
 from .ledger import Ledger, new_project_id
+from .model import ModelClient, project_model_name
 from .program_manifest import (
     add_entry,
     entries,
@@ -53,6 +54,7 @@ from .providers.github_auth import (
     GithubAuth,
     GithubAuthError,
 )
+from .repo_init import RepoInitAgent
 
 ADOPTED_CONTEXT = """# FORGEL.md
 
@@ -730,6 +732,7 @@ def _adopt_linked(
     path: Path,
     brief: str,
     name: str,
+    model_client: ModelClient | None = None,
 ) -> AdoptResult:
     """Adopt a local folder in place: no clone, no second copy of the code."""
 
@@ -777,6 +780,13 @@ def _adopt_linked(
         "path": ".",
         "depends_on": [],
     }
+    entry["test"] = _init_test_commands(
+        root,
+        "main",
+        model_client,
+        project_model_name(root),
+        allow_write=False,
+    )
     write_json(
         root / ".forgel" / "project.json",
         {
@@ -827,10 +837,13 @@ def adopt_repository(
     url: str,
     brief: str = "",
     name: str = "",
+    model_client: ModelClient | None = None,
 ) -> AdoptResult:
     local = _local_directory(url)
     if local is not None:
-        return _adopt_linked(settings, ledger, local, brief, name)
+        return _adopt_linked(
+            settings, ledger, local, brief, name, model_client
+        )
     temporary, clone, remote, auth = _clone_temp(settings, url)
     try:
         project_name = name.strip() or _project_name(remote.slug)
@@ -864,6 +877,13 @@ def adopt_repository(
             "url": remote.url,
             "depends_on": [],
         }
+        entry["test"] = _init_test_commands(
+            repository,
+            repo_id,
+            model_client,
+            project_model_name(layout.control),
+            allow_write=False,
+        )
         set_entries(layout, [entry])
         _write_brownfield_files(layout, project_name, project_brief)
         _control_commit(
@@ -908,6 +928,7 @@ def _add_linked_repository(
     repo_id: str,
     depends_on: list[str] | None,
     role: str,
+    model_client: ModelClient | None = None,
 ) -> "RepoAddResult":
     local = _local_directory(url)
     if local is None:
@@ -964,6 +985,13 @@ def _add_linked_repository(
         "path": str(root),
         "depends_on": dependencies,
     }
+    entry["test"] = _init_test_commands(
+        root,
+        selected_id,
+        model_client,
+        project_model_name(layout.control),
+        allow_write=False,
+    )
     add_entry(layout, entry)
     _write_repo_doc(layout, entry)
     write_program(
@@ -1013,6 +1041,7 @@ def add_repository(
     repo_id: str = "",
     depends_on: list[str] | None = None,
     role: str = "application",
+    model_client: ModelClient | None = None,
 ) -> RepoAddResult:
     layout = ProjectLayout.detect(project["workspace"])
     if not layout.is_project:
@@ -1036,6 +1065,7 @@ def add_repository(
             repo_id,
             depends_on,
             role,
+            model_client,
         )
     temporary, clone, remote, auth = _clone_temp(settings, url)
     try:
@@ -1069,6 +1099,13 @@ def add_repository(
             "url": remote.url,
             "depends_on": dependencies,
         }
+        entry["test"] = _init_test_commands(
+            repository,
+            selected_id,
+            model_client,
+            project_model_name(layout.control),
+            allow_write=False,
+        )
         try:
             add_entry(layout, entry)
         except ValueError as exc:
@@ -1183,6 +1220,25 @@ def _git_config(layout: ProjectLayout) -> GitConfig:
     except ConfigError:
         config = None
     return config.git if config is not None else GitConfig()
+
+
+def _init_test_commands(
+    repo: Path,
+    repo_id: str,
+    client: ModelClient | None,
+    model: str,
+    *,
+    allow_write: bool,
+    preset: str = "",
+) -> list[str]:
+    if client is None:
+        return []
+    return RepoInitAgent(client, model).commands(
+        repo,
+        repo_id,
+        allow_write=allow_write,
+        preset=preset,
+    )
 
 
 def _init_local_repository(
@@ -1337,6 +1393,8 @@ def create_repository(
     path: str = "",
     api: Any | None = None,
     auth: AuthToken | None = None,
+    model_client: ModelClient | None = None,
+    preset: str = "",
 ) -> RepoCreateResult:
     """Create a repository on GitHub and register it in the project."""
 
@@ -1381,6 +1439,20 @@ def create_repository(
     )
 
     _init_local_repository(local, selected_id, description)
+    test_commands = _init_test_commands(
+        local,
+        selected_id,
+        model_client,
+        project_model_name(layout.control),
+        allow_write=True,
+        preset=preset,
+    )
+    try:
+        git_ops.commit_all(
+            local, f"Set up {selected_id} test environment"
+        )
+    except git_ops.GitOperationError:
+        pass
     try:
         git_ops.ensure_remote(local, url)
     except git_ops.GitOperationError as exc:
@@ -1391,6 +1463,7 @@ def create_repository(
         "provider": "github",
         "url": url,
         "depends_on": dependencies,
+        "test": test_commands,
     }
     if layout.is_linked:
         entry["path"] = str(local)

@@ -127,9 +127,7 @@ class TaskReviewTest(unittest.TestCase):
             capture_output=True, text=True,
         )
 
-    def _task(
-        self, status: str = "done", checks: list[dict] | None = None
-    ) -> dict:
+    def _task(self, status: str = "done") -> dict:
         task = create_task(
             self.layout,
             "Do it",
@@ -137,7 +135,6 @@ class TaskReviewTest(unittest.TestCase):
             ["It is done"],
             repo_id="main",
             test_command=["python", "-c", "print('task')"],
-            checks=checks,
         )
         sha = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -949,45 +946,6 @@ class TaskReviewTest(unittest.TestCase):
         )
         self.assertEqual(result.status, "error")
         self.assertIn("did not cover", result.summary)
-
-    def test_review_only_checks_are_accepted_after_a_green_review(
-        self,
-    ) -> None:
-        self.settings = Settings(
-            home=self.home,
-            registry_path=REPO_ROOT / "registry" / "recipes.json",
-            templates_path=REPO_ROOT / "src" / "forgel" / "templates",
-            jurisdiction_path=REPO_ROOT / "jurisdiction",
-            qa_runtime="local",
-            task_qa=True,
-            task_review=True,
-            task_accept="auto",
-        )
-        task = self._task(
-            checks=[
-                {
-                    "criterion": "Docs are accurate",
-                    "verification": "review",
-                }
-            ]
-        )
-        process_task_result(
-            self.settings,
-            self.ledger,
-            self.project,
-            task,
-            ScriptedModelClient([PASS]),
-            log=lambda _m: None,
-        )
-        final = get_task(self.layout, task["id"])
-        assert final is not None
-        self.assertEqual(final["status"], "done")
-        self.assertTrue(
-            final["result"]["qa"]["review_required"]
-        )
-        self.assertEqual(
-            final["result"]["acceptance"]["actor"], "auto"
-        )
 
     def test_acceptance_pushes_the_commit_to_the_remote(self) -> None:
         bare = self.home / "remote.git"

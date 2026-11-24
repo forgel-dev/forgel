@@ -961,8 +961,6 @@ def _ensure_formal_spec(
         task_id,
         spec=ref,
         request=current,
-        checks=list(spec.get("checks") or []),
-        test_command=list(spec.get("test_command") or []),
         requirements=list(spec.get("requirements") or []),
         acceptance=list(spec.get("acceptance") or []),
         external_dependencies=list(

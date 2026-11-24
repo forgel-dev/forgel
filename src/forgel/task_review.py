@@ -529,9 +529,9 @@ Scope of responsibility:
   interfaces the code uses, which libraries it depends on, and the interfaces
   it must expose. Do not re-derive, replace or second-guess that contract; a
   mismatch is reported only against the written requirement.
-- Deterministic checks (the environment gate, acceptance commands, contract
-  tests) are QA's responsibility. Treat their verdict as authoritative; do not
-  reproduce them with your own model of the interface.
+- Deterministic checks (the environment gate, repository test commands, the
+  task test command) are QA's responsibility. Treat their verdict as
+  authoritative; do not reproduce them with your own model of the interface.
 - Judge the attributed diff on requirement compliance and code quality:
   logical errors, architectural problems, security issues, and weakened or
   deleted tests without an allowed justification. Report a requirement that
@@ -1328,7 +1328,7 @@ def process_task_result(
         return
     reason = "review passed; acceptance required"
     if review_required:
-        reason = "acceptance checks require review"
+        reason = "the change requires review"
     elif review_status == "error":
         reason = "the reviewer could not produce a verdict"
     elif review_status == "skipped":

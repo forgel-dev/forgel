@@ -35,58 +35,6 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [
-    {
-      "criterion": "The guard passes against the updated documentation.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_readme_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The guard fails against a documentation variant that names a superseded release, and against a variant that names no release.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The documented install instruction identifies the current published release rather than an in-development location.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The documented uninstall and update instructions carry the same release identifier as the documented install instruction.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The release record and the documentation agree on the release identifier and instruction form.",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "The delivered result contains only the documentation page, the guard and the release record, while unrelated pending changes remain undelivered and unattributed.",
-      "verification": "command",
-      "command": [
-        "git",
-        "status",
-        "--porcelain"
-      ]
-    },
-    {
-      "criterion": "The full check suite still passes with the corrected guard.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
-    }
-  ],
   "external_dependencies": [
     {
       "name": "Released installer for the project",

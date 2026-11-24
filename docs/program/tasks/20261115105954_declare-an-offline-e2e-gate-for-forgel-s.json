@@ -33,46 +33,6 @@
   "depends_on": [
     "20261115105954_record-m0-and-m0-5-completion-status-in-"
   ],
-  "checks": [
-    {
-      "criterion": "environment.yaml declares test and e2e and the e2e command parses",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_environment",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "Self-hosting e2e driver exits 0 and parks at the staging gate",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_e2e",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "Full suite is green after the change",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests"
-      ]
-    }
-  ],
   "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T13:48:28+00:00",

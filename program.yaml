@@ -1,6 +1,6 @@
 # program.yaml
 project: forgel
-recipe: ""
+recipe: "20261123193557155149_forgel-code-interactive-agent-client-instead-of-"
 repos:
   - id: main
     role: application
@@ -8,9 +8,13 @@ repos:
     provider: github
     url: "git@github.com:forgel-dev/forgel.git"
     depends_on: []
+    test:
+      - "python3 -m unittest discover -s tests"
   - id: code
     role: application
     path: ../code
     provider: github
     url: "https://github.com/forgel-dev/code.git"
     depends_on: [main]
+    test:
+      - "python3 -m unittest discover -s tests"

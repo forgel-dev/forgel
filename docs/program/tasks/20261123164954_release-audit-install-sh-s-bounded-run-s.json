@@ -46,57 +46,6 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [
-    {
-      "criterion": "A verification command that ends just after the time limit makes the installation fail with a message naming the time limit.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_install_timeout_verdict.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "A verification command that succeeds well within the time limit lets the installation complete, and one that fails within the limit is not reported as a time limit.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "tests/test_install_timeout_verdict.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "After an exceeded-limit run, no verification processes remain and no temporary working artifacts are left behind.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests/test_check_cleanup.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The regression test for the just-after-limit case exists and passes, and the full test suite passes without weakened tests.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Behavior for within-limit verification is unchanged and all artifacts are in English.",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "external_dependencies": [
     {
       "name": "POSIX shell runtime of the environment where the installer runs",

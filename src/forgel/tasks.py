@@ -53,36 +53,6 @@ def task_path(layout: ProjectLayout, task_id: str) -> Path:
     return tasks_dir(layout) / f"{task_id}.json"
 
 
-def _normalize_check(item: dict[str, Any]) -> dict[str, Any]:
-    """One acceptance check: a command, or an explicit review criterion."""
-
-    if not isinstance(item, dict):
-        raise ValueError("a check must be an object")
-    criterion = str(item.get("criterion", "")).strip()
-    if not criterion:
-        raise ValueError("a check needs a criterion")
-    verification = str(item.get("verification", "command")).strip().lower()
-    if verification not in {"command", "review"}:
-        raise ValueError(
-            f"check {criterion!r}: verification must be command or review"
-        )
-    command = item.get("command", [])
-    if isinstance(command, str):
-        command = [command]
-    if not isinstance(command, list):
-        raise ValueError(f"check {criterion!r}: command must be a list")
-    command = [str(value) for value in command if str(value).strip()]
-    if verification == "command" and not command:
-        raise ValueError(
-            f"check {criterion!r}: a command check needs a command"
-        )
-    return {
-        "criterion": criterion,
-        "verification": verification,
-        "command": command,
-    }
-
-
 def new_task_id(title: str) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     return f"{timestamp}_{_slug(title)}"
@@ -100,7 +70,6 @@ def create_task(
     plan_id: str = "",
     plan_goal: str = "",
     order: int = 0,
-    checks: list[dict[str, Any]] | None = None,
     language: str = "",
     spec: str = "",
     external_dependencies: list[dict[str, Any]] | None = None,
@@ -139,7 +108,6 @@ def create_task(
         "release_id": release_id.strip(),
         "release_class": release_class.strip().lower(),
         "order": order,
-        "checks": [_normalize_check(item) for item in (checks or [])],
         "external_dependencies": [
             dict(item) for item in (external_dependencies or [])
             if isinstance(item, dict)

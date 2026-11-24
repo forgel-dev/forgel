@@ -168,6 +168,7 @@ def _restart_from_requirements(
         client,
         log=log,
         requested_changes=requested_changes,
+        current_spec=_current_spec(layout, task),
     )
     ref = specs.spec_path(task_id)
     write_text(
@@ -187,8 +188,6 @@ def _restart_from_requirements(
         requirements=list(spec.get("requirements") or []),
         acceptance=list(spec.get("acceptance") or []),
         constraints=list(spec.get("constraints") or []),
-        checks=list(spec.get("checks") or []),
-        test_command=list(spec.get("test_command") or []),
         external_dependencies=list(
             spec.get("external_dependencies") or []
         ),
@@ -279,8 +278,6 @@ def _rewrite_task_requirements(
         requirements=list(spec.get("requirements") or []),
         acceptance=list(spec.get("acceptance") or []),
         constraints=list(spec.get("constraints") or []),
-        checks=list(spec.get("checks") or []),
-        test_command=list(spec.get("test_command") or []),
         external_dependencies=list(
             spec.get("external_dependencies") or []
         ),

@@ -33,34 +33,6 @@
   "depends_on": [
     "20261115105954_register-the-django-drf-react-recipe-and"
   ],
-  "checks": [
-    {
-      "criterion": "Cost aggregation and acceptance recording tests pass",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_costs",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "Existing ledger behavior is unchanged",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_ledger",
-        "-v"
-      ]
-    }
-  ],
   "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T19:36:17+00:00",

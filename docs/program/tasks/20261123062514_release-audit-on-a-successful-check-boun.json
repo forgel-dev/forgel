@@ -37,67 +37,6 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [
-    {
-      "criterion": "A-1",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests",
-        "-k",
-        "background or cleanup"
-      ]
-    },
-    {
-      "criterion": "A-2",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests",
-        "-k",
-        "timeout"
-      ]
-    },
-    {
-      "criterion": "A-3",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "A-4",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "A-5",
-      "verification": "review",
-      "command": []
-    },
-    {
-      "criterion": "A-6",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests"
-      ]
-    },
-    {
-      "criterion": "A-7",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "tests"
-      ]
-    }
-  ],
   "external_dependencies": [
     {
       "name": "POSIX process groups and signals (setpgid, killpg, SIGTERM/SIGKILL)",

@@ -438,7 +438,6 @@ class SelectionAndAgentTest(unittest.TestCase):
                 {
                     "title": "First",
                     "repo_id": "main",
-                    "checks": [{"criterion": "It works"}],
                     "depends_on": [],
                 }
             ],
@@ -450,7 +449,6 @@ class SelectionAndAgentTest(unittest.TestCase):
                 7, "/plan --dry-run Bring it to M1", "@tester"
             )
         self.assertIn("dry run", reply.text)
-        self.assertIn("1 checks", reply.text)
         self.assertTrue(plan.call_args.kwargs["dry_run"])
         self.assertEqual(
             plan.call_args.args[3], "Bring it to M1"

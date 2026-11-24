@@ -20,7 +20,6 @@
   "release_class": "minor",
   "order": 0,
   "depends_on": [],
-  "checks": [],
   "external_dependencies": [],
   "language": "",
   "status": "cancelled",

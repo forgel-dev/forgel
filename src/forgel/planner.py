@@ -459,6 +459,7 @@ def _apply_repositories(
     ledger: Ledger,
     project: Mapping[str, Any],
     repositories: Sequence[Mapping[str, Any]],
+    client: ModelClient | None = None,
 ) -> None:
     """Create or add repositories before the plan's coding tasks run."""
 
@@ -477,6 +478,7 @@ def _apply_repositories(
                     role=str(spec.get("role") or "application"),
                     description=str(spec.get("description") or ""),
                     path=str(spec.get("path") or ""),
+                    model_client=client,
                 )
             else:
                 add_repository(
@@ -487,6 +489,7 @@ def _apply_repositories(
                     repo_id=repo_id,
                     depends_on=list(spec.get("depends_on") or []),
                     role=str(spec.get("role") or "application"),
+                    model_client=client,
                 )
         except (
             AdoptError,
@@ -543,8 +546,6 @@ def _blocked_spec(
         "revision_history": [
             "1.0.0 — blocked: the specification needs a decision"
         ],
-        "checks": [],
-        "test_command": [],
     }
 
 
@@ -878,7 +879,9 @@ def plan_project(
 
     if not global_blocked:
         try:
-            _apply_repositories(settings, ledger, project, repositories)
+            _apply_repositories(
+                settings, ledger, project, repositories, client
+            )
         except PlanningError as exc:
             global_blocked = True
             blockers.append(str(exc))
@@ -1103,6 +1106,7 @@ def plan_project(
                     for entry in repositories
                     if str(entry["id"]) not in applied
                 ],
+                client=client,
             )
         except PlanningError as exc:
             global_blocked = True
@@ -1158,11 +1162,9 @@ def plan_project(
             [],
             [],
             repo_id=str(item["repo_id"]),
-            test_command=list(spec["test_command"]),
             plan_id=plan_id,
             plan_goal=goal,
             order=index + 1,
-            checks=list(spec["checks"]),
             language=task_language,
             spec=spec_ref,
             external_dependencies=list(
@@ -1213,18 +1215,6 @@ def plan_project(
         f"   - repo: {item['repo_id'] or '(sole)'}\n"
         f"   - spec: `{item['spec']}`\n"
         f"   - summary: {item.get('summary') or '—'}\n"
-        f"   - checks: "
-        + (
-            "; ".join(
-                check["criterion"]
-                + (
-                    ""
-                    if check["verification"] == "review"
-                    else f" ({json.dumps(check['command'])})"
-                )
-                for check in item["checks"]
-            )
-        )
         + (
             f"\n   - blocked: {item['blocked']}"
             if item.get("blocked")

@@ -11,23 +11,23 @@
 | Repository | `code` |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-24T19:20:30+00:00 |
+| Created | 2026-11-24T16:56:19+00:00 |
 | Source | Plan `20261124145600_make-forgel-and-forgel-code-install-and-` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-The repository currently keeps an automated check that reads the installation instructions and asserts their exact wording and command text. The project forbids any automated check that reads documentation text: documentation is text and is accepted or returned by review only. That check, together with the helper data that reproduces the documented text, therefore has to go — without a replacement and without touching any other check or any program behaviour — while the installation instructions themselves must still tell the owner that one command installs the client together with a supported engine.
+The documented one-command installation of Forgel Code installs only the client, so on a machine without the engine the first client request fails with an unhelpful missing-engine error. A user who follows the installation exactly still does not get a working pair, and the installation names no origin for a supported engine.
 
-**Outcome:** The change set no longer contains any automated check that reads documentation text and no helper data reproducing that text; nothing was added in its place; every other automated check is still present, none was weakened, and they all pass. The installation instructions, read by a person, state that the one documented command installs the client together with an engine the client supports, name the default engine source and how a run can be pointed elsewhere, describe the client-only option and that it leaves any engine untouched, and state that a successful run reports which engine version is in place and how it was obtained. The installer and the client behave exactly as before outside that text.
+**Outcome:** The documented default installation of Forgel Code yields a working client together with a supported engine. The installation is idempotent: it obtains an engine only when none is present or when the version the configured engine source offers is strictly newer than the present one; an engine at or above the offered version is left untouched. The finished state always satisfies the client's declared minimum supported engine version, and when it cannot, the installation fails with a message naming the required minimum, the version that was found or offered, and the action the user can take. A successful installation states which engine version is in place and how it was obtained, and the engine source it depends on is documented configuration.
 
 ## Product Intent
 
-Forgel Code is a thin client over the engine and cannot work without it, so its documented installation must be understood as installing a supported pair, not a lone client. At the same time, documentation is text in this project and is judged by reading it, never by a machine that re-reads it; the installation instructions stay honest through review, and no other guarantee is traded away to get there.
+Make Forgel and Forgel Code install and run as one working pair: the client is a thin UI over the engine's parameterized commands, so a client without a supported engine is useless. The client's own documented installation therefore brings a supported engine onto the machine, while the engine's lifecycle stays with the engine.
 
 ## User Experience
 
-An owner who reads the installation instructions understands that the single documented command leaves them with a client and a supported engine that work together, knows which engine source is used by default and how to point the run elsewhere, knows there is a client-only option that leaves an existing engine untouched, and knows that the run will tell them which engine version they ended up with and how it was obtained. A maintainer reviewing a change to those instructions reads the text and accepts or returns it; nothing in the automated suite re-reads the documentation, and every behavioural guarantee the suite already gave stays exactly as strong as it was.
+The user performs the single documented installation and afterwards has a working client and a supported engine, without a second setup guide and without hunting for an engine. The installation reads like a short report of what it ended with: the engine version in place and whether it was installed, kept or replaced. A user who cannot reach a supported engine never sees a raw process error; the installation stops and says which minimum is required, which version was found or offered, and what to do next. A user who manages the engine themselves, or who only wants the client side, chooses the documented client-only installation and no engine is queried or touched.
 
 ## Roadmap
 
@@ -35,87 +35,102 @@ An owner who reads the installation instructions understands that the single doc
 
 ## Goals
 
-- No automated check reads documentation text anywhere in the change set
-- No helper data reproducing documentation text remains
-- No replacement check of documentation text is introduced
-- Every other automated check stays present and passes
-- Installer and client behaviour is unchanged
-- The installation instructions, read by a person, describe the pair installation, the default engine source, the client-only option and the engine version report
+- A user who follows the documented installation obtains a working client-and-engine pair.
+- The combined installation is safe to repeat: no engine churn when nothing newer is offered, and no duplicate client artifacts.
+- A user who cannot reach a supported engine gets a clear, actionable failure instead of a raw process error.
+- A user who does not want the installation to manage the engine keeps a documented way to install the client alone.
+- The engine source the installation depends on is documented configuration rather than hidden behavior.
 
 ## Non-Goals
 
-- Adding, keeping or substituting any automated check that reads a documentation file
-- Changing the version comparison, the ordering rules or the fallback behaviour of the installation
-- Changing the declared minimum engine version
-- Changing the client's commands, output forms or interactive session
-- Changing the engine project, its releases or its installer
-- Rewriting documentation outside the installation instructions
+- Building or changing the engine's own installation facility
+- Uninstalling or downgrading an engine
+- Changing the client's startup check of the engine version
+- Changing any client request or its output
+- Changing the client's installation location, launcher, startup entry, fresh-session verification or removal behavior beyond what the engine decision needs
+- Removing the replaced chat mode from the engine
+- Installation on Windows
+- Managing engine credentials, projects or model configuration
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | Documentation is text and is verified by review: never add, require or accept a test, guard or automated check that reads a documentation file; a documentation task has review-only checks and no test command. | D-106, FORGEL.md native rules and AGENTS.md project rules |
-| — | The client is a thin UI over the engine's parameterized commands and does not call the model, read project files or run checks itself; model access, the sandbox, independent QA, review and release approval stay in the engine. | D-002, user decision log |
-| — | The client's working name is Forgel Code; it is a Python client installed as a separate distribution that imports nothing from the engine. | D-004, user decision log |
+| — | The client is a thin UI over the engine's parameterized commands; it does not call the model, read project files or run checks itself, so it is only useful with a supported engine beside it. | D-002, User, 2026-11-16 18:31 |
+| — | The client is a Python client installed as `forgel-code`, follows a Pareto 20/80 scope and imports nothing from the engine. | D-004, User accepted the proposal, 2026-11-16 18:34 |
+| — | The work proceeds in order: machine-readable engine commands first, then the client repository and the console move, then removal of the replaced chat mode from the engine. | D-006, User accepted the proposal, 2026-11-16 18:34 |
 
 ## Functional Requirements
 
-- **FR-1**: The change set contains no automated check that reads documentation text.
-- **FR-2**: The helper data that reproduced the documented installation text is gone, so no automated check can compare the instructions against a stored copy.
-- **FR-3**: The check that previously read the installation instructions no longer exists and no replacement check of documentation text is introduced in its place.
-- **FR-4**: Every other automated check remains present, its premise is unchanged, and none is removed or weakened by this change.
-- **FR-5**: The installer and the client keep their previous behaviour: this change alters no program behaviour outside the wording of the installation instructions.
-- **FR-6**: The installation instructions state, as text, that the single documented command installs the client together with an engine the client supports, so the result is a working pair.
-- **FR-7**: The installation instructions name the default engine source and state how a run can be pointed at another source.
-- **FR-8**: The installation instructions describe the client-only installation option and state that it leaves any engine untouched.
-- **FR-9**: The installation instructions state that a successful run reports which engine version is in place and how it was obtained.
-- **FR-10**: The installation instructions no longer present an already installed engine as a precondition the owner must satisfy before running the documented command.
-- **FR-11**: The installation instructions are accepted or returned only by reviewing their text.
+- **FR-1**: The default client installation also ensures a supported engine is in place in the same run.
+- **FR-2**: The installation learns which engine version the configured engine source offers without changing anything on the machine.
+- **FR-3**: When no engine is present, the installation obtains the offered engine version.
+- **FR-4**: When an engine is present and the offered version is not strictly newer, the installation keeps the present engine and changes nothing about the engine installation.
+- **FR-5**: When the offered version is strictly newer than the present engine, the installation replaces the present engine with that newer one.
+- **FR-6**: The installation never installs an engine older than, or equal to, the one already present.
+- **FR-7**: The finished state always satisfies the client's declared minimum supported engine version; when it cannot, the installation ends as a failure instead of reporting the pair as installed.
+- **FR-8**: A failed engine outcome reports the required minimum version, the version that was found or offered, and a concrete action the user can take, and is clearly distinguishable from a successful run.
+- **FR-9**: A successful installation states the engine version in place and how it was obtained: installed, kept or replaced.
+- **FR-10**: Engine versions are ordered numerically component by component, tolerating one leading version prefix and trailing zero components; a version that cannot be ordered never counts as satisfying the minimum.
+- **FR-11**: The documented client-only installation installs the client and neither queries nor changes any engine.
+- **FR-12**: Removing the client installs nothing and leaves any engine in place.
+- **FR-13**: The documented option that keeps the user's startup configuration unchanged does not disable the engine part of the installation.
+- **FR-14**: The engine source the installation resolves against is documented configuration with a stated default and a documented way to point it elsewhere.
+- **FR-15**: Repeating the default installation changes nothing about an engine that needs no change, and leaves exactly one client installation and one startup entry.
+- **FR-16**: The user documentation presents the default installation as the way to obtain a working client-and-engine pair, documents the client-only installation and the engine source configuration, and no longer instructs the user to supply an engine separately.
 
 ## User Stories
 
-- As an owner reading the installation instructions, I want to know that one command gives me a client and a supported engine, so that I understand what the command does before I run it.
-- As an owner who already has an engine, I want the instructions to tell me about the client-only option, so that I can install the client without touching the engine.
-- As an owner reading the instructions, I want to know which engine source is used and how to change it, so that I can point the run at the engine I trust.
-- As a maintainer, I want the installation instructions judged by reading them, so that no automated check depends on documentation wording and nothing else is weakened in exchange.
+- As a new user, I want the documented installation to give me both the client and a supported engine, so that the first thing I type works instead of failing with a missing-engine error.
+- As a returning user, I want repeating the installation to leave my current engine alone unless a strictly newer one is offered, so that an update never downgrades or churns my engine.
+- As a user whose engine cannot be brought to a supported version, I want to be told the required minimum, what was found and what to do, so that I can fix it without guessing.
+- As a user who manages the engine myself, I want a documented client-only installation, so that the installation never touches my engine.
 
 ## Acceptance Criteria
 
-- **AC-1**: Reading the change set finds no automated check that reads documentation text and no stored copy of documented text.
-- **AC-2**: The check that previously asserted the installation instructions' wording and command text is absent, and nothing equivalent was added.
-- **AC-3**: Every other automated check is still present with its original premise, and a full run of the suite passes.
-- **AC-4**: The installer and the client behave as they did before this change; no behavioural check was altered, relaxed or deleted.
-- **AC-5**: Reading the installation instructions shows that one documented command installs the client together with a supported engine.
-- **AC-6**: Reading the installation instructions shows the default engine source and how to point a run at another one.
-- **AC-7**: Reading the installation instructions shows the client-only option and that it leaves any engine untouched.
-- **AC-8**: Reading the installation instructions shows that a successful run reports the engine version in place and how it was obtained.
-- **AC-9**: Reading the installation instructions finds no statement that an engine must already be installed before the documented command is run.
-- **AC-10**: The installation instructions are accepted or returned by a person reading them, with no automated check involved.
+- **AC-1**: Starting the default installation on a machine with no engine ends successfully, leaves a usable client, leaves an engine at or above the declared minimum, and reports that version and that it was installed.
+- **AC-2**: Starting the default installation with an engine already present at exactly the offered version ends successfully, leaves the engine installation unchanged, and reports the engine as kept with its version.
+- **AC-3**: Starting the default installation with an engine present below the offered version ends successfully, leaves the strictly newer offered engine in place, and reports it as replaced.
+- **AC-4**: Starting the default installation with an engine present above the offered version and at or above the declared minimum ends successfully, leaves the engine installation unchanged, and reports the engine as kept.
+- **AC-5**: When the offered version is below the declared minimum and no suitable engine is present, the installation ends as a failure whose message names the required minimum, the version found or offered, and the action the user can take.
+- **AC-6**: When obtaining the engine fails, the installation ends as a failure with a message naming what went wrong and the next action, and never reports the pair as installed.
+- **AC-7**: Choosing the documented client-only installation installs the client, performs no engine version query, and leaves an engine present beforehand unchanged.
+- **AC-8**: Running the default installation twice in a row leaves exactly one client installation and one startup entry, and the second run does not change the engine the first run left.
+- **AC-9**: Versions differing only by a leading version prefix or by trailing zero components are treated as the same version, and a version that cannot be ordered never satisfies the minimum.
+- **AC-10**: Removing a client installed with an engine leaves the engine in place and leaves no client artifacts behind.
+- **AC-11**: The documentation presents the default installation as producing a working client alongside a supported engine, states that the engine version in place and how it was obtained are reported, and describes what a successful installation reports.
+- **AC-12**: The documentation states that an absent engine is obtained, that a present engine is kept when the offered version is not strictly newer, that a strictly newer offered engine replaces it, and that the finished state always satisfies the declared minimum or the installation fails with an actionable message naming the minimum and the version found or offered.
+- **AC-13**: The documentation documents the client-only installation, the engine source with its default and how to point it elsewhere, and the option that keeps the user's startup configuration unchanged; it no longer instructs the user to supply an engine separately for the default installation.
 
 ## Scope Boundaries
 
-- Removing the automated check that read the installation instructions and asserted their wording and command text
-- Removing the helper data that reproduced the documented installation text
-- Introducing no replacement automated check over documentation text of any kind
-- Keeping every other automated check present, unweakened and passing
-- Keeping the installer's and the client's behaviour unchanged
-- Updating the installation instructions, as text, to state the pair installation, the default engine source and how to point a run elsewhere, the client-only option, and the engine version report of a successful run
-- Adding, keeping or substituting any automated check that reads a documentation file
-- Changing the version comparison, the ordering rules or the fallback behaviour of the installation
-- Changing the declared minimum engine version
-- Changing the client's commands, output forms or interactive session
-- Changing the engine project, its releases or its installer
-- Rewriting documentation outside the installation instructions
+- The default client installation also ensures a supported engine is in place beside the client
+- Deciding between obtaining an engine, keeping the present one and replacing it with a strictly newer one
+- Enforcing the client's declared minimum supported engine version at the end of the installation
+- A failure report naming the required minimum, the version found or offered, and the user action
+- A success report naming the engine version in place and how it was obtained
+- A documented client-only installation that leaves any engine untouched and unqueried
+- The engine source as documented configuration with a documented way to point it elsewhere
+- User documentation of the combined default installation, the client-only installation and the engine source
+- Automated coverage of the combined installation against a deterministic stand-in for the engine's installation facility
+- Building or changing the engine's own installation facility
+- Uninstalling or downgrading an engine
+- Changing the client's startup check of the engine version
+- Changing any client request or its output
+- Changing the client's installation location, launcher, startup entry, fresh-session verification or removal behavior beyond what the engine decision needs
+- Removing the replaced chat mode from the engine
+- Installation on Windows
+- Managing engine credentials, projects or model configuration
 
 ## Risks
 
-- Removing the documentation-reading check drops the only automation that caught a stale or divergent installation command in the instructions; a divergence now survives until a reader notices it, which the owner has accepted.
-- A developer may be tempted to reintroduce an equivalent check over documentation text, for example a narrower one, which the change explicitly forbids.
-- The helper data that reproduced the documented text may be spread across more than one place, so a partial removal leaves a stored copy behind.
-- Removing the check may accidentally remove or weaken a neighbouring behavioural check, which would fail the requirement that all others stay intact.
-- The installation instructions may be corrected in one place while an older sentence elsewhere still requires an already installed engine, leaving the text self-contradictory under review.
-- Documentation review is subjective; a reviewer with a different reading of the engine source or of the client-only option may return the text, costing another cycle.
+- The engine project may not yet provide an installation facility with the reporting and installation behavior this task relies on, in which case the default installation always fails and the milestone goal is not met.
+- A deterministic stand-in for the engine's installation facility is not proof of the real one; if the real facility reports or installs differently, the combined installation fails outside the automated tests even though the tests pass.
+- The default engine source is remote, so the automated checks cannot reach it and can only exercise the decision logic through the stand-in; the real dependency must be confirmed on a connected machine before this can be trusted.
+- Careless version ordering could treat a pre-release or non-numeric version as satisfying or exceeding the minimum and silently leave an unsupported engine in place.
+- Failing the installation after the client is already installed can leave a user with a client and no usable engine unless the failure message is unambiguous about the state and the next action.
+- Extending the installation risks regressing the existing startup-entry, fresh-session verification and removal behavior that current coverage protects.
+- Documenting the combined installation before the behavior exists would mislead users; the documentation and the behavior must change together.
 
 ## Open Questions
 
@@ -123,21 +138,24 @@ An owner who reads the installation instructions understands that the single doc
 
 ## Assumptions
 
-- The single automated check that read documentation text is the one over the installation instructions; no other automated check is known to read documentation, and the review confirms it.
-- The helper data to remove is the stored wording and command text that check compared against; no other file reproduces that text.
-- The installation already places a supported engine alongside the client, so the instructions can be corrected without changing any program behaviour.
-- The installation instructions are the repository's install, update and uninstall text; no other document is in scope.
-- The owner accepts that a stale instruction now survives until a reader notices it, because no automated check may read the documentation.
-- Writing about the pairing is documentation work, so its verification is review; the behaviour it describes is already covered by the existing behavioural checks.
+- Removing the client leaves the engine in place, because the engine's lifecycle belongs to the engine and may be shared with other tools; this is recorded rather than asked.
+- The offered version is whatever the configured engine source provides, as reported by the engine's own installation facility without installing anything.
+- An engine whose version cannot be ordered is treated as not satisfying the minimum, and the installation falls through to the obtain-or-replace decision.
+- The engine's own installation facility is taken from the machine unless the installation is pointed elsewhere, and the default engine source is the engine project's public source.
+- The client-only installation is a positive choice; leaving the user's startup configuration unchanged still performs the engine part of the installation.
+- When the installation fails after the client part already succeeded, the client installation stays in place and the message makes the state of the pair and the next action clear.
+- Failed and successful installations are told apart by the outcome and by a message that names the minimum, the version and the action, while the success report instead states the version and how it was obtained.
+- The engine's own installation facility is produced by the engine project in this same product, so its behavior is a contract between two parts of one product rather than a third-party service; its real behavior is exercised by the engine project's own tests, and this task verifies the client's decisions against a deterministic stand-in.
 
 ## Related Documents
 
 - README.md
 - CHANGELOG.md
-- install.sh
+- releases/0.2.0/plan.md
 
 ## Revision History
 
-- 1.0 — initial specification of the combined engine and client installation mode.
-- 1.1 — per the owner's change request, the automated check that read the installation instructions is removed together with the helper data that reproduced that text, no replacement check over documentation text is added, every other check and every other installer and client behaviour stays unchanged, and the installation instructions are accepted or returned by text review only.
-- 1.2 — rewritten as a documentation change: all checks are review-only and there is no test command; the requirements and acceptance state only observable outcomes and contain no command, path, tool name or other implementation detail.
+- 1.0 — initial specification for the combined engine and client installation
+- 1.1 — removed implementation detail from constraints and assumptions and moved environment-specific detail into the dependency record
+- 1.2 — treated the task as documentation only; incorrect, because the task changes installation behavior
+- 1.3 — restored behavior requirements and acceptance with executable checks in this repository, kept documentation criteria as review-only, and recorded the engine project's installation facility as an in-product contract rather than an external service

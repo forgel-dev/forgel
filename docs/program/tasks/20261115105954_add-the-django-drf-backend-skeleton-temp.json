@@ -37,37 +37,6 @@
   "depends_on": [
     "20261115105954_record-m0-and-m0-5-completion-status-in-"
   ],
-  "checks": [
-    {
-      "criterion": "Template structural validation test passes",
-      "verification": "command",
-      "command": [
-        "env",
-        "PYTHONPATH=src",
-        "python",
-        "-m",
-        "unittest",
-        "tests.test_template_django_drf_react",
-        "-v"
-      ]
-    },
-    {
-      "criterion": "Template Python sources compile",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "compileall",
-        "-q",
-        "src/forgel/templates/django-drf-react"
-      ]
-    },
-    {
-      "criterion": "The compose stand serves /healthz against Postgres, with actual output in the task report",
-      "verification": "review",
-      "command": []
-    }
-  ],
   "status": "done",
   "created_at": "2026-11-15T10:59:54+00:00",
   "started_at": "2026-11-15T15:36:03+00:00",

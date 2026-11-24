@@ -40,66 +40,6 @@
   "release_class": "patch",
   "order": 0,
   "depends_on": [],
-  "checks": [
-    {
-      "criterion": "A simulated install into a bash home with the block in ~/.bashrc, followed by `--uninstall`, leaves no block or marker line",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q",
-        "tests/test_install.py",
-        "-k",
-        "bashrc"
-      ]
-    },
-    {
-      "criterion": "Unrelated lines in the cleaned startup file are preserved byte-for-byte",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q",
-        "tests/test_install.py",
-        "-k",
-        "bashrc"
-      ]
-    },
-    {
-      "criterion": "A second `--uninstall` run leaves every candidate startup file unchanged, and missing or block-free files do not fail the uninstall",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q",
-        "tests/test_install.py",
-        "-k",
-        "idempotent"
-      ]
-    },
-    {
-      "criterion": "The full existing test suite passes",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "install.sh remains syntactically valid in its shell dialect",
-      "verification": "command",
-      "command": [
-        "sh",
-        "-n",
-        "install.sh"
-      ]
-    }
-  ],
   "external_dependencies": [
     {
       "name": "POSIX shell (sh) executing install.sh",

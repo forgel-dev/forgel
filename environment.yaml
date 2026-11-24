@@ -14,7 +14,7 @@
 # resources.
 build: environment
 mounts: [code]
-test: ["python -m unittest discover -s tests"]
+test: ["python3 -m unittest discover -s tests"]
 e2e:
   - "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py"
   - "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py"
