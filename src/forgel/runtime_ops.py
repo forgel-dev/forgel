@@ -14,7 +14,7 @@ from typing import Any, Callable, Mapping
 from .config import Settings
 from . import limits, specs, tasks
 from .artifacts import write_text
-from .daemon import handle_failure, run_once
+from .daemon import _run_task, handle_failure, run_once
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .model import ModelClient
@@ -95,6 +95,7 @@ def _restart_from_requirements(
     task: Mapping[str, Any],
     client: ModelClient,
     log: Log,
+    requested_changes: str = "",
 ) -> str:
     """Rewrite the specification from the task's own request and start over."""
 
@@ -115,7 +116,14 @@ def _restart_from_requirements(
             notes = ""
     log(f"[restart] {project['id']}: task {task_id}: rewriting spec")
     spec = specs.write_task_spec(
-        settings, layout, goal, notes, intent, client, log=log
+        settings,
+        layout,
+        goal,
+        notes,
+        intent,
+        client,
+        log=log,
+        requested_changes=requested_changes,
     )
     ref = specs.spec_path(task_id)
     write_text(
@@ -155,8 +163,19 @@ def _restart_from_requirements(
     )
     log(
         f"[restart] {project['id']}: task {task_id}: specification "
-        f"rewritten; task is pending"
+        f"rewritten; task restarted"
     )
+    stored = tasks.get_task(layout, task_id)
+    if stored is not None:
+        _run_task(
+            settings,
+            ledger,
+            dict(project),
+            layout,
+            stored,
+            client,
+            log,
+        )
     return f"Task {task_id} restarted from its requirements."
 
 
@@ -234,8 +253,22 @@ def run_operation(
             raise ValueError(
                 "no model is configured to rewrite the specification"
             )
+        changes = str(
+            args.get("changes")
+            or args.get("clarification")
+            or args.get("issue")
+            or args.get("notes")
+            or ""
+        ).strip()
         return _restart_from_requirements(
-            settings, ledger, project, layout, task, client, log
+            settings,
+            ledger,
+            project,
+            layout,
+            task,
+            client,
+            log,
+            requested_changes=changes,
         )
 
     if name == "release_resume":

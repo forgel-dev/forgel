@@ -191,15 +191,19 @@ class RuntimeOpsTest(unittest.TestCase):
     def test_task_restart_rewrites_the_spec_and_starts_over(self) -> None:
         task = self._task(status="done")
         client = ScriptedModelClient([json.dumps(RESTART_SPEC)])
-        text = run_operation(
-            self.settings,
-            self.ledger,
-            self.project,
-            "task_restart",
-            {"task_id": task["id"]},
-            client=client,
-        )
+        with patch("forgel.runtime_ops._run_task") as run_task:
+            text = run_operation(
+                self.settings,
+                self.ledger,
+                self.project,
+                "task_restart",
+                {"task_id": task["id"]},
+                client=client,
+            )
         self.assertIn("restarted", text)
+        run_task.assert_called_once()
+        started = run_task.call_args.args[4]
+        self.assertEqual(started["id"], task["id"])
         stored = get_task(self.layout, task["id"])
         assert stored is not None
         self.assertEqual(stored["status"], "pending")
@@ -218,6 +222,23 @@ class RuntimeOpsTest(unittest.TestCase):
             for event in self.ledger.events(self.project["id"])
         ]
         self.assertIn("task_restart", stages)
+
+    def test_task_restart_passes_requested_changes_to_the_writer(self) -> None:
+        task = self._task(status="done")
+        client = ScriptedModelClient([json.dumps(RESTART_SPEC)])
+        changes = "The documentation test must be removed."
+        with patch("forgel.runtime_ops._run_task"):
+            run_operation(
+                self.settings,
+                self.ledger,
+                self.project,
+                "task_restart",
+                {"task_id": task["id"], "changes": changes},
+                client=client,
+            )
+        prompt = client.requests[0][-1].content
+        self.assertIn("The owner requires these changes", prompt)
+        self.assertIn(changes, prompt)
 
 
     def test_task_cancel_stops_work_and_marks_the_document(self) -> None:

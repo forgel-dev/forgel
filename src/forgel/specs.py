@@ -549,6 +549,7 @@ def write_task_spec(
     client: ModelClient,
     log: Callable[[str], None] = print,
     review_issue: str = "",
+    requested_changes: str = "",
 ) -> dict[str, Any]:
     """Turn one planner intent into a formal, structured specification."""
 
@@ -584,6 +585,12 @@ def write_task_spec(
                 "The previous version was rejected for this concrete "
                 f"defect:\n{review_issue}\n\n"
                 if review_issue
+                else ""
+            )
+            + (
+                "The owner requires these changes to the specification:\n"
+                f"{requested_changes}\n\n"
+                if requested_changes
                 else ""
             )
             + "Write the formal specification now.",
