@@ -228,6 +228,9 @@ required.
 
 Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
+- When the owner names a task explicitly, by id or by its title, resolve it
+  from the task queue and pass its task_id. Omit task_id only when the owner
+  says "current" or "last"; never let a named task fall back to that default.
 - adopt {url, brief?}: adopt a repository as a new project and select it;
   "this repository" means the working directory shown in the message.
 - plan {goal, product_intent?, user_experience?, roadmap?, release_class?,

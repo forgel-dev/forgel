@@ -286,6 +286,77 @@ class TasksTest(unittest.TestCase):
         assert current is not None
         self.assertEqual(current["id"], running["id"])
 
+    def test_current_task_uses_the_last_launch_not_the_file_name(self) -> None:
+        earlier = tasks.create_task(
+            self.layout,
+            "Earlier file name",
+            ["A"],
+            ["B"],
+            task_id="20260101000000_alpha",
+        )
+        later = tasks.create_task(
+            self.layout,
+            "Later file name",
+            ["A"],
+            ["B"],
+            task_id="20260101000001_zulu",
+        )
+        tasks.update_task(
+            self.layout,
+            earlier["id"],
+            started_at="2026-01-01T10:00:00+00:00",
+        )
+        tasks.update_task(
+            self.layout,
+            later["id"],
+            started_at="2026-01-01T09:00:00+00:00",
+        )
+
+        current = tasks.current_task(self.layout)
+        latest = tasks.latest_task(self.layout)
+
+        assert current is not None
+        assert latest is not None
+        self.assertEqual(current["id"], earlier["id"])
+        self.assertEqual(latest["id"], earlier["id"])
+
+    def test_current_task_prefers_a_recently_restarted_task(self) -> None:
+        restarted = tasks.create_task(
+            self.layout,
+            "Restarted work",
+            ["A"],
+            ["B"],
+            task_id="20260101000000_alpha",
+        )
+        other = tasks.create_task(
+            self.layout,
+            "Other work",
+            ["A"],
+            ["B"],
+            task_id="20260101000001_zulu",
+        )
+        tasks.update_task(
+            self.layout,
+            other["id"],
+            started_at="2026-01-01T09:00:00+00:00",
+        )
+        tasks.restart_task(self.layout, restarted["id"])
+
+        current = tasks.current_task(self.layout)
+
+        assert current is not None
+        self.assertEqual(current["id"], restarted["id"])
+
+    def test_restart_task_records_the_restart_time(self) -> None:
+        task = tasks.create_task(
+            self.layout, "Restart", ["A"], ["B"]
+        )
+        tasks.restart_task(self.layout, task["id"])
+        stored = tasks.get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertIn("restarted_at", stored["result"])
+        self.assertEqual(stored["result"]["manual_restarts"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

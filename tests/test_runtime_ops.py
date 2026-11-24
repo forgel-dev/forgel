@@ -240,6 +240,27 @@ class RuntimeOpsTest(unittest.TestCase):
         self.assertIn("The owner requires these changes", prompt)
         self.assertIn(changes, prompt)
 
+    def test_task_restart_uses_the_explicit_task(self) -> None:
+        first = self._task(status="done")
+        second = self._task(status="done")
+        update_task(
+            self.layout,
+            second["id"],
+            started_at="2026-12-01T00:00:00+00:00",
+        )
+        client = ScriptedModelClient([json.dumps(RESTART_SPEC)])
+        with patch("forgel.runtime_ops._run_task") as run_task:
+            run_operation(
+                self.settings,
+                self.ledger,
+                self.project,
+                "task_restart",
+                {"task_id": first["id"]},
+                client=client,
+            )
+        started = run_task.call_args.args[4]
+        self.assertEqual(started["id"], first["id"])
+
 
     def test_task_cancel_stops_work_and_marks_the_document(self) -> None:
         task = self._task(status="running")

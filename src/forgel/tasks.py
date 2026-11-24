@@ -369,6 +369,7 @@ def restart_task(
                 previous.get("manual_restarts", 0)
             )
             + 1,
+            "restarted_at": _now(),
         },
     )
     unblock_for_retry(layout, task_id)
@@ -461,22 +462,82 @@ def listed_tasks(layout: ProjectLayout) -> list[dict[str, Any]]:
 
 
 def latest_task(layout: ProjectLayout) -> dict[str, Any] | None:
+    """The task launched most recently, or the latest created when none was."""
+
     tasks = listed_tasks(layout)
-    return tasks[-1] if tasks else None
+    if not tasks:
+        return None
+    return max(
+        tasks,
+        key=lambda task: (
+            _launch_moment(task),
+            _task_touch(layout, task),
+        ),
+    )
 
 
 def current_task(layout: ProjectLayout) -> dict[str, Any] | None:
-    """The task the runtime is working on now: a running task, else the newest.
+    """The task the runtime is working on now: a running task, else the last
+    launched one.
 
-    An implicit operation ("restart the current task") must target the running
-    task, not a newer pending one queued behind it.
+    An implicit operation ("restart the current task") targets the running
+    task first, then the task launched most recently. File-name order is never
+    used to decide which task is current.
     """
 
     tasks = listed_tasks(layout)
-    for task in reversed(tasks):
-        if task.get("status") == "running":
-            return task
-    return tasks[-1] if tasks else None
+    running = [
+        task for task in tasks if task.get("status") == "running"
+    ]
+    if running:
+        return max(
+            running,
+            key=lambda task: (
+                _launch_moment(task),
+                _task_touch(layout, task),
+            ),
+        )
+    return latest_task(layout)
+
+
+def _moment(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment
+
+
+def _launch_moment(task: Mapping[str, Any]) -> datetime:
+    result = task.get("result") or {}
+    launched = [
+        _moment(task.get("started_at")),
+        _moment(result.get("restarted_at")),
+    ]
+    latest = max(
+        (moment for moment in launched if moment is not None),
+        default=None,
+    )
+    if latest is not None:
+        return latest
+    return (
+        _moment(task.get("created_at"))
+        or datetime.min.replace(tzinfo=timezone.utc)
+    )
+
+
+def _task_touch(layout: ProjectLayout, task: Mapping[str, Any]) -> float:
+    try:
+        return task_path(
+            layout, str(task.get("id") or "")
+        ).stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def cancel_task(
