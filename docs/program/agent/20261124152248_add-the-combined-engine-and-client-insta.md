@@ -3,8 +3,8 @@
 - Task: `20261124152248_add-the-combined-engine-and-client-insta`
 - Status: `failed`
 - Repository: `code`
-- Steps: 238
-- Finished: 2026-11-24T16:26:26+00:00
+- Steps: 467
+- Finished: 2026-11-24T22:34:09+00:00
 
 ## Requirements
 
@@ -31,11 +31,11 @@
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 6
 - Handoffs: 5
-- Model calls: 238
-- Estimated input tokens (all calls): 12713296
-- Provider input/output tokens: 13134490 / 705643
-- Provider cache hit/miss tokens: 12637696 / 496794
-- Estimated prompt at the end: 92845 tokens
+- Model calls: 467
+- Estimated input tokens (all calls): 23470828
+- Provider input/output tokens: 23973880 / 419522
+- Provider cache hit/miss tokens: 23476736 / 497144
+- Estimated prompt at the end: 87264 tokens
 - State: `docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.state.md`
 
 ## Specification (`docs/program/specs/20261124152248_add-the-combined-engine-and-client-insta.md`)
@@ -53,23 +53,23 @@
 | Repository | `code` |
 | Status | Specification |
 | Version | 1.0.0 |
-| Created | 2026-11-24T15:22:48+00:00 |
+| Created | 2026-11-24T21:24:37+00:00 |
 | Source | Plan `20261124145600_make-forgel-and-forgel-code-install-and-` |
 | Author | Forgel requirements writer |
 
 ## Overview
 
-Installing Forgel Code today yields a client without an engine, so the first run fails with a bare execution error. A user who wants a working pair must find, install and version-match the engine themselves, and nothing states which engine version the client needs. The client's installation path handles only the client, and it cannot tell whether the engine already present is good enough.
+The documented one-command installation of Forgel Code installs only the client, so on a machine without the engine the first client request fails with an unhelpful missing-engine error. A user who follows the installation exactly still does not get a working pair, and the installation names no origin for a supported engine. In addition, the correctness of the installation instructions is currently enforced by an automated check that reads the documentation text, which the project rules forbid: documentation is text and is verified by review.
 
-**Outcome:** Installing Forgel Code with no extra options installs the client and, when needed, an engine, so one documented command produces a working pair. The installation learns which engine version the configured engine source provides without installing it, compares that with the engine already present, installs nothing when the present engine is good enough, replaces a strictly older engine with a newer available one, and never finishes with an engine below the client's declared minimum supported engine version. When it cannot reach that end state it ends as a failure and says what is wrong, which version is required, which version was found and what the user can do, and every successful run states which engine version is in place and how it got there.
+**Outcome:** The documented default installation of Forgel Code yields a working client together with a supported engine. The installation is idempotent: it obtains an engine only when none is present or when the version the configured engine source offers is strictly newer than the present one; an engine at or above the offered version is left untouched. The finished state always satisfies the client's declared minimum supported engine version, and when it cannot, the installation fails with a message naming the required minimum, the version that was found or offered, and the action the user can take. A successful installation states which engine version is in place and how it was obtained, and the engine source it depends on is documented configuration. No automated check reads documentation text any more and none replaces it: the installation instructions are accepted or returned solely by review of their text, while every other check and the installer and client behavior outside the combined installation remain unchanged.
 
 ## Product Intent
 
-Forgel and Forgel Code are one product pair: the client is a thin UI over the engine's parameterized commands, so a client without a usable engine is not a product. The installation must deliver a working pair in one step, stay safe to repeat, and turn a version mismatch into a self-explanatory message instead of a raw execution error.
+Make Forgel and Forgel Code install and run as one working pair: the client is a thin UI over the engine's parameterized commands, so a client without a supported engine is useless. The client's own documented installation therefore brings a supported engine onto the machine, while the engine's lifecycle stays with the engine. Documentation states behavior and is judged by people reading it, never by automated checks over its text.
 
 ## User Experience
 
-A new user runs the single documented installation command and ends with both the client and the engine, then uses the client successfully. A returning user runs the same command again: if the engine present is at or above the available version it is left exactly as it was, and if a strictly newer engine exists it is picked up. A user whose engine is too old, or whose configured engine source cannot supply a satisfying engine, is told which engine version is required, which version was found and what to do about it, instead of seeing an execution error. A user who manages the engine themselves can install only the client.
+The user performs the single documented installation and afterwards has a working client and a supported engine, without a second setup guide and without hunting for an engine. The installation reads like a short report of what it ended with: the engine version in place and whether it was installed, kept or replaced. A user who cannot reach a supported engine never sees a raw process error; the installation stops and says which minimum is required, which version was found or offered, and what to do next. A user who manages the engine themselves, or who only wants the client side, chooses the documented client-only installation and no engine is queried or touched. A contributor experiences no automated verdict on documentation wording: the instructions are read and judged by a reviewer.
 
 ## Roadmap
 
@@ -77,106 +77,117 @@ A new user runs the single documented installation command and ends with both th
 
 ## Goals
 
-- One documented installation command yields a working client and engine pair.
-- The engine decision is repeat-safe and rests on the available engine version determined before installing.
-- No successful run ever leaves an engine below the client's declared minimum supported engine version.
-- A missing, too-old or unobtainable engine produces a clear, actionable message naming the required version and the action.
-- The run tells the user which engine version it ended with and how it got there.
+- A user who follows the documented installation obtains a working client-and-engine pair.
+- The combined installation is safe to repeat: no engine churn when nothing newer is offered, and no duplicate client artifacts.
+- A user who cannot reach a supported engine gets a clear, actionable failure instead of a raw process error.
+- A user who does not want the installation to manage the engine keeps a documented way to install the client alone.
+- The engine source the installation depends on is documented configuration rather than hidden behavior.
+- The automated checks no longer contain any check that reads documentation text, while every other check and the installer and client behavior outside the combined installation stay unchanged, and the installation instructions are accepted or returned by reading them.
 
 ## Non-Goals
 
-- Implementing the engine's own installer or its version reporting; that belongs to the engine
-- The client's startup check of the minimum supported engine version; a separate task covers it
-- Rewriting the client's user documentation or changelog; separate documentation tasks cover them
-- Publishing an engine release or choosing release versions
-- Downgrading, uninstalling or repairing an engine that a user manages
-- Changing what the client does after it starts, or how it finds the engine when it runs
-- Installing any other companion tool, plugin or extension
+- Building or changing the engine's own installation facility
+- Uninstalling or downgrading an engine
+- Changing the client's startup check of the engine version
+- Changing any client request or its output
+- Changing the client's installation location, launcher, startup entry, fresh-session verification or removal behavior beyond what the engine decision needs
+- Removing the replaced chat mode from the engine
+- Installation on Windows
+- Managing engine credentials, projects or model configuration
+- Adding any automated check of the documentation text in place of the removed one
+- Changing, weakening or removing any other check, or changing installer and client behavior outside the combined installation
 
 ## User Decisions
 
 | ID | Decision | Source |
 |----|----------|--------|
-| — | The client is a thin UI over the engine's parameterized commands; it does not call the model, read project files or run checks itself, so it needs a working engine to be useful (D-002). | User decision log, D-002, 2026-11-16 18:31 |
-| — | The client's working name is Forgel Code, it installs as its own distribution, follows a Pareto scope and imports nothing from the engine (D-004). | User decision log, D-004, 2026-11-16 18:34 |
-| — | The client is public and lives in the same organization as the engine (D-005), so the default installation must work from public sources without private access. | User decision log, D-005, 2026-11-16 21:14 |
-| — | The work proceeds engine command line first, then the client and the console move (D-006); the engine side is therefore ahead of this client-side task. | User decision log, D-006, 2026-11-16 18:34 |
+| — | The client is a thin UI over the engine's parameterized commands; it does not call the model, read project files or run checks itself, so it is only useful with a supported engine beside it. | D-002, User, 2026-11-16 18:31 |
+| — | The client is a Python client installed as `forgel-code`, follows a Pareto 20/80 scope and imports nothing from the engine. | D-004, User accepted the proposal, 2026-11-16 18:34 |
+| — | The work proceeds in order: machine-readable engine commands first, then the client repository and the console move, then removal of the replaced chat mode from the engine. | D-006, User accepted the proposal, 2026-11-16 18:34 |
+| — | Documentation is text and is verified by review: never add, require or accept a test, guard or automated check that reads a documentation file. A documentation task has review-only checks and no test command. | Project rules FORGEL.md and AGENTS.md (D-106); restated by the owner for this task |
 
 ## Functional Requirements
 
-- **FR-1**: A run of the Forgel Code installation with no extra options installs the client and also ensures an engine is installed, so one command produces a working pair.
-- **FR-2**: An explicit, documented option installs only the client and leaves any engine present untouched; it is not the default and it is not needed to obtain the pair.
-- **FR-3**: Before deciding whether to install an engine, the run determines the engine version that the configured engine source provides, without installing it and without changing any engine that is already present.
-- **FR-4**: The client declares one minimum supported engine version, and the installation enforces exactly that same minimum.
-- **FR-5**: When no engine is present and the available engine version satisfies the declared minimum, the run installs that version.
-- **FR-6**: When an engine is present, its version is at or above the available version, and it satisfies the declared minimum, the run installs no engine and leaves the present engine untouched.
-- **FR-7**: When an engine is present and the available version is strictly newer than the present version and satisfies the declared minimum, the run replaces the present engine with the available version.
-- **FR-8**: When the available version does not satisfy the declared minimum, the run installs no engine, keeps any present engine in place, ends as a failure, and reports the required minimum and the available version.
-- **FR-9**: When a present engine is below the declared minimum and the available version is not strictly newer than it, the run keeps the present engine, does not place a lower version over it, ends as a failure, and reports the required minimum and the present version.
-- **FR-10**: Every failure of the engine part of the run reports what is wrong, the required minimum engine version, the version that was available or present when known, and the concrete action the user can take to supply a satisfying engine.
-- **FR-11**: Every successful run ends by reporting the engine version in place after the run and how it was obtained: newly installed, kept, or replaced.
-- **FR-12**: Repeating the run against an unchanged engine source installs no engine after the first successful run and reports the same engine version.
-- **FR-13**: The engine source and the location of the engine's own installer are configurable settings with documented project defaults, so a user can point the run at a different engine source.
-- **FR-14**: When the engine source cannot be reached or the available version cannot be determined, the run installs no engine, leaves any present engine untouched, ends as a failure, and reports an actionable message.
-- **FR-15**: When the engine installation itself fails, the run ends as a failure with an actionable message, and a client that was already installed remains installed and usable.
-- **FR-16**: Version comparison follows the version ordering the project uses for its releases, ignores a leading version marker and trailing zero components, and treats a version it cannot parse as not satisfying the declared minimum.
-- **FR-17**: An engine that is present but cannot report its version is treated the same as a missing engine.
-- **FR-18**: A run is reported as successful only when its end state satisfies the declared minimum, or when the client-only option was used; every other end state is reported as a failure.
-- **FR-19**: Everything the client installation did before this change keeps working: its options, its messages, its handling of the user's shell environment and its removal path.
+- **FR-1**: The default client installation also ensures a supported engine is in place in the same run.
+- **FR-2**: The installation learns which engine version the configured engine source offers without changing anything on the machine.
+- **FR-3**: When no engine is present, the installation obtains the offered engine version.
+- **FR-4**: When an engine is present and the offered version is not strictly newer, the installation keeps the present engine and changes nothing about the engine installation.
+- **FR-5**: When the offered version is strictly newer than the present engine, the installation replaces the present engine with that newer one.
+- **FR-6**: The installation never installs an engine older than, or equal to, the one already present.
+- **FR-7**: The finished state always satisfies the client's declared minimum supported engine version; when it cannot, the installation ends as a failure instead of reporting the pair as installed.
+- **FR-8**: A failed engine outcome reports the required minimum version, the version that was found or offered, and a concrete action the user can take, and is clearly distinguishable from a successful run.
+- **FR-9**: A successful installation states the engine version in place and how it was obtained: installed, kept or replaced.
+- **FR-10**: Engine versions are ordered numerically component by component, tolerating one leading version prefix and trailing zero components; a version that cannot be ordered never counts as satisfying the minimum.
+- **FR-11**: The documented client-only installation installs the client and neither queries nor changes any engine.
+- **FR-12**: Removing the client installs nothing and leaves any engine in place.
+- **FR-13**: The documented option that keeps the user's startup configuration unchanged does not disable the engine part of the installation.
+- **FR-14**: The engine source the installation resolves against is documented configuration with a stated default and a documented way to point it elsewhere.
+- **FR-15**: Repeating the default installation changes nothing about an engine that needs no change, and leaves exactly one client installation and one startup entry.
+- **FR-16**: The user documentation presents the default installation as the way to obtain a working client-and-engine pair, documents the client-only installation and the engine source configuration, and no longer instructs the user to supply an engine separately.
+- **FR-17**: The project's automated checks contain no check that reads documentation text, and no automated check of documentation text is added in its place.
+- **FR-18**: The correctness of the installation instructions is accepted or returned solely by review of their text.
+- **FR-19**: Every other automated check stays in place and unchanged, and the installer and client behavior outside the combined installation is unchanged.
 
 ## User Stories
 
-- As a new user, I want the single documented installation command to give me both the client and the engine, so that my first client run works.
-- As a returning user, I want re-running the installation to leave a good engine alone and only pick up a strictly newer one, so that installing is predictable.
-- As a user with an outdated engine, I want the installation to tell me which engine version is required and what to do, so that I can fix it without reading source code.
-- As a user who manages the engine myself, I want an option that installs only the client, so that the installation does not touch my setup.
-- As a user whose engine source is unreachable, I want a clear failure that leaves my installation intact, so that I can retry knowingly.
+- As a new user, I want the documented installation to give me both the client and a supported engine, so that the first thing I type works instead of failing with a missing-engine error.
+- As a returning user, I want repeating the installation to leave my current engine alone unless a strictly newer one is offered, so that an update never downgrades or churns my engine.
+- As a user whose engine cannot be brought to a supported version, I want to be told the required minimum, what was found and what to do, so that I can fix it without guessing.
+- As a user who manages the engine myself, I want a documented client-only installation, so that the installation never touches my engine.
+- As a contributor, I want the installation instructions judged by a person reading them, so that a wording change is never blocked or forced by an automated check over documentation text.
 
 ## Acceptance Criteria
 
-- **AC-1**: A run with no extra options against a source with no engine present ends successfully, leaves the client and the available engine installed, and states the engine version as newly installed.
-- **AC-2**: A run with the client-only option installs no engine and states that no engine was installed.
-- **AC-3**: Before any engine is installed, the run already knows the version the configured source provides, and the decision it makes matches that version.
-- **AC-4**: With a present engine at or above the available version that satisfies the declared minimum, a run installs no engine and the present engine is unchanged afterwards.
-- **AC-5**: With a present engine older than a strictly newer available version that satisfies the declared minimum, a run replaces it and states the newer version as the result.
-- **AC-6**: With an available version below the declared minimum, the run installs no engine, ends as a failure, and its message contains the required minimum and the available version.
-- **AC-7**: With a present engine below the declared minimum and no strictly newer available version, the run installs no engine, ends as a failure, and its message contains the required minimum and the present version.
-- **AC-8**: Every failure message names the required minimum engine version and an action the user can take, so a reader can act without further investigation.
-- **AC-9**: Running the no-option installation twice in a row against an unchanged source installs the engine only on the first run and states the same engine version both times.
-- **AC-10**: Pointing the configurable engine source at a different source changes which engine version the run treats as available.
-- **AC-11**: An unreachable engine source produces a failing outcome with an actionable message and does not disturb a present engine.
-- **AC-12**: A failing engine installation produces a failing outcome with an actionable message while the client remains installed.
-- **AC-13**: A present engine that cannot report its version is treated as missing and the run proceeds accordingly.
-- **AC-14**: The behavior the client installation had before this change is preserved, including its existing options, its handling of the user's shell environment and its removal path.
+- **AC-1**: Starting the default installation on a machine with no engine ends successfully, leaves a usable client, leaves an engine at or above the declared minimum, and reports that version and that it was installed.
+- **AC-2**: Starting the default installation with an engine already present at exactly the offered version ends successfully, leaves the engine installation unchanged, and reports the engine as kept with its version.
+- **AC-3**: Starting the default installation with an engine present below the offered version ends successfully, leaves the strictly newer offered engine in place, and reports it as replaced.
+- **AC-4**: Starting the default installation with an engine present above the offered version and at or above the declared minimum ends successfully, leaves the engine installation unchanged, and reports the engine as kept.
+- **AC-5**: When the offered version is below the declared minimum and no suitable engine is present, the installation ends as a failure whose message names the required minimum, the version found or offered, and the action the user can take.
+- **AC-6**: When obtaining the engine fails, the installation ends as a failure with a message naming what went wrong and the next action, and never reports the pair as installed.
+- **AC-7**: Choosing the documented client-only installation installs the client, performs no engine version query, and leaves an engine present beforehand unchanged.
+- **AC-8**: Running the default installation twice in a row leaves exactly one client installation and one startup entry, and the second run does not change the engine the first run left.
+- **AC-9**: Versions differing only by a leading version prefix or by trailing zero components are treated as the same version, and a version that cannot be ordered never satisfies the minimum.
+- **AC-10**: Removing a client installed with an engine leaves the engine in place and leaves no client artifacts behind.
+- **AC-11**: The documentation presents the default installation as producing a working client alongside a supported engine, states that the engine version in place and how it was obtained are reported, and describes what a successful installation reports.
+- **AC-12**: The documentation states that an absent engine is obtained, that a present engine is kept when the offered version is not strictly newer, that a strictly newer offered engine replaces it, and that the finished state always satisfies the declared minimum or the installation fails with an actionable message naming the minimum and the version found or offered.
+- **AC-13**: The documentation documents the client-only installation, the engine source with its default and how to point it elsewhere, and the option that keeps the user's startup configuration unchanged; it no longer instructs the user to supply an engine separately for the default installation.
+- **AC-14**: The automated checks contain no check that reads documentation text, and no automated check of documentation text replaces the removed one.
+- **AC-15**: All other automated checks run unchanged and pass, and installer and client behavior outside the combined installation is unchanged.
+- **AC-16**: The installation instructions are accepted or returned solely by review of their text; a passing or failing verdict on their wording comes from a person reading them, never from an automated check.
 
 ## Scope Boundaries
 
-- Installing the client and the engine together when the installation runs with no extra options
-- Determining the engine version the configured engine source provides before deciding whether to install
-- Comparing the engine present against the available engine version and against the client's declared minimum supported engine version
-- Deciding per case whether to install, keep untouched, replace, or end as a failure with an actionable message
-- Stating, at the end of a successful run, which engine version is in place and how it got there
-- Making the engine source and the location of the engine's own installer configurable settings with project defaults
-- An explicit documented option that installs only the client
-- Automated coverage of every decision case and of the content of the messages
-- Implementing the engine's own installer or its version reporting; that belongs to the engine
-- The client's startup check of the minimum supported engine version; a separate task covers it
-- Rewriting the client's user documentation or changelog; separate documentation tasks cover them
-- Publishing an engine release or choosing release versions
-- Downgrading, uninstalling or repairing an engine that a user manages
-- Changing what the client does after it starts, or how it finds the engine when it runs
-- Installing any other companion tool, plugin or extension
+- The default client installation also ensures a supported engine is in place beside the client
+- Deciding between obtaining an engine, keeping the present one and replacing it with a strictly newer one
+- Enforcing the client's declared minimum supported engine version at the end of the installation
+- A failure report naming the required minimum, the version found or offered, and the user action
+- A success report naming the engine version in place and how it was obtained
+- A documented client-only installation that leaves any engine untouched and unqueried
+- The engine source as documented configuration with a documented way to point it elsewhere
+- User documentation of the combined default installation, the client-only installation and the engine source
+- Automated coverage of the combined installation against a deterministic stand-in for the engine's installation facility
+- Removal of the automated check that reads the documentation text, together with the supporting data that reproduces that text
+- Building or changing the engine's own installation facility
+- Uninstalling or downgrading an engine
+- Changing the client's startup check of the engine version
+- Changing any client request or its output
+- Changing the client's installation location, launcher, startup entry, fresh-session verification or removal behavior beyond what the engine decision needs
+- Removing the replaced chat mode from the engine
+- Installation on Windows
+- Managing engine credentials, projects or model configuration
+- Adding any automated check of the documentation text in place of the removed one
+- Changing, weakening or removing any other check, or changing installer and client behavior outside the combined installation
 
 ## Risks
 
-- The engine's ability to report the version a configured source provides before installing belongs to separate work that is currently blocked; without it the client cannot decide without installing, and the goal of repeat-safe installation is missed.
-- No released engine version exists yet, so the available version comes from configured sources whose declared version may be missing or stale; a run could then always fail the minimum check.
-- The declared minimum is introduced on both sides of the pair; if its value or meaning diverges between installation and the client's startup, the two behave inconsistently.
-- Replacing a present engine whenever a strictly newer version appears can overwrite an engine the user manages themselves; only the client-only option protects that case.
-- Installing depends on reaching the engine source, so a restricted network turns the default installation into a failing outcome.
-- The default meaning of the installation, the documented installation command and the client's startup check all move at once, so for a time the documentation can describe behavior that does not yet exist, or the reverse.
-- Treating an engine that cannot report its version as missing may reinstall an engine that is actually healthy but damaged in its version reporting.
-- An available version that satisfies the minimum can still fail while actually being installed, leaving a user who expected a pair with a failure and no engine.
+- The engine project may not yet provide an installation facility with the reporting and installation behavior this task relies on, in which case the default installation always fails and the milestone goal is not met.
+- A deterministic stand-in for the engine's installation facility is not proof of the real one; if the real facility reports or installs differently, the combined installation fails outside the automated checks even though the checks pass.
+- The default engine source is remote, so the automated checks cannot reach it and can only exercise the decision logic through the stand-in; the real dependency must be confirmed on a connected machine before this can be trusted.
+- Careless version ordering could treat a pre-release or non-numeric version as satisfying or exceeding the minimum and silently leave an unsupported engine in place.
+- Failing the installation after the client is already installed can leave a user with a client and no usable engine unless the failure message is unambiguous about the state and the next action.
+- Extending the installation risks regressing the existing startup-entry, fresh-session verification and removal behavior that current coverage protects.
+- Documenting the combined installation before the behavior exists would mislead users; the documentation and the behavior must change together.
+- With the automated documentation check gone, drift between the documented installation instructions and the installer is caught only by reading the text, so a wrong instruction can reach users if that review is superficial.
 
 ## Open Questions
 
@@ -184,30 +195,30 @@ A new user runs the single documented installation command and ends with both th
 
 ## Assumptions
 
-- The engine's own installation can report the version its configured source provides without installing, and can install a requested available version; this task consumes that capability instead of reimplementing it.
-- Installing the pair becomes the default behavior; a client-only path survives as an explicit documented option for users who manage the engine themselves.
-- The client's declared minimum supported engine version is defined once by the client and shared by the installation and the future startup check; this task does not choose the value.
-- A run that cannot reach a satisfying end state fails rather than finishing with an engine below the minimum, even when a usable engine is already present.
-- A failing engine step does not roll back a client that was already installed.
-- The client-only option is exempt from the minimum check during installation; the client's startup check covers that path.
-- A version carrying a leading marker or trailing zero components compares equal to its normalized form.
-- Reporting happens in the run's own output, without an extra option.
-- The client's user documentation and changelog updates belong to separate documentation tasks, which make the combined installation the documented one.
+- Removing the client leaves the engine in place, because the engine's lifecycle belongs to the engine and may be shared with other tools; this is recorded rather than asked.
+- The offered version is whatever the configured engine source provides, as reported by the engine's own installation facility without installing anything.
+- An engine whose version cannot be ordered is treated as not satisfying the minimum, and the installation falls through to the obtain-or-replace decision.
+- The engine's own installation facility is taken from the machine unless the installation is pointed elsewhere, and the default engine source is the engine project's public source.
+- The client-only installation is a positive choice; leaving the user's startup configuration unchanged still performs the engine part of the installation.
+- When the installation fails after the client part already succeeded, the client installation stays in place and the message makes the state of the pair and the next action clear.
+- Failed and successful installations are told apart by the outcome and by a message that names the minimum, the version and the action, while the success report instead states the version and how it was obtained.
+- The engine's own installation facility is produced by the engine project in this same product, so its behavior is a contract between two parts of one product rather than a third-party service; its real behavior is exercised by the engine project's own checks, and this task verifies the client's decisions against a deterministic stand-in.
+- The removed documentation check is not replaced by any other automated check of documentation text, and the installation instructions themselves are otherwise unchanged in what they must say.
 
 ## Related Documents
 
 - README.md
 - CHANGELOG.md
-- install.sh
-- pyproject.toml
-- tests/test_install.py
-- tests/test_readme_install.py
 - releases/0.2.0/plan.md
 
 ## Revision History
 
-- 1.0 — initial specification for the combined engine and client installation.
-- 1.1 — removed process and repository mechanics from the constraints, restated acceptance as observable outcomes only, and dropped the acceptance item about a test run in favor of a preserved-behavior criterion.
+- 1.0 — initial specification for the combined engine and client installation
+- 1.1 — removed implementation detail from constraints and assumptions and moved environment-specific detail into the dependency record
+- 1.2 — treated the task as documentation only; incorrect, because the task changes installation behavior
+- 1.3 — restored behavior requirements and acceptance with executable checks in this repository, kept documentation criteria as review-only, and recorded the engine project's installation facility as an in-product contract rather than an external service
+- 1.4 — removed the automated check that reads the documentation text together with the supporting data that reproduces that text, added no replacement automated documentation check, made the installation instructions review-only, and recorded that no other check is removed or weakened and that installer and client behavior outside the combined installation is unchanged
+- 1.5 — removed implementation wording from the constraints and requirements; the language rule is stated as a plain artifact-language constraint without process steps
 
 
 ## Summary
@@ -216,32 +227,57 @@ context session limit reached
 
 ## Files Changed
 
-- `forgel_code/__init__.py`
+- `README.md`
 - `install.sh`
-- `tests/stub_engine_install.py`
 - `tests/test_cli.py`
-- `tests/test_install.py`
 - `tests/test_readme_install.py`
 
 ## Commands
 
-- `["python", "-m", "pytest", "tests/test_readme_install.py", "-q"]` → exit 1
-- `["git", "status", "--short"]` → exit 0
-- `["python", "-m", "pytest", "tests/test_readme_install.py", "-q", "-x"]` → exit 1
-- `["python", "-m", "pytest", "tests/test_install.py", "-q", "-x"]` → exit 0
-- `["python", "-m", "pytest", "-q"]` → exit 1
-- `["git", "status", "--short"]` → exit 0
-- `["git", "log", "-3", "--format=%h %s", "--", "README.md"]` → exit 0
-- `["git", "show", "--stat", "--oneline", "76643ff"]` → exit 0
 - `["git", "status", "--porcelain"]` → exit 0
-- `["python", "-m", "pytest", "tests/test_readme_install.py", "tests/test_cli.py", "-q"]` → exit 1
-- `["git", "diff", "--", "forgel_code/__init__.py", "install.sh"]` → exit 0
-- `["git", "log", "-5", "--format=%h %s", "--", "tests/test_readme_install.py"]` → exit 0
-- `["git", "show", "76643ff", "--", "README.md", "tests/test_readme_install.py", "tests/test_cli.py"]` → exit 0
-- `["python", "-m", "pytest", "tests/test_readme_install.py", "tests/test_cli.py", "tests/test_install.py", "-q"]` → exit 1
-- `["git", "show", "--stat", "--format=%h %s", "7a11c1a"]` → exit 0
+- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
+- `["git", "diff", "--", "install.sh"]` → exit 0
 - `["git", "diff", "--stat"]` → exit 0
-- `["python", "-m", "pytest", "tests/test_cli.py::ReadmeTest", "tests/test_readme_install.py", "-q"]` → exit 1
+- `["git", "diff", "--", "tests/test_cli.py", "tests/test_readme_install.py"]` → exit 0
+- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "grep", "-n", "available", "tests/test_install.py"]` → exit 1
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
+- `["git", "diff", "--stat"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py", "tests/test_readme_install.py"]` → exit 0
+- `["git", "diff", "--", "install.sh"]` → exit 0
+- `["git", "diff", "--", "forgel_code/__init__.py", "tests/test_install.py"]` → exit 0
+- `["python3", "-m", "pytest", "--collect-only", "-q", "-k", "readme"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--", "install.sh"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py", "tests/test_readme_install.py"]` → exit 0
+- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--", "README.md"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--stat"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "diff", "--", "install.sh"]` → exit 0
+- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
+- `["python3", "-m", "unittest", "tests.test_install"]` → exit 0
+- `["python3", "-m", "unittest", "tests.test_install", "-k", "client", "-v"]` → exit 5
+- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "--collect-only", "tests/test_install.py"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install.py", "-q"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q"]` → exit 4
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "diff", "--", "install.sh"]` → exit 0
+- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
+- `["git", "diff", "--stat"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "diff", "--", "README.md"]` → exit 0
+- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
 
 ## Final Test Output
 
@@ -251,85 +287,179 @@ not run
 
 ## Actions
 
-- read_file: install.sh
-- read_file: tests/test_install.py
-- read_file: forgel_code/engine.py
-- read_file: tests/stub_engine.py
-- read_file: README.md
-- read_file: tests/test_readme_install.py
-- read_file: releases/0.2.0/plan.md
-- read_file: forgel_code/__init__.py
-- run: ['sh', '-n', 'install.sh']
-- recall
-- recall
-- read_file: tests/test_stub_contract.py
-- list_files
-- read_file: pyproject.toml
-- read_file: tests/test_install_timeout_verdict.py
-- read_file: CHANGELOG.md
-- read_file: tests/test_check_cleanup.py
-- run: ['python', '-m', 'pytest', 'tests/test_readme_install.py', '-q']
-- read_file: _build_backend.py
-- write_file: forgel_code/__init__.py
-- write_file: install.sh
-- read_file: install.sh
-- read_file: forgel_code/__init__.py
-- recall
-- recall
-- recall
-- list_files
-- read_file: README.md
-- recall
-- recall
-- run: ['git', 'status', '--short']
-- run: ['python', '-m', 'pytest', 'tests/test_readme_install.py', '-q', '-x']
-- read_file: tests/test_install_timeout_verdict.py
-- recall
-- write_file: tests/stub_engine_install.py
-- write_file: tests/test_install.py
-- recall
-- read_file: install.sh
-- run: ['python', '-m', 'pytest', 'tests/test_install.py', '-q', '-x']
-- run: ['python', '-m', 'pytest', '-q']
-- read_file: tests/test_readme_install.py
-- recall
-- run: ['git', 'status', '--short']
-- recall
-- recall
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- read_file: tests/test_readme_install.py
-- run: ['git', 'log', '-3', '--format=%h %s', '--', 'README.md']
-- read_file: tests/stub_engine_install.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_readme_install.py
-- read_file: forgel_code/__init__.py
-- run: ['git', 'show', '--stat', '--oneline', '76643ff']
-- run: ['git', 'grep', '-n', 'v0.1.1', 'HEAD', '--', 'tests']
-- read_file: tests/test_install.py
-- read_file: README.md
-- read_file: README.md
 - run: ['git', 'status', '--porcelain']
-- run: ['python', '-m', 'pytest', 'tests/test_readme_install.py', 'tests/test_cli.py', '-q']
-- recall
-- recall
-- recall
+- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
+- run: ['git', 'diff', '--', 'install.sh']
 - read_file: tests/test_readme_install.py
-- read_file: tests/test_readme_install.py
-- read_file: install.sh
-- run: ['git', 'diff', '--', 'forgel_code/__init__.py', 'install.sh']
-- recall
-- read_file: install.sh
-- run: ['git', 'log', '-5', '--format=%h %s', '--', 'tests/test_readme_install.py']
-- run: ['git', 'show', '76643ff', '--', 'README.md', 'tests/test_readme_install.py', 'tests/test_cli.py']
-- write_file: tests/test_readme_install.py
-- run: ['python', '-m', 'pytest', 'tests/test_readme_install.py', 'tests/test_cli.py', 'tests/test_install.py', '-q']
-- run: ['sed', '-i.bak', 's|v0.1.1|v0.2.0|g', 'tests/test_cli.py']
-- run: ['git', 'show', '--stat', '--format=%h %s', '7a11c1a']
+- run: ['git', 'diff', '--stat']
+- read_file: tests/test_check_cleanup.py
+- run: ['git', 'diff', '--', 'tests/test_cli.py', 'tests/test_readme_install.py']
+- run: ['git', 'diff', '--', 'tests/test_install.py']
+- run: ['git', 'grep', '-n', 'README', 'HEAD', '--', 'tests']
 - read_file: tests/test_cli.py
+- read_file: forgel_code/engine.py
+- run: ['git', 'grep', '-n', 'version', '--', 'forgel_code']
+- read_file: tests/stub_engine_install.py
+- read_file: README.md
+- read_file: forgel_code/cli.py
+- run: ['grep', '-rn', 'version', 'forgel_code']
+- read_file: forgel_code/__main__.py
+- read_file: forgel_code/cli.py
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: CHANGELOG.md
+- read_file: forgel_code/commands.py
+- write_file: README.md
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- run: ['sed', '-i.bak', 's/if \\[ "\\$available_ok" = "0" \\]; then/if [ "$available_ok" = "0" ] \\&\\& [ "$present_ok" = "0" ]; then/', 'install.sh']
+- run: ['python3', '-m', 'grep', '-n', 'available', 'tests/test_install.py']
+- read_file: install.sh
+- run: ['python3', '-c', 'p=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold=\'    if [ "$available_ok" = "0" ]; then\\n\'\nnew=\'    if [ "$available_ok" = "0" ] && [ "$present_ok" = "0" ]; then\\n\'\nassert s.count(old)==1, s.count(old)\nopen(p,\'w\',encoding=\'utf-8\').write(s.replace(old,new))\nprint(\'patched\')']
+- read_file: install.sh
+- read_file: tests/test_packaging.py
+- read_file: install.sh
+- run: ['git', 'status', '--porcelain']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_readme_install.py
+- read_file: tests/test_readme_install.py
+- read_file: tests/test_cli.py
+- run: ['git', 'grep', '-ln', 'README', '--', 'tests']
+- read_file: tests/test_check_cleanup.py
+- run: ['git', 'grep', '-n', 'readme', 'HEAD', '--', 'tests']
+- recall
 - read_file: tests/test_cli.py
 - run: ['git', 'diff', '--stat']
-- run: ['python', '-m', 'pytest', 'tests/test_cli.py::ReadmeTest', 'tests/test_readme_install.py', '-q']
+- run: ['sh', '-c', "grep -rln 'README' tests"]
+- run: ['git', 'diff', '--', 'tests/test_cli.py', 'tests/test_readme_install.py']
+- run: ['git', 'diff', '--', 'install.sh']
+- run: ['git', 'diff', '--', 'forgel_code/__init__.py', 'tests/test_install.py']
+- run: ['grep', '-rln', 'README', 'tests']
+- run: ['python3', '-m', 'pytest', '--collect-only', '-q', '-k', 'readme']
+- read_file: install.sh
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_packaging.py
+- read_file: tests/test_install.py
+- run: ['git', 'grep', '-n', 'README.md', 'HEAD', '--', 'tests']
+- read_file: README.md
+- run: ['rg', '-l', 'README', 'tests']
+- read_file: tests/test_cli_help_description.py
+- read_file: forgel_code/engine.py
+- run: ['git', 'grep', '-n', 'README', 'HEAD', '--', 'tests']
+- run: ['python3', '-c', 'p=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold=\'\'\'    if [ "$available_ok" = "0" ]; then\n        engine_failure "the available engine $ENGINE_AVAILABLE does not satisfy the client\'s minimum supported engine version"\n        return 1\n    fi\n    if [ -n "$ENGINE_PRESENT" ] && [ "$present_ok" = "1" ]; then\n        if ! version_compare gt "$ENGINE_AVAILABLE" "$ENGINE_PRESENT"; then\n            echo "Engine: forgel $ENGINE_PRESENT kept; the available $ENGINE_AVAILABLE is not newer."\n            return 0\n        fi\n    fi\n\'\'\'\nnew=\'\'\'    if [ -n "$ENGINE_PRESENT" ] && [ "$present_ok" = "1" ]; then\n        if ! version_compare gt "$ENGINE_AVAILABLE" "$ENGINE_PRESENT"; then\n            echo "Engine: forgel $ENGINE_PRESENT kept; the available $ENGINE_AVAILABLE is not newer."\n            return 0\n        fi\n    fi\n    if [ "$available_ok" = "0" ]; then\n        engine_failure "the available engine $ENGINE_AVAILABLE does not satisfy the client\'s minimum supported engine version $ENGINE_MINIMUM"\n        return 1\n    fi\n\'\'\'\nassert s.count(old)==1, s.count(old)\ns=s.replace(old,new)\nold2=\'\'\'report_client_only() {\n    minimum=$(engine_minimum) || minimum=\n    if [ -n "$minimum" ]; then\n        echo "Engine: none installed; --client-only was used, and the client needs forgel $minimum or newer."\n    else\n        echo "Engine: none installed; --client-only was used."\n    fi\n    return 0\n}\n\'\'\'\nnew2=\'\'\'report_client_only() {\n    echo "Engine: left untouched; --client-only was used, so no engine was queried or changed."\n    return 0\n}\n\'\'\'\nassert s.count(old2)==1\nopen(p,\'w\',encoding=\'utf-8\').write(s.replace(old2,new2))\nprint(\'patched\')']
+- run: ['git', 'grep', '-n', 'README', '--', 'tests']
+- recall
+- read_file: install.sh
+- recall
+- read_file: tests/test_retained_text.py
+- read_file: README.md
+- run: ['sed', '-i.bak', 's|if \\[ "\\$available_ok" = "0" \\]; then|if [ "$available_ok" = "0" ] \\&\\& [ "$present_ok" = "0" ]; then|', 'install.sh']
+- read_file: install.sh
+- read_file: install.sh
+- run: ['git', 'status', '--porcelain']
+- read_file: install.sh
+- read_file: install.sh
+- run: ['git', 'diff', '--', 'install.sh']
+- read_file: tests/test_install.py
+- run: ['git', 'diff', '--', 'tests/test_cli.py', 'tests/test_readme_install.py']
 - read_file: tests/test_cli.py
+- run: ['git', 'grep', '-n', 'README', '--', 'tests']
+- read_file: README.md
+- run: ['git', 'grep', '-n', 'raw.githubusercontent', 'HEAD', '--', 'README.md', 'tests']
+- run: ['rg', '-ln', 'read_text', 'tests']
+- read_file: tests/test_readme_install.py
+- read_file: tests/stub_engine_install.py
+- run: ['git', 'diff', '--', 'tests/test_install.py']
+- read_file: tests/test_check_cleanup.py
+- run: ['grep', '-rn', 'README', 'tests']
+- recall
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- recall
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'grep', '-n', 'README', '--', 'tests']
+- run: ['git', 'diff', '--', 'README.md']
+- run: ['python3', '-c', "import pathlib\nfor p in sorted(pathlib.Path('tests').rglob('*.py')):\n    t=p.read_text(encoding='utf-8')\n    if 'README' in t:\n        print(p)? "]
+- read_file: tests/test_retained_text.py
+- read_file: tests/test_packaging.py
+- read_file: tests/test_cli.py
+- run: ['sed', '-i.bak', '961,1011d', 'tests/test_cli.py']
+- read_file: tests/test_cli.py
+- read_file: tests/test_cli.py
+- run: ['python3', '-c', 'p=\'tests/test_cli.py\'\ns=open(p,encoding=\'utf-8\').read()\ni=s.index(\'class ReadmeTest(unittest.TestCase):\')\nj=s.index(\'if __name__ == "__main__":\', i)\ns=s[:i]+s[j:]\nopen(p,\'w\',encoding=\'utf-8\').write(s)\nprint(\'removed ReadmeTest\')']
+- delete_file: tests/test_readme_install.py
+- read_file: tests/test_cli_help_description.py
+- run: ['sh', '-c', "sed -e '961,1011d' tests/test_cli.py > tests/.test_cli.tmp && mv tests/.test_cli.tmp tests/test_cli.py && tail -n 4 tests/test_cli.py"]
 - write_file: tests/test_cli.py
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: install.sh
+- read_file: tests/test_extras.py
+- run: ['git', 'status', '--porcelain']
+- read_file: tests/test_localization.py
+- read_file: tests/test_cli_extra.py
+- read_file: tests/test_install.py
+- read_file: install.sh
+- read_file: install.sh
+- run: ['python3', '-c', 'p=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold1=\'    if [ "$available_ok" = "0" ]; then\\n\'\nnew1=\'    if [ "$available_ok" = "0" ] && [ "$present_ok" = "0" ]; then\\n\'\nassert s.count(old1)==1, s.count(old1)\ns=s.replace(old1,new1)\nold2=\'\'\'report_client_only() {\n    minimum=$(engine_minimum) || minimum=\n    if [ -n "$minimum" ]; then\n        echo "Engine: none installed; --client-only was used, and the client needs forgel $minimum or newer."\n    else\n        echo "Engine: none installed; --client-only was used."\n    fi\n    return 0\n}\'\'\'\nnew2=\'\'\'report_client_only() {\n    echo "Engine: left untouched; --client-only was used, so no engine was queried or changed."\n    return 0\n}\'\'\'\nassert s.count(old2)==1, s.count(old2)\ns=s.replace(old2,new2)\nopen(p,\'w\',encoding=\'utf-8\').write(s)\nprint(\'patched\')']
+- read_file: install.sh
+- read_file: tests/test_install.py
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'diff', '--stat']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'diff', '--', 'install.sh']
+- run: ['python3', '-c', 'import re\np=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold=\'    if [ "$available_ok" = "0" ]; then\\n\'\nnew=\'    if [ "$available_ok" = "0" ] && [ "$present_ok" = "0" ]; then\\n\'\nassert s.count(old)==1, (\'avail\', s.count(old))\ns=s.replace(old,new)\nfunc=\'report_client_only() {\\n    echo "Engine: left untouched; --client-only was used, so no engine was queried or changed."\\n    return 0\\n}\\n\'\ns2,n=re.subn(r\'report_client_only\\(\\) \\{\\n(?:.*\\n)*?\\}\\n\', func, s, count=1)\nassert n==1, (\'func\', n)\nopen(p,\'w\',encoding=\'utf-8\').write(s2)\nprint(\'patched\')']
+- read_file: install.sh
+- run: ['sed', '-i.bak', 's|if \\[ "\\$available_ok" = "0" \\]; then|if [ "$available_ok" = "0" ] \\&\\& [ "$present_ok" = "0" ]; then|', 'install.sh']
+- run: ['git', 'diff', '--', 'tests/test_install.py']
+- run: ['git', 'grep', '-n', 'Engine:', '--', 'tests/test_install.py']
+- run: ['rg', '-n', 'Engine:', 'tests/test_install.py']
+- run: ['python3', '-m', 'unittest', 'tests.test_install']
+- run: ['python3', '-m', 'unittest', 'tests.test_install', '-k', 'client', '-v']
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/stub_engine_install.py
+- read_file: install.sh
+- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
+- read_file: install.sh
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- read_file: install.sh
+- run: ['git', 'grep', '-n', '--', 'client-only', 'tests']
+- run: ['git', 'grep', '-n', 'client-only', '--', 'tests']
+- read_file: tests/test_install.py
+- read_file: install.sh
+- run: ['python3', '-m', 'pytest', '-q', '--collect-only', 'tests/test_install.py']
+- run: ['sh', '-n', 'install.sh']
+- read_file: README.md
+- read_file: tests/test_install.py
+- run: ['python3', '-m', 'pytest', 'tests/test_install.py', '-q']
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- list_files
+- run: ['git', 'status', '--porcelain']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'diff', '--', 'install.sh']
+- read_file: install.sh
+- run: ['git', 'diff', '--', 'tests/test_install.py']
+- read_file: tests/stub_engine_install.py
+- run: ['rg', '-n', 'class |Engine:', 'tests/test_install.py']
+- run: ['git', 'grep', '-n', 'Engine:', '--', 'tests/test_install.py']
+- run: ['grep', '-n', 'Engine:', 'tests/test_install.py']
+- run: ['git', 'diff', '--stat']
+- read_file: tests/test_install.py
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- run: ['git', 'diff', '--', 'README.md']
+- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
+- read_file: forgel_code/engine.py
+- read_file: forgel_code/cli.py
+- run: ['git', 'grep', '-n', 'version', 'HEAD', '--', 'forgel_code']
+- read_file: install.sh
+- read_file: tests/test_install.py
+- read_file: tests/test_retained_text.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install_timeout_verdict.py
+- recall
+- write_file: install.sh
