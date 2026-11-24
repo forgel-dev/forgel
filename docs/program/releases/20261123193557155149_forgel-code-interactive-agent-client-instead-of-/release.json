@@ -6,7 +6,7 @@
   "release_class": "minor",
   "plan_id": "",
   "created_at": "2026-11-23T19:35:57+00:00",
-  "status": "running",
+  "status": "released",
   "tasks": [
     "20261123193557_forgel-code-interactive-agent-client-ins",
     "20261123213155_release-audit-forgel-code-interactive-py",
@@ -30,18 +30,25 @@
       "base_source": "changelog 0.1.0",
       "preset": "python",
       "planned_version": "0.2.0",
-      "version": "",
-      "status": "pending",
-      "tag": "",
-      "sha": "",
-      "release": "",
-      "detail": ""
+      "version": "0.2.0",
+      "status": "released",
+      "tag": "v0.2.0",
+      "sha": "76643ff8d07da05e039cd5f22e01ce4719b38492",
+      "release": "https://github.com/forgel-dev/code/releases/tag/v0.2.0",
+      "detail": "",
+      "version_files": [
+        "forgel_code/__init__.py"
+      ],
+      "release_refs": [
+        "README.md",
+        "install.sh"
+      ]
     }
   },
   "audit": {
-    "rounds": 6,
-    "verdict": "fail",
-    "summary": "The release implements most of the interactive client and has broad test coverage, but the audit found a blocking authorization gap in sensitive-action detection and an explicit regression in the one-shot CLI help output. The new README also contradicts the implemented plain-sentence behavior.",
+    "rounds": 7,
+    "verdict": "pass",
+    "summary": "The change set delivers the requested interactive Forgel Code session: a bare invocation now opens a prompt-and-answer loop over the engine's own commands, free text goes to the engine's `say`, state is shown and self-refreshed, plain-language accept/rework/retry/pause/resume and project switching are routed to engine commands, failures and clarifications stay in-session, the session speaks English/Russian/French/Spanish, and the redaction passes after the audit-fix series (labels, quotes, newlines, punctuation, joined French labels, descriptors, retained text). `cli.main`'s empty-argv short-circuit leaves `--help`, `--version`, every subcommand and `--json` parsing untouched, and the help description was restored byte-for-byte with a pinning test. All task suites pass (last run 390 passed) and no destructive operation, migration, leaked credential, or unverified acceptance command is present. Three non-blocking issues remain: the English/Russian sensitive-action matcher over-blocks ordinary `verb + project` sentences, the sensitive refusal points only at `forgel-code` (which reopens the session) rather than the explicit subcommand, and the README's interactive section contradicts itself on when a clarification is returned.",
     "report": "docs/program/releases/20261123193557155149_forgel-code-interactive-agent-client-instead-of-/audit.md",
     "task_ids": [
       "20261123193557_forgel-code-interactive-agent-client-ins",
@@ -55,32 +62,35 @@
       "20261124053445_release-audit-in-quoted-binding-after-a-",
       "20261124053445_release-audit-sensitive-markers-is-engli",
       "20261124053445_release-audit-the-redactor-recognizes-on",
-      "20261124123936_release-audit-the-redactor-recognizes-th"
+      "20261124123936_release-audit-the-redactor-recognizes-th",
+      "20261124131129_release-audit-forgel-code-cli-py-changes",
+      "20261124131129_release-audit-the-sensitive-action-guard"
     ],
-    "at": "2026-11-24T13:11:24+00:00",
+    "at": "2026-11-24T14:11:11+00:00",
     "errors": 0,
     "findings": [
       {
-        "severity": "major",
+        "severity": "minor",
         "repo_id": "code",
-        "issue": "The sensitive-action guard is incomplete for required explicit actions. `SENSITIVE_MARKERS`, `CREDENTIAL_NOUNS`, `CONFIG_NOUNS` and the create/change stems do not cover bare `key`/`ключ`, `config`, or `scaffold`, so free-text requests such as `change config`, `create a key`, `создай ключ`, or `scaffold a project` are not refused and can be sent to the engine as ordinary `say` requests. This violates the requirement that setting key material and changing configuration or creating/scaffolding a project never happen from free text alone. No tests assert no-passthrough for these forms.",
-        "suggestion": "Extend sensitive-action detection with verb-plus-object handling for English and Russian, including the missing key, config, and scaffold terms, and add tests that these requests are refused and produce no outgoing engine `say` request while ordinary mentions remain forwarded."
-      },
-      {
-        "severity": "major",
-        "repo_id": "code",
-        "issue": "`forgel_code/cli.py` changes the argparse description to include `Run it without a command to open the interactive session.` This changes the output of `forgel-code --help`, an existing non-interactive usage, while the requirements and acceptance say every existing one-shot usage keeps its previous output. The review statement that `--help` output is unchanged is contradicted by the diff.",
-        "suggestion": "Restore the original parser description so `forgel-code --help` output is byte-for-byte unchanged; interactive documentation belongs in README/CHANGELOG rather than in existing help output. Keep a test that pins the one-shot help output if the contract requires it."
+        "issue": "`_asks_for_explicit_action` pairs broad create verbs (`make`, `generate`, `init`, `provision`, …) with the noun `project`/`projects`, so ordinary requests that are not project creation — e.g. `make the project faster` or `generate the project documentation` — are classified as sensitive, refused, and never forwarded to the engine, although the guard task requires requests outside the guarded categories to be forwarded as before. The ordinary-conversation tests only exercise sentences that name the object without a verb, so this class is untested.",
+        "suggestion": "Restrict the project-noun rule to genuine creation frames (the create verb taking the project as its direct object) and add regression tests for ordinary `verb + … + project` sentences that must still reach the engine."
       },
       {
         "severity": "minor",
         "repo_id": "code",
-        "issue": "The new README section contradicts itself and the documented behavior: the table maps `a plain sentence` to the project agent's answer, but the following paragraph says `A sentence that names no action ... gets a clarification` and nothing is carried out. A plain sentence is exactly a sentence that names no action, so the user is told both that it is answered and that it is not.",
-        "suggestion": "Reword the paragraph to say that an action-bearing request that cannot be resolved, such as one missing a task, remarks or project, or one matching several actions, gets a clarification and performs nothing; a plain sentence is forwarded to the agent."
+        "issue": "The sensitive-request refusal names only the program `forgel-code`, not the explicit operation. Running `forgel-code` without arguments reopens the same interactive session, so the advertised next step cannot perform the requested action and the owner must guess the real subcommand, which is what the requirement asked the refusal to name so the owner can act without guessing.",
+        "suggestion": "In every language's sensitive refusal, name the concrete explicit command(s) for the requested family (adopt, project create, secret/config operations) instead of only `forgel-code`."
+      },
+      {
+        "severity": "minor",
+        "repo_id": "code",
+        "issue": "The README's interactive section contradicts itself: it says \"Each sentence is handed to the engine's project agent\" and its table maps \"a plain sentence\" to the agent's answer, but the next paragraph says \"A sentence that names no action, or more than one, gets a clarification and nothing is carried out.\" A plain sentence names no action, so the documentation gives two different behaviours for the same input and conflicts with the requirement that a typed phrase is answered by the agent.",
+        "suggestion": "Reword the paragraph to state the actual rule — a clarification is returned when a sentence targets an action on a task but names no task, no available action, or several actions — so it no longer contradicts the table and the agent-answer behaviour."
       }
     ]
   },
   "control_push": {},
-  "finalized_at": "",
-  "detail": ""
+  "finalized_at": "2026-11-24T14:11:22+00:00",
+  "detail": "",
+  "next_at": ""
 }

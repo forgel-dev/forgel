@@ -3,7 +3,7 @@
 - Project: `forgel-1d2bf685`
 - Request: Forgel Code: interactive agent client instead of a command wrapper
 - Class: minor
-- Status: running
+- Status: released
 - Created: 2026-11-23T19:35:57+00:00
 
 
@@ -13,7 +13,7 @@ The Forgel Code client stops being only a set of one-shot, argument-driven wrapp
 
 ## Repositories
 
-- `code` — pending, preset python, base 0.1.1, planned 0.2.0
+- `code` — released, preset python, base 0.1.1, releases 0.2.0
 
 ## Tasks
 
@@ -29,11 +29,11 @@ The Forgel Code client stops being only a set of one-shot, argument-driven wrapp
 - `20261124053445_release-audit-sensitive-markers-is-engli` — Release audit: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `cré (code, done)
 - `20261124053445_release-audit-the-redactor-recognizes-on` — Release audit: The redactor recognizes only English secret words and Russian stems (`SECRET_WOR (code, done)
 - `20261124123936_release-audit-the-redactor-recognizes-th` — Release audit: The redactor recognizes the French password label only as the whitespace-separat (code, done)
-- `20261124131129_release-audit-forgel-code-cli-py-changes` — Release audit: `forgel_code/cli.py` changes the argparse description to include `Run it without (code, pending)
-- `20261124131129_release-audit-the-sensitive-action-guard` — Release audit: The sensitive-action guard is incomplete for required explicit actions. `SENSITI (code, pending)
+- `20261124131129_release-audit-forgel-code-cli-py-changes` — Release audit: `forgel_code/cli.py` changes the argparse description to include `Run it without (code, done)
+- `20261124131129_release-audit-the-sensitive-action-guard` — Release audit: The sensitive-action guard is incomplete for required explicit actions. `SENSITI (code, done)
 
 ## Audit
 
-- Rounds: 6
-- Verdict: fail
+- Rounds: 7
+- Verdict: pass
 - Report: `docs/program/releases/20261123193557155149_forgel-code-interactive-agent-client-instead-of-/audit.md`
