@@ -232,10 +232,10 @@
     }
   ],
   "language": "en",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-24T15:22:48+00:00",
-  "finished_at": "2026-11-24T16:26:26+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "context session limit reached",
     "files_changed": [
@@ -444,10 +444,15 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.md",
+    "spec_rework_count": 1,
+    "feedback": [
+      "The specification was rewritten after an invalid check: … [truncated]\ngine together. The documented installation command currently still points at an earlier release's client-only installer, so the delivered change cannot become the documented one-command install, and a developer who works strictly inside this scope is forced either to leave the mismatch in place or to weaken the project's existing installation-documentation expectations, which is not permitted. The rewrite must require that the documented installation command is the combined client-and-engine command, that the documentation tells a user how to install only the client, and that any disagreement with existing installation-documentation expectations is resolved by bringing the documentation in line with the delivered behavior, never by relaxing, deleting or rewriting the existing expectations.",
+      "Implement the new specification. Do not change code only to satisfy the old check."
+    ],
+    "last_failure": {
       "kind": "agent",
-      "message": "context session limit reached"
-    },
-    "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.md"
+      "message": "The specification declares the user-facing installation documentation out of scope and keeps the documented installation command as the client-only one, while the product goal of this feature is that the single documented command installs the client and the engine together. The documented installation command currently still points at an earlier release's client-only installer, so the delivered change cannot become the documented one-command install, and a developer who works strictly inside this scope is forced either to leave the mismatch in place or to weaken the project's existing installation-documentation expectations, which is not permitted. The rewrite must require that the documented installation command is the combined client-and-engine command, that the documentation tells a user how to install only the client, and that any disagreement with existing installation-documentation expectations is resolved by bringing the documentation in line with the delivered behavior, never by relaxing, deleting or rewriting the existing expectations."
+    }
   }
 }
