@@ -105,10 +105,133 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T12:39:36+00:00",
   "started_at": "2026-11-24T12:39:36+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T12:58:13+00:00",
+  "result": {
+    "summary": "Closed the release-audit leak: the French password label is now recognised as a secret label in its joined spellings. In `forgel_code/interactive.py` a helper `_joined_phrase` treats a compound label whose segments are `mot`/`mots`, `de`, `passe` joined only by `_` or `-` (case-insensitively, diacritics folded, as for every other label) as the same several-word secret label as the spaced form, and `_secret_label` consults it. Because recognition feeds the existing `_binding`/`_descriptor_span` path, every value form already handled for the spaced label is redacted with the unchanged `[redacted]` placeholder: colon/equals separators and their runs, delimited and bracketed assignments, quoted values, bare values, copulas, and quoted or bracketed labels — on both the display and the retention paths, which share `redact`. A joined label with no adjacent value binds nothing, so the message stays unchanged. Added `tests/test_redact_french_joined.py` covering underscore- and hyphen-joined labels (plus mixed case), each value form, equivalence with the spaced form, prose without a value, unchanged behaviour of the other labels, idempotence, and session-level rendering and retention of replies, state and errors. Recorded the fix under Unreleased/Fixed in `CHANGELOG.md`. Tested with `python -m pytest -q` (final run: 378 passed, 600 subtests passed) and with a focused run of the new module (9 passed, 72 subtests passed).",
+    "files_changed": [
+      "CHANGELOG.md",
+      "forgel_code/interactive.py",
+      "tests/test_redact_french_joined.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact_french_joined.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact_french_joined.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": ".............................................................................................. [ 24%]\n........................................................................ [ 43%]\n......................................................................... [ 63%]\n.................................................................... [ 81%]\n.......................................................................                               [100%]\n378 passed, 600 subtests passed in 199.13s (0:03:19)\n",
+    "assumptions": [
+      "The joined spellings to support are exactly underscore-joined and hyphen-joined, as the specification states; a dot-joined `mot.de.passe` is deliberately not treated as the label.",
+      "Only the joined French password label is added: the secret-word and stem vocabularies, the placeholder, the context rules and the spaced phrase handling are untouched.",
+      "Mixed joiners inside one label are accepted (for example `mot_de-passe`), since the requirement distinguishes only which separators may appear.",
+      "The CHANGELOG entry is documentation and is verified by review; no test reads it."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 30,
+      "estimated_input_tokens": 1580291,
+      "provider_input_tokens": 1638343,
+      "provider_output_tokens": 56386,
+      "cache_hit_tokens": 1550592,
+      "cache_miss_tokens": 87751,
+      "estimated_tokens": 86416,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "e6a75a9b3f480a6f09c463aa0e267a688ca6b697",
+      "head": "151244ed57a6d6f45a0e420dab50f1f403284976",
+      "commit": "151244ed57a6d6f45a0e420dab50f1f403284976",
+      "commits": [
+        "151244ed57a6d6f45a0e420dab50f1f403284976"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124123936_release-audit-the-redactor-recognizes-th.md"
+  },
   "request": ""
 }
