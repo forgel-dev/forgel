@@ -174,9 +174,222 @@
     }
   ],
   "language": "en",
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-24T15:22:48+00:00",
+  "finished_at": "2026-11-24T16:26:26+00:00",
+  "result": {
+    "summary": "context session limit reached",
+    "files_changed": [
+      "forgel_code/__init__.py",
+      "install.sh",
+      "tests/stub_engine_install.py",
+      "tests/test_cli.py",
+      "tests/test_install.py",
+      "tests/test_readme_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_readme_install.py",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_readme_install.py",
+          "-q",
+          "-x"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_install.py",
+          "-q",
+          "-x"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "-3",
+          "--format=%h %s",
+          "--",
+          "README.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "--oneline",
+          "76643ff"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_readme_install.py",
+          "tests/test_cli.py",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "forgel_code/__init__.py",
+          "install.sh"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "-5",
+          "--format=%h %s",
+          "--",
+          "tests/test_readme_install.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "76643ff",
+          "--",
+          "README.md",
+          "tests/test_readme_install.py",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_readme_install.py",
+          "tests/test_cli.py",
+          "tests/test_install.py",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "--format=%h %s",
+          "7a11c1a"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "tests/test_cli.py::ReadmeTest",
+          "tests/test_readme_install.py",
+          "-q"
+        ],
+        "exit_code": 1
+      }
+    ],
+    "test_output": "",
+    "assumptions": [],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 6,
+      "compactions": 5,
+      "model_calls": 238,
+      "estimated_input_tokens": 12713296,
+      "provider_input_tokens": 13134490,
+      "provider_output_tokens": 705643,
+      "cache_hit_tokens": 12637696,
+      "cache_miss_tokens": 496794,
+      "estimated_tokens": 92845,
+      "state": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "d51471674c30c0413546e68f885f7352c9fd9a1c",
+      "head": "d51471674c30c0413546e68f885f7352c9fd9a1c",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "agent",
+      "message": "context session limit reached"
+    },
+    "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.md"
+  }
 }
