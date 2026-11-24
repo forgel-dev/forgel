@@ -3,14 +3,57 @@
   "title": "Add the combined engine and client install mode",
   "spec": "docs/program/specs/20261124152248_add-the-combined-engine-and-client-insta.md",
   "summary": "The Forgel Code installer, run with no extra flags, installs the engine alongside the client, so the documented one-command install yields a working pair. It is idempotent by comparing the installed engine against the version the configured engine source provides: no engine installs it, an installed engine at or above the available one is kept untouched, a strictly newer available engine replaces it, and the finished result always satisfies the declared minimum, failing with an actionable message when it cannot. The default engine source is a documented configuration, and the run reports which engine version is installed.",
-  "requirements": [],
-  "acceptance": [],
+  "requirements": [
+    "Running the client installation with no mode selection installs the client and, in the same run, brings an engine the client supports into place.",
+    "The engine source used by the run is a configuration with a documented default; when the configuration is unset the project's own public engine source is used.",
+    "The run determines, without installing anything, which engine version the configured engine source provides, and determines which version of an engine is already in place if one is.",
+    "When no engine is in place, the run installs the available engine.",
+    "When an engine is in place at a version equal to or above the available one and satisfies the declared minimum, the run keeps it untouched and reports it as kept.",
+    "When the available version is strictly newer than the engine in place, the run replaces it with the available version.",
+    "A successful run never leaves an engine below the client's declared minimum supported engine version.",
+    "When the finished state cannot satisfy the declared minimum, the run exits with a non-zero status and prints one message that names the required minimum, the engine version found and the action the user can take.",
+    "A successful run states the engine version left in place and how it was obtained: installed, kept or replaced.",
+    "The client installation has a mode that installs the client alone; in that mode it never installs, replaces or otherwise touches an engine and succeeds whether or not an engine or the engine project's installation mechanism is available.",
+    "When the engine project's installation mechanism cannot be found or fails, a default run exits with a non-zero status and an actionable message that names the client-only mode as the way to proceed without an engine, rather than silently installing only the client.",
+    "Uninstalling removes the client installation and its path entry and leaves any installed engine in place.",
+    "Re-running the default installation is idempotent: the client installation is replaced rather than duplicated, exactly one path entry remains, and an engine that is kept is not reinstalled.",
+    "The declared minimum supported engine version has exactly one source, which both the installation and the client's startup check honour.",
+    "Two engine versions are ordered numerically component by component; one leading version marker and trailing zero components do not affect the comparison; a version that cannot be ordered numerically is treated as not satisfying the minimum.",
+    "The installation's own usage text describes the combined mode as the default, the client-only mode, and the engine source with its default.",
+    "The user documentation presents exactly one one-command installation as the main path, and that path installs the client and the engine together.",
+    "The one-command installation the documentation presents is served by the release of this project that contains the combined mode, not by an earlier release that installed the client alone; the update and uninstall instructions name the same release location.",
+    "The documentation shows how to install only the client, states that this route touches no engine and that the user then supplies an engine meeting the declared minimum, and states that uninstalling leaves the engine in place.",
+    "The documentation states the engine source default and how to point the run at another engine source, states that an already installed supported engine is kept and a strictly older one replaced, and states that the run reports the engine version it leaves in place.",
+    "The documentation no longer tells the user that a working engine must already be present before the one-command installation.",
+    "The project's existing installation-documentation standards keep their full strength: the main path is still led by the one-command installation, the update and uninstall routes are still documented, exactly one current-release location is named, no alternative main installation route is introduced, and no editable installation is proposed. Any disagreement with those standards is resolved by bringing the documentation in line with the delivered behaviour, never by dropping, loosening or rephrasing a standard into a weaker one; the only change permitted to the documented current-release location is its advance to the release that carries the combined mode.",
+    "The changelog records the combined installation, the client-only mode, the keep/replace behaviour and the reported engine version."
+  ],
+  "acceptance": [
+    "On a machine with no engine, a default run against a configured engine source that provides a supported version leaves an installed client and an installed engine at that version, and reports the version and that it was installed.",
+    "On a machine whose engine is at or above the available version and satisfies the minimum, a default run leaves the installed engine untouched and reports it as kept.",
+    "On a machine whose engine is older than the available version, a default run replaces it and reports the new version as installed.",
+    "When the run cannot leave an engine meeting the declared minimum, it exits non-zero and its single message names the required minimum, the version found and the action the user can take.",
+    "A client-only run succeeds with no engine and no engine installation mechanism available, installs the client, and leaves an engine that is present unchanged.",
+    "A default run with no engine installation mechanism available exits non-zero with a message that names the client-only route as the way to proceed.",
+    "Running the default installation twice leaves the kept engine unchanged and exactly one path entry in the profile.",
+    "Engine versions that differ only by a leading marker or trailing zero components compare equal, a strictly newer available version wins, and a non-numeric version never satisfies the minimum.",
+    "Uninstalling removes the client installation and its path entry and leaves the installed engine in place.",
+    "The installation's usage text describes the combined default, the client-only mode and the engine source default.",
+    "The documentation's single main one-command installation installs the client and the engine together.",
+    "The documentation shows how to install only the client and says that route touches no engine.",
+    "The documentation names the default engine source and its override, the keep-supported and replace-strictly-older behaviour, the reported engine version and the fact that uninstalling keeps the engine; it no longer requires a pre-installed engine for the one-command installation.",
+    "The documented installation, update and uninstall instructions all name the release that carries the combined mode, and no earlier release that installed the client alone is named.",
+    "No existing installation-documentation standard has been dropped, loosened or rephrased into a weaker one; the only change to the documented current-release location is its advance to the release carrying the combined mode.",
+    "The changelog records the combined installation, the client-only mode, the comparison behaviour and the reported engine version.",
+    "The whole test suite passes, including the existing installation and packaging expectations."
+  ],
   "constraints": [],
   "repo_id": "code",
   "test_command": [
-    "python",
+    "python3",
     "-m",
-    "pytest"
+    "pytest",
+    "-q"
   ],
   "assumptions": [],
   "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
@@ -20,135 +63,150 @@
   "order": 5,
   "checks": [
     {
-      "criterion": "A run with no extra options installs the client and the available engine and states it as newly installed.",
+      "criterion": "A default run with no engine installs the available engine and reports the version and that it was installed.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "The client-only option installs no engine.",
+      "criterion": "An engine at or above the available version is kept untouched and reported as kept.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "The available engine version is known before any engine is installed and drives the decision.",
+      "criterion": "A strictly newer available engine replaces the installed one and the run reports the new version as installed.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "A present engine at or above the available version is left unchanged.",
+      "criterion": "An unsatisfiable finished state exits non-zero with one message naming the minimum, the version found and the next action.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "A strictly newer available version replaces an older present engine.",
+      "criterion": "A client-only run succeeds without any engine or engine installation mechanism and leaves a present engine unchanged.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "An available version below the declared minimum fails without installing and names the minimum and the available version.",
+      "criterion": "A default run without an available engine installation mechanism exits non-zero and names the client-only route.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "A present engine below the declared minimum with no newer available version fails and names the minimum and the present version.",
+      "criterion": "A second default run keeps exactly one path entry and does not reinstall a kept engine.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
-        "-q"
+        "-q",
+        "tests/test_install.py"
       ]
     },
     {
-      "criterion": "Failure messages name the required minimum and an actionable next step.",
+      "criterion": "Version ordering treats marker-prefixed and zero-padded versions as equal, prefers the strictly newer one, and never accepts a non-numeric version as meeting the minimum.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py"
+      ]
+    },
+    {
+      "criterion": "Uninstalling removes the client and its path entry and leaves the engine in place.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py"
+      ]
+    },
+    {
+      "criterion": "The installation's usage text describes the combined default, the client-only mode and the engine source default.",
+      "verification": "command",
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_install.py"
+      ]
+    },
+    {
+      "criterion": "The documentation's single main one-command installation installs the client and the engine together.",
       "verification": "review",
       "command": []
     },
     {
-      "criterion": "A second identical run installs no engine and states the same version.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
+      "criterion": "The documentation shows how to install only the client and says that route touches no engine.",
+      "verification": "review",
+      "command": []
     },
     {
-      "criterion": "Changing the configured engine source changes the version considered available.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
+      "criterion": "The documentation names the default engine source and its override, the keep/replace behaviour, the reported engine version and that uninstalling keeps the engine, and no longer requires a pre-installed engine for the one-command installation.",
+      "verification": "review",
+      "command": []
     },
     {
-      "criterion": "An unreachable engine source fails with an actionable message and leaves the present engine untouched.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
+      "criterion": "The documented installation, update and uninstall instructions all name the release carrying the combined mode, and no earlier client-only release is named.",
+      "verification": "review",
+      "command": []
     },
     {
-      "criterion": "A failed engine installation leaves the client installed and ends as a failure with an actionable message.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
+      "criterion": "No existing installation-documentation standard is dropped, loosened or rephrased into a weaker one; only the documented current-release location advances.",
+      "verification": "review",
+      "command": []
     },
     {
-      "criterion": "An engine that cannot report its version is treated as missing.",
-      "verification": "command",
-      "command": [
-        "python",
-        "-m",
-        "pytest",
-        "-q"
-      ]
+      "criterion": "The changelog records the combined installation, the client-only mode, the comparison behaviour and the reported engine version.",
+      "verification": "review",
+      "command": []
     },
     {
-      "criterion": "The behavior the client installation had before this change is preserved.",
+      "criterion": "The whole test suite passes, including the existing installation and packaging expectations.",
       "verification": "command",
       "command": [
-        "python",
+        "python3",
         "-m",
         "pytest",
         "-q"
@@ -157,20 +215,20 @@
   ],
   "external_dependencies": [
     {
-      "name": "engine installation and version reporting supplied by the engine",
-      "interface": "The client never imports engine internals. It uses three operations behind one seam: (1) probe the configured engine source for the version it offers, without installing anything -> Version | None; (2) install a chosen version from that source -> void; (3) read the version the installed engine itself declares -> Version | None. Reconciliation on top of them: nothing installed -> install the available version; installed >= available -> keep untouched; available > installed -> install the available one; afterwards assert installed >= declared minimum and fail with an actionable message otherwise. The run reports the resulting installed version. Every operation is deterministic: no network, no clock, no ambient state; versions are compared as (major, minor, patch).",
-      "docs": "Task specification in the repository (behaviour of the combined install mode: probe without install, install chosen available version, keep at-or-above, replace strictly newer, enforce the declared minimum, report the installed version); FORGEL.md project rules (deterministic orchestrator; documentation and code own the contract); AGENTS.md (process rules live in code, not prose).",
-      "mode": "stub",
-      "evidence": "The engine is not a repository of this project: the project repository list contains only 'main: application' and 'code: application', and no vendored engine installer source or engine version-output fixture is present in the inspected repository context. The contract is therefore taken from the specification itself, which states: 'It is idempotent by comparing the installed engine against the version the configured engine source provides: no engine installs it, an installed engine at or above the available one is kept untouched, a strictly newer available engine replaces it, and the finished result always satisfies the declared minimum, failing with an actionable message when it cannot' and 'the run reports which engine version is installed'. FORGEL.md adds 'The orchestrator is deterministic; the LLM works only inside a step', so the probe/install/report surface must be a deterministic local seam rather than a real download. The stub below implements exactly those states and no other interface.",
-      "stub": "\"\"\"Deterministic stand-in for the engine installer / version-reporting surface.\n\nOnly the operations the client actually uses are modelled:\n    available_version(source) -> Version | None   (probe; installs nothing)\n    installed_version()      -> Version | None   (what the engine declares)\n    install(source, version) -> None\nplus ensure(source, minimum) -> (Version, changed) with the reconciliation\nrules from the specification. No network, no clock, no ambient state.\n\"\"\"\nfrom __future__ import annotations\n\nimport re\nfrom dataclasses import dataclass\nfrom typing import Iterable, Optional, Tuple\n\n_SEMVER = re.compile(r\"^(\\d+)\\.(\\d+)\\.(\\d+)$\")\n\n\nclass EngineError(RuntimeError):\n    \"\"\"Base error for the engine surface.\"\"\"\n\n\nclass EngineUnavailableError(EngineError):\n    \"\"\"The configured source offers no engine and none is installed.\"\"\"\n\n\nclass EngineInstallError(EngineError):\n    \"\"\"The installer refused or failed to install a version.\"\"\"\n\n\nclass MinimumNotSatisfiedError(EngineError):\n    \"\"\"The resulting engine is below the declared minimum.\"\"\"\n\n\n@dataclass(frozen=True, order=True)\nclass Version:\n    major: int\n    minor: int\n    patch: int\n\n    @classmethod\n    def parse(cls, text: object) -> \"Version\":\n        if isinstance(text, Version):\n            return text\n        match = _SEMVER.match(str(text).strip())\n        if match is None:\n            raise ValueError(\"not a version: %r\" % (text,))\n        return cls(*(int(part) for part in match.groups()))\n\n    def __str__(self) -> str:\n        return \"%d.%d.%d\" % (self.major, self.minor, self.patch)\n\n\nclass FakeEngine:\n    \"\"\"In-memory engine whose state is fully controlled by the test.\"\"\"\n\n    def __init__(self, channel, installed: Optional[Version] = None,\n                 broken: Iterable[Version] = (), unavailable_sources=()):\n        self._channel = channel\n        self._installed = None if installed is None else Version.parse(installed)\n        self._broken = {Version.parse(v) for v in broken}\n        self._unavailable = set(unavailable_sources)\n        self.install_calls = []\n\n    # probe: must never mutate anything\n    def available_version(self, source: str) -> Optional[Version]:\n        if source in self._unavailable:\n            return None\n        return self._channel.latest(source)\n\n    # what the installed engine itself declares\n    def installed_version(self) -> Optional[Version]:\n        return self._installed\n\n    def install(self, source: str, version: Version) -> None:\n        version = Version.parse(version)\n        self.install_calls.append((source, version))\n        if version in self._broken:\n            raise EngineInstallError(\n                \"engine installer rejected %s from source %r\"\n                % (version, source))\n        artifact = self._channel.fetch(source, version)\n        self._installed = artifact.version\n\n    def ensure(self, source: str, minimum: Version) -> Tuple[Version, bool]:\n        \"\"\"Reconcile installed vs available; return (version, changed).\"\"\"\n        minimum = Version.parse(minimum)\n        available = self.available_version(source)\n        current = self.installed_version()\n        changed = False\n\n        if available is None:\n            if current is None:\n                raise EngineUnavailableError(\n                    \"no engine is installed and the configured engine source \"\n                    \"%r offers none; point 'engine_source' at a reachable \"\n                    \"engine location or install an engine of at least %s\"\n                    % (source, minimum))\n        elif current is None or available > current:\n            self.install(source, available)\n            changed = True\n        # current >= available: kept untouched, no install call\n\n        installed = self.installed_version()\n        if installed is None or installed < minimum:\n            raise MinimumNotSatisfiedError(\n                \"installed engine %s is below the required minimum %s; \"\n                \"make a source that provides at least %s available as the \"\n                \"configured engine source\"\n                % (installed, minimum, minimum))\n        return installed, changed"
+      "name": "The engine project's own installation mechanism",
+      "interface": "Reports which engine version a named engine source provides without installing anything, and installs a requested engine version, signalling failure on its error output with a non-zero status.",
+      "docs": "sibling project main repository (forgel-dev/forgel)",
+      "mode": "",
+      "evidence": "",
+      "stub": ""
     },
     {
-      "name": "engine distribution channel reached by the configured source",
-      "interface": "The client passes the configured engine source (the documented default, overridable in configuration) straight through to the engine installer; it never opens its own transport for the engine. The channel resolves a source to the set of published engine versions, exposes the newest one for probing, and yields an installable artifact for an exact version. In tests the channel is an in-memory catalogue; no HTTP, DNS, credentials or filesystem outside the tmp path are involved.",
-      "docs": "Task specification in the repository: 'The default engine source is a documented configuration' and the client keeps using the same channel and fetch mechanism it already uses today for the client; the engine is obtained through the engine's own installation, not through a new channel invented here. Client user documentation of the current installation channel (referenced by the dependency contract).",
-      "mode": "stub",
-      "evidence": "The specification states the channel is a configuration value, not new code: 'The default engine source is a documented configuration', and the dependency contract for this repository states 'The client's installation keeps using the same channel and fetch mechanism it uses today for the client; the engine is obtained through the engine's own installation, not through a new channel invented here.' No channel client, release-fetch helper or network fixture for engine artifacts exists in the inspected repository context, and the project repository list ('main: application', 'code: application') contains no channel repository, so the transport is stubbed as a deterministic in-memory catalogue that the client reaches only through the installer seam above. FORGEL.md: 'The orchestrator is deterministic', which rules out a live fetch in tests.",
-      "stub": "\"\"\"Deterministic in-memory engine distribution channel.\n\nOne instance stands in for the configured engine source. It answers the two\nquestions the installer seam asks: which versions does a source publish, and\ngive me the artifact for an exact version. Nothing is fetched over a network.\n\"\"\"\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom typing import Iterable, Mapping, Optional\n\nfrom .engine import Version  # semver type defined with the engine stub\n\n\nclass ChannelError(RuntimeError):\n    \"\"\"The source has no such artifact.\"\"\"\n\n\n@dataclass(frozen=True)\nclass Artifact:\n    version: Version\n    location: str\n\n\nclass FakeEngineChannel:\n    \"\"\"Catalogue of engine artifacts keyed by configured source string.\"\"\"\n\n    def __init__(self, catalogue: Optional[Mapping[str, Iterable[object]]] = None):\n        self._catalogue = {}\n        for source, versions in (catalogue or {}).items():\n            for version in versions:\n                self.publish(source, version)\n\n    def publish(self, source: str, version: object) -> None:\n        parsed = Version.parse(version)\n        location = \"mem://%s/engine-%s\" % (source, parsed)\n        self._catalogue.setdefault(source, {})[parsed] = Artifact(parsed, location)\n\n    def versions(self, source: str):\n        return sorted(self._catalogue.get(source, {}))\n\n    def latest(self, source: str) -> Optional[Version]:\n        available = self.versions(source)\n        return available[-1] if available else None\n\n    def fetch(self, source: str, version: object) -> Artifact:\n        parsed = Version.parse(version)\n        try:\n            return self._catalogue[source][parsed]\n        except KeyError:\n            raise ChannelError(\n                \"source %r publishes no engine %s (available: %s)\"\n                % (source, parsed,\n                   \", \".join(str(v) for v in self.versions(source)) or \"none\"))"
+      "name": "The engine's version report",
+      "interface": "One machine-readable object on standard output describing the engine's own name and version.",
+      "docs": "sibling project main repository (forgel-dev/forgel)",
+      "mode": "",
+      "evidence": "",
+      "stub": ""
     }
   ],
   "language": "en",
