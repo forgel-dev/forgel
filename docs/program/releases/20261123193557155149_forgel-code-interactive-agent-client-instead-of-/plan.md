@@ -21,12 +21,13 @@ The Forgel Code client stops being only a set of one-shot, argument-driven wrapp
 - `20261123213155_release-audit-forgel-code-interactive-py` — Release audit: `forgel_code/interactive.py`'s `redact()` does not keep key material out of the (code, done)
 - `20261123213155_release-audit-localization-does-not-sati` — Release audit: Localization does not satisfy the requirement that every reply follow the owner' (code, done)
 - `20261123213155_release-audit-the-session-does-not-refre` — Release audit: The session does not refresh task and release state on its own while the owner i (code, done)
-- `20261124003849_release-audit-quoted-secret-labels-are-n` — Release audit: Quoted secret labels are not fully redacted. For a message such as `'token': 'ab (code, pending)
-- `20261124003849_release-audit-redaction-misses-values-se` — Release audit: Redaction misses values separated from a secret label by a newline and values be (code, pending)
-- `20261124003849_release-audit-the-session-keeps-unredact` — Release audit: The session keeps unredacted engine text in memory. `show_state` assigns the raw (code, pending)
+- `20261124003849_release-audit-quoted-secret-labels-are-n` — Release audit: Quoted secret labels are not fully redacted. For a message such as `'token': 'ab (code, done)
+- `20261124003849_release-audit-redaction-misses-values-se` — Release audit: Redaction misses values separated from a secret label by a newline and values be (code, done)
+- `20261124003849_release-audit-the-session-keeps-unredact` — Release audit: The session keeps unredacted engine text in memory. `show_state` assigns the raw (code, done)
+- `20261124045451_release-audit-redact-in-forgel-code-inte` — Release audit: `redact()` in `forgel_code/interactive.py` treats the first word after a recogni (code, pending)
 
 ## Audit
 
-- Rounds: 2
+- Rounds: 3
 - Verdict: fail
 - Report: `docs/program/releases/20261123193557155149_forgel-code-interactive-agent-client-instead-of-/audit.md`

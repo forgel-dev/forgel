@@ -1,0 +1,100 @@
+{
+  "id": "20261124045451_release-audit-redact-in-forgel-code-inte",
+  "title": "Release audit: `redact()` in `forgel_code/interactive.py` treats the first word after a recogni",
+  "spec": "docs/program/specs/20261124045451_release-audit-redact-in-forgel-code-inte.md",
+  "summary": "After a secret label, detect that the next word is a plain descriptor rather than a value (no digits, mixed case, value punctuation, or quoting) and, when a copula or explicit separator follows it, resolve the value past the descriptor instead of masking the descriptor; alternatively mask conservatively through the whole label-to-value phrase. Add direct tests for forms such as `token value is hunter2`, `password field: hunter2`, and `the credential value: hunter2` asserting the value is absent from both the displayed line and the retained state, and cover the same text arriving as an engine error.",
+  "requirements": [
+    "When a recognized secret label is followed by an ordinary descriptor word and then a value, the client displays the label and the descriptor unchanged and replaces the value with the masking placeholder.",
+    "When a sentence begins with a recognized secret label, is followed by an ordinary descriptor word and then a value, the display keeps the label and descriptor and replaces the value with the masking placeholder.",
+    "A displayed sentence that carried a credential contains no fragment of that credential after masking.",
+    "Text the client retains for a later status display, and text it retains when a background refresh fails, contain no fragment of any credential.",
+    "Masking that already worked stays unchanged: a value bound directly to the label, a compound label whose segment names key material, a credential that follows an authorization scheme word (which stays visible), and a label-bearing Russian sentence are all masked as before.",
+    "Ordinary prose that mentions a secret word without presenting a value is displayed unchanged, with no placeholder inserted.",
+    "The masking placeholder is the one the client already uses, so the corrected output is consistent with output produced for other secret forms.",
+    "The behavior holds for sentences in every language the session speaks, including the Russian label stems the client already recognizes.",
+    "The existing automated test suite continues to pass."
+  ],
+  "acceptance": [
+    "A sentence that names a secret label, an ordinary descriptor and then a credential is displayed with the label and the descriptor visible and the credential replaced by the existing masking placeholder.",
+    "A sentence that begins with a secret label, continues with an ordinary descriptor and then a credential is displayed with the label and descriptor visible and the credential replaced by the placeholder.",
+    "No character sequence of the credential appears in the displayed text for either of those two shapes.",
+    "The status text the client retains, and the failure text it retains when a background refresh fails, contain the placeholder instead of the credential for those shapes.",
+    "Sentences that previously masked correctly — direct binding, compound labels, authorization scheme words, Russian label stems — still produce the same masked output as before.",
+    "Prose that mentions a secret word without a value is displayed unchanged.",
+    "The existing automated test suite passes."
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [
+    {
+      "criterion": "A label followed by an ordinary descriptor and then a credential is displayed with the label and descriptor visible and the credential replaced by the placeholder.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Text the client retains, including the background-refresh failure text, contains the placeholder instead of the credential for those shapes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_retained_text.py",
+        "tests/test_idle_refresh.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Sentences that previously masked correctly still produce the same masked output and prose without a value is unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_redact.py",
+        "tests/test_interactive.py",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The existing automated test suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Masked output keeps the surrounding sentence readable and uses the placeholder the client already uses.",
+      "verification": "review",
+      "command": []
+    }
+  ],
+  "external_dependencies": [],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-24T04:54:51+00:00",
+  "started_at": "2026-11-24T04:54:51+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}
