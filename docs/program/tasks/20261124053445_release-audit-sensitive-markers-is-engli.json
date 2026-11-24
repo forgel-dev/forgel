@@ -121,10 +121,10 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "done",
+  "status": "pending",
   "created_at": "2026-11-24T05:34:45+00:00",
-  "started_at": "2026-11-24T10:00:00+00:00",
-  "finished_at": "2026-11-24T10:44:05+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "Widened the interactive session's sensitive explicit-action boundary to French and Spanish, leaving English and Russian detection byte-for-byte as it was. `forgel_code/interactive.py` now folds input (lower-case, diacritics stripped, whitespace collapsed) and refuses a sentence that names, in either word order and in any ordinary inflection, both an action verb (create/start, set/define/assign/enter, change/update/modify) and the object it acts on (a project, a credential such as a password/token/key, or a configuration/settings), with separate families per action so a bare mention of a project stays ordinary conversation; the refusal is written in the message's own language and nothing of the refused input reaches the engine's free-text entry. Because the session's own refusal sentence is static wording rather than owner or engine text, it is now printed as written instead of being run through the secret-masking pass, which previously turned its tail into `[redacted]`; engine- and owner-derived text is still masked. `tests/test_localization.py` covers the audited phrases, low-variation forms (other verb form, other word order, no diacritics), the refusal-and-redirect answer per language, the absence of any outgoing request derived from a refused input, ordinary French/Spanish conversation still reaching the engine unchanged, and English/Russian results unchanged. `CHANGELOG.md` records the fix. Verified with `python -m pytest -q`: 343 passed, 425 subtests passed.",
     "files_changed": [
@@ -213,13 +213,6 @@
       "state": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.state.md"
     },
     "test_removals": [],
-    "spec_issues": [
-      {
-        "requirement": "AC-6: the refusal answer names the explicit commands the user can use for the requested action.",
-        "problem": "The client's documented surface has no per-action explicit commands for adopting a repository, creating a project or setting a secret (README lists no such client command, and the engine's commands for them are outside this repository), so naming them would invent an interface; adding names only for the actions that do exist would also change the English and Russian refusal wording that AC-7 requires to stay exactly as before.",
-        "proposal": "State that the refusal points to the client's own explicit commands in general terms and keeps the wording the session already uses, with detection language coverage as the only thing this change alters."
-      }
-    ],
     "escalated": [],
     "git": {
       "base": "e4571370f6407fa626f1dbb9272327162c284f74",
@@ -229,8 +222,24 @@
         "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a"
       ]
     },
-    "failure": {},
-    "report": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.md"
+    "report": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.md",
+    "spec_feedback": [
+      "the planner rejected the deviation; follow the accepted specification: AC-6 and FR-7 explicitly require the refusal to name the explicit commands and to match the existing sensitive-request refusal. Weakening that to 'general terms' removes an accepted acceptance criterion; it is not merely a wording preference. AC-7 only requires existing English/Russian behavior to stay unchanged, so a French/Spanish-specific refusal can name the existing explicit commands without altering those paths. The coder's claim that no per-action client commands exist does not justify dropping the redirect requirement; the spec forbids adding or renaming commands, not referencing the existing explicit command surface."
+    ],
+    "rework_count": 1,
+    "feedback": [
+      "For each refused French and Spanish request, the refusal answer must name the existing explicit command(s) that perform that action — creating a project, setting or defining a credential such as a password/token/key, and changing configuration/settings — instead of referring to explicit commands only in general terms.",
+      "Match the structure and style of the refusal the session already produces for sensitive English and Russian requests (same statement that the action is not performed from free text, followed by the pointer to the explicit commands), so the four languages read consistently.",
+      "Do not add, rename or remove any command: name only the explicit command surface that already exists in the client for those actions; if a single surface exists for all three families, name that surface for each family rather than inventing per-action commands.",
+      "Keep English and Russian refusal text and results exactly as they are today; the redirect only needs to be added for the French and Spanish paths.",
+      "Extend the automated tests so the refused French and Spanish cases assert that the answer names those explicit commands (not only that a refusal occurs and nothing is forwarded), and keep the existing assertions on no outgoing request derived from a refused input.",
+      "Update the CHANGELOG entry so it states that the refusal points to the explicit commands, consistently with the delivered behavior."
+    ],
+    "last_failure": {
+      "kind": "spec",
+      "message": "the planner rejected the deviation; follow the accepted specification: AC-6 and FR-7 explicitly require the refusal to name the explicit commands and to match the existing sensitive-request refusal. Weakening that to 'general terms' removes an accepted acceptance criterion; it is not merely a wording preference. AC-7 only requires existing English/Russian behavior to stay unchanged, so a French/Spanish-specific refusal can name the existing explicit commands without altering those paths. The coder's claim that no per-action client commands exist does not justify dropping the redirect requirement; the spec forbids adding or renaming commands, not referencing the existing explicit command surface.",
+      "retryable": false
+    }
   },
   "request": ""
 }
