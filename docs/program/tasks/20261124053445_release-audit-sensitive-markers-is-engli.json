@@ -121,12 +121,12 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T05:34:45+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-24T10:46:11+00:00",
+  "finished_at": "2026-11-24T11:41:38+00:00",
   "result": {
-    "summary": "Widened the interactive session's sensitive explicit-action boundary to French and Spanish, leaving English and Russian detection byte-for-byte as it was. `forgel_code/interactive.py` now folds input (lower-case, diacritics stripped, whitespace collapsed) and refuses a sentence that names, in either word order and in any ordinary inflection, both an action verb (create/start, set/define/assign/enter, change/update/modify) and the object it acts on (a project, a credential such as a password/token/key, or a configuration/settings), with separate families per action so a bare mention of a project stays ordinary conversation; the refusal is written in the message's own language and nothing of the refused input reaches the engine's free-text entry. Because the session's own refusal sentence is static wording rather than owner or engine text, it is now printed as written instead of being run through the secret-masking pass, which previously turned its tail into `[redacted]`; engine- and owner-derived text is still masked. `tests/test_localization.py` covers the audited phrases, low-variation forms (other verb form, other word order, no diacritics), the refusal-and-redirect answer per language, the absence of any outgoing request derived from a refused input, ordinary French/Spanish conversation still reaching the engine unchanged, and English/Russian results unchanged. `CHANGELOG.md` records the fix. Verified with `python -m pytest -q`: 343 passed, 425 subtests passed.",
+    "summary": "Completed the reviewer-mandated redirect for French and Spanish refusals; the detection widening was already committed by earlier attempts and was left as is. In `forgel_code/interactive.py` the French and Spanish `MESSAGES[\"sensitive\"]` sentences now follow the same structure as the English and Russian ones: they state that adopting a repository, creating a project, setting a secret and changing the configuration are explicit separate actions never carried out from a sentence, and then point at the one explicit command surface the client already has (`forgel-code`), naming each guarded family — creating a project, defining a password, token or key, and changing the configuration — instead of referring to explicit commands in general terms. The command surface is referenced through a single `EXPLICIT_COMMAND` constant so no command is added, renamed or removed, and the English and Russian wording is untouched. Because a French or Spanish input that names no other language signal has to be attributed to one of the two Latin languages for the refusal to be composed in that language at all, the action words themselves (`créer`, `cree`, `définir`, `definis`, `définis`, `changer`, `configurer` / `crear`, `crea`, `asignar`, `clave`, `nuevo`, `nueva` and their plurals) were added to `FRENCH_WORDS`/`SPANISH_WORDS`. `tests/test_localization.py` now splits the audited phrases from their low-variation forms, asserts for every refused French and Spanish phrase that the answer is the sensitive refusal, contains `EXPLICIT_COMMAND` and names all three action families, and still records no `say` call; a wording test checks that each French and Spanish refusal states the boundary before it names the command. A new case pins the English and Russian refusals to their own wording and away from the French and Spanish ones. `CHANGELOG.md` states that the refusal points at the explicit command together with the action it performs. Verified with `python -m pytest -q`: 345 passed, 452 subtests passed. `git status --porcelain` shows only the three files below.; the completion step did not decide; committed the agent's own files and escalated the rest",
     "files_changed": [
       "CHANGELOG.md",
       "forgel_code/interactive.py",
@@ -140,36 +140,41 @@
           "pytest",
           "-q"
         ],
-        "exit_code": 1
+        "exit_code": 0
       },
       {
         "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_localization.py",
-          "tests/test_cli.py"
+          "git",
+          "status",
+          "--porcelain"
         ],
-        "exit_code": 2
+        "exit_code": 0
       },
       {
         "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q"
+          "git",
+          "diff",
+          "--unified=0",
+          "--",
+          "forgel_code/interactive.py"
         ],
-        "exit_code": 1
+        "exit_code": 0
       },
       {
         "command": [
-          "python",
-          "-m",
-          "pytest",
-          "-q",
-          "tests/test_localization.py",
-          "tests/test_interactive.py"
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=3",
+          "--",
+          "forgel_code/interactive.py"
         ],
         "exit_code": 0
       },
@@ -179,6 +184,164 @@
           "-m",
           "pytest",
           "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_localization.py"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_localization.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=2",
+          "--",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=1",
+          "--",
+          "CHANGELOG.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=0",
+          "--",
+          "CHANGELOG.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=2",
+          "--",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=2",
+          "--",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=1",
+          "--",
+          "tests/test_localization.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--unified=0",
+          "--",
+          "CHANGELOG.md"
         ],
         "exit_code": 0
       },
@@ -192,34 +355,46 @@
         "final_test": true
       }
     ],
-    "test_output": "============================= test session starts ==============================\nplatform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /Users/okalistratov/Documents/sites/code\nconfigfile: pyproject.toml\ncollected 343 items\n\ntests/test_check_cleanup.py ..                                           [  0%]\ntests/test_cli.py ...................................................... [ 16%]\n.................                                                        [ 21%]\ntests/test_cli_extra.py .........                                        [ 23%]\ntests/test_extras.py ......................                              [ 30%]\ntests/test_idle_refresh.py ....                                          [ 31%]\ntests/test_install.py .................................................. [ 46%]\n......                                                                   [ 47%]\ntests/test_install_timeout_verdict.py ....                               [ 48%]\ntests/test_interactive.py .....................................          [ 59%]\ntests/test_localization.py ........................                      [ 66%]\ntests/test_packaging.py ..............                                   [ 70%]\ntests/test_packaging_types.py ..                                         [ 71%]\ntests/test_readme_install.py ..................................          [ 81%]\ntests/test_redact.py ..................................                  [ 91%]\ntests/test_redact_descriptor.py ..........                               [ 94%]\ntests/test_redact_quoted_bare.py ..........                              [ 97%]\ntests/test_retained_text.py ......                                       [ 98%]\ntests/test_stub_contract.py ....                                         [100%]\n\n======================= 343 passed in 215.21s (0:03:35) ========================\n",
+    "test_output": "============================= test session starts ==============================\nplatform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0\nrootdir: /Users/okalistratov/Documents/sites/code\nconfigfile: pyproject.toml\ncollected 345 items\n\ntests/test_check_cleanup.py ..                                           [  0%]\ntests/test_cli.py ...................................................... [ 16%]\n.................                                                        [ 21%]\ntests/test_cli_extra.py .........                                        [ 23%]\ntests/test_extras.py ......................                              [ 30%]\ntests/test_idle_refresh.py ....                                          [ 31%]\ntests/test_install.py .................................................. [ 45%]\n......                                                                   [ 47%]\ntests/test_install_timeout_verdict.py ....                               [ 48%]\ntests/test_interactive.py .....................................          [ 59%]\ntests/test_localization.py ..........................                    [ 66%]\ntests/test_packaging.py ..............                                   [ 71%]\ntests/test_packaging_types.py ..                                         [ 71%]\ntests/test_readme_install.py ..................................          [ 81%]\ntests/test_redact.py ..................................                  [ 91%]\ntests/test_redact_descriptor.py ..........                               [ 94%]\ntests/test_redact_quoted_bare.py ..........                              [ 97%]\ntests/test_retained_text.py ......                                       [ 98%]\ntests/test_stub_contract.py ....                                         [100%]\n\n======================= 345 passed in 224.78s (0:03:44) ========================\n",
     "assumptions": [
-      "The refusal keeps the wording the session already produces in each of its four languages; it states that the action is never carried out from a sentence and points to the client's own command run outside the session, so English and Russian refusals stay exactly as before.",
-      "Detection stays phrase-based and conservative: a sensitive request needs both an action verb and its object, so mentions of a project, a password or the configuration alone remain ordinary conversation.",
-      "The session's own fixed sentences are shown as written, while text coming from the owner or the engine still passes through the secret-masking pass."
+      "The explicit command surface named in the refusal is the client's own `forgel-code` command line, which is the only explicit surface that exists for project creation, credentials and configuration; no per-action command was invented or added.",
+      "The refusal keeps the language and voice the session already uses; the redirect was added to the French and Spanish sentences only, so the English and Russian refusals stay byte-identical.",
+      "The action verbs of a French or Spanish sensitive phrase are counted as a language signal, which is what makes those phrases get the refusal in French or Spanish rather than in English."
     ],
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 3,
-      "compactions": 2,
-      "model_calls": 52,
-      "estimated_input_tokens": 2669492,
-      "provider_input_tokens": 2755087,
-      "provider_output_tokens": 360331,
-      "cache_hit_tokens": 2523776,
-      "cache_miss_tokens": 231311,
-      "estimated_tokens": 84704,
+      "sessions": 4,
+      "compactions": 3,
+      "model_calls": 111,
+      "estimated_input_tokens": 5181220,
+      "provider_input_tokens": 5317953,
+      "provider_output_tokens": 221165,
+      "cache_hit_tokens": 5054464,
+      "cache_miss_tokens": 263489,
+      "estimated_tokens": 55943,
       "state": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.state.md"
     },
-    "test_removals": [],
+    "test_removals": [
+      {
+        "test": "tests/test_localization.py::SensitiveRefusalTest::test_a_french_refusal_reads_in_the_existing_style",
+        "reason": "replaced",
+        "replacement": "tests/test_localization.py::SensitiveRefusalTest::test_a_french_refusal_names_the_explicit_commands"
+      },
+      {
+        "test": "tests/test_localization.py::SensitiveRefusalTest::test_a_spanish_refusal_reads_in_the_existing_style",
+        "reason": "replaced",
+        "replacement": "tests/test_localization.py::SensitiveRefusalTest::test_a_spanish_refusal_names_the_explicit_commands"
+      }
+    ],
     "escalated": [],
     "git": {
-      "base": "e4571370f6407fa626f1dbb9272327162c284f74",
-      "head": "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a",
-      "commit": "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a",
+      "base": "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a",
+      "head": "04c8d13ced836693144e541dddeb8c7fe83c9926",
+      "commit": "04c8d13ced836693144e541dddeb8c7fe83c9926",
       "commits": [
-        "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a"
+        "c7dac92f8e0a49b407868e5bb65fe86a70e53e0a",
+        "04c8d13ced836693144e541dddeb8c7fe83c9926"
       ]
     },
     "report": "docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.md",
@@ -239,7 +414,9 @@
       "kind": "spec",
       "message": "the planner rejected the deviation; follow the accepted specification: AC-6 and FR-7 explicitly require the refusal to name the explicit commands and to match the existing sensitive-request refusal. Weakening that to 'general terms' removes an accepted acceptance criterion; it is not merely a wording preference. AC-7 only requires existing English/Russian behavior to stay unchanged, so a French/Spanish-specific refusal can name the existing explicit commands without altering those paths. The coder's claim that no per-action client commands exist does not justify dropping the redirect requirement; the spec forbids adding or renaming commands, not referencing the existing explicit command surface.",
       "retryable": false
-    }
+    },
+    "spec_issues": [],
+    "failure": {}
   },
   "request": ""
 }

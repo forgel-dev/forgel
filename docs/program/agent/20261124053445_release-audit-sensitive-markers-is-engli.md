@@ -3,8 +3,8 @@
 - Task: `20261124053445_release-audit-sensitive-markers-is-engli`
 - Status: `done`
 - Repository: `code`
-- Steps: 52
-- Finished: 2026-11-24T10:44:05+00:00
+- Steps: 111
+- Finished: 2026-11-24T11:41:38+00:00
 
 ## Requirements
 
@@ -20,24 +20,25 @@
 
 ## Assumptions
 
-- The refusal keeps the wording the session already produces in each of its four languages; it states that the action is never carried out from a sentence and points to the client's own command run outside the session, so English and Russian refusals stay exactly as before.
-- Detection stays phrase-based and conservative: a sensitive request needs both an action verb and its object, so mentions of a project, a password or the configuration alone remain ordinary conversation.
-- The session's own fixed sentences are shown as written, while text coming from the owner or the engine still passes through the secret-masking pass.
+- The explicit command surface named in the refusal is the client's own `forgel-code` command line, which is the only explicit surface that exists for project creation, credentials and configuration; no per-action command was invented or added.
+- The refusal keeps the language and voice the session already uses; the redirect was added to the French and Spanish sentences only, so the English and Russian refusals stay byte-identical.
+- The action verbs of a French or Spanish sensitive phrase are counted as a language signal, which is what makes those phrases get the refusal in French or Spanish rather than in English.
 
 ## Test Removals
 
-- none
+- tests/test_localization.py::SensitiveRefusalTest::test_a_french_refusal_reads_in_the_existing_style: replaced -> tests/test_localization.py::SensitiveRefusalTest::test_a_french_refusal_names_the_explicit_commands
+- tests/test_localization.py::SensitiveRefusalTest::test_a_spanish_refusal_reads_in_the_existing_style: replaced -> tests/test_localization.py::SensitiveRefusalTest::test_a_spanish_refusal_names_the_explicit_commands
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 3
-- Handoffs: 2
-- Model calls: 52
-- Estimated input tokens (all calls): 2669492
-- Provider input/output tokens: 2755087 / 360331
-- Provider cache hit/miss tokens: 2523776 / 231311
-- Estimated prompt at the end: 84704 tokens
+- Sessions: 4
+- Handoffs: 3
+- Model calls: 111
+- Estimated input tokens (all calls): 5181220
+- Provider input/output tokens: 5317953 / 221165
+- Provider cache hit/miss tokens: 5054464 / 263489
+- Estimated prompt at the end: 55943 tokens
 - State: `docs/program/agent/20261124053445_release-audit-sensitive-markers-is-engli.state.md`
 
 ## Specification (`docs/program/specs/20261124053445_release-audit-sensitive-markers-is-engli.md`)
@@ -184,7 +185,7 @@ A user typing 'crée un projet', 'crear un proyecto', 'définir le mot de passe'
 
 ## Summary
 
-Widened the interactive session's sensitive explicit-action boundary to French and Spanish, leaving English and Russian detection byte-for-byte as it was. `forgel_code/interactive.py` now folds input (lower-case, diacritics stripped, whitespace collapsed) and refuses a sentence that names, in either word order and in any ordinary inflection, both an action verb (create/start, set/define/assign/enter, change/update/modify) and the object it acts on (a project, a credential such as a password/token/key, or a configuration/settings), with separate families per action so a bare mention of a project stays ordinary conversation; the refusal is written in the message's own language and nothing of the refused input reaches the engine's free-text entry. Because the session's own refusal sentence is static wording rather than owner or engine text, it is now printed as written instead of being run through the secret-masking pass, which previously turned its tail into `[redacted]`; engine- and owner-derived text is still masked. `tests/test_localization.py` covers the audited phrases, low-variation forms (other verb form, other word order, no diacritics), the refusal-and-redirect answer per language, the absence of any outgoing request derived from a refused input, ordinary French/Spanish conversation still reaching the engine unchanged, and English/Russian results unchanged. `CHANGELOG.md` records the fix. Verified with `python -m pytest -q`: 343 passed, 425 subtests passed.
+Completed the reviewer-mandated redirect for French and Spanish refusals; the detection widening was already committed by earlier attempts and was left as is. In `forgel_code/interactive.py` the French and Spanish `MESSAGES["sensitive"]` sentences now follow the same structure as the English and Russian ones: they state that adopting a repository, creating a project, setting a secret and changing the configuration are explicit separate actions never carried out from a sentence, and then point at the one explicit command surface the client already has (`forgel-code`), naming each guarded family — creating a project, defining a password, token or key, and changing the configuration — instead of referring to explicit commands in general terms. The command surface is referenced through a single `EXPLICIT_COMMAND` constant so no command is added, renamed or removed, and the English and Russian wording is untouched. Because a French or Spanish input that names no other language signal has to be attributed to one of the two Latin languages for the refusal to be composed in that language at all, the action words themselves (`créer`, `cree`, `définir`, `definis`, `définis`, `changer`, `configurer` / `crear`, `crea`, `asignar`, `clave`, `nuevo`, `nueva` and their plurals) were added to `FRENCH_WORDS`/`SPANISH_WORDS`. `tests/test_localization.py` now splits the audited phrases from their low-variation forms, asserts for every refused French and Spanish phrase that the answer is the sensitive refusal, contains `EXPLICIT_COMMAND` and names all three action families, and still records no `say` call; a wording test checks that each French and Spanish refusal states the boundary before it names the command. A new case pins the English and Russian refusals to their own wording and away from the French and Spanish ones. `CHANGELOG.md` states that the refusal points at the explicit command together with the action it performs. Verified with `python -m pytest -q`: 345 passed, 452 subtests passed. `git status --porcelain` shows only the three files below.; the completion step did not decide; committed the agent's own files and escalated the rest
 
 ## Files Changed
 
@@ -194,11 +195,29 @@ Widened the interactive session's sensitive explicit-action boundary to French a
 
 ## Commands
 
-- `["python", "-m", "pytest", "-q"]` → exit 1
-- `["python", "-m", "pytest", "-q", "tests/test_localization.py", "tests/test_cli.py"]` → exit 2
-- `["python", "-m", "pytest", "-q"]` → exit 1
-- `["python", "-m", "pytest", "-q", "tests/test_localization.py", "tests/test_interactive.py"]` → exit 0
 - `["python", "-m", "pytest", "-q"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--unified=0", "--", "forgel_code/interactive.py"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--unified=3", "--", "forgel_code/interactive.py"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 0
+- `["python", "-m", "pytest", "-q", "tests/test_localization.py"]` → exit 1
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 1
+- `["python", "-m", "pytest", "-q", "tests/test_localization.py"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 0
+- `["git", "diff", "--unified=2", "--", "forgel_code/interactive.py"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 0
+- `["git", "diff", "--stat"]` → exit 0
+- `["git", "diff", "--unified=1", "--", "CHANGELOG.md"]` → exit 0
+- `["git", "diff", "--unified=0", "--", "CHANGELOG.md"]` → exit 0
+- `["git", "diff", "--unified=2", "--", "forgel_code/interactive.py"]` → exit 0
+- `["python", "-m", "pytest", "-q"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--unified=2", "--", "forgel_code/interactive.py"]` → exit 0
+- `["git", "diff", "--unified=1", "--", "tests/test_localization.py"]` → exit 0
+- `["git", "diff", "--unified=0", "--", "CHANGELOG.md"]` → exit 0
 - `["python", "-m", "pytest"]` → exit 0
 
 ## Final Test Output
@@ -208,7 +227,7 @@ Widened the interactive session's sensitive explicit-action boundary to French a
 platform darwin -- Python 3.13.3, pytest-9.2.0, pluggy-1.7.0
 rootdir: /Users/okalistratov/Documents/sites/code
 configfile: pyproject.toml
-collected 343 items
+collected 345 items
 
 tests/test_check_cleanup.py ..                                           [  0%]
 tests/test_cli.py ...................................................... [ 16%]
@@ -216,12 +235,12 @@ tests/test_cli.py ...................................................... [ 16%]
 tests/test_cli_extra.py .........                                        [ 23%]
 tests/test_extras.py ......................                              [ 30%]
 tests/test_idle_refresh.py ....                                          [ 31%]
-tests/test_install.py .................................................. [ 46%]
+tests/test_install.py .................................................. [ 45%]
 ......                                                                   [ 47%]
 tests/test_install_timeout_verdict.py ....                               [ 48%]
 tests/test_interactive.py .....................................          [ 59%]
-tests/test_localization.py ........................                      [ 66%]
-tests/test_packaging.py ..............                                   [ 70%]
+tests/test_localization.py ..........................                    [ 66%]
+tests/test_packaging.py ..............                                   [ 71%]
 tests/test_packaging_types.py ..                                         [ 71%]
 tests/test_readme_install.py ..................................          [ 81%]
 tests/test_redact.py ..................................                  [ 91%]
@@ -230,7 +249,7 @@ tests/test_redact_quoted_bare.py ..........                              [ 97%]
 tests/test_retained_text.py ......                                       [ 98%]
 tests/test_stub_contract.py ....                                         [100%]
 
-======================= 343 passed in 215.21s (0:03:35) ========================
+======================= 345 passed in 224.78s (0:03:44) ========================
 
 ```
 
@@ -238,50 +257,93 @@ tests/test_stub_contract.py ....                                         [100%]
 
 - read_file: forgel_code/interactive.py
 - read_file: forgel_code/interactive.py
+- recall
+- read_file: forgel_code/interactive.py
+- recall
+- recall
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: README.md
+- read_file: CHANGELOG.md
+- read_file: releases/0.1.1/release.md
+- read_file: tests/test_interactive.py
+- read_file: tests/test_interactive.py
+- read_file: tests/test_localization.py
+- read_file: forgel_code/commands.py
+- read_file: tests/stub_engine.py
+- read_file: README.md
+- recall
+- read_file: tests/test_cli_extra.py
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: releases/0.1.0/plan.md
+- write_file: forgel_code/interactive.py
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'restore', 'forgel_code/interactive.py']
+- run: ['git', 'diff', '--unified=0', '--', 'forgel_code/interactive.py']
+- write_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- run: ['git', 'status', '--porcelain']
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- run: ['git', 'diff', '--unified=3', '--', 'forgel_code/interactive.py']
+- read_file: README.md
+- read_file: forgel_code/commands.py
+- read_file: tests/test_localization.py
+- read_file: README.md
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: CHANGELOG.md
 - read_file: tests/test_localization.py
 - read_file: tests/test_interactive.py
-- read_file: forgel_code/commands.py
-- read_file: forgel_code/cli.py
-- read_file: tests/test_extras.py
-- read_file: tests/stub_engine.py
-- read_file: forgel_code/engine.py
-- read_file: pyproject.toml
-- read_file: tests/test_check_cleanup.py
-- read_file: README.md
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- recall
-- run: ['python', '-m', 'pytest', '-q']
-- read_file: tests/test_cli.py
-- write_file: forgel_code/interactive.py
-- read_file: README.md
 - write_file: tests/test_localization.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_localization.py', 'tests/test_cli.py']
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
+- read_file: forgel_code/cli.py
+- read_file: forgel_code/cli.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_localization.py']
+- write_file: _forgel_words.diff
+- delete_file: _forgel_words.diff
 - write_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
+- run: ['git', 'status', '--porcelain']
 - read_file: forgel_code/interactive.py
 - read_file: tests/test_localization.py
+- read_file: tests/test_localization.py
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
 - run: ['python', '-m', 'pytest', '-q']
-- recall
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/commands.py
+- write_file: tests/test_localization.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_localization.py']
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: CHANGELOG.md
+- read_file: CHANGELOG.md
+- write_file: CHANGELOG.md
+- run: ['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']
+- run: ['git', 'status', '--porcelain']
+- write_file: forgel_code/interactive.py
 - read_file: forgel_code/interactive.py
 - write_file: forgel_code/interactive.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_localization.py', 'tests/test_interactive.py']
 - run: ['python', '-m', 'pytest', '-q']
-- read_file: CHANGELOG.md
-- read_file: README.md
-- read_file: README.md
-- read_file: README.md
+- run: ['git', 'diff', '--stat']
+- run: ['git', 'diff', '--unified=1', '--', 'CHANGELOG.md']
 - write_file: CHANGELOG.md
+- run: ['git', 'diff', '--unified=0', '--', 'CHANGELOG.md']
+- run: ['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']
 - write_file: CHANGELOG.md
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/cli.py
+- read_file: tests/test_localization.py
+- read_file: tests/test_localization.py
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: forgel_code/cli.py
+- read_file: README.md
 - read_file: CHANGELOG.md
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']
+- read_file: forgel_code/commands.py
+- read_file: README.md
+- read_file: forgel_code/interactive.py
+- read_file: forgel_code/interactive.py
+- run: ['git', 'diff', '--unified=1', '--', 'tests/test_localization.py']
+- read_file: releases/0.1.1/plan.md
+- run: ['git', 'diff', '--unified=0', '--', 'CHANGELOG.md']
