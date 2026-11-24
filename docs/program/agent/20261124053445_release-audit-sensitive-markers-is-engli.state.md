@@ -1,7 +1,7 @@
 # Session State: Release audit: `SENSITIVE_MARKERS` is English/Russian only. French/Spanish phrases such as `cré
 
 - Task: `20261124053445_release-audit-sensitive-markers-is-engli`
-- Session: 2
+- Session: 3
 - Status: in progress
 
 ## Goal
@@ -45,42 +45,52 @@ truth; re-read files with read_file when needed.
 
 ## Files Changed
 
+- CHANGELOG.md
+- _forgel_words.diff
 - forgel_code/interactive.py
 - tests/test_localization.py
 
 ## Actions
 
-- read_file: tests/test_extras.py
-- read_file: tests/stub_engine.py
-- read_file: forgel_code/engine.py
-- read_file: pyproject.toml
-- read_file: tests/test_check_cleanup.py
-- read_file: README.md
-- write_file: forgel_code/interactive.py
-- write_file: forgel_code/interactive.py
 - read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- recall
 - run: ['python', '-m', 'pytest', '-q']
-- read_file: tests/test_cli.py
-- write_file: forgel_code/interactive.py
-- read_file: README.md
 - write_file: tests/test_localization.py
-- run: ['python', '-m', 'pytest', '-q', 'tests/test_localization.py', 'tests/test_cli.py']
-- read_file: forgel_code/interactive.py
+- run: ['python', '-m', 'pytest', '-q', 'tests/test_localization.py']
+- run: ['python', '-m', 'pytest', '-q']
+- read_file: CHANGELOG.md
+- read_file: CHANGELOG.md
+- write_file: CHANGELOG.md
+- run: ['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']
+- run: ['git', 'status', '--porcelain']
+- write_file: forgel_code/interactive.py
 - read_file: forgel_code/interactive.py
 - write_file: forgel_code/interactive.py
+- run: ['python', '-m', 'pytest', '-q']
+- run: ['git', 'diff', '--stat']
+- run: ['git', 'diff', '--unified=1', '--', 'CHANGELOG.md']
+- write_file: CHANGELOG.md
+- run: ['git', 'diff', '--unified=0', '--', 'CHANGELOG.md']
+- run: ['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']
+- write_file: CHANGELOG.md
 
 ## Commands
 
 - `['python', '-m', 'pytest', '-q']` -> exit 1
-- `['python', '-m', 'pytest', '-q', 'tests/test_localization.py', 'tests/test_cli.py']` -> exit 2
+- `['python', '-m', 'pytest', '-q', 'tests/test_localization.py']` -> exit 0
+- `['python', '-m', 'pytest', '-q']` -> exit 0
+- `['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']` -> exit 0
+- `['git', 'status', '--porcelain']` -> exit 0
+- `['python', '-m', 'pytest', '-q']` -> exit 0
+- `['git', 'diff', '--stat']` -> exit 0
+- `['git', 'diff', '--unified=1', '--', 'CHANGELOG.md']` -> exit 0
+- `['git', 'diff', '--unified=0', '--', 'CHANGELOG.md']` -> exit 0
+- `['git', 'diff', '--unified=2', '--', 'forgel_code/interactive.py']` -> exit 0
 
 ## Recent Observations
 
-- read_file forgel_code/interactive.py: forgel_code/interactive.py: lines 1225-1264 of 2284
-- read_file forgel_code/interactive.py: forgel_code/interactive.py: lines 1180-1239 of 2284
-- write_file forgel_code/interactive.py
+- run git diff --unified=0 -- CHANGELOG.md -> exit 0
+- run git diff --unified=2 -- forgel_code/interactive.py -> exit 0
+- write_file CHANGELOG.md
 
 ## Next Step
 
