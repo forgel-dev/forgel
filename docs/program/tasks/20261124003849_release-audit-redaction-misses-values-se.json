@@ -163,10 +163,91 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T00:38:49+00:00",
   "started_at": "2026-11-24T04:00:00+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T04:21:24+00:00",
+  "result": {
+    "summary": "Widened the client-side masking in forgel_code/interactive.py so that a secret value is hidden however it is separated from its label. The gap was two-fold: the separator gap only accepted spaces and tabs, and the value after an explicit ':' or '=' separator could only be a word-like run, so a value on the next line or a value introduced by punctuation reached the screen.\n\nChanges:\n- The gap between a label and its value (and between a value and an authorization scheme word) is now skipped with a single whitespace predicate that includes line breaks and the other whitespace characters, so `password:\\nhunter2`, `password\\nhunter2`, `token =\\r\\nabc123` and `Authorization:\\nBearer abc123` are masked while every separator character and the line break stay visible.\n- After an explicit ':'/'=' separator a separate value-span helper is used: quotation marks keep their current enclosing rendering, a word-like value keeps the existing rendering, and any other punctuation that introduces a value is treated as part of the value, so `password: !hunter2` becomes `password: [redacted]` and a bracketed run `password: [hunter2]` is hidden whole with one marker.\n- Repeated separators, prose/mention/copula/authorization-scheme exceptions and the masker's own marker stay untouched, so existing renderings and idempotence are preserved.\n\nTests: extended tests/test_redact.py with a new `LineBreakAndPunctuationFormTest` class (line-break separation with and without a separator, CRLF and mixed whitespace, line count and other lines unchanged, punctuation-prefixed values across labels, bracketed values, valueless labels, secret-free multiline text, idempotence and one marker per masked value) plus a screen test that a multiline engine reply with a value on the next line and a punctuation-prefixed value shows no secret characters. The full suite passes: `python -m pytest -q` → 308 passed, 293 subtests passed.",
+    "files_changed": [
+      "forgel_code/interactive.py",
+      "tests/test_redact.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": ".............................................................................................. [ 30%]\n........................................................................ [ 53%]\n.......................................................................................... [ 83%]\n....................................................                                                [100%]\n308 passed, 293 subtests passed in 194.54s (0:03:14)\n",
+    "assumptions": [
+      "A run of any whitespace that contains a line break (or only spacing) separates a label from its value, mirroring the existing space-and-tab rule; carriage returns are included so CRLF text is masked.",
+      "Punctuation directly before a value after an explicit ':'/'=' separator is treated as part of the value and replaced together with it, while enclosing quotation characters keep their visible rendering; trailing clause punctuation after the value stays visible as before.",
+      "A bracketed run after an explicit separator is hidden whole, brackets included, on the value's own line; a '[' that opens no such run keeps its previous treatment.",
+      "The existing mention, prose-word, copula and authorization-scheme rules keep precedence over the widened gap rule, so ordinary prose across a line break is not masked.",
+      "No documentation or changelog update was made, following the task's non-goals."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 16,
+      "estimated_input_tokens": 557943,
+      "provider_input_tokens": 575127,
+      "provider_output_tokens": 111321,
+      "cache_hit_tokens": 518784,
+      "cache_miss_tokens": 56343,
+      "estimated_tokens": 58113,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "4466c6841742340f634add2b80d2cfad32209305",
+      "head": "19a7f6509a25de41d00a75c14d51c9f55e3246a2",
+      "commit": "19a7f6509a25de41d00a75c14d51c9f55e3246a2",
+      "commits": [
+        "19a7f6509a25de41d00a75c14d51c9f55e3246a2"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124003849_release-audit-redaction-misses-values-se.md"
+  },
   "request": ""
 }
