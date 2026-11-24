@@ -136,10 +136,205 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-23T21:31:55+00:00",
   "started_at": "2026-11-23T23:46:51+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T00:24:32+00:00",
+  "result": {
+    "summary": "Implemented idle state refresh for the interactive session, so the task list and current release are re-read from the engine while the owner submits nothing, and added evidence that does not depend on empty sentences. forgel_code/interactive.py: the state read was split into read_state() (raises an EngineError) and state_lines(quiet) (keeps the previous failure behaviour), show_state() prints only when the rendered state differs from the last shown one, refresh(force, quiet) reuses show_state, and a new idle_refresh() re-reads the state, shows a change and reports an engine failure once per distinct message in the session's existing cause-and-next-step form without ending the session. wait_for_line() reads one input line on a background thread and joins it for IDLE_REFRESH_SECONDS; while the line has not arrived it runs idle_refresh(), so the loop repeats for as long as the owner waits, leaves typed characters untouched (the line is returned exactly as read), and end of input still yields an empty line that ends the session with the existing closing notice and exit code 0. The session loop now takes its line from wait_for_line(). tests/test_idle_refresh.py proves this with a stand-in engine whose reported state comes from a file the test rewrites while a threaded session waits on a pipe: the pipe stays silent for the whole observation, two successive engine-side changes appear in the output, an unchanged state is printed exactly once although the engine keeps being read, a sentence half-typed across a refresh reaches the engine as `status` and the session ends with code 0, an engine failure during the idle wait is shown as `failed:`/`next step:` and the next sentence still works, and an input that ends at once still shows the prompt, the closing notice and code 0. All pre-existing tests still pass (289 passed, 232 subtests).",
+    "files_changed": [
+      "forgel_code/interactive.py",
+      "tests/test_cli.py",
+      "tests/test_idle_refresh.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_idle_refresh.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import subprocess,sys; sys.exit(subprocess.run(['git','checkout','--','tests/test_cli.py']).returncode)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "CHANGELOG.md",
+          "README.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import subprocess,sys; sys.exit(subprocess.run(['git','checkout','--','tests/test_cli.py']).returncode)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-c",
+          "import subprocess,sys; sys.exit(subprocess.run(['git','checkout','--','CHANGELOG.md','README.md']).returncode)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "-U3",
+          "--",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat",
+          "--",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": ".............................................................................................. [ 32%]\n........................................................................ [ 57%]\n.......................................................................................... [ 88%]\n.................................                                                        [100%]\n289 passed, 232 subtests passed in 182.60s (0:03:02)\n",
+    "assumptions": [
+      "A refresh interval of 0.5 s was chosen as the developer's cadence; it is not a product commitment.",
+      "A state that has not changed prints nothing, because show_state compares the rendered lines with what was last shown.",
+      "An engine failure during an idle refresh is stated once per distinct message and the session keeps running, matching how other engine failures are reported.",
+      "Repeated reads still cost one engine invocation per state command per interval, which the task treats as the developer's choice of cadence.",
+      "The unrelated README and CHANGELOG edits left by an earlier attempt of this task (they documented the multilingual reply behavior, not the idle refresh) were reverted, because this task requires no documentation change and forbids unrelated edits.",
+      "The pre-existing stdlib allowlist test had to learn the stdlib module the session now imports; its scenario (client sources import only the standard library and never the engine) is unchanged."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 105,
+      "estimated_input_tokens": 4862035,
+      "provider_input_tokens": 5000884,
+      "provider_output_tokens": 260575,
+      "cache_hit_tokens": 4853248,
+      "cache_miss_tokens": 147636,
+      "estimated_tokens": 67496,
+      "state": "docs/program/agent/20261123213155_release-audit-the-session-does-not-refre.state.md"
+    },
+    "test_removals": [
+      {
+        "test": "tests/test_cli.py::NoEngineImportTest::test_client_sources_import_only_stdlib",
+        "reason": "replaced",
+        "replacement": "tests/test_cli.py::NoEngineImportTest::test_client_sources_import_only_stdlib"
+      }
+    ],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "b060a351aba2d66d58a81c42f6756a44f2b2173a",
+      "head": "df9819923894070a91c4f00f14b59f25ca772461",
+      "commit": "df9819923894070a91c4f00f14b59f25ca772461",
+      "commits": [
+        "df9819923894070a91c4f00f14b59f25ca772461"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261123213155_release-audit-the-session-does-not-refre.md"
+  },
   "request": ""
 }
