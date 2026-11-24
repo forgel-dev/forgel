@@ -4,54 +4,39 @@
   "spec": "docs/program/specs/20261124152248_add-the-combined-engine-and-client-insta.md",
   "summary": "The Forgel Code installer, run with no extra flags, installs the engine alongside the client, so the documented one-command install yields a working pair. It is idempotent by comparing the installed engine against the version the configured engine source provides: no engine installs it, an installed engine at or above the available one is kept untouched, a strictly newer available engine replaces it, and the finished result always satisfies the declared minimum, failing with an actionable message when it cannot. The default engine source is a documented configuration, and the run reports which engine version is installed.",
   "requirements": [
-    "The default client installation also ensures a supported engine is in place in the same run.",
-    "The installation learns which engine version the configured engine source offers without changing anything on the machine.",
-    "When no engine is present, the installation obtains the offered engine version.",
-    "When an engine is present and the offered version is not strictly newer, the installation keeps the present engine and changes nothing about the engine installation.",
-    "When the offered version is strictly newer than the present engine, the installation replaces the present engine with that newer one.",
-    "The installation never installs an engine older than, or equal to, the one already present.",
-    "The finished state always satisfies the client's declared minimum supported engine version; when it cannot, the installation ends as a failure instead of reporting the pair as installed.",
-    "A failed engine outcome reports the required minimum version, the version that was found or offered, and a concrete action the user can take, and is clearly distinguishable from a successful run.",
-    "A successful installation states the engine version in place and how it was obtained: installed, kept or replaced.",
-    "Engine versions are ordered numerically component by component, tolerating one leading version prefix and trailing zero components; a version that cannot be ordered never counts as satisfying the minimum.",
-    "The documented client-only installation installs the client and neither queries nor changes any engine.",
-    "Removing the client installs nothing and leaves any engine in place.",
-    "The documented option that keeps the user's startup configuration unchanged does not disable the engine part of the installation.",
-    "The engine source the installation resolves against is documented configuration with a stated default and a documented way to point it elsewhere.",
-    "Repeating the default installation changes nothing about an engine that needs no change, and leaves exactly one client installation and one startup entry.",
-    "The user documentation presents the default installation as the way to obtain a working client-and-engine pair, documents the client-only installation and the engine source configuration, and no longer instructs the user to supply an engine separately."
+    "The change set contains no automated check that reads documentation text.",
+    "The helper data that reproduced the documented installation text is gone, so no automated check can compare the instructions against a stored copy.",
+    "The check that previously read the installation instructions no longer exists and no replacement check of documentation text is introduced in its place.",
+    "Every other automated check remains present, its premise is unchanged, and none is removed or weakened by this change.",
+    "The installer and the client keep their previous behaviour: this change alters no program behaviour outside the wording of the installation instructions.",
+    "The installation instructions state, as text, that the single documented command installs the client together with an engine the client supports, so the result is a working pair.",
+    "The installation instructions name the default engine source and state how a run can be pointed at another source.",
+    "The installation instructions describe the client-only installation option and state that it leaves any engine untouched.",
+    "The installation instructions state that a successful run reports which engine version is in place and how it was obtained.",
+    "The installation instructions no longer present an already installed engine as a precondition the owner must satisfy before running the documented command.",
+    "The installation instructions are accepted or returned only by reviewing their text."
   ],
   "acceptance": [
-    "Starting the default installation on a machine with no engine ends successfully, leaves a usable client, leaves an engine at or above the declared minimum, and reports that version and that it was installed.",
-    "Starting the default installation with an engine already present at exactly the offered version ends successfully, leaves the engine installation unchanged, and reports the engine as kept with its version.",
-    "Starting the default installation with an engine present below the offered version ends successfully, leaves the strictly newer offered engine in place, and reports it as replaced.",
-    "Starting the default installation with an engine present above the offered version and at or above the declared minimum ends successfully, leaves the engine installation unchanged, and reports the engine as kept.",
-    "When the offered version is below the declared minimum and no suitable engine is present, the installation ends as a failure whose message names the required minimum, the version found or offered, and the action the user can take.",
-    "When obtaining the engine fails, the installation ends as a failure with a message naming what went wrong and the next action, and never reports the pair as installed.",
-    "Choosing the documented client-only installation installs the client, performs no engine version query, and leaves an engine present beforehand unchanged.",
-    "Running the default installation twice in a row leaves exactly one client installation and one startup entry, and the second run does not change the engine the first run left.",
-    "Versions differing only by a leading version prefix or by trailing zero components are treated as the same version, and a version that cannot be ordered never satisfies the minimum.",
-    "Removing a client installed with an engine leaves the engine in place and leaves no client artifacts behind.",
-    "The documentation presents the default installation as producing a working client alongside a supported engine, states that the engine version in place and how it was obtained are reported, and describes what a successful installation reports.",
-    "The documentation states that an absent engine is obtained, that a present engine is kept when the offered version is not strictly newer, that a strictly newer offered engine replaces it, and that the finished state always satisfies the declared minimum or the installation fails with an actionable message naming the minimum and the version found or offered.",
-    "The documentation documents the client-only installation, the engine source with its default and how to point it elsewhere, and the option that keeps the user's startup configuration unchanged; it no longer instructs the user to supply an engine separately for the default installation."
+    "Reading the change set finds no automated check that reads documentation text and no stored copy of documented text.",
+    "The check that previously asserted the installation instructions' wording and command text is absent, and nothing equivalent was added.",
+    "Every other automated check is still present with its original premise, and a full run of the suite passes.",
+    "The installer and the client behave as they did before this change; no behavioural check was altered, relaxed or deleted.",
+    "Reading the installation instructions shows that one documented command installs the client together with a supported engine.",
+    "Reading the installation instructions shows the default engine source and how to point a run at another one.",
+    "Reading the installation instructions shows the client-only option and that it leaves any engine untouched.",
+    "Reading the installation instructions shows that a successful run reports the engine version in place and how it was obtained.",
+    "Reading the installation instructions finds no statement that an engine must already be installed before the documented command is run.",
+    "The installation instructions are accepted or returned by a person reading them, with no automated check involved."
   ],
   "constraints": [
-    "The default installation is a single unattended step that never prompts the user.",
-    "The installation never downgrades an engine and never reinstalls an engine that needs no change.",
-    "Learning which engine version the source offers, and installing it, remain the engine's own jobs; the client's installation only learns, decides and delegates.",
-    "The engine's minimum supported version is declared by the client itself, so the installation and the client agree on a single declared minimum.",
-    "Existing client installation behavior — installation location, launcher, startup entry, bounded fresh-session verification, update, removal and the startup-configuration opt-out — stays unchanged.",
-    "User documentation is text and is verified by review; no automated check reads a documentation file.",
-    "All project artifacts are written in English."
+    "Documentation is text in this project: it is accepted or returned by reading it, and never by an automated check.",
+    "The removal must be surgical: only the documentation-reading check and the helper data that reproduced the documented text go; everything else stays.",
+    "No behavioural guarantee may be traded for the removal: a failing or weakened neighbouring check is a failure of this change.",
+    "The instructions must stay consistent with what an installation run actually does, since a person, not a machine, now catches a divergence.",
+    "Only the change set belonging to this task is part of it; unrelated files are left alone."
   ],
   "repo_id": "code",
-  "test_command": [
-    "python3",
-    "-m",
-    "pytest",
-    "-q"
-  ],
+  "test_command": [],
   "assumptions": [],
   "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
   "plan_goal": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
@@ -60,127 +45,52 @@
   "order": 5,
   "checks": [
     {
-      "criterion": "Starting the default installation on a machine with no engine ends successfully, leaves a usable client, leaves an engine at or above the declared minimum, and reports that version and that it was installed.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Starting the default installation with an engine already present at exactly the offered version ends successfully, leaves the engine installation unchanged, and reports the engine as kept with its version.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Starting the default installation with an engine present below the offered version ends successfully, leaves the strictly newer offered engine in place, and reports it as replaced.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Starting the default installation with an engine present above the offered version and at or above the declared minimum ends successfully, leaves the engine installation unchanged, and reports the engine as kept.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "When the offered version is below the declared minimum and no suitable engine is present, the installation ends as a failure whose message names the required minimum, the version found or offered, and the action the user can take.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "When obtaining the engine fails, the installation ends as a failure with a message naming what went wrong and the next action, and never reports the pair as installed.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Choosing the documented client-only installation installs the client, performs no engine version query, and leaves an engine present beforehand unchanged.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Running the default installation twice in a row leaves exactly one client installation and one startup entry, and the second run does not change the engine the first run left.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Versions differing only by a leading version prefix or by trailing zero components are treated as the same version, and a version that cannot be ordered never satisfies the minimum.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "Removing a client installed with an engine leaves the engine in place and leaves no client artifacts behind.",
-      "verification": "command",
-      "command": [
-        "python3",
-        "-m",
-        "pytest",
-        "tests/test_install.py",
-        "-q"
-      ]
-    },
-    {
-      "criterion": "The documentation presents the default installation as producing a working client alongside a supported engine, states that the engine version in place and how it was obtained are reported, and describes what a successful installation reports.",
+      "criterion": "Reading the change set finds no automated check that reads documentation text and no stored copy of documented text.",
       "verification": "review",
       "command": []
     },
     {
-      "criterion": "The documentation states that an absent engine is obtained, that a present engine is kept when the offered version is not strictly newer, that a strictly newer offered engine replaces it, and that the finished state always satisfies the declared minimum or the installation fails with an actionable message naming the minimum and the version found or offered.",
+      "criterion": "The check that previously asserted the installation instructions' wording and command text is absent, and nothing equivalent was added.",
       "verification": "review",
       "command": []
     },
     {
-      "criterion": "The documentation documents the client-only installation, the engine source with its default and how to point it elsewhere, and the option that keeps the user's startup configuration unchanged; it no longer instructs the user to supply an engine separately for the default installation.",
+      "criterion": "Every other automated check is still present with its original premise, and a full run of the suite passes.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The installer and the client behave as they did before this change; no behavioural check was altered, relaxed or deleted.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Reading the installation instructions shows that one documented command installs the client together with a supported engine.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Reading the installation instructions shows the default engine source and how to point a run at another one.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Reading the installation instructions shows the client-only option and that it leaves any engine untouched.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Reading the installation instructions shows that a successful run reports the engine version in place and how it was obtained.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Reading the installation instructions finds no statement that an engine must already be installed before the documented command is run.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The installation instructions are accepted or returned by a person reading them, with no automated check involved.",
       "verification": "review",
       "command": []
     }
@@ -192,6 +102,7 @@
   "started_at": "",
   "finished_at": "",
   "result": {
-    "manual_restarts": 1
+    "manual_restarts": 2,
+    "restarted_at": "2026-11-24T19:20:30+00:00"
   }
 }
