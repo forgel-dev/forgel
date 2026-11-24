@@ -253,7 +253,202 @@
       ]
     },
     "failure": {},
-    "report": "docs/program/agent/20261124131129_release-audit-forgel-code-cli-py-changes.md"
+    "report": "docs/program/agent/20261124131129_release-audit-forgel-code-cli-py-changes.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261124131129_release-audit-forgel-code-cli-py-changes.qa.md",
+      "commands": [
+        {
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python -c 'import subprocess,sys;out=subprocess.run([sys.executable,'\"'\"'-m'\"'\"','\"'\"'forgel_code'\"'\"','\"'\"'--help'\"'\"'],capture_output=True,text=True).stdout;sys.exit(1 if '\"'\"'Run it without a command'\"'\"' in out else 0)'",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest tests/test_interactive.py",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        },
+        {
+          "command": "python -m pytest",
+          "exit_code": 0,
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The help output no longer contains the sentence advertising the interactive session.",
+          "command": "python -c 'import subprocess,sys;out=subprocess.run([sys.executable,'\"'\"'-m'\"'\"','\"'\"'forgel_code'\"'\"','\"'\"'--help'\"'\"'],capture_output=True,text=True).stdout;sys.exit(1 if '\"'\"'Run it without a command'\"'\"' in out else 0)'",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "Running the program with no command still opens the interactive session.",
+          "command": "python -m pytest tests/test_interactive.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "All tests in the project's test suite pass.",
+          "command": "python -m pytest",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "task",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The help output's description text is identical to the previous release with no other wording change.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "The change set contains only the restoration of the description wording and any test adjustment needed by it.",
+          "command": "",
+          "exit_code": null,
+          "verdict": "review",
+          "scope": "review",
+          "repo": "",
+          "workdir": "",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": true,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The attributed change does exactly what the release audit finding requires: `forgel_code/cli.py` drops the appended sentence \"Run it without a command to open the interactive session.\" from the argparse `description`, leaving \"Thin console client for Forgel over the engine's machine-readable commands.\" — the sentence the audit identified as the sole addition, so removing it restores the previously released wording with no other line in the file (usage text, option help, subcommand help, version output, or one-shot handling) touched. The no-argument path still routes to `run_interactive()`, so the interactive session remains reachable as required, and every other command path is byte-identical because no other code changed. The newly added `tests/test_cli_help_description.py` does not assert the removed sentence (it asserts its absence and pins the restored text, both in-process and through a real `--help` subprocess run), so FR-4 is satisfied and no existing test was deleted or weakened. The change set contains only the description restoration and the accompanying help-assertion test; no temporary, debug or generated artifact was committed. QA reports the environment gate and the full suite as passing, and the two review-only criteria (identical previous-release wording, scoped change set) hold when the diff is read. The only observation, non-blocking, is that the new test also rejects the bare word \"interactive\" anywhere in the help output, which is slightly stronger than the requirement but consistent with it and does not constrain current product behavior.",
+      "requirements": [
+        {
+          "requirement": "FR-1 / AC-1: the help output's description contains no sentence advertising the interactive session and matches the previous release text.",
+          "verdict": "pass",
+          "note": "The description now reads \"Thin console client for Forgel over the engine's machine-readable commands.\"; the appended interactive-session sentence is gone."
+        },
+        {
+          "requirement": "AC-2: the description text is identical to the previous release with no other wording change.",
+          "verdict": "pass",
+          "note": "The diff removes only the added sentence from the concatenated description string; no other line of cli.py is modified, so no other help-visible wording (usage, options, subcommands, version) changed."
+        },
+        {
+          "requirement": "FR-2 / AC-3: running the program with no command still opens the interactive session.",
+          "verdict": "pass",
+          "note": "`main()` keeps the empty-argv branch returning `run_interactive()`; that path was not touched, and the environment/acceptance checks for it passed."
+        },
+        {
+          "requirement": "FR-3: every existing one-shot usage produces the same output as before, including failures and exit statuses.",
+          "verdict": "pass",
+          "note": "Only the parser `description` string changed; argument parsing, engine invocation, error reporting and exit codes are untouched."
+        },
+        {
+          "requirement": "FR-4: no automated test asserts the presence of the removed interactive-session sentence in the help output.",
+          "verdict": "pass",
+          "note": "The added test asserts the released sentence is present and that 'interactive' is absent from help; no test asserts the removed sentence, and no test was deleted or weakened."
+        },
+        {
+          "requirement": "FR-5 / AC-5: the change set contains only the description restoration and any test adjustment needed by it, with no unrelated, temporary or generated files.",
+          "verdict": "pass",
+          "note": "Two files: the description fix in forgel_code/cli.py and one help-description test that pins the restored wording and the absence of interactive advertising; nothing else, no artifacts."
+        },
+        {
+          "requirement": "AC-4: all tests in the project's test suite pass.",
+          "verdict": "pass",
+          "note": "QA verdict pass, with the environment test, both e2e checks and the acceptance commands exiting 0."
+        },
+        {
+          "requirement": "Quality of the added test: not a weakening, not documentation-reading, and consistent with the corrected output.",
+          "verdict": "pass",
+          "note": "The new test exercises parser state, formatted help and a real `--help` process run; it verifies rather than weakens behavior. Its blanket 'no interactive in help' assertion is marginally stronger than FR-4 but does not conflict with any requirement."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261124131129_release-audit-forgel-code-cli-py-changes.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-24T13:34:45+00:00",
+      "notes": ""
+    }
   },
   "request": ""
 }
