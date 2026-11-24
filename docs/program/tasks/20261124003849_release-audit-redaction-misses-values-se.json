@@ -1,30 +1,172 @@
 {
   "id": "20261124003849_release-audit-redaction-misses-values-se",
   "title": "Release audit: Redaction misses values separated from a secret label by a newline and values be",
-  "spec": "",
+  "spec": "docs/program/specs/20261124003849_release-audit-redaction-misses-values-se.md",
   "summary": "Treat all whitespace including line breaks as separators between label, separator and value, and do not reject the first value character after an explicit colon or equals. Add direct and session-level tests for newline-separated and punctuation-prefixed values.",
   "requirements": [
-    "Redaction misses values separated from a secret label by a newline and values beginning with punctuation that `_NOT_A_VALUE` rejects. `_SPACES` covers only space and tab, so a label followed by a newline and a value is not masked; after an explicit colon or equals, `token: !abc123` and `token: [abc123]` are also shown unchanged. This violates the colon/whitespace masking criterion and can display the credential."
+    "When a secret label is separated from its value by whitespace that contains a line break instead of, or in addition to, spaces and tabs, the value is masked and the label, the separator and the line break stay visible.",
+    "The line-break rule applies whether the label and the value reach the owner as one block of text or are displayed on separate lines.",
+    "After an explicit colon or equals separator, a value that begins with punctuation is masked: the label, the separator and the space before the value stay visible and exactly one marker takes the place of the punctuation and the value.",
+    "A bracketed value after an explicit colon or equals separator is masked so that no character of the value remains visible and exactly one marker appears.",
+    "Quotation characters that enclose a value keep the behaviour they already have: the quotation characters stay visible and the marker stands between them.",
+    "Repeated separator characters stay visible and only the value is replaced.",
+    "Each masked value carries exactly one marker, and masking an already masked text changes nothing.",
+    "No character of a masked value appears anywhere in the text the client shows, for every form this task adds and every form it already handled.",
+    "A mention of a secret label that carries no value, on one line or followed by a line break, stays exactly as written.",
+    "Text without a secret value stays exactly as written, character for character, including its line breaks.",
+    "Every masking form the client already handles keeps its current rendering."
   ],
   "acceptance": [
-    "The release audit finding is resolved: Redaction misses values separated from a secret label by a newline and values beginning with punctuation that `_NOT_A_VALUE` rejects. `_SPACES` covers only space and tab, so a label followed by a newline and a value is not masked; after an explicit colon or equals, `token: !abc123` and `token: [abc123]` are also shown unchanged. This violates the colon/whitespace masking criterion and can display the credential.",
-    "Existing tests pass"
+    "A label, an explicit colon and a line break followed by a value on the next line are shown as the label, the colon, the same line break and one marker, and no character of the value is visible.",
+    "A label, a line break and a value on the next line without any separator are shown as the label, the same line break and one marker, and no character of the value is visible.",
+    "A text in which only one line carries the value keeps its line count and every other line character for character, while the value line shows one marker in place of the value.",
+    "A value introduced by an exclamation mark after an explicit colon or equals separator loses the exclamation mark and the value and gains exactly one marker; no character of the value is visible.",
+    "A value enclosed in square brackets after an explicit colon or equals separator loses the brackets and the value and gains exactly one marker; no character of the value is visible.",
+    "A quoted value after a label renders exactly as it renders today, with the quotation characters visible and one marker between them.",
+    "An authorization scheme word before a credential stays visible and the credential is replaced by one marker, as today.",
+    "A label that carries no value is unchanged, both on a single line and when a line break follows the label.",
+    "Secret-free text, including text with punctuation, line breaks and several lines, is returned unchanged.",
+    "For every form this task adds, masking twice gives the same text as masking once and the text contains exactly one marker per masked value.",
+    "The whole existing expectation suite passes.",
+    "The finding is resolved for any secret label, any explicit separator and any punctuation, not only for the examples named in the audit finding."
   ],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
   "assumptions": [],
   "plan_id": "",
   "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
   "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
   "release_class": "minor",
   "order": 0,
-  "checks": [],
+  "checks": [
+    {
+      "criterion": "A label, an explicit colon and a line break followed by a value on the next line are shown as the label, the colon, the same line break and one marker, and no character of the value is visible.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A label, a line break and a value on the next line without any separator are shown as the label, the same line break and one marker, and no character of the value is visible.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A text in which only one line carries the value keeps its line count and every other line character for character, while the value line shows one marker in place of the value.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A value introduced by an exclamation mark after an explicit colon or equals separator loses the exclamation mark and the value and gains exactly one marker; no character of the value is visible.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A value enclosed in square brackets after an explicit colon or equals separator loses the brackets and the value and gains exactly one marker; no character of the value is visible.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A quoted value after a label renders exactly as it renders today, with the quotation characters visible and one marker between them.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "An authorization scheme word before a credential stays visible and the credential is replaced by one marker, as today.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "A label that carries no value is unchanged, both on a single line and when a line break follows the label.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "Secret-free text, including text with punctuation, line breaks and several lines, is returned unchanged.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "For every form this task adds, masking twice gives the same text as masking once and the text contains exactly one marker per masked value.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The whole existing expectation suite passes.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    },
+    {
+      "criterion": "The finding is resolved for any secret label, any explicit separator and any punctuation, not only for the examples named in the audit finding.",
+      "verification": "review",
+      "command": []
+    }
+  ],
   "external_dependencies": [],
   "language": "",
-  "status": "pending",
+  "status": "running",
   "created_at": "2026-11-24T00:38:49+00:00",
-  "started_at": "",
+  "started_at": "2026-11-24T04:00:00+00:00",
   "finished_at": "",
-  "result": {}
+  "result": {},
+  "request": ""
 }
