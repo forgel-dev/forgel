@@ -1,0 +1,30 @@
+{
+  "id": "20261124003849_release-audit-the-session-keeps-unredact",
+  "title": "Release audit: The session keeps unredacted engine text in memory. `show_state` assigns the raw",
+  "spec": "",
+  "summary": "Store the redacted form, or a hash, for comparison and deduplication, and never assign raw engine text to long-lived session attributes.",
+  "requirements": [
+    "The session keeps unredacted engine text in memory. `show_state` assigns the raw joined state to `self.last_state`, and `idle_refresh` assigns raw `exc.message` to `self.idle_failure`; if engine output or an error contains key material, it remains in the client for the session, violating the requirement that secrets never appear in anything the client keeps."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The session keeps unredacted engine text in memory. `show_state` assigns the raw joined state to `self.last_state`, and `idle_refresh` assigns raw `exc.message` to `self.idle_failure`; if engine output or an error contains key material, it remains in the client for the session, violating the requirement that secrets never appear in anything the client keeps.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-24T00:38:49+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

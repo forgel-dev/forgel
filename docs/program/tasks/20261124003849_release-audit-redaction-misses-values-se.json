@@ -1,0 +1,30 @@
+{
+  "id": "20261124003849_release-audit-redaction-misses-values-se",
+  "title": "Release audit: Redaction misses values separated from a secret label by a newline and values be",
+  "spec": "",
+  "summary": "Treat all whitespace including line breaks as separators between label, separator and value, and do not reject the first value character after an explicit colon or equals. Add direct and session-level tests for newline-separated and punctuation-prefixed values.",
+  "requirements": [
+    "Redaction misses values separated from a secret label by a newline and values beginning with punctuation that `_NOT_A_VALUE` rejects. `_SPACES` covers only space and tab, so a label followed by a newline and a value is not masked; after an explicit colon or equals, `token: !abc123` and `token: [abc123]` are also shown unchanged. This violates the colon/whitespace masking criterion and can display the credential."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: Redaction misses values separated from a secret label by a newline and values beginning with punctuation that `_NOT_A_VALUE` rejects. `_SPACES` covers only space and tab, so a label followed by a newline and a value is not masked; after an explicit colon or equals, `token: !abc123` and `token: [abc123]` are also shown unchanged. This violates the colon/whitespace masking criterion and can display the credential.",
+    "Existing tests pass"
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Forgel Code: interactive agent client instead of a command wrapper",
+  "release_id": "20261123193557155149_forgel-code-interactive-agent-client-instead-of-",
+  "release_class": "minor",
+  "order": 0,
+  "checks": [],
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-24T00:38:49+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}
