@@ -29,7 +29,7 @@ from .release_train import (
 )
 from .task_qa import run_task_qa
 from .task_review import process_task_result, rerun_review
-from .tasks import current_task, get_task
+from .tasks import get_task
 
 Log = Callable[[str], None]
 
@@ -37,6 +37,7 @@ OPERATIONS = (
     "drive",
     "task_retry",
     "task_restart",
+    "task_respec",
     "task_cancel",
     "task_process",
     "task_qa",
@@ -48,12 +49,16 @@ OPERATIONS = (
 )
 
 
-def _task(layout: ProjectLayout, task_id: str) -> dict[str, Any]:
-    task_id = str(task_id or "").strip()
-    task = get_task(layout, task_id) if task_id else current_task(layout)
+def _task(
+    layout: ProjectLayout, task_id: str
+) -> dict[str, Any]:
+    """Resolve a task reference through the shared task selector."""
+
+    value = str(task_id or "").strip()
+    task = tasks.resolve_task(layout, value)
     if task is None:
         raise ValueError(
-            f"unknown task {task_id!r}" if task_id else "there is no task"
+            f"unknown task {value!r}" if value else "there is no task"
         )
     return task
 
@@ -70,6 +75,45 @@ def _workable(
             f"task {task['id']} is cancelled; its requirements document "
             "is not accepted for work"
         )
+
+
+def _requested_changes(args: Mapping[str, Any]) -> str:
+    return str(
+        args.get("changes")
+        or args.get("clarification")
+        or args.get("issue")
+        or args.get("notes")
+        or ""
+    ).strip()
+
+
+def _current_spec(
+    layout: ProjectLayout, task: Mapping[str, Any]
+) -> str:
+    ref = str(task.get("spec") or "").strip() or specs.spec_path(
+        str(task.get("id") or "")
+    )
+    try:
+        text = layout.artifact(ref).read_text(encoding="utf-8").strip()
+    except OSError:
+        text = ""
+    if text:
+        return text
+    parts: list[str] = []
+    for title, key in (
+        ("Requirements", "requirements"),
+        ("Acceptance", "acceptance"),
+    ):
+        values = [
+            str(item).strip()
+            for item in task.get(key) or []
+            if str(item).strip()
+        ]
+        if values:
+            parts.append(
+                title + ":\n" + "\n".join(f"- {item}" for item in values)
+            )
+    return "\n\n".join(parts)
 
 
 def _release(
@@ -179,6 +223,91 @@ def _restart_from_requirements(
     return f"Task {task_id} restarted from its requirements."
 
 
+def _rewrite_task_requirements(
+    settings: Settings,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    layout: ProjectLayout,
+    task: Mapping[str, Any],
+    client: ModelClient,
+    log: Log,
+    requested_changes: str,
+) -> str:
+    """Rewrite the task's requirements without changing its status or work."""
+
+    task_id = str(task["id"])
+    repo_id = str(task.get("repo_id") or "").strip()
+    intent = {
+        "title": task.get("title") or task_id,
+        "summary": task.get("summary") or task.get("title") or task_id,
+        "repo_id": repo_id,
+    }
+    goal = str(task.get("plan_goal") or task.get("title") or "—")
+    notes = ""
+    request = str(task.get("request") or "").strip()
+    if request:
+        try:
+            notes = layout.artifact(request).read_text(encoding="utf-8")
+        except OSError:
+            notes = ""
+    log(f"[respec] {project['id']}: task {task_id}: rewriting requirements")
+    spec = specs.write_task_spec(
+        settings,
+        layout,
+        goal,
+        notes,
+        intent,
+        client,
+        log=log,
+        requested_changes=requested_changes,
+        current_spec=_current_spec(layout, task),
+    )
+    ref = specs.spec_path(task_id)
+    write_text(
+        layout.artifact(ref),
+        specs.render_spec(
+            spec,
+            task_id,
+            str(task.get("plan_id") or ""),
+            repo_id,
+        ),
+    )
+    tasks.update_task(
+        layout,
+        task_id,
+        spec=ref,
+        requirements=list(spec.get("requirements") or []),
+        acceptance=list(spec.get("acceptance") or []),
+        constraints=list(spec.get("constraints") or []),
+        checks=list(spec.get("checks") or []),
+        test_command=list(spec.get("test_command") or []),
+        external_dependencies=list(
+            spec.get("external_dependencies") or []
+        ),
+    )
+    tasks.commit_task(layout, task_id, f"Rewrite requirements {task_id}")
+    ledger.append_event(
+        str(project["id"]),
+        "task_respec",
+        status="completed",
+        payload={
+            "task": task_id,
+            "changes": requested_changes,
+            "requirements": list(spec.get("requirements") or []),
+        },
+        artifact_refs=[ref],
+        generation=ledger.current_generation(str(project["id"])),
+    )
+    log(
+        f"[respec] {project['id']}: task {task_id}: requirements "
+        "rewritten; status unchanged"
+    )
+    return (
+        f"Task {task_id}: requirements rewritten; "
+        "the task status is unchanged."
+    )
+
+
 def run_operation(
     settings: Settings,
     ledger: Ledger,
@@ -253,13 +382,6 @@ def run_operation(
             raise ValueError(
                 "no model is configured to rewrite the specification"
             )
-        changes = str(
-            args.get("changes")
-            or args.get("clarification")
-            or args.get("issue")
-            or args.get("notes")
-            or ""
-        ).strip()
         return _restart_from_requirements(
             settings,
             ledger,
@@ -268,7 +390,30 @@ def run_operation(
             task,
             client,
             log,
-            requested_changes=changes,
+            requested_changes=_requested_changes(args),
+        )
+
+    if name == "task_respec":
+        task = _task(layout, str(args.get("task_id") or ""))
+        _workable(layout, task)
+        if client is None:
+            raise ValueError(
+                "no model is configured to rewrite the specification"
+            )
+        changes = _requested_changes(args)
+        if not changes:
+            raise ValueError(
+                "task_respec needs the requested requirement changes"
+            )
+        return _rewrite_task_requirements(
+            settings,
+            ledger,
+            project,
+            layout,
+            task,
+            client,
+            log,
+            changes,
         )
 
     if name == "release_resume":

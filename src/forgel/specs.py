@@ -550,6 +550,7 @@ def write_task_spec(
     log: Callable[[str], None] = print,
     review_issue: str = "",
     requested_changes: str = "",
+    current_spec: str = "",
 ) -> dict[str, Any]:
     """Turn one planner intent into a formal, structured specification."""
 
@@ -581,6 +582,12 @@ def write_task_spec(
                 else ""
             )
             + f"Repository file tree:\n{_context(layout, repo_id)}\n\n"
+            + (
+                "The current specification is:\n"
+                f"{current_spec}\n\n"
+                if current_spec
+                else ""
+            )
             + (
                 "The previous version was rejected for this concrete "
                 f"defect:\n{review_issue}\n\n"

@@ -28,6 +28,7 @@ from .instructions import instruction_context
 from .layout import ProjectLayout
 from .ledger import Ledger
 from .program_manifest import entries as manifest_entries
+from .prompts import TASK_REFERENCE_RULES
 from .providers.github_auth import GithubAuth, GithubAuthError
 from .release_train import (
     attach_blocked_release,
@@ -228,9 +229,6 @@ required.
 
 Actions (ask for the missing required argument instead of guessing only when
 the action cannot run without it):
-- When the owner names a task explicitly, by id or by its title, resolve it
-  from the task queue and pass its task_id. Omit task_id only when the owner
-  says "current" or "last"; never let a named task fall back to that default.
 - adopt {url, brief?}: adopt a repository as a new project and select it;
   "this repository" means the working directory shown in the message.
 - plan {goal, product_intent?, user_experience?, roadmap?, release_class?,
@@ -258,13 +256,17 @@ the action cannot run without it):
   runtime operation now, in the order the state needs. Operations: drive
   (advance one daemon iteration), task_retry (queue a task again),
   task_restart (rewrite its specification from the task request, apply the
-  optional changes to the requirements, and start it over), task_cancel (stop
+  optional changes to the requirements, and start it over), task_respec
+  (rewrite its specification from the requested changes without starting or
+  restarting it; the task status is unchanged), task_cancel (stop
   a task for good: it leaves the task list and its requirements document is
   marked cancelled), task_process (QA, review and acceptance for a task),
   task_qa, task_review, release_resume,
   release_audit, release_finalize, set_limit (raise a runtime limit). When the
-  user asks to restart a task and states requirement changes, pass them in
-  changes; without changes the task restarts from its current requirements.
+  user asks only to change or rewrite the requirements, use task_respec with
+  changes and do not start or restart the task. When the user asks to restart
+  a task and states requirement changes, pass them in changes; without changes
+  the task restarts from its current requirements.
 - control_extract {path?}: move the project state into a separate repository,
   for a project that started with one folder and grew.
 - peak {policy?}: show or set the model peak policy ("always" or "off_peak").
@@ -357,7 +359,7 @@ For a change request:
   change and let the release report carry the version;
 - the daemon will run the task with a separate coding agent; you cannot edit
   code yourself.
-"""
+""" + TASK_REFERENCE_RULES
 
 
 class AgentError(RuntimeError):

@@ -513,7 +513,13 @@ def _moment(value: Any) -> datetime | None:
     return moment
 
 
-def _launch_moment(task: Mapping[str, Any]) -> datetime:
+def _launch_moment(task: Mapping[str, Any]) -> tuple[bool, datetime]:
+    """The latest launch and whether the task was launched at all.
+
+    A task that was never launched sorts behind any launched task; its
+    creation time is used only when no task has a launch time.
+    """
+
     result = task.get("result") or {}
     launched = [
         _moment(task.get("started_at")),
@@ -524,10 +530,11 @@ def _launch_moment(task: Mapping[str, Any]) -> datetime:
         default=None,
     )
     if latest is not None:
-        return latest
+        return True, latest
     return (
+        False,
         _moment(task.get("created_at"))
-        or datetime.min.replace(tzinfo=timezone.utc)
+        or datetime.min.replace(tzinfo=timezone.utc),
     )
 
 
@@ -538,6 +545,52 @@ def _task_touch(layout: ProjectLayout, task: Mapping[str, Any]) -> float:
         ).stat().st_mtime
     except OSError:
         return 0.0
+
+
+def resolve_task(
+    layout: ProjectLayout, reference: str
+) -> dict[str, Any] | None:
+    """Resolve a task reference: id/file name, title, or description.
+
+    An empty reference means the current or last launched task. An ambiguous
+    reference raises ``ValueError`` naming the candidates instead of guessing.
+    """
+
+    value = str(reference or "").strip()
+    if not value:
+        return current_task(layout)
+    task = get_task(layout, value)
+    if task is not None:
+        return task
+    needle = value.casefold()
+    matches: list[dict[str, Any]] = []
+    for item in listed_tasks(layout):
+        title = str(item.get("title") or "").casefold()
+        summary = str(item.get("summary") or "").casefold()
+        if needle in title or needle in summary:
+            matches.append(item)
+    exact = [
+        item
+        for item in matches
+        if needle
+        in {
+            str(item.get("title") or "").casefold(),
+            str(item.get("summary") or "").casefold(),
+        }
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        return None
+    names = ", ".join(
+        f"{item['id']} ({item.get('title')})"
+        for item in matches[:5]
+    )
+    raise ValueError(
+        f"task reference {value!r} is ambiguous: {names}"
+    )
 
 
 def cancel_task(

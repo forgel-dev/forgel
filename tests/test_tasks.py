@@ -347,6 +347,93 @@ class TasksTest(unittest.TestCase):
         assert current is not None
         self.assertEqual(current["id"], restarted["id"])
 
+    def test_resolve_task_by_id_title_and_description(self) -> None:
+        by_id = tasks.create_task(
+            self.layout,
+            "Alpha",
+            ["A"],
+            ["B"],
+            task_id="20260101000000_alpha",
+        )
+        by_title = tasks.create_task(
+            self.layout,
+            "Build the client",
+            ["A"],
+            ["B"],
+            task_id="20260101000001_client",
+        )
+        by_description = tasks.create_task(
+            self.layout,
+            "Unrelated title",
+            ["A"],
+            ["B"],
+            task_id="20260101000002_installer",
+            summary="A combined installer for the engine and the client.",
+        )
+
+        resolved_id = tasks.resolve_task(
+            self.layout, "20260101000000_alpha"
+        )
+        resolved_title = tasks.resolve_task(
+            self.layout, "Build the client"
+        )
+        resolved_description = tasks.resolve_task(
+            self.layout, "combined installer"
+        )
+
+        assert resolved_id is not None
+        assert resolved_title is not None
+        assert resolved_description is not None
+        self.assertEqual(resolved_id["id"], by_id["id"])
+        self.assertEqual(resolved_title["id"], by_title["id"])
+        self.assertEqual(
+            resolved_description["id"], by_description["id"]
+        )
+
+    def test_resolve_task_rejects_an_ambiguous_reference(self) -> None:
+        tasks.create_task(
+            self.layout,
+            "Build the client",
+            ["A"],
+            ["B"],
+            task_id="20260101000000_client",
+        )
+        tasks.create_task(
+            self.layout,
+            "Build the engine",
+            ["A"],
+            ["B"],
+            task_id="20260101000001_engine",
+        )
+        with self.assertRaises(ValueError):
+            tasks.resolve_task(self.layout, "build")
+
+    def test_resolve_task_empty_uses_the_current_task(self) -> None:
+        tasks.create_task(
+            self.layout,
+            "Earlier work",
+            ["A"],
+            ["B"],
+            task_id="20260101000000_alpha",
+        )
+        later = tasks.create_task(
+            self.layout,
+            "Later work",
+            ["A"],
+            ["B"],
+            task_id="20260101000001_zulu",
+        )
+        tasks.update_task(
+            self.layout,
+            later["id"],
+            started_at="2026-01-01T10:00:00+00:00",
+        )
+
+        resolved = tasks.resolve_task(self.layout, "")
+
+        assert resolved is not None
+        self.assertEqual(resolved["id"], later["id"])
+
     def test_restart_task_records_the_restart_time(self) -> None:
         task = tasks.create_task(
             self.layout, "Restart", ["A"], ["B"]

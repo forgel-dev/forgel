@@ -261,6 +261,87 @@ class RuntimeOpsTest(unittest.TestCase):
         started = run_task.call_args.args[4]
         self.assertEqual(started["id"], first["id"])
 
+    def test_task_respec_rewrites_requirements_without_starting(self) -> None:
+        task = self._task(status="done")
+        update_task(
+            self.layout,
+            task["id"],
+            result={"summary": "old result"},
+        )
+        client = ScriptedModelClient([json.dumps(RESTART_SPEC)])
+        changes = "Add the deletion requirement."
+        with patch("forgel.runtime_ops._run_task") as run_task:
+            text = run_operation(
+                self.settings,
+                self.ledger,
+                self.project,
+                "task_respec",
+                {"task_id": task["id"], "changes": changes},
+                client=client,
+            )
+        run_task.assert_not_called()
+        self.assertIn("status is unchanged", text)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(stored["status"], "done")
+        self.assertEqual(stored["result"]["summary"], "old result")
+        self.assertEqual(
+            stored["requirements"], RESTART_SPEC["requirements"]
+        )
+        prompt = client.requests[0][-1].content
+        self.assertIn("The current specification is", prompt)
+        self.assertIn(changes, prompt)
+        stages = [
+            event["stage"]
+            for event in self.ledger.events(self.project["id"])
+        ]
+        self.assertIn("task_respec", stages)
+
+    def test_task_respec_resolves_a_task_by_title_or_description(self) -> None:
+        task = create_task(
+            self.layout,
+            "Add the combined engine and client install mode",
+            ["A"],
+            ["B"],
+            repo_id="main",
+            summary="A combined installer for the engine and the client.",
+        )
+        update_task(self.layout, task["id"], status="done")
+        client = ScriptedModelClient([json.dumps(RESTART_SPEC)])
+        run_operation(
+            self.settings,
+            self.ledger,
+            self.project,
+            "task_respec",
+            {
+                "task_id": "combined installer",
+                "changes": "Add the deletion requirement.",
+            },
+            client=client,
+        )
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["requirements"], RESTART_SPEC["requirements"]
+        )
+
+    def test_task_reference_rejects_ambiguous_matches(self) -> None:
+        create_task(
+            self.layout, "Build the client", ["A"], ["B"]
+        )
+        create_task(
+            self.layout, "Build the engine", ["A"], ["B"]
+        )
+        with self.assertRaises(ValueError):
+            run_operation(
+                self.settings,
+                self.ledger,
+                self.project,
+                "task_respec",
+                {"task_id": "build", "changes": "Add the change."},
+                client=ScriptedModelClient([]),
+            )
+
 
     def test_task_cancel_stops_work_and_marks_the_document(self) -> None:
         task = self._task(status="running")

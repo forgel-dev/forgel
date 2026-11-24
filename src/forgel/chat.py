@@ -80,6 +80,7 @@ from .tasks import (
     current_task,
     latest_task,
     listed_tasks,
+    resolve_task,
     retry_task,
 )
 
@@ -1882,13 +1883,15 @@ class CommandRouter:
                 return project
             layout = ProjectLayout.detect(project["workspace"])
             task_id = str(args.get("task_id") or "").strip()
-            if not task_id:
-                task = current_task(layout)
-                if task is None:
-                    return self._error(
-                        chat_id, "chat_action_no_decision"
-                    )
-                task_id = str(task["id"])
+            try:
+                task = resolve_task(layout, task_id)
+            except ValueError as exc:
+                return self._error(chat_id, "chat_error", error=exc)
+            if task is None:
+                return self._error(
+                    chat_id, "chat_action_no_decision"
+                )
+            task_id = str(task["id"])
             notes = str(args.get("notes") or "").strip()
             rest = f"{action} {task_id} {notes}".strip()
             return combine(self._task(chat_id, rest, actor))
@@ -1898,15 +1901,16 @@ class CommandRouter:
                 return project
             layout = ProjectLayout.detect(project["workspace"])
             task_id = str(args.get("task_id") or "").strip()
-            if not task_id:
-                task = current_task(layout)
-                if task is None:
-                    return self._error(
-                        chat_id, "chat_action_no_review_task"
-                    )
-                task_id = str(task["id"])
+            try:
+                task = resolve_task(layout, task_id)
+            except ValueError as exc:
+                return self._error(chat_id, "chat_error", error=exc)
+            if task is None:
+                return self._error(
+                    chat_id, "chat_action_no_review_task"
+                )
             return combine(
-                self._task(chat_id, f"review {task_id}", actor)
+                self._task(chat_id, f"review {task['id']}", actor)
             )
         if action == "adopt":
             url = str(args.get("url") or "").strip()
