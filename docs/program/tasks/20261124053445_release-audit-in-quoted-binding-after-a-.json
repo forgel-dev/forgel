@@ -128,10 +128,142 @@
   ],
   "external_dependencies": [],
   "language": "",
-  "status": "running",
+  "status": "done",
   "created_at": "2026-11-24T05:34:45+00:00",
   "started_at": "2026-11-24T05:34:45+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-24T05:53:56+00:00",
+  "result": {
+    "summary": "Closed the quoted-label gap in credential masking in `forgel_code/interactive.py`. `_quoted_binding` previously bound a value to a quoted label only through a separator (`'token': abc`) or a quoted run (`'token' 'abc'`) and returned None for anything else, so a quoted label followed by whitespace and a bare unquoted value (`'token' abc123`, `\"password\" hunter2`) left the secret visible. It now inspects the token after the closing quote: an authorization-scheme word still routes to `_scheme_value` (scheme visible, credential masked), a copula routes to `_copula_span` (`the 'token' is VALUE`), a prose/narrative word still means the label is only mentioned, and any other token is masked when it carries value markers or closes the clause. Clause closing is decided by a new helper `_closes_clause`, together with two new constants `_INLINE_WHITESPACE` and `_CLAUSE_END`, so a bare value at the end of the line or in front of punctuation is masked while a quoted word followed only by punctuation, or by a word that continues the sentence, stays unchanged. Single-quoted and double-quoted labels travel the same code path, so both behave identically, and the previously working forms (separator, quoted value, unquoted label with a bare value, unchanged secret-free output) keep their behaviour and their visible placeholder. No existing test was touched; new coverage lives in `tests/test_redact_quoted_bare.py` (10 tests, 37 subtests) covering single- and double-quoted bare values, clause-ending values, the preserved separator/quoted-value/unquoted-label forms, quoted words without a value, secret-free text, and idempotence with exactly one marker. The full suite passes: `python -m pytest -q` -> 334 passed, 363 subtests passed.",
+    "files_changed": [
+      "forgel_code/interactive.py",
+      "tests/test_redact_quoted_bare.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "HEAD:forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "HEAD",
+          "--",
+          "forgel_code/interactive.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_redact_quoted_bare.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": ".............................................................................................. [ 28%]\n........................................................................ [ 49%]\n.......................................................................................... [ 76%]\n..............................................................................                        [100%]\n334 passed, 363 subtests passed in 187.96s (0:03:07)\n",
+    "assumptions": [
+      "A bare value after a quoted label ends at the same boundary as a bare value after an unquoted label: whitespace, with trailing clause punctuation left visible.",
+      "A token after a quoted label that carries value markers (digit, mixed case or value punctuation) is treated as the value even when a word follows it, mirroring the unquoted-label rule.",
+      "A quoted word followed by an ordinary word that continues the sentence is not a binding, so ordinary prose about a quoted label stays readable.",
+      "The masking placeholder stays `[redacted]` and quotation marks around a quoted value stay visible, unchanged from today.",
+      "No CHANGELOG entry was added: the specification lists producing or updating user documentation about masking as out of scope."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 37,
+      "estimated_input_tokens": 1384865,
+      "provider_input_tokens": 1418949,
+      "provider_output_tokens": 100461,
+      "cache_hit_tokens": 1305856,
+      "cache_miss_tokens": 113093,
+      "estimated_tokens": 41872,
+      "state": "docs/program/agent/20261124053445_release-audit-in-quoted-binding-after-a-.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "37289974029b1935d1828df3e126e3a6164bb872",
+      "head": "e4571370f6407fa626f1dbb9272327162c284f74",
+      "commit": "e4571370f6407fa626f1dbb9272327162c284f74",
+      "commits": [
+        "e4571370f6407fa626f1dbb9272327162c284f74"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124053445_release-audit-in-quoted-binding-after-a-.md"
+  },
   "request": ""
 }
