@@ -1,0 +1,97 @@
+{
+  "id": "20261124152248_declare-the-minimum-supported-engine-ver",
+  "title": "Declare the minimum supported engine version in the client",
+  "spec": "docs/program/specs/20261124152248_declare-the-minimum-supported-engine-ver.md",
+  "summary": "The client records, in one place, the minimum engine version it supports and exposes it together with its own version in a stable machine-readable form that the installer and the startup check both read, so the requirement is declared once instead of being implied. Producing this version information works with no engine installed.",
+  "requirements": [],
+  "acceptance": [],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q"
+  ],
+  "assumptions": [],
+  "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
+  "plan_goal": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
+  "release_id": "20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o",
+  "release_class": "minor",
+  "order": 3,
+  "checks": [
+    {
+      "criterion": "A machine-readable report produced by the client contains the client's own version and the declared minimum supported engine version at the same time.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cli.py"
+      ]
+    },
+    {
+      "criterion": "The report is produced successfully on a machine with no engine installed and with the network unavailable.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cli_extra.py",
+        "tests/test_extras.py"
+      ]
+    },
+    {
+      "criterion": "The client version in the report equals the version of the installed client distribution.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_packaging.py"
+      ]
+    },
+    {
+      "criterion": "The minimum supported engine version is a single well-formed version number and is the earliest engine version providing every engine operation the client relies on.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "Review of the change confirms the minimum supported engine version is declared once, that no second copy of that value exists for any consumer, and that the installer and the startup check can both obtain it from the declaration.",
+      "verification": "review",
+      "command": []
+    },
+    {
+      "criterion": "The client's human-readable version output still produces the same information as before the change.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cli_help_description.py",
+        "tests/test_localization.py"
+      ]
+    },
+    {
+      "criterion": "The client's full automated test suite passes with the change in place.",
+      "verification": "command",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q"
+      ]
+    }
+  ],
+  "external_dependencies": [],
+  "language": "en",
+  "status": "pending",
+  "created_at": "2026-11-24T15:22:48+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

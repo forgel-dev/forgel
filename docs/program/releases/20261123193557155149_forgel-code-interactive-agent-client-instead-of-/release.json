@@ -89,7 +89,11 @@
       }
     ]
   },
-  "control_push": {},
+  "control_push": {
+    "status": "pushed",
+    "branch": "main",
+    "detail": ""
+  },
   "finalized_at": "2026-11-24T14:11:22+00:00",
   "detail": "",
   "next_at": ""
