@@ -1,0 +1,57 @@
+{
+  "id": "20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o",
+  "project": "forgel-1d2bf685",
+  "title": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
+  "request": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
+  "release_class": "minor",
+  "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
+  "created_at": "2026-11-24T15:22:48+00:00",
+  "status": "planned",
+  "tasks": [
+    "20261124152248_emit-a-machine-readable-engine-version",
+    "20261124152248_add-the-engine-s-one-command-installer-w",
+    "20261124152248_declare-the-minimum-supported-engine-ver",
+    "20261124152248_check-the-engine-version-at-client-start",
+    "20261124152248_add-the-combined-engine-and-client-insta",
+    "20261124152248_document-the-engine-installer-and-versio",
+    "20261124152248_document-the-combined-install-and-minimu"
+  ],
+  "repos": {
+    "main": {
+      "base_sha": "413dce2f0f61535ba88e8cb33aa80032a01947fd",
+      "base_version": "",
+      "base_source": "no release history",
+      "preset": "python",
+      "planned_version": "0.1.0",
+      "version": "",
+      "status": "pending",
+      "tag": "",
+      "sha": "",
+      "release": "",
+      "detail": ""
+    },
+    "code": {
+      "base_sha": "d51471674c30c0413546e68f885f7352c9fd9a1c",
+      "base_version": "0.2.0",
+      "base_source": "changelog 0.1.0",
+      "preset": "python",
+      "planned_version": "0.3.0",
+      "version": "",
+      "status": "pending",
+      "tag": "",
+      "sha": "",
+      "release": "",
+      "detail": ""
+    }
+  },
+  "audit": {
+    "rounds": 0,
+    "verdict": "",
+    "summary": "",
+    "report": "",
+    "task_ids": []
+  },
+  "control_push": {},
+  "finalized_at": "",
+  "detail": ""
+}
