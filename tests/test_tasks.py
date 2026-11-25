@@ -269,6 +269,36 @@ class TasksTest(unittest.TestCase):
             project_state(self.ledger, self.project), "task done"
         )
 
+    def test_pending_tasks_follow_the_plan_order(self) -> None:
+        later = tasks.create_task(
+            self.layout,
+            "Later in plan",
+            ["A"],
+            ["B"],
+            task_id="20260101000000_alpha",
+            order=2,
+        )
+        earlier = tasks.create_task(
+            self.layout,
+            "Earlier in plan",
+            ["A"],
+            ["B"],
+            task_id="20260101000001_zulu",
+            order=1,
+        )
+        self.assertEqual(
+            tasks.next_pending_task(self.layout)["id"], earlier["id"]
+        )
+        from forgel.release_train import eligible_pending_task
+
+        self.assertEqual(
+            eligible_pending_task(self.layout)["id"], earlier["id"]
+        )
+        tasks.update_task(self.layout, earlier["id"], status="done")
+        self.assertEqual(
+            tasks.next_pending_task(self.layout)["id"], later["id"]
+        )
+
     def test_current_task_prefers_the_running_task(self) -> None:
         running = tasks.create_task(
             self.layout,

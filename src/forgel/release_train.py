@@ -572,8 +572,8 @@ def eligible_pending_task(
 ) -> dict[str, Any] | None:
     """The first pending task whose repository has no earlier open release."""
 
-    tasks_list = tasks.list_tasks(layout)
-    for task in tasks_list:
+    candidates: list[dict[str, Any]] = []
+    for task in tasks.list_tasks(layout):
         if task.get("status") != "pending":
             continue
         if not tasks._retry_ready(task, now):
@@ -583,8 +583,10 @@ def eligible_pending_task(
         if release_id and repo_id:
             if blocking_release(layout, repo_id, release_id):
                 continue
-        return task
-    return None
+        candidates.append(task)
+    if not candidates:
+        return None
+    return min(candidates, key=tasks.schedule_key)
 
 
 def attach_blocked_release(
