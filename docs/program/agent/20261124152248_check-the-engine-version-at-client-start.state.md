@@ -1,7 +1,7 @@
 # Session State: Check the engine version at client startup
 
 - Task: `20261124152248_check-the-engine-version-at-client-start`
-- Session: 5
+- Session: 1
 - Status: in progress
 
 ## Goal
@@ -27,41 +27,41 @@ truth; re-read files with read_file when needed.
 
 ## Files Changed
 
-- none
+- forgel_code/cli.py
 
 ## Actions
 
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/engine.py
-- read_file: tests/stub_engine.py
 - read_file: tests/test_cli.py
-- read_file: README.md
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- read_file: tests/test_install_engine.py
-- read_file: install.sh
-- read_file: tests/test_stub_contract.py
 - read_file: tests/test_interactive.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
+- read_file: tests/test_interactive.py
+- read_file: tests/test_cli_extra.py
+- write_file: forgel_code/cli.py
+- read_file: tests/test_idle_refresh.py
 - read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/engine.py
-- read_file: tests/stub_engine.py
+- write_file: forgel_code/cli.py
+- read_file: tests/test_idle_refresh.py
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_packaging.py
+- read_file: tests/stub_engine_install.py
+- read_file: tests/test_install_engine.py
+- read_file: tests/test_install.py
+- read_file: install.sh
+- read_file: tests/test_install.py
+- read_file: tests/test_packaging.py
+- run: ['python3', '-c', 'print(1)']
+- read_file: tests/test_cli_help_description.py
+- read_file: tests/test_install.py
 
 ## Commands
 
-- `['git', 'status', '--porcelain']` -> exit 0
-- `['git', 'status', '--porcelain']` -> exit 0
+- `['python3', '-m', 'unittest', 'discover', '-s', 'tests']` -> exit 1
+- `['python3', '-c', 'print(1)']` -> exit 0
 
 ## Recent Observations
 
-- read_file forgel_code/interactive.py: forgel_code/interactive.py: lines 2400-2706 of 2706
-- read_file forgel_code/engine.py: forgel_code/engine.py: lines 1-205 of 205
-- read_file tests/stub_engine.py: tests/stub_engine.py: lines 1-91 of 91
+- run python3 -c 'print(1)' -> exit 0
+- read_file tests/test_cli_help_description.py: tests/test_cli_help_description.py: lines 1-47 of 47
+- read_file tests/test_install.py: tests/test_install.py: lines 380-479 of 1937
 
 ## Next Step
 

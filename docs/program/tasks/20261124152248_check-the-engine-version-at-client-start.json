@@ -3,9 +3,47 @@
   "title": "Check the engine version at client startup",
   "spec": "docs/program/specs/20261124152248_check-the-engine-version-at-client-start.md",
   "summary": "Whenever the client is about to call the engine, it first verifies the engine: a missing engine produces a message that names the engine and the concrete install command, an engine below the declared minimum produces a message that names the required version and the concrete upgrade command, and a compatible engine proceeds normally. Reporting the client's own version and the declared requirement is exempt from this check and works without an engine, so a bare `executable not found` failure is never the outcome of a command that needs the engine.",
-  "requirements": [],
-  "acceptance": [],
-  "constraints": [],
+  "requirements": [
+    "R-1: The client declares exactly one minimum supported engine version. That value cannot be overridden, lowered or skipped by any option, setting or configuration the user controls, and the value shown to the user is the same value enforced before use, with no second copy that could differ.",
+    "R-2: Asking the client for its own version prints the client version and the declared minimum engine version, exits successfully, and works on a machine with no engine installed, sending nothing to the engine.",
+    "R-3: The client's usage help is produced and exits successfully on a machine with no engine installed, sending nothing to the engine.",
+    "R-4: Before the client first uses the engine in an invocation, it confirms that the engine is present and asks the version the engine reports about itself, and carries that result through the rest of the invocation. Reporting the client's own version and printing usage help are exempt from this confirmation.",
+    "R-5: When the engine cannot be found or cannot be started, the invocation fails with one message that names the engine, states that the client requires it, and contains a single-line instruction that installs the engine and can be pasted and run unchanged. The requested work is not attempted, and the message never leaves the user with the low-level operating-system error text as the only thing shown.",
+    "R-6: When the engine reports a version below the declared minimum, the invocation fails with one message that names the required minimum version, the version found and a single-line instruction that installs a newer engine and can be pasted and run unchanged. The requested work is not attempted.",
+    "R-7: When the engine answers but no version can be confirmed from its answer, the invocation fails in the same actionable shape as the too-old case: it states that compatibility could not be confirmed, names the required minimum version and carries the upgrade instruction. The requested work is not attempted.",
+    "R-8: When the engine reports the declared minimum or a newer version, the requested operation proceeds exactly as before: the same requests reach the engine, the human-readable and machine-readable output is unchanged, and the exit status is unchanged.",
+    "R-9: Versions compare as sequences of numeric components, numerically, one component at a time from the first. A version with fewer components equals the same version with trailing zero components, a leading version marker and any non-numeric suffix after the numeric components do not affect the outcome, and a larger later component counts as newer even when its text is longer.",
+    "R-10: The engine's version is requested at most once per invocation. After a failed confirmation the invocation sends no request of its own to the engine.",
+    "R-11: In the client's machine-readable output form, the missing-engine and the not-compatible failures each surface as exactly one failure result carrying the same message and a non-zero exit status, consistent with the client's other failures.",
+    "R-12: Starting the interactive session performs the same confirmation first. With a missing, too-old or unconfirmable engine the session prints the actionable message and exits non-zero without opening a prompt.",
+    "R-13: The client never installs, upgrades or otherwise modifies the engine; every failure path only reports what the user can do."
+  ],
+  "acceptance": [
+    "AC-1: With no engine installed, asking the client for its version exits successfully and prints the client version together with the declared minimum engine version, and no request reaches an engine. Check: repository test gate exercises the version request with no engine available and asserts the printed pair and the successful exit.",
+    "AC-2: With no engine installed, the client's usage help is printed and exits successfully, and no request reaches an engine. Check: repository test gate exercises the help request with no engine available.",
+    "AC-3: With no engine installed, an operation that needs the engine exits non-zero and prints one message that names the engine, says the client requires it, and contains a single-line install instruction readable and pasteable as printed; the printed text is not the bare low-level operating-system error. Check: repository test gate runs an engine-backed operation with no engine and asserts the named engine, the requirement statement and the pasted instruction line.",
+    "AC-4: With an engine reporting a version below the declared minimum, an engine-backed operation exits non-zero, prints one message naming the required minimum, the version found and a single-line upgrade instruction, and the engine receives no request from the operation itself beyond the version question. Check: repository test gate uses an engine reporting an older version and asserts the message content and that no operation request was made.",
+    "AC-5: With an engine that answers but reports no usable version, an engine-backed operation exits non-zero with the same actionable shape as the too-old case, and the engine receives no request from the operation itself. Check: repository test gate uses an engine whose answer carries no version and asserts the actionable message and the absence of an operation request.",
+    "AC-6: With an engine exactly at the declared minimum and with an engine newer than it, every engine-backed operation and the interactive session behave as before: the same requests reach the engine, the same human-readable output appears and the exit status is unchanged. Check: repository test gate exercises the operations against both engines and compares the requests, text and exit statuses with the behaviour that precedes this change.",
+    "AC-7: An engine reporting 0.10.0 is accepted against a declared minimum of 0.9.0, and an engine reporting 0.9.0 is accepted against a declared minimum of 0.9.0. Check: repository test gate exercises both comparisons.",
+    "AC-8: An engine reporting the declared minimum with a non-numeric suffix is accepted as equal to the minimum. Check: repository test gate exercises that engine answer.",
+    "AC-9: An invocation that uses the engine several times causes the engine's version to be asked at most once, and a failed confirmation leaves the engine with no request from the operation itself. Check: repository test gate counts the requests the engine receives in both situations.",
+    "AC-10: In the machine-readable output form, a missing-engine failure and a too-old-engine failure each yield exactly one failure result carrying the same message as the human-readable form and a non-zero exit status. Check: repository test gate exercises both failures in the machine-readable form and asserts one result, the message and the exit status.",
+    "AC-11: Starting the interactive session with no engine installed prints the install guidance and exits non-zero without ever showing a prompt, and the same holds for a too-old engine. Check: repository test gate starts the session against an absent and an old engine and asserts the guidance, the non-zero exit and the absence of a prompt.",
+    "AC-12: The minimum engine version printed by the version report and the one enforced before use are identical, and no user-facing option, setting or configuration changes the enforced value. Check: review compares the reported value with the enforced value and inspects the client's options and settings for any way to skip or lower it.",
+    "AC-13: The install and upgrade instruction lines shown in the failure messages are complete single lines that a user can paste into a terminal and run unchanged. Check: review reads the messages and judges the instruction lines to be complete and runnable as printed."
+  ],
+  "constraints": [
+    "The client remains a thin surface over the engine's parameterized commands: it calls no model, reads no project and runs no check itself.",
+    "The client omits nothing the engine provides and adds no capability of its own; only the confirmation described here is added.",
+    "Only one minimum supported engine version exists in the client, and it is a fixed value rather than a user setting.",
+    "The engine version is asked through the engine's own version reporting and the answer is the only source of the engine's version.",
+    "An engine whose version cannot be confirmed is treated as not compatible; the client never proceeds on an unconfirmed engine.",
+    "The client never imports the engine or shares a process with it.",
+    "All user-facing messages produced by this task are English.",
+    "The client's existing failure convention is reused for these failures instead of introducing a second shape.",
+    "Nothing in the engine changes, and the client does not install or upgrade the engine."
+  ],
   "repo_id": "code",
   "test_command": [],
   "assumptions": [],
@@ -16,242 +54,12 @@
   "order": 4,
   "external_dependencies": [],
   "language": "en",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-25T05:05:00+00:00",
-  "finished_at": "2026-11-25T05:19:24+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
-    "summary": "no progress after repeated actions: read_file:forgel_code/cli.py::",
-    "files_changed": [
-      "forgel_code/cli.py",
-      "forgel_code/compat.py"
-    ],
-    "commands": [
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "python3",
-          "-c",
-          "print(1)"
-        ],
-        "exit_code": 0
-      }
-    ],
-    "test_output": "",
-    "assumptions": [],
-    "context": {
-      "window": 1000000,
-      "usable": 122880,
-      "sessions": 2,
-      "compactions": 1,
-      "model_calls": 38,
-      "estimated_input_tokens": 1756941,
-      "provider_input_tokens": 1832242,
-      "provider_output_tokens": 111027,
-      "cache_hit_tokens": 1747072,
-      "cache_miss_tokens": 85170,
-      "estimated_tokens": 33370,
-      "state": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.state.md"
-    },
-    "test_removals": [],
-    "spec_issues": [],
-    "escalated": [],
-    "git": {
-      "base": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
-      "head": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
-      "commit": "",
-      "commits": [
-        "36510fbe3c01155ad4d5f781214d2b3de9228ccc"
-      ]
-    },
-    "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.md",
-    "qa": {
-      "status": "pass",
-      "runtime": "local + environment.yaml",
-      "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.qa.md",
-      "commands": [
-        {
-          "command": "python3 -m unittest discover -s tests",
-          "exit_code": 0,
-          "scope": "environment",
-          "repo": "",
-          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
-        },
-        {
-          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
-          "exit_code": 0,
-          "scope": "e2e",
-          "repo": "",
-          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
-        },
-        {
-          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
-          "exit_code": 0,
-          "scope": "e2e",
-          "repo": "",
-          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
-        },
-        {
-          "command": "python3 -m unittest discover -s tests",
-          "exit_code": 0,
-          "scope": "repo",
-          "repo": "code",
-          "workdir": "/Users/okalistratov/Documents/sites/code"
-        }
-      ],
-      "checks": [
-        {
-          "criterion": "environment test",
-          "command": "python3 -m unittest discover -s tests",
-          "exit_code": 0,
-          "verdict": "pass",
-          "scope": "environment",
-          "repo": "",
-          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
-          "output": "",
-          "failure": ""
-        },
-        {
-          "criterion": "environment e2e",
-          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
-          "exit_code": 0,
-          "verdict": "pass",
-          "scope": "e2e",
-          "repo": "",
-          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
-          "output": "",
-          "failure": ""
-        },
-        {
-          "criterion": "environment e2e",
-          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
-          "exit_code": 0,
-          "verdict": "pass",
-          "scope": "e2e",
-          "repo": "",
-          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
-          "output": "",
-          "failure": ""
-        },
-        {
-          "criterion": "repository test",
-          "command": "python3 -m unittest discover -s tests",
-          "exit_code": 0,
-          "verdict": "pass",
-          "scope": "repo",
-          "repo": "code",
-          "workdir": "/Users/okalistratov/Documents/sites/code",
-          "output": "",
-          "failure": ""
-        }
-      ],
-      "review_required": false,
-      "failure_kind": ""
-    },
-    "review": {
-      "status": "fail",
-      "summary": "The attributed change adds a new module `forgel_code/compat.py` with version parsing, action messages and a `confirm` helper, but nothing wires it into the client: neither `forgel_code/cli.py` nor `forgel_code/interactive.py` imports it or calls `confirm`, so no engine version is ever requested and none of the missing/too-old/unconfirmed behaviours reach the user. The client's version report in `cli.py` still prints only `forgel-code <version>` and never the declared minimum engine version, and no test exercises the confirmation path. The file itself is reasonably written, but in the repository's current state the feature the task asks for is not implemented — only an unused helper exists.",
-      "requirements": [
-        {
-          "requirement": "FR-1 / FR-13: the client declares exactly one minimum supported engine version as its own fixed value, not overridable by the user",
-          "verdict": "pass",
-          "note": "`MIN_ENGINE_VERSION = \"0.1.0\"` is declared once in `forgel_code/__init__.py` and read by `compat`; it is not a user setting."
-        },
-        {
-          "requirement": "FR-2 / AC-1 / AC-12: the client's version report prints both the client version and the declared minimum engine version and succeeds without an engine",
-          "verdict": "fail",
-          "note": "`build_parser()` still registers `--version` as `\"forgel-code %s\" % __version__`; the minimum engine version is never printed."
-        },
-        {
-          "requirement": "FR-3 / AC-2: usage help still works with no engine installed",
-          "verdict": "pass",
-          "note": "Help is produced by argparse before any engine call, so it is unaffected."
-        },
-        {
-          "requirement": "FR-4 / FR-10 / AC-9: the engine is confirmed once before first use and the result carried through the invocation",
-          "verdict": "fail",
-          "note": "`compat.confirm` is never called by `cli.py` or `interactive.py` (their import blocks list only `.engine`, `.render`, `.session`, `.commands`); the engine is used with no confirmation at all, so `at most once` is vacuously true but the confirmation never happens."
-        },
-        {
-          "requirement": "FR-5 / AC-3 / AC-13: a missing or unstartable engine fails with one message naming the engine and a runnable install instruction",
-          "verdict": "fail",
-          "note": "`missing_message` exists but is unreachable; without a caller the user still receives the raw engine error path in `Engine.run` (e.g. `executable not found`)."
-        },
-        {
-          "requirement": "FR-6 / AC-4: an engine below the minimum fails with the required version, the version found and an upgrade instruction, and the operation is not attempted",
-          "verdict": "fail",
-          "note": "`outdated_message`/`confirm` are dead code; no invocation checks the engine version before running the requested command."
-        },
-        {
-          "requirement": "FR-7 / AC-5: an engine that answers without a usable version fails the same actionable way",
-          "verdict": "fail",
-          "note": "`unconfirmed_message` is unreachable for the same reason."
-        },
-        {
-          "requirement": "FR-8 / AC-6: a compatible engine keeps identical requests, output and exit status",
-          "verdict": "pass",
-          "note": "No engine-backed request or rendering was altered by the diff, so behaviour with a compatible engine is unchanged (trivially, since nothing was hooked in)."
-        },
-        {
-          "requirement": "FR-9 / AC-7 / AC-8: numeric component-wise comparison, trailing zeros equal, non-numeric suffix ignored",
-          "verdict": "pass",
-          "note": "`numeric_version`/`supported` implement numeric tuples with trailing-zero trimming and stop at the first non-numeric character; 0.10.0 > 0.9.0 and '0.9.0+x' equals 0.9.0."
-        },
-        {
-          "requirement": "FR-11 / AC-10: the machine-readable form carries these failures as one result with a non-zero exit",
-          "verdict": "fail",
-          "note": "The confirm failures never reach `main`, so the `--json` failure envelope is never produced for a missing or too-old engine."
-        },
-        {
-          "requirement": "FR-12 / AC-11: the interactive session confirms the engine first and exits non-zero with the guidance instead of opening a prompt",
-          "verdict": "fail",
-          "note": "`interactive.py` does not import `compat` and performs no confirmation before opening the prompt."
-        },
-        {
-          "requirement": "The change includes every file it needs and is internally consistent (no dead code)",
-          "verdict": "fail",
-          "note": "The task requires edits to the command entry point, the interactive session entry point and the version report; the attributed diff adds only the helper module, leaving it unreferenced and the feature inert."
-        },
-        {
-          "requirement": "Tests for the new behaviour are present and no test was weakened",
-          "verdict": "fail",
-          "note": "No test covers the confirmation, the install/upgrade messages, the version report change or the session startup; the spec's own listed risk that stand-in engines report and would be judged incompatible is unaddressed."
-        }
-      ],
-      "blocking": [
-        "`forgel_code/compat.py` is dead code: neither `forgel_code/cli.py` nor `forgel_code/interactive.py` imports or calls `compat.confirm`, so the engine version is never confirmed and no install/upgrade message is ever shown (FR-4 to FR-7, FR-10 to FR-12, AC-3 to AC-5, AC-9 to AC-11).",
-        "The client's version report still prints only `forgel-code <version>`; the declared minimum engine version is not shown (FR-2, AC-1, AC-12).",
-        "No test exercises the version confirmation, the actionable messages or the version report change, leaving the feature unproven."
-      ],
-      "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.review.md"
-    },
-    "rework_count": 2,
-    "feedback": [
-      "Do not rewrite or delete `forgel_code/compat.py` — it is already committed and its parsing, messages and `confirm` helper are accepted as they are. Start directly from the edit sites instead of re-reading the whole specification and repository.",
-      "In `forgel_code/cli.py`, call `compat.confirm(engine)` once, before the first engine-backed operation of the invocation, pass the confirmed version through the rest of the invocation, and never request the version a second time; do not confirm for the usage-help and version-report paths, which must stay engine-free.",
-      "Fail the invocation from that confirmation result: a missing or unstartable engine, an engine below the declared minimum and an engine whose answer carries no usable version must each end the command with the module's single actionable message and a non-zero exit, and must not attempt the requested operation. Reuse the client's existing failure path so the machine-readable form carries the same message and non-zero exit.",
-      "Change the client's version report so it prints both the client version and the single declared minimum engine version, and keeps exiting zero with no engine installed.",
-      "In `forgel_code/interactive.py`, perform the same confirmation before opening the prompt and exit non-zero with the actionable message instead of starting a session when the engine is missing, too old or unconfirmable.",
-      "Add tests that drive the confirmation through the real entry points with a stand-in engine: missing engine, engine below the minimum, engine answering without a usable version, and a supported engine proceeding unchanged; cover the version report showing the minimum and the interactive session's non-zero exit.",
-      "Report only what the diff actually contains: this attempt must end with the entry points, the version report and the tests present in the change set, not with a single unreferenced module."
-    ],
-    "last_failure": {
-      "kind": "agent",
-      "message": "context session limit reached"
-    },
-    "failure": {
-      "kind": "agent",
-      "message": "no progress after repeated actions: read_file:forgel_code/cli.py::"
-    }
+    "manual_restarts": 1,
+    "restarted_at": "2026-11-25T05:21:32+00:00"
   }
 }
