@@ -16,10 +16,10 @@
   "order": 4,
   "external_dependencies": [],
   "language": "en",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-25T04:52:36+00:00",
-  "finished_at": "2026-11-25T05:04:24+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "context session limit reached",
     "files_changed": [
@@ -231,23 +231,17 @@
       ],
       "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.review.md"
     },
-    "rework_count": 1,
+    "rework_count": 2,
     "feedback": [
-      "Actually connect the confirmation to the product: before any client operation that needs the engine, the engine must be asked for its version exactly once, and that confirmed result must be carried through the rest of the invocation instead of asking again.",
-      "The client's version reporting must show both the client version and the single declared minimum engine version, and must keep succeeding and exiting zero with no engine installed; usage help must also stay engine-free.",
-      "A missing or unstartable engine must reach the user as one message naming the engine, stating the client requires it, and containing one runnable install line — the raw operating-system text must not be the outcome, and the requested operation must not be attempted.",
-      "An engine below the declared minimum must produce one message naming the required minimum, the version found and a runnable upgrade line, and must not attempt the operation; an engine that answers without a usable version must fail the same actionable way rather than proceeding.",
-      "These failures must also appear in the machine-readable output form as one result with a non-zero exit, exactly like the client's other failures.",
-      "Starting the interactive session must perform the same confirmation first and exit non-zero with the guidance instead of opening a prompt when the engine is missing, too old or unconfirmable.",
-      "Add tests that exercise the confirmation path with a stub engine: missing engine, too-old engine, unconfirmable engine, and a supported engine proceeding unchanged, plus the version report and the interactive session's failure exit.",
-      "Report the change honestly: the previous report claimed the module was wired into the startup path, the version report, help and the interactive session while the commit series contains only the new helper file. Describe only what the diff actually contains."
+      "Do not rewrite or delete `forgel_code/compat.py` — it is already committed and its parsing, messages and `confirm` helper are accepted as they are. Start directly from the edit sites instead of re-reading the whole specification and repository.",
+      "In `forgel_code/cli.py`, call `compat.confirm(engine)` once, before the first engine-backed operation of the invocation, pass the confirmed version through the rest of the invocation, and never request the version a second time; do not confirm for the usage-help and version-report paths, which must stay engine-free.",
+      "Fail the invocation from that confirmation result: a missing or unstartable engine, an engine below the declared minimum and an engine whose answer carries no usable version must each end the command with the module's single actionable message and a non-zero exit, and must not attempt the requested operation. Reuse the client's existing failure path so the machine-readable form carries the same message and non-zero exit.",
+      "Change the client's version report so it prints both the client version and the single declared minimum engine version, and keeps exiting zero with no engine installed.",
+      "In `forgel_code/interactive.py`, perform the same confirmation before opening the prompt and exit non-zero with the actionable message instead of starting a session when the engine is missing, too old or unconfirmable.",
+      "Add tests that drive the confirmation through the real entry points with a stand-in engine: missing engine, engine below the minimum, engine answering without a usable version, and a supported engine proceeding unchanged; cover the version report showing the minimum and the interactive session's non-zero exit.",
+      "Report only what the diff actually contains: this attempt must end with the entry points, the version report and the tests present in the change set, not with a single unreferenced module."
     ],
     "last_failure": {
-      "kind": "review",
-      "message": "The attributed change adds a new module `forgel_code/compat.py` with version parsing, action messages and a `confirm` helper, but nothing wires it into the client: neither `forgel_code/cli.py` nor `forgel_code/interactive.py` imports it or calls `confirm`, so no engine version is ever requested and none of the missing/too-old/unconfirmed behaviours reach the user. The client's version report in `cli.py` still prints only `forgel-code <version>` and never the declared minimum engine version, and no test exercises the confirmation path. The file itself is reasonably written, but in the repository's current state the feature the task asks for is not implemented — only an unused helper exists.",
-      "retryable": false
-    },
-    "failure": {
       "kind": "agent",
       "message": "context session limit reached"
     }
