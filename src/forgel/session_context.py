@@ -94,6 +94,8 @@ class SessionState:
     observations: list[str] = field(default_factory=list)
     status: str = "in progress"
     next_step: str = ""
+    last_test_outcome: str = ""
+    failing_check: str = ""
 
     def to_markdown(
         self,
@@ -161,6 +163,14 @@ truth; re-read files with read_file when needed.
 
 {command_lines}
 
+## Last Test Outcome
+
+{self.last_test_outcome or 'not run'}
+
+## Failing Check
+
+{self.failing_check or 'none'}
+
 ## Recent Observations
 
 {observation_lines}
@@ -200,6 +210,14 @@ truth; re-read files with read_file when needed.
 ## Commands
 
 {command_lines}
+
+## Last Test Outcome
+
+{self.last_test_outcome or 'not run'}
+
+## Failing Check
+
+{self.failing_check or 'none'}
 
 ## Next Step
 

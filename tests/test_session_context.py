@@ -68,6 +68,9 @@ class SessionStateTest(unittest.TestCase):
             actions=["write_file: app.py"],
             commands=[{"command": ["python", "-m", "unittest"], "exit_code": 0}],
             observations=["wrote app.py", "tests passed"],
+            next_step="Fix the failing check",
+            last_test_outcome="failed: python -m unittest (exit 1)",
+            failing_check="python -m unittest",
         )
         text = state.to_markdown()
         self.assertIn("# Session State: Add a page", text)
@@ -78,6 +81,11 @@ class SessionStateTest(unittest.TestCase):
         self.assertIn("unittest", text)
         self.assertIn("exit 0", text)
         self.assertIn("tests passed", text)
+        self.assertIn("## Last Test Outcome", text)
+        self.assertIn("## Failing Check", text)
+        self.assertIn("## Next Step", text)
+        self.assertIn("Fix the failing check", text)
+        self.assertIn("failed: python -m unittest (exit 1)", text)
 
     def test_state_is_bounded(self) -> None:
         state = SessionState(

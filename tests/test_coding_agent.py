@@ -675,6 +675,59 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("## Context", report)
         self.assertIn("Handoffs:", report)
 
+    def test_handoff_records_the_failing_check_and_next_step(self) -> None:
+        write_text(
+            self.layout.control / "forgel.toml",
+            render_project_config("Test project", model_context_window=4096),
+        )
+        (self.repo / "large.txt").write_text(
+            "x" * 30_000 + "\n", encoding="utf-8"
+        )
+        task = create_task(
+            self.layout,
+            "Record the handoff",
+            ["Record the failing check"],
+            ["The handoff names the failure"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps(
+                {
+                    "action": "run",
+                    "command": [
+                        sys.executable,
+                        "-c",
+                        "import sys; sys.exit(3)",
+                    ],
+                }
+            ),
+            json.dumps({"action": "read_file", "path": "large.txt"}),
+            json.dumps({"action": "done", "summary": "recorded"}),
+            json.dumps(
+                {
+                    "commit": [],
+                    "revert": ["large.txt"],
+                    "ignore": [],
+                    "escalate": [],
+                }
+            ),
+        ]
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client, max_steps=1000
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        state = self.layout.artifact(
+            f"docs/program/agent/{task['id']}.state.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("## Last Test Outcome", state)
+        self.assertIn("failed:", state)
+        self.assertIn("exit 3", state)
+        self.assertIn("## Failing Check", state)
+        self.assertIn("## Next Step", state)
+        self.assertIn("Investigate the failing command", state)
+
     def test_free_text_queues_a_task_the_daemon_runs(self) -> None:
         request = {
             "kind": "change_request",

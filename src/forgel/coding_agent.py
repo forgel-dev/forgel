@@ -596,6 +596,30 @@ def _repo_fingerprint(repo: Path) -> str:
     return digest.hexdigest()[:16]
 
 
+def _handoff_next_step(
+    actions: Sequence[str], failing_check: str
+) -> str:
+    if failing_check:
+        return (
+            f"Investigate the failing command `{failing_check}` and "
+            "change the code or the approach; do not repeat it unchanged."
+        )
+    if actions:
+        last = actions[-1]
+        if last.startswith(
+            ("write_file:", "edit_file:", "delete_file:")
+        ):
+            return (
+                "Run the relevant check for the changed files, "
+                "then continue."
+            )
+        return (
+            f"Continue from the last action ({last}); use the repository "
+            "state and the files changed."
+        )
+    return "Continue from the current repository state and the changed files."
+
+
 class CodingAgent:
     def __init__(
         self,
@@ -1341,6 +1365,22 @@ class CodingAgent:
             changed = sorted(
                 set(touched) | set(git_ops.status_paths(repo))
             )
+            last_command = commands[-1] if commands else {}
+            command_text = " ".join(
+                str(item)
+                for item in (last_command.get("command") or [])
+            )
+            last_exit = last_command.get("exit_code")
+            failing_check = ""
+            last_test_outcome = "not run"
+            if command_text:
+                if last_exit == 0:
+                    last_test_outcome = f"passed: {command_text}"
+                else:
+                    last_test_outcome = (
+                        f"failed: {command_text} (exit {last_exit})"
+                    )
+                    failing_check = command_text
             state = SessionState(
                 task_id=str(task["id"]),
                 title=str(task["title"]),
@@ -1359,6 +1399,9 @@ class CodingAgent:
                 actions=list(actions),
                 commands=list(commands),
                 observations=list(recent),
+                next_step=_handoff_next_step(actions, failing_check),
+                last_test_outcome=last_test_outcome,
+                failing_check=failing_check,
             )
             max_state_tokens = max(
                 512, int(budget.window * STATE_CONTEXT_RATIO)
