@@ -54,14 +54,14 @@
   "order": 4,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-25T17:01:13+00:00",
+  "finished_at": "2026-11-25T17:01:13+00:00",
   "result": {
     "manual_restarts": 1,
     "restarted_at": "2026-11-25T05:21:32+00:00",
-    "summary": "the controlling agent stopped: the chosen step failed (limit command_timeout must be a positive number); try again later",
+    "summary": "task call limit reached (242/200); raise task_calls with set_limit",
     "files_changed": [],
     "commands": [
       {
@@ -312,15 +312,15 @@
       "provider_output_tokens": 237050,
       "cache_hit_tokens": 12356219,
       "cache_miss_tokens": 382362,
-      "estimated_tokens": 17280,
+      "estimated_tokens": 17311,
       "state": ""
     },
     "test_removals": [],
     "spec_issues": [],
     "escalated": [],
     "git": {
-      "base": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
-      "head": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
+      "base": "28a08ebf67947a23939260d48da2c72e0b07be2a",
+      "head": "28a08ebf67947a23939260d48da2c72e0b07be2a",
       "commit": "",
       "commits": []
     },
@@ -332,6 +332,10 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 2
+    "manual_retries": 2,
+    "failure": {
+      "kind": "limit",
+      "message": "task call limit reached (242/200); raise task_calls with set_limit"
+    }
   }
 }

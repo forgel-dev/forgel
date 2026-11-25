@@ -4,7 +4,7 @@
 - Status: `failed`
 - Repository: `code`
 - Steps: 242
-- Finished: 2026-11-25T15:20:08+00:00
+- Finished: 2026-11-25T17:01:13+00:00
 
 ## Requirements
 
@@ -35,7 +35,7 @@
 - Estimated input tokens (all calls): 12278405
 - Provider input/output tokens: 12738581 / 237050
 - Provider cache hit/miss tokens: 12356219 / 382362
-- Estimated prompt at the end: 17280 tokens
+- Estimated prompt at the end: 17311 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261124152248_check-the-engine-version-at-client-start.md`)
