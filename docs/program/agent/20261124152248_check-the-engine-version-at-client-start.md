@@ -3,8 +3,8 @@
 - Task: `20261124152248_check-the-engine-version-at-client-start`
 - Status: `failed`
 - Repository: `code`
-- Steps: 102
-- Finished: 2026-11-25T05:04:24+00:00
+- Steps: 38
+- Finished: 2026-11-25T05:19:24+00:00
 
 ## Requirements
 
@@ -29,13 +29,13 @@
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 6
-- Handoffs: 5
-- Model calls: 102
-- Estimated input tokens (all calls): 4404234
-- Provider input/output tokens: 4436200 / 130989
-- Provider cache hit/miss tokens: 4000128 / 436072
-- Estimated prompt at the end: 87130 tokens
+- Sessions: 2
+- Handoffs: 1
+- Model calls: 38
+- Estimated input tokens (all calls): 1756941
+- Provider input/output tokens: 1832242 / 111027
+- Provider cache hit/miss tokens: 1747072 / 85170
+- Estimated prompt at the end: 33370 tokens
 - State: `docs/program/agent/20261124152248_check-the-engine-version-at-client-start.state.md`
 
 ## Specification (`docs/program/specs/20261124152248_check-the-engine-version-at-client-start.md`)
@@ -205,16 +205,16 @@ A user who runs a client operation without the engine sees a short message that 
 
 ## Summary
 
-context session limit reached
+no progress after repeated actions: read_file:forgel_code/cli.py::
 
 ## Files Changed
 
-- none
+- `forgel_code/cli.py`
 
 ## Commands
 
-- `["git", "status", "--porcelain"]` → exit 0
-- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
+- `["python3", "-c", "print(1)"]` → exit 0
 
 ## Final Test Output
 
@@ -226,76 +226,36 @@ not run
 
 - read_file: forgel_code/compat.py
 - read_file: forgel_code/cli.py
-- read_file: forgel_code/engine.py
+- read_file: forgel_code/cli.py
 - read_file: forgel_code/__init__.py
 - read_file: forgel_code/interactive.py
+- run: ['grep', '-n', 'def run\\|def session\\|Engine(\\|engine.run\\|def main', 'forgel_code/interactive.py']
 - read_file: forgel_code/interactive.py
+- read_file: forgel_code/engine.py
 - read_file: tests/stub_engine.py
 - read_file: tests/test_stub_contract.py
 - read_file: tests/test_cli.py
-- read_file: install.sh
+- read_file: tests/test_cli.py
 - read_file: tests/test_interactive.py
 - read_file: tests/test_interactive.py
+- read_file: tests/test_cli_extra.py
+- write_file: forgel_code/cli.py
 - read_file: tests/test_idle_refresh.py
-- run: ['grep', '-rn', '--', '--version', 'tests', 'forgel_code', 'pyproject.toml']
-- read_file: tests/test_cli_extra.py
-- read_file: forgel_code/compat.py
-- recall
-- read_file: tests/stub_engine.py
-- recall
-- read_file: install.sh
-- run: ['git', 'status', '--porcelain']
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli_extra.py
-- read_file: tests/test_interactive.py
-- read_file: tests/test_interactive.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/__init__.py
-- read_file: forgel_code/engine.py
 - read_file: forgel_code/interactive.py
-- run: ['grep', '-n', 'def run\\|Engine(\\|engine.run\\|def main\\|EngineError', 'forgel_code/interactive.py']
-- read_file: forgel_code/interactive.py
-- read_file: tests/stub_engine.py
-- run: ['git', 'status', '--porcelain']
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli_extra.py
-- read_file: install.sh
-- read_file: tests/test_stub_contract.py
-- read_file: tests/test_interactive.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/interactive.py
-- run: ['grep', '-n', 'def run\\|Engine(\\|engine.run\\|EngineError\\|def main\\|def session', 'forgel_code/interactive.py']
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/engine.py
-- read_file: tests/stub_engine.py
-- read_file: tests/test_cli.py
-- read_file: README.md
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
+- write_file: forgel_code/cli.py
+- read_file: tests/test_idle_refresh.py
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_packaging.py
+- read_file: tests/stub_engine_install.py
 - read_file: tests/test_install_engine.py
+- read_file: tests/test_install.py
 - read_file: install.sh
-- read_file: tests/test_stub_contract.py
-- read_file: tests/test_interactive.py
+- read_file: tests/test_install.py
+- read_file: tests/test_packaging.py
+- run: ['python3', '-c', 'print(1)']
+- read_file: tests/test_cli_help_description.py
+- read_file: tests/test_install.py
 - read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/engine.py
-- read_file: tests/stub_engine.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
 - read_file: forgel_code/cli.py
-- read_file: forgel_code/engine.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: tests/stub_engine.py
-- read_file: install.sh
-- read_file: install.sh
-- read_file: tests/test_stub_contract.py
-- recall
+- read_file: forgel_code/cli.py
+- read_file: forgel_code/cli.py
