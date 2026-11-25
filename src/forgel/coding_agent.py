@@ -19,6 +19,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -77,6 +78,7 @@ ALLOWED_ACTIONS = {
     "read_file",
     "search_files",
     "recall",
+    "edit_file",
     "write_file",
     "delete_file",
     "run",
@@ -184,6 +186,7 @@ JSON actions below.
 {"action": "read_file", "path": "relative/path", "offset": 1, "limit": 2000}
 {"action": "search_files", "pattern": "text or POSIX extended regex", "path": ".", "glob": "*.py", "literal": false, "context": 2}
 {"action": "recall", "from": 1, "count": 5}
+{"action": "edit_file", "path": "relative/path", "old": "exact current text", "new": "replacement text", "expected_sha256": "value shown by read_file"}
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
@@ -222,7 +225,10 @@ Rules:
   a file. read_file returns a numbered line range with a continuation hint;
   read the next range with offset instead of writing helper scripts.
 - A file you have read is in the conversation. Do not read it again before
-  editing; when you know the exact change, call write_file immediately.
+  editing; when you know the exact change, call edit_file with the exact old
+  text (without the numbered display prefix), the replacement, and the
+  sha256 that read_file showed. The old text must occur exactly once. Use
+  write_file only for a new file or a full replacement.
 - Do not repeat an action. If you see the same observation twice, change the
   approach or make the edit.
 - If the task changes documentation only, edit the document and call done; do
@@ -1972,16 +1978,65 @@ Files:
                 cached = self._read_cache.get(cache_key)
                 if cached is not None:
                     return cached, None
-                rendered = read_text_page(
-                    path,
-                    action.get("offset", 1),
-                    action.get("limit", READ_DEFAULT_LINES),
-                    display=str(action.get("path") or ""),
+                rendered = (
+                    f"sha256:{digest}\n"
+                    + read_text_page(
+                        path,
+                        action.get("offset", 1),
+                        action.get("limit", READ_DEFAULT_LINES),
+                        display=str(action.get("path") or ""),
+                    )
                 )
                 self._read_cache[cache_key] = rendered
                 return rendered, None
             if kind == "search_files":
                 return self._search(layout, repo, action), None
+            if kind == "edit_file":
+                path = self._path(repo, action.get("path"))
+                self._check_write_path(path)
+                if not path.is_file():
+                    return f"file not found: {action.get('path')}", None
+                old = action.get("old")
+                new = action.get("new")
+                expected = str(
+                    action.get("expected_sha256") or ""
+                ).strip().lower()
+                if not isinstance(old, str) or not old:
+                    return "edit_file needs a non-empty old string", None
+                if not isinstance(new, str):
+                    return "edit_file needs a string new value", None
+                if not expected:
+                    return (
+                        "edit_file needs expected_sha256 from read_file",
+                        None,
+                    )
+                try:
+                    text = path.read_text(encoding="utf-8")
+                    digest = hashlib.sha256(
+                        path.read_bytes()
+                    ).hexdigest()
+                except (OSError, UnicodeDecodeError) as exc:
+                    return f"cannot read {action.get('path')}: {exc}", None
+                if expected not in {digest, digest[:16]}:
+                    return (
+                        "conflict: the file changed; read it again",
+                        None,
+                    )
+                count = text.count(old)
+                if count != 1:
+                    return (
+                        "old text must occur exactly once "
+                        f"(found {count})",
+                        None,
+                    )
+                updated = text.replace(old, new, 1)
+                raw = updated.encode("utf-8")
+                if len(raw) > MAX_FILE_BYTES:
+                    return f"file too large ({len(raw)} bytes)", None
+                self._atomic_write(path, updated)
+                relative = path.relative_to(repo.resolve()).as_posix()
+                touched.add(relative)
+                return f"edited {relative}", None
             if kind == "write_file":
                 path = self._path(repo, action.get("path"))
                 self._check_write_path(path)
@@ -2070,6 +2125,29 @@ Files:
         name = path.name
         if _is_secret_name(name):
             raise AgentError(f"refusing to write secret-like file {name}")
+
+    def _atomic_write(self, path: Path, text: str) -> None:
+        fd, temporary = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.chmod(temporary, path.stat().st_mode)
+            except OSError:
+                pass
+            os.replace(temporary, path)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
 
     @staticmethod
     def _looks_like_file_inspection(command: Sequence[str]) -> bool:
@@ -2331,7 +2409,7 @@ Files:
     @staticmethod
     def _action_summary(action: Mapping[str, Any]) -> str:
         kind = action.get("action")
-        if kind in {"read_file", "write_file", "delete_file"}:
+        if kind in {"read_file", "write_file", "delete_file", "edit_file"}:
             return f"{kind}: {action.get('path')}"
         if kind == "search_files":
             pattern = str(action.get("pattern") or "")

@@ -1131,6 +1131,141 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("new", second)
         self.assertNotIn("old", second)
 
+    def _read_digest(self, agent, path: str) -> str:
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": path},
+            set(),
+        )
+        self.assertTrue(observation.startswith("sha256:"))
+        return observation.splitlines()[0].split(":", 1)[1]
+
+    def test_edit_file_applies_an_exact_unique_change(self) -> None:
+        path = self.repo / "edit.txt"
+        path.write_text("alpha\nbeta\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        digest = self._read_digest(agent, "edit.txt")
+        touched: set[str] = set()
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "beta",
+                "new": "gamma",
+                "expected_sha256": digest,
+            },
+            touched,
+        )
+        self.assertIn("edited", observation)
+        self.assertEqual(
+            path.read_text(encoding="utf-8"), "alpha\ngamma\n"
+        )
+        self.assertIn("edit.txt", touched)
+        self.assertEqual(
+            [item.name for item in self.repo.glob(".edit.txt.*.tmp")],
+            [],
+        )
+
+    def test_edit_file_rejects_a_stale_or_non_unique_old_text(self) -> None:
+        path = self.repo / "edit.txt"
+        path.write_text("x\nx\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        digest = self._read_digest(agent, "edit.txt")
+        stale, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "x",
+                "new": "y",
+                "expected_sha256": "0" * 16,
+            },
+            set(),
+        )
+        self.assertIn("conflict", stale)
+        repeated, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "x",
+                "new": "y",
+                "expected_sha256": digest,
+            },
+            set(),
+        )
+        self.assertIn("exactly once", repeated)
+        missing, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "missing",
+                "new": "y",
+                "expected_sha256": digest,
+            },
+            set(),
+        )
+        self.assertIn("found 0", missing)
+        self.assertEqual(path.read_text(encoding="utf-8"), "x\nx\n")
+
+    def test_edit_file_rejects_secret_missing_file_and_no_hash(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        (self.repo / ".env").write_text("SECRET=1\n", encoding="utf-8")
+        secret, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": ".env",
+                "old": "SECRET=1",
+                "new": "SECRET=2",
+                "expected_sha256": "0" * 16,
+            },
+            set(),
+        )
+        self.assertIn("secret-like", secret)
+        missing, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "missing.txt",
+                "old": "a",
+                "new": "b",
+                "expected_sha256": "0" * 16,
+            },
+            set(),
+        )
+        self.assertIn("file not found", missing)
+        path = self.repo / "edit.txt"
+        path.write_text("alpha\n", encoding="utf-8")
+        no_hash, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "alpha",
+                "new": "beta",
+            },
+            set(),
+        )
+        self.assertIn("expected_sha256", no_hash)
+        self.assertEqual(path.read_text(encoding="utf-8"), "alpha\n")
+
     def test_signatures_are_content_and_state_aware(self) -> None:
         path = self.repo / "sig.txt"
         path.write_text("one\n", encoding="utf-8")
