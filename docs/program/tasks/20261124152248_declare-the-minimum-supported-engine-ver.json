@@ -7,12 +7,7 @@
   "acceptance": [],
   "constraints": [],
   "repo_id": "code",
-  "test_command": [
-    "python",
-    "-m",
-    "pytest",
-    "-q"
-  ],
+  "test_command": [],
   "assumptions": [],
   "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
   "plan_goal": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
@@ -21,9 +16,234 @@
   "order": 3,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-25T14:16:42+00:00",
+  "finished_at": "2026-11-25T15:09:08+00:00",
+  "result": {
+    "summary": "The client now exposes its own version together with one declared minimum supported engine version in a stable machine-readable report. `forgel_code/__init__.py` keeps the single `MIN_ENGINE_VERSION` declaration and gained `version_report()`, which returns both values from the client's own declaration. `forgel_code/cli.py` recognises the client's `--version` before any command is parsed and answers with either the unchanged human line (`forgel-code <version>`) or, with `--json`, one JSON object carrying `forgel_code_version` and `minimum_engine_version`; the report path touches no engine, no session, no timeout and no network. The human-readable output and every existing command path stay byte-identical. `CHANGELOG.md` records the new report under Unreleased/Added. A new test module `tests/test_version_report.py` checks both values in one report, distinct keys, the client version equalling the built distribution's version, a well-formed minimum, successful production with an unusable engine path and a PATH that resolves nothing, that no engine process is started, the unchanged human output, that only words before the command count as the version request, and that no other product module restates the minimum. The minimum `0.1.0` was chosen as the floor already declared and enforced by the shipped installer and startup check, since the engine has no released version yet. Full gate `python3 -m unittest discover -s tests` passes (378 tests, 0 failures); one earlier full run failed on two pre-existing installer timing tests that pass in isolation and in the following full run. `python -m pytest -q tests/test_version_report.py` passes (11 tests).",
+    "files_changed": [
+      "CHANGELOG.md",
+      "forgel_code/__init__.py",
+      "forgel_code/cli.py",
+      "tests/test_version_report.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-6"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-S",
+          "MIN_ENGINE_VERSION",
+          "--",
+          "forgel_code",
+          "install.sh"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-S",
+          "MIN_ENGINE_VERSION",
+          "--",
+          "forgel_code/__init__.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_version_report",
+          "tests.test_cli",
+          "tests.test_packaging"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_version_report",
+          "tests.test_cli",
+          "tests.test_cli_extra",
+          "tests.test_packaging",
+          "tests.test_cli_help_description"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_version_report",
+          "tests.test_cli",
+          "tests.test_cli_extra",
+          "tests.test_packaging",
+          "tests.test_cli_help_description"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_check_cleanup",
+          "tests.test_install.InstallerBoundedCheckTest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_version_report.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "..........................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 378 tests in 286.261s\n\nOK\n",
+    "assumptions": [
+      "The minimum supported engine version keeps the value already declared and enforced by the installer (`0.1.0`); the engine has no released version yet, so the value is selected from the existing declaration rather than from a release.",
+      "The machine-readable report is the client's own `--version --json` output, one JSON object on stdout with the keys `forgel_code_version` and `minimum_engine_version`, capturable by a script without entering the interactive session.",
+      "`--version` is honoured when it appears before any command word, so the client's own version report takes precedence over command parsing; a `--version` appearing after a command word belongs to that command.",
+      "The client version in the report is read from the single `__version__` declaration, which the build backend already packs into the distribution metadata.",
+      "The startup check from the earlier task (which compares an installed engine against this declaration) is not part of this change; this change only declares the floor and reports it."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 73,
+      "estimated_input_tokens": 3198370,
+      "provider_input_tokens": 3349219,
+      "provider_output_tokens": 165215,
+      "cache_hit_tokens": 3282688,
+      "cache_miss_tokens": 66531,
+      "estimated_tokens": 63158,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
+      "head": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
+      "commit": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
+      "commits": [
+        "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124152248_declare-the-minimum-supported-engine-ver.md"
+  }
 }
