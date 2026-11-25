@@ -34,13 +34,194 @@
   "order": 1,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-25T13:37:54+00:00",
+  "finished_at": "2026-11-25T14:08:00+00:00",
   "result": {
     "manual_restarts": 1,
     "resume_count": 1,
-    "resumed_at": "2026-11-24T23:10:41+00:00"
+    "resumed_at": "2026-11-24T23:10:41+00:00",
+    "summary": "Added a program-facing engine version report. `forgel version [--json]` (dispatched in `forgel.entry` before the client and legacy parsers, so it never loads settings or starts a model session) writes the engine's usual one-object JSON envelope with `kind: \"version\"` and the `major.minor.patch` version, and on failure exits non-zero with `ok: false` and the reason in `error` (also on stderr). The reported value is taken from the single release declaration (`[project] version` in `pyproject.toml`), falling back to the distribution metadata written from it when the declaration is not shipped; `forgel.__version__` and the existing `--version` flag now read through the same resolver instead of a second hard-coded copy. Reading the version needs no project, stored configuration, ledger, model access or network, works from any working directory, accepts the shared `--json`/`--home` arguments without using them, and writes nothing. `docs/program/commands.md` documents the new `version` kind and command. Existing reports and human-readable outputs are untouched; the installer and client are unchanged. Added `tests/test_engine_version.py` (9 tests: declared value, comparable shape, empty HOME/cwd run leaving no state, single-authority source, failure signalling, non-comparable values rejected, unknown arguments refused, entry-point dispatch, package `__version__`). Full gate `python3 -m unittest discover -s tests` passes: 797 tests OK, including the engine/client e2e gate that previously failed because the version report rejected the shared `--home` argument.",
+    "files_changed": [
+      "src/forgel/__init__.py",
+      "src/forgel/engine_version.py",
+      "src/forgel/entry.py",
+      "tests/test_engine_version.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import importlib.metadata as m; print(m.version('forgel'))"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import forgel, importlib.metadata as m; print(forgel.__file__); print(m.distribution('forgel')._path)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "tests/e2e/run_client_e2e.py"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import sys; sys.argv=['forgel','version','--json','--home','/tmp/nonexistenthome']; from forgel.entry import main; raise SystemExit(main())"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "tests/e2e/run_client_e2e.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "src/forgel/__init__.py",
+          "src/forgel/entry.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "forgel",
+          "--version"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_engine_version",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests/test_engine_version.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261125140520_inspect-and-finish: context handoff to session 2 (~6513/3072 tokens)\n[agent] 20261125140529_record-the-handoff: context handoff to session 2 (~2761/3072 tokens)\n[agent] 20261125140529_record-the-handoff: context handoff to session 3 (~7036/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 2 (~6499/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 3 (~3083/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 4 (~3141/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 5 (~3210/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 6 (~3237/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[au\n... [output truncated, 10616 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "The report reuses the engine's existing program-facing envelope (ok/kind/text/error plus payload) and is invoked as `forgel version [--json]`, like the other program-facing commands; the client's `--home` argument is accepted but unused because the report reads no configuration.",
+      "The version is the `major.minor.patch` value of the release declaration; a declaration that is not comparable is not stated, and the distribution metadata is used as the same value seen by an installed engine that ships without the declaration.",
+      "`forgel.__version__` and the existing `forgel --version` flag now resolve through the same single authority instead of a duplicated constant, so no second editable statement remains.",
+      "The command is documented in `docs/program/commands.md` next to the other program-facing commands."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 184,
+      "estimated_input_tokens": 8862221,
+      "provider_input_tokens": 9207217,
+      "provider_output_tokens": 183226,
+      "cache_hit_tokens": 9055488,
+      "cache_miss_tokens": 151729,
+      "estimated_tokens": 60065,
+      "state": "docs/program/agent/20261124152248_emit-a-machine-readable-engine-version.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "eab361cbf6ef059e49febf86eac4de46e849a111",
+      "head": "975530c6b243bf5197f74acab87d5b9062abb732",
+      "commit": "975530c6b243bf5197f74acab87d5b9062abb732",
+      "commits": [
+        "975530c6b243bf5197f74acab87d5b9062abb732"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124152248_emit-a-machine-readable-engine-version.md"
   }
 }
