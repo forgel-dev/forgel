@@ -218,6 +218,9 @@ Autonomy (D-075):
 
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
+- A specification may group requirements into work packages. Work on one work
+  package at a time: implement and verify its acceptance criteria, then
+  continue to the next. Do not mix packages in one change.
 - Use search_files to locate symbols and relevant lines before reading a file.
   Use read_file only for the ranges needed for the current decision.
 - Use read_file for file contents. run is only for tests, build and

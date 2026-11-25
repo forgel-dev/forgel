@@ -32,6 +32,7 @@ from .repo_tools import RESEARCH_ACTIONS, RepoActionError, execute_repo_action
 MAX_SPEC_STEPS = 50
 MAX_SPEC_CHARS = 12_000
 MAX_SPEC_RETRIES = 5
+MAX_WORK_PACKAGE_ACCEPTANCE = 4
 SPEC_KEYS = {
     "problem",
     "outcome",
@@ -134,6 +135,11 @@ Rules:
 - Acceptance criteria describe observable outcomes. The repository test gate
   and the reviewer judge them; the specification does not carry a test
   command or an automated check.
+- Group every requirement and acceptance criterion into cohesive work
+  packages. Each package is one related behavior set; every index appears in
+  exactly one requirement or acceptance list; a package covers at most four
+  acceptance criteria. Do not define a package by file name, path or
+  implementation step.
 - A respec issue is a binding decision: the rewritten requirements and
   acceptance must remove the option the issue rejected and must not leave a
   product choice open when the acceptance depends on it. Requirements and
@@ -226,6 +232,111 @@ def _strings(value: Any) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _package_indices(
+    value: Any, limit: int, label: str
+) -> list[int]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise SpecError(f"a work package {label} list must be a list")
+    result: list[int] = []
+    for item in value:
+        if isinstance(item, bool) or not isinstance(item, int):
+            raise SpecError(
+                f"a work package {label} index must be an integer"
+            )
+        if item < 0 or item >= limit:
+            raise SpecError(
+                f"work package {label} index {item} is out of range"
+            )
+        if item in result:
+            raise SpecError(
+                f"work package {label} index {item} is repeated"
+            )
+        result.append(item)
+    return result
+
+
+def _normalize_work_packages(
+    raw: Any,
+    requirements: Sequence[str],
+    acceptance: Sequence[str],
+) -> list[dict[str, Any]]:
+    items = raw if isinstance(raw, list) and raw else [
+        {
+            "title": "All requirements",
+            "requirements": list(range(len(requirements))),
+            "acceptance": list(range(len(acceptance))),
+        }
+    ]
+    packages: list[dict[str, Any]] = []
+    seen_requirements: set[int] = set()
+    seen_acceptance: set[int] = set()
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise SpecError(f"work package {index} must be an object")
+        title = str(item.get("title") or "").strip()
+        if not title:
+            raise SpecError(f"work package {index} has no title")
+        package_requirements = _package_indices(
+            item.get("requirements"), len(requirements), "requirement"
+        )
+        package_acceptance = _package_indices(
+            item.get("acceptance"), len(acceptance), "acceptance"
+        )
+        if not package_requirements and not package_acceptance:
+            raise SpecError(f"work package {title!r} is empty")
+        if len(package_acceptance) > MAX_WORK_PACKAGE_ACCEPTANCE:
+            raise SpecError(
+                f"work package {title!r} covers "
+                f"{len(package_acceptance)} acceptance criteria; the limit "
+                f"is {MAX_WORK_PACKAGE_ACCEPTANCE}; split it into cohesive "
+                "packages"
+            )
+        for position in package_requirements:
+            if position in seen_requirements:
+                raise SpecError(
+                    f"requirement {position} appears in more than one "
+                    "work package"
+                )
+            seen_requirements.add(position)
+        for position in package_acceptance:
+            if position in seen_acceptance:
+                raise SpecError(
+                    f"acceptance criterion {position} appears in more than "
+                    "one work package"
+                )
+            seen_acceptance.add(position)
+        packages.append(
+            {
+                "title": title,
+                "requirements": package_requirements,
+                "acceptance": package_acceptance,
+            }
+        )
+    missing_requirements = [
+        position
+        for position in range(len(requirements))
+        if position not in seen_requirements
+    ]
+    missing_acceptance = [
+        position
+        for position in range(len(acceptance))
+        if position not in seen_acceptance
+    ]
+    if missing_requirements:
+        raise SpecError(
+            "work packages omit requirements "
+            + ", ".join(str(item) for item in missing_requirements)
+        )
+    if missing_acceptance:
+        raise SpecError(
+            "work packages omit acceptance criteria "
+            + ", ".join(str(item) for item in missing_acceptance)
+        )
+    return packages
+
+
 def _normalize_spec(
     data: Mapping[str, Any],
     intent: Mapping[str, Any],
@@ -236,6 +347,9 @@ def _normalize_spec(
         raise SpecError("the specification has no requirements")
     if not acceptance:
         raise SpecError("the specification has no acceptance criteria")
+    work_packages = _normalize_work_packages(
+        data.get("work_packages"), requirements, acceptance
+    )
     external_dependencies = [
         {
             "name": str(item.get("name") or "").strip(),
@@ -265,6 +379,7 @@ def _normalize_spec(
         "non_goals": _strings(data.get("non_goals")),
         "requirements": requirements,
         "acceptance": acceptance,
+        "work_packages": work_packages,
         "constraints": _strings(data.get("constraints")),
         "assumptions": _strings(data.get("assumptions")),
         "external_dependencies": external_dependencies,
@@ -672,7 +787,10 @@ def write_task_spec(
                         "stories, risks, open questions and assumptions. "
                         "A documentation task is text and is verified by "
                         "review; never require a test or guard that reads a "
-                        "documentation file. A respec issue is "
+                        "documentation file. Group every requirement and "
+                        "acceptance criterion into cohesive work packages; "
+                        "every index appears once and a package covers at "
+                        "most four acceptance criteria. A respec issue is "
                         "binding: remove the option it rejected and keep "
                         "requirements and acceptance consistent. Return "
                         "a complete JSON specification without a test "
@@ -875,6 +993,11 @@ def render_spec(
         ),
         "acceptance": requirements_doc.numbered(
             "AC", spec.get("acceptance") or []
+        ),
+        "work_packages": requirements_doc.work_packages_text(
+            spec.get("work_packages") or [],
+            spec.get("requirements") or [],
+            spec.get("acceptance") or [],
         ),
         "scope": requirements_doc.bullets(
             list(spec.get("scope") or [])

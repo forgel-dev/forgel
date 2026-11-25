@@ -54,10 +54,20 @@ class TasksTest(unittest.TestCase):
             ["List posts", "Create posts"],
             ["POST /posts creates a post"],
             constraints=["stdlib only"],
+            work_packages=[
+                {
+                    "title": "Posts",
+                    "requirements": [0, 1],
+                    "acceptance": [0],
+                }
+            ],
             test_command=["python", "-m", "unittest"],
             assumptions=["SQLite is the storage"],
         )
         self.assertEqual(task["assumptions"], ["SQLite is the storage"])
+        self.assertEqual(
+            task["work_packages"][0]["title"], "Posts"
+        )
         self.assertEqual(task["status"], "pending")
         self.assertEqual(len(tasks.list_tasks(self.layout)), 1)
         self.assertEqual(

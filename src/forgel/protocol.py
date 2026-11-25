@@ -389,6 +389,7 @@ def rewrite_task_spec(
     )
     tasks.update_task(layout, task_id, spec=ref)
     updates: dict[str, Any] = {}
+    updates["work_packages"] = list(spec.get("work_packages") or [])
     if not task.get("requirements"):
         updates["requirements"] = list(spec.get("requirements") or [])
     if not task.get("acceptance"):

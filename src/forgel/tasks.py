@@ -64,6 +64,7 @@ def create_task(
     requirements: list[str],
     acceptance: list[str],
     constraints: list[str] | None = None,
+    work_packages: list[dict[str, Any]] | None = None,
     repo_id: str = "",
     test_command: list[str] | None = None,
     assumptions: list[str] | None = None,
@@ -95,6 +96,10 @@ def create_task(
         "summary": summary.strip(),
         "requirements": requirements,
         "acceptance": acceptance,
+        "work_packages": [
+            dict(item) for item in (work_packages or [])
+            if isinstance(item, dict)
+        ],
         "constraints": [
             item.strip() for item in (constraints or []) if item.strip()
         ],

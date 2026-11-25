@@ -249,6 +249,9 @@ Rules:
   here; put uncertainty and ordering rationale in "notes".
 - Every task must be a single repository change that a coding agent can
   implement, test and commit on its own.
+- A task is a cohesive work package, not a bundle of independent features. If
+  the goal needs several independent behaviors, split them into separate
+  tasks in execution order; do not put them in one task.
 - A task that only changes documentation is text: do not ask for a test or
   guard for it; the reviewer reads it.
 - Do not create tasks for production deploys, payments, secrets, data
@@ -1161,6 +1164,7 @@ def plan_project(
             str(item["title"]),
             [],
             [],
+            work_packages=list(spec.get("work_packages") or []),
             repo_id=str(item["repo_id"]),
             plan_id=plan_id,
             plan_goal=goal,
