@@ -62,17 +62,20 @@ from .sandbox import CommandRunner, SandboxError, docker_runner
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
-PROMPT_READ_OBSERVATION = 30_000
+PROMPT_READ_OBSERVATION = 50_000
 PROMPT_RUN_OBSERVATION = 16_000
 PROMPT_OTHER_OBSERVATION = 20_000
 MAX_INVALID_REPLIES = 8
 MAX_MARKUP_RETRIES = 10
 MAX_LIST_ENTRIES = 200
+MAX_SEARCH_RESULTS = 100
+SEARCH_TIMEOUT = 30.0
 MAX_REPEATED_ACTIONS = 5
 MAX_REPEAT_CORRECTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
     "read_file",
+    "search_files",
     "recall",
     "write_file",
     "delete_file",
@@ -179,6 +182,7 @@ XML or provider-specific function calls; the runtime understands only the
 JSON actions below.
 {"action": "list_files", "path": "."}
 {"action": "read_file", "path": "relative/path", "offset": 1, "limit": 2000}
+{"action": "search_files", "pattern": "text or POSIX extended regex", "path": ".", "glob": "*.py", "literal": false, "context": 2}
 {"action": "recall", "from": 1, "count": 5}
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
@@ -211,6 +215,8 @@ Autonomy (D-075):
 
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
+- Use search_files to locate symbols and relevant lines before reading a file.
+  Use read_file only for the ranges needed for the current decision.
 - Use read_file for file contents. run is only for tests, build and
   dependency-install commands; never use python, grep, cat or similar to print
   a file. read_file returns a numbered line range with a continuation hint;
@@ -486,6 +492,7 @@ def _prompt_observation(kind: str, observation: str) -> str:
 
     limit = {
         "read_file": PROMPT_READ_OBSERVATION,
+        "search_files": PROMPT_READ_OBSERVATION,
         "run": PROMPT_RUN_OBSERVATION,
     }.get(kind, PROMPT_OTHER_OBSERVATION)
     if len(observation) <= limit:
@@ -494,7 +501,8 @@ def _prompt_observation(kind: str, observation: str) -> str:
     tail = limit - head
     marker = (
         f"\n... [observation truncated for prompt: {len(observation)} chars; "
-        "the full observation is preserved in the task transcript]\n"
+        "the full observation is preserved in the task transcript; "
+        "continue with a narrower read range or a repository search]\n"
     )
     return observation[:head] + marker + observation[-tail:]
 
@@ -554,6 +562,34 @@ def _preserved_evidence(path: Path) -> str:
     return "\n\n".join(parts)
 
 
+def _file_digest(path: Path) -> str:
+    """Return a short content digest without exposing the file's contents."""
+
+    try:
+        if not path.is_file():
+            return "missing"
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while chunk := handle.read(1_048_576):
+                digest.update(chunk)
+        return digest.hexdigest()[:16]
+    except OSError:
+        return "unreadable"
+
+
+def _repo_fingerprint(repo: Path) -> str:
+    """Fingerprint product state, excluding the runtime's own process files."""
+
+    digest = hashlib.sha256(git_ops.head_sha(repo).encode("utf-8"))
+    for item in git_ops.status_paths(repo):
+        product = _task_path(item)
+        if not product:
+            continue
+        digest.update(product.encode("utf-8"))
+        digest.update(_file_digest(repo / product).encode("ascii"))
+    return digest.hexdigest()[:16]
+
+
 class CodingAgent:
     def __init__(
         self,
@@ -566,6 +602,7 @@ class CodingAgent:
         self.ledger = ledger
         self.client = client
         self._allowed_scripts: set[str] = set()
+        self._read_cache: dict[tuple[str, str, str, str], str] = {}
         env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
         if max_steps is not None:
             steps = max(1, int(max_steps))
@@ -603,6 +640,7 @@ class CodingAgent:
         repo_id, repo = self._repository(layout, task)
         if not (repo / ".git").exists():
             raise AgentError(f"repository {repo_id} has no git history")
+        self._read_cache.clear()
         # Each attempt starts from the current HEAD. The review is state-based
         # and uses the attributed files, not a commit range, so unrelated
         # commits between attempts never enter the review.
@@ -1325,7 +1363,6 @@ class CodingAgent:
                     max_tokens=max_state_tokens, model=model
                 ),
             )
-            signatures.clear()
             return (
                 [
                     ModelMessage("system", SYSTEM_PROMPT),
@@ -1512,9 +1549,9 @@ class CodingAgent:
                         )
                         terminal = True
                         break
-                    signature = self._signature(action)
+                    signature = self._signature(action, repo)
                     repeats = 0
-                    if kind in {"read_file", "write_file", "run"}:
+                    if kind in {"read_file", "search_files", "write_file", "run"}:
                         repeats = signatures.get(signature, 0) + 1
                         signatures[signature] = repeats
                         if repeats >= MAX_REPEATED_ACTIONS:
@@ -1589,10 +1626,6 @@ class CodingAgent:
                         )
                         messages.append(ModelMessage("user", warning))
                         recent.append(warning)
-                    if kind in {"write_file", "delete_file"} and (
-                        observation.startswith(("wrote ", "deleted "))
-                    ):
-                        signatures.clear()
                     if budget.should_compact(messages, model):
                         if session < self.max_sessions:
                             used = budget.usage(messages, model)
@@ -1929,12 +1962,26 @@ Files:
                 data = path.read_bytes()
                 if b"\x00" in data:
                     return "binary file; not displayed", None
-                return read_text_page(
+                digest = hashlib.sha256(data).hexdigest()[:16]
+                cache_key = (
+                    str(path),
+                    str(action.get("offset", 1)),
+                    str(action.get("limit", READ_DEFAULT_LINES)),
+                    digest,
+                )
+                cached = self._read_cache.get(cache_key)
+                if cached is not None:
+                    return cached, None
+                rendered = read_text_page(
                     path,
                     action.get("offset", 1),
                     action.get("limit", READ_DEFAULT_LINES),
                     display=str(action.get("path") or ""),
-                ), None
+                )
+                self._read_cache[cache_key] = rendered
+                return rendered, None
+            if kind == "search_files":
+                return self._search(layout, repo, action), None
             if kind == "write_file":
                 path = self._path(repo, action.get("path"))
                 self._check_write_path(path)
@@ -2043,25 +2090,42 @@ Files:
             )
         return False
 
-    @staticmethod
-    def _signature(action: Mapping[str, Any]) -> str:
+    def _signature(self, action: Mapping[str, Any], repo: Path) -> str:
         kind = str(action.get("action"))
         path = str(action.get("path") or "")
         if kind == "read_file":
+            try:
+                digest = _file_digest(self._path(repo, path))
+            except AgentError:
+                digest = "invalid"
             return (
                 f"read_file:{path}:"
-                f"{action.get('offset', '')}:{action.get('limit', '')}"
+                f"{action.get('offset', '')}:{action.get('limit', '')}:{digest}"
             )
-        if kind in {"list_files", "delete_file"}:
+        if kind == "delete_file":
             return f"{kind}:{path}"
         if kind == "write_file":
             content = str(action.get("content") or "")
             digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
             return f"write_file:{path}:{digest}"
         if kind == "run":
-            return "run:" + json.dumps(
+            command = json.dumps(
                 action.get("command"), sort_keys=True, ensure_ascii=False
             )
+            return f"run:{command}:{_repo_fingerprint(repo)}"
+        if kind == "search_files":
+            query = json.dumps(
+                {
+                    "pattern": action.get("pattern"),
+                    "path": action.get("path"),
+                    "glob": action.get("glob"),
+                    "literal": action.get("literal"),
+                    "context": action.get("context"),
+                },
+                sort_keys=True,
+                ensure_ascii=False,
+            )
+            return f"search_files:{query}:{_repo_fingerprint(repo)}"
         return kind
 
     def _command(self, value: Any) -> list[str]:
@@ -2167,6 +2231,87 @@ Files:
         output = merge_output(completed.stdout, completed.stderr)
         return completed.returncode, _cap(output)
 
+    def _search(
+        self,
+        layout: ProjectLayout,
+        repo: Path,
+        action: Mapping[str, Any],
+    ) -> str:
+        pattern = str(action.get("pattern") or "").strip()
+        if not pattern:
+            return "search_files needs a pattern"
+        if len(pattern) > 256:
+            return "search pattern is too long"
+        try:
+            target = self._path(repo, str(action.get("path") or "."))
+        except AgentError as exc:
+            return f"error: {exc}"
+        if not target.exists():
+            return f"not found: {action.get('path')}"
+        try:
+            context = max(0, min(int(action.get("context", 2)), 5))
+        except (TypeError, ValueError):
+            context = 2
+        argv = [
+            "git",
+            "grep",
+            "-n",
+            "-I",
+            "-E",
+            "--untracked",
+            "-C",
+            str(context),
+        ]
+        if action.get("literal"):
+            argv.append("-F")
+        argv.extend(["-e", pattern, "--"])
+        relative = target.relative_to(repo.resolve()).as_posix()
+        glob = str(action.get("glob") or "").strip()
+        if glob:
+            argv.append(f"{relative}/{glob}" if relative != "." else glob)
+        else:
+            argv.append(relative)
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=str(repo),
+                env=_safe_env(layout),
+                capture_output=True,
+                text=True,
+                timeout=SEARCH_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return f"search timed out after {SEARCH_TIMEOUT:g}s"
+        except (OSError, subprocess.SubprocessError) as exc:
+            return f"cannot search: {exc}"
+        output = (completed.stdout + completed.stderr).strip()
+        if completed.returncode == 1:
+            return "no matches"
+        if completed.returncode != 0:
+            return f"search failed: {output[-4_000:]}"
+        matches: list[str] = []
+        for line in output.splitlines():
+            if line == "--":
+                continue
+            parts = line.split(":", 2)
+            if len(parts) < 3:
+                continue
+            filename = parts[0]
+            if contract.is_control_path(filename) or _is_secret_name(
+                Path(filename).name
+            ):
+                continue
+            matches.append(line)
+            if len(matches) >= MAX_SEARCH_RESULTS:
+                break
+        if not matches:
+            return "no matches"
+        rendered = "\n".join(matches)
+        if len(matches) >= MAX_SEARCH_RESULTS:
+            rendered += "\n... [search results truncated]"
+        return _cap(rendered, PROMPT_READ_OBSERVATION)
+
     @staticmethod
     def _list(repo: Path) -> str:
         lines: list[str] = []
@@ -2188,6 +2333,11 @@ Files:
         kind = action.get("action")
         if kind in {"read_file", "write_file", "delete_file"}:
             return f"{kind}: {action.get('path')}"
+        if kind == "search_files":
+            pattern = str(action.get("pattern") or "")
+            path = str(action.get("path") or ".")
+            glob = str(action.get("glob") or "")
+            return f"search_files: {pattern} @ {path} {glob}".rstrip()
         if kind == "run":
             return f"run: {action.get('command')}"
         return str(kind)

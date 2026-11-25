@@ -28,6 +28,7 @@ from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.project_config import render_project_config
+from forgel.repo_tools import read_text_page
 from forgel.tasks import (
     create_task,
     get_task,
@@ -949,6 +950,265 @@ class CodingAgentTest(unittest.TestCase):
             self.settings, self.ledger, client
         ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "done", result.summary)
+
+    def _search_fixtures(self) -> None:
+        src = self.repo / "src"
+        src.mkdir()
+        (src / "a.py").write_text("needle = 1\n", encoding="utf-8")
+        (src / "b.txt").write_text("needle\n", encoding="utf-8")
+        (src / "literal.py").write_text("a.b\naxb\n", encoding="utf-8")
+        (self.repo / "other.py").write_text(
+            "other = 'needle'\n", encoding="utf-8"
+        )
+        (self.repo / "untracked.py").write_text(
+            "untracked needle\n", encoding="utf-8"
+        )
+        (self.repo / "secrets.toml").write_text(
+            "token = 'needle'\n", encoding="utf-8"
+        )
+        docs = self.repo / "docs" / "program"
+        docs.mkdir(parents=True, exist_ok=True)
+        (docs / "note.md").write_text("needle\n", encoding="utf-8")
+        _run(
+            self.repo,
+            "add",
+            "src/a.py",
+            "src/b.txt",
+            "src/literal.py",
+            "other.py",
+            "secrets.toml",
+            "docs/program/note.md",
+        )
+        _run(
+            self.repo,
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "search fixtures",
+        )
+
+    def test_search_files_finds_tracked_and_untracked_and_filters_secrets(
+        self,
+    ) -> None:
+        self._search_fixtures()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": "needle"},
+            set(),
+        )
+        self.assertIn("src/a.py", observation)
+        self.assertIn("src/b.txt", observation)
+        self.assertIn("untracked.py", observation)
+        self.assertNotIn("secrets.toml", observation)
+        self.assertNotIn("docs/program", observation)
+
+    def test_search_files_respects_glob_and_path(self) -> None:
+        self._search_fixtures()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        by_glob, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "needle",
+                "glob": "*.py",
+            },
+            set(),
+        )
+        self.assertIn("src/a.py", by_glob)
+        self.assertNotIn("src/b.txt", by_glob)
+        by_path, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "needle",
+                "path": "src",
+            },
+            set(),
+        )
+        self.assertIn("src/a.py", by_path)
+        self.assertNotIn("other.py", by_path)
+
+    def test_search_files_supports_literal_mode(self) -> None:
+        self._search_fixtures()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        literal, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "a.b",
+                "path": "src/literal.py",
+                "literal": True,
+            },
+            set(),
+        )
+        self.assertIn("a.b", literal)
+        self.assertNotIn("axb", literal)
+        regex, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "a.b",
+                "path": "src/literal.py",
+            },
+            set(),
+        )
+        self.assertIn("a.b", regex)
+        self.assertIn("axb", regex)
+
+    def test_search_files_rejects_invalid_queries(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        empty, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": ""},
+            set(),
+        )
+        self.assertIn("needs a pattern", empty)
+        long_pattern, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": "x" * 257},
+            set(),
+        )
+        self.assertIn("too long", long_pattern)
+        outside, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "x",
+                "path": "../outside",
+            },
+            set(),
+        )
+        self.assertIn("error", outside)
+        invalid, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": "["},
+            set(),
+        )
+        self.assertIn("search failed", invalid)
+
+    def test_read_cache_invalidates_when_content_changes(self) -> None:
+        path = self.repo / "cache.txt"
+        path.write_text("old\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        first, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": "cache.txt"},
+            set(),
+        )
+        self.assertIn("old", first)
+        path.write_text("new\n", encoding="utf-8")
+        second, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": "cache.txt"},
+            set(),
+        )
+        self.assertIn("new", second)
+        self.assertNotIn("old", second)
+
+    def test_signatures_are_content_and_state_aware(self) -> None:
+        path = self.repo / "sig.txt"
+        path.write_text("one\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        read = {"action": "read_file", "path": "sig.txt"}
+        first = agent._signature(read, self.repo)
+        self.assertEqual(first, agent._signature(read, self.repo))
+        path.write_text("two\n", encoding="utf-8")
+        self.assertNotEqual(first, agent._signature(read, self.repo))
+
+        run = {
+            "action": "run",
+            "command": [sys.executable, "-c", "pass"],
+        }
+        run_first = agent._signature(run, self.repo)
+        self.assertEqual(run_first, agent._signature(run, self.repo))
+        (self.repo / "changed.txt").write_text("x\n", encoding="utf-8")
+        self.assertNotEqual(run_first, agent._signature(run, self.repo))
+
+    def test_repeats_survive_a_write_to_another_file(self) -> None:
+        task = self._task()
+        responses: list[str] = []
+        for index in range(12):
+            responses.append(
+                json.dumps(
+                    {"action": "read_file", "path": "README.md"}
+                )
+            )
+            responses.append(
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": f"notes{index}.txt",
+                        "content": str(index),
+                    }
+                )
+            )
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn(
+            "no progress after repeated actions", result.summary
+        )
+
+    def test_repeats_survive_a_context_handoff(self) -> None:
+        write_text(
+            self.layout.control / "forgel.toml",
+            render_project_config("Test project", model_context_window=4096),
+        )
+        (self.repo / "large.txt").write_text(
+            "x" * 30_000 + "\n", encoding="utf-8"
+        )
+        task = create_task(
+            self.layout,
+            "Read repeatedly",
+            ["Read the repository"],
+            ["Reading does not loop"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps({"action": "read_file", "path": "large.txt"})
+        ] + [
+            json.dumps({"action": "read_file", "path": "README.md"})
+            for _ in range(12)
+        ]
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client, max_steps=1000
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn(
+            "no progress after repeated actions", result.summary
+        )
 
     def test_project_shell_scripts_are_allowed(self) -> None:
         agent = CodingAgent(
