@@ -65,6 +65,9 @@ MAX_AUDIT_ERRORS = 15
 AUDIT_TOTAL_TIMEOUT = limits.LIMITS["audit_timeout"]
 MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
+UNRESOLVED_RELEASE_DETAIL = (
+    "the release has a failed or cancelled task"
+)
 MAX_DIFF_CHARS = 60_000
 MAX_STAT_CHARS = 8_000
 RELEASE_CLASSES = {"patch", "minor", "major"}
@@ -1790,6 +1793,7 @@ def process_releases(
     """Advance release trains: audit ready ones and publish passing ones."""
 
     actions: list[str] = []
+    client = client or build_model_client(settings.home, log=log)
     auditor = client
     waiting: list[set[str]] = []
     for release in list_releases(layout):
@@ -1827,6 +1831,20 @@ def process_releases(
                     release["provider_retry_at"] = _retry_at()
                 save_release(layout, release)
             continue
+        if (
+            status == "blocked"
+            and str(release.get("detail") or "")
+            == UNRESOLVED_RELEASE_DETAIL
+        ):
+            log(
+                f"[release] {release_id}: clearing an unresolved "
+                "controller block; retrying"
+            )
+            release["status"] = "failed"
+            release["detail"] = ""
+            release["next_at"] = ""
+            status = "failed"
+            save_release(layout, release)
         if status in {"blocked", "cancelled"}:
             continue
         repos = release_repo_ids(layout, release)
@@ -1877,9 +1895,14 @@ def process_releases(
                 not in {"pending", "running", "review"}
             ]
             decision = None
+            controller_error = ""
             if ledger is not None and client is not None and stopped:
                 from . import controller
 
+                log(
+                    f"[controller] release {release_id}: deciding for "
+                    f"{len(stopped)} stopped task(s)"
+                )
                 try:
                     decision = controller.decide(
                         settings,
@@ -1929,11 +1952,24 @@ def process_releases(
                         log,
                     )
                 except Exception as exc:  # noqa: BLE001 - keep the train
+                    controller_error = str(exc)
                     log(
                         f"[controller] release failed-task decision "
                         f"failed: {exc}"
                     )
                     decision = None
+                else:
+                    log(
+                        f"[controller] release {release_id}: "
+                        f"{decision.operation}: "
+                        f"{str(decision.reason or decision.summary)[:300]}"
+                    )
+            elif stopped:
+                controller_error = (
+                    "no ledger is available"
+                    if ledger is None
+                    else "no model is configured"
+                )
             if decision is not None:
                 action = controller.release_action(decision.operation)
                 if action == "block":
@@ -2010,6 +2046,8 @@ def process_releases(
                         actions.append(f"blocked:{release_id}")
                         continue
                     release["status"] = "running"
+                    release["detail"] = ""
+                    release["next_at"] = ""
                     save_release(layout, release)
                     actions.append(f"respec:{task_id}")
                     log(f"[release] {release_id}: {text}; task queued")
@@ -2040,6 +2078,8 @@ def process_releases(
                         actions.append(f"blocked:{release_id}")
                         continue
                     release["status"] = "running"
+                    release["detail"] = ""
+                    release["next_at"] = ""
                     save_release(layout, release)
                     actions.append(
                         f"{decision.operation}:{stopped[0]['id']}"
@@ -2065,6 +2105,8 @@ def process_releases(
                     result=data,
                 )
                 release["status"] = "running"
+                release["detail"] = ""
+                release["next_at"] = ""
                 save_release(layout, release)
                 actions.append(f"retry:{task['id']}")
                 log(
@@ -2072,9 +2114,40 @@ def process_releases(
                     f"{task['id']} back to work"
                 )
                 continue
+            if stopped:
+                if client is None:
+                    release["status"] = "blocked"
+                    release["detail"] = (
+                        "no model is configured for the controlling "
+                        "agent; configure it and resume the release"
+                    )
+                    save_release(layout, release)
+                    actions.append(f"blocked:{release_id}")
+                    continue
+                if ledger is None:
+                    release["status"] = "blocked"
+                    release["detail"] = (
+                        "no ledger is available for the controlling agent"
+                    )
+                    save_release(layout, release)
+                    actions.append(f"blocked:{release_id}")
+                    continue
+                release["status"] = "failed"
+                release["detail"] = (
+                    "the controlling agent was unavailable: "
+                    + (controller_error or "no decision")
+                )
+                release["next_at"] = _retry_at()
+                save_release(layout, release)
+                actions.append(f"retry:{release_id}")
+                log(
+                    f"[release] {release_id}: "
+                    f"{release['detail']}; retry scheduled"
+                )
+                continue
             release["status"] = "blocked"
             release["detail"] = (
-                "the release has a failed or cancelled task"
+                "the release has no runnable or stopped task"
             )
             save_release(layout, release)
             actions.append(f"blocked:{release_id}")
