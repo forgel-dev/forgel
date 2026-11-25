@@ -16,12 +16,12 @@
   "order": 6,
   "external_dependencies": [],
   "language": "en",
-  "status": "failed",
+  "status": "blocked",
   "created_at": "2026-11-24T15:22:48+00:00",
   "started_at": "2026-11-25T15:20:28+00:00",
-  "finished_at": "2026-11-25T15:27:39+00:00",
+  "finished_at": "2026-11-25T15:28:22+00:00",
   "result": {
-    "summary": "The shipped engine has no installer to document. The plan docs/program/plans/20261124145600_make-forgel-and-forgel-code-install-and-.md marks backlog item 2, 'Add the engine's one-command installer with pre-install version resolution', as blocked ('the dependency scout exceeded its step limit'), and that task's spec (docs/program/specs/20261124152248_add-the-engine-s-one-command-installer-w.md) states 'The owner decides this task's scope before it can be implemented'. In this repository there is no install script (no install.sh anywhere; only deploy/entrypoint.sh and Django template scripts), no uninstall path, no private prefix, no launcher placed on PATH, no marked profile block or shell-reachability handling (no 'export PATH' in the tree), and no determination of the version a configured source or release ref would provide. The only shipped piece is the version inquiry in src/forgel/engine_version.py ('forgel version [--json]', dispatched from src/forgel/entry.py), which alone cannot satisfy FR-1, FR-2, FR-3, FR-5, FR-6, FR-7, AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 and AC-9. Writing the installation, entry point, pre-install version determination, strictly-newer comparison and removal text would document behaviour the shipped installer and engine do not perform, which FR-8, AC-8 and the specification's own Risks section forbid. Decision needed: unblock and implement the engine installer task first, then re-run this documentation task against the shipped behaviour.",
+    "summary": "stopped by the controller: The documentation task is sound but has an unmet prerequisite that this task cannot create. The failure is not a specification defect (the spec explicitly requires documenting only shipped behaviour), not a repository test or environment problem, and not a limit; the earlier decisions — respec, retry, two reworks, restart, QA, and a raised limit — have all exhausted the space of re-runs, and each returned the same fact: the engine has no installer, entry point on PATH, profile/reachability handling, uninstall path, or pre-install version determination. The only shipped piece is the version inquiry, so FR-1, FR-2, FR-3, FR-5, FR-6, FR-7 and their acceptance criteria cannot be met truthfully, and writing them anyway would break FR-8/AC-8. The plan's backlog item 2, which must implement the installer, is itself marked blocked (dependency scout exceeded its step limit), and the escalated install.sh/test_install.py from an earlier attempt were never committed. Re-running this task unchanged reproduces the same conclusion; no runtime next-step operation can retarget the prerequisite task from here. The work must stop with this reason so the plan sequencing is corrected: unblock and implement the engine installer task, then re-queue this documentation task against the shipped behaviour.",
     "files_changed": [],
     "commands": [],
     "test_output": "",
@@ -48,10 +48,6 @@
       "head": "ac09a5b8769ead9f746002fed82a43b9ac1fdda0",
       "commit": "",
       "commits": []
-    },
-    "failure": {
-      "kind": "agent",
-      "message": "The shipped engine has no installer to document. The plan docs/program/plans/20261124145600_make-forgel-and-forgel-code-install-and-.md marks backlog item 2, 'Add the engine's one-command installer with pre-install version resolution', as blocked ('the dependency scout exceeded its step limit'), and that task's spec (docs/program/specs/20261124152248_add-the-engine-s-one-command-installer-w.md) states 'The owner decides this task's scope before it can be implemented'. In this repository there is no install script (no install.sh anywhere; only deploy/entrypoint.sh and Django template scripts), no uninstall path, no private prefix, no launcher placed on PATH, no marked profile block or shell-reachability handling (no 'export PATH' in the tree), and no determination of the version a configured source or release ref would provide. The only shipped piece is the version inquiry in src/forgel/engine_version.py ('forgel version [--json]', dispatched from src/forgel/entry.py), which alone cannot satisfy FR-1, FR-2, FR-3, FR-5, FR-6, FR-7, AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 and AC-9. Writing the installation, entry point, pre-install version determination, strictly-newer comparison and removal text would document behaviour the shipped installer and engine do not perform, which FR-8, AC-8 and the specification's own Risks section forbid. Decision needed: unblock and implement the engine installer task first, then re-run this documentation task against the shipped behaviour."
     },
     "report": "docs/program/agent/20261124152248_document-the-engine-installer-and-versio.md"
   }
