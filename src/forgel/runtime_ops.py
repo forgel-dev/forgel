@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
-from .config import Settings
 from . import limits, specs, tasks
 from .artifacts import write_text
+from .config import Settings
+from .control_flow import RUNTIME_OPERATIONS
 from .daemon import _run_task, handle_failure, run_once
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -33,20 +34,7 @@ from .tasks import get_task
 
 Log = Callable[[str], None]
 
-OPERATIONS = (
-    "drive",
-    "task_retry",
-    "task_restart",
-    "task_respec",
-    "task_cancel",
-    "task_process",
-    "task_qa",
-    "task_review",
-    "release_resume",
-    "release_audit",
-    "release_finalize",
-    "set_limit",
-)
+OPERATIONS = RUNTIME_OPERATIONS
 
 
 def _task(
