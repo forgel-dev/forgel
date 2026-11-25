@@ -16,9 +16,43 @@
   "order": 6,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-25T15:20:28+00:00",
+  "finished_at": "2026-11-25T15:27:39+00:00",
+  "result": {
+    "summary": "The shipped engine has no installer to document. The plan docs/program/plans/20261124145600_make-forgel-and-forgel-code-install-and-.md marks backlog item 2, 'Add the engine's one-command installer with pre-install version resolution', as blocked ('the dependency scout exceeded its step limit'), and that task's spec (docs/program/specs/20261124152248_add-the-engine-s-one-command-installer-w.md) states 'The owner decides this task's scope before it can be implemented'. In this repository there is no install script (no install.sh anywhere; only deploy/entrypoint.sh and Django template scripts), no uninstall path, no private prefix, no launcher placed on PATH, no marked profile block or shell-reachability handling (no 'export PATH' in the tree), and no determination of the version a configured source or release ref would provide. The only shipped piece is the version inquiry in src/forgel/engine_version.py ('forgel version [--json]', dispatched from src/forgel/entry.py), which alone cannot satisfy FR-1, FR-2, FR-3, FR-5, FR-6, FR-7, AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 and AC-9. Writing the installation, entry point, pre-install version determination, strictly-newer comparison and removal text would document behaviour the shipped installer and engine do not perform, which FR-8, AC-8 and the specification's own Risks section forbid. Decision needed: unblock and implement the engine installer task first, then re-run this documentation task against the shipped behaviour.",
+    "files_changed": [],
+    "commands": [],
+    "test_output": "",
+    "assumptions": [],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 107,
+      "estimated_input_tokens": 5675067,
+      "provider_input_tokens": 5890695,
+      "provider_output_tokens": 43940,
+      "cache_hit_tokens": 5800960,
+      "cache_miss_tokens": 89735,
+      "estimated_tokens": 81798,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "ac09a5b8769ead9f746002fed82a43b9ac1fdda0",
+      "head": "ac09a5b8769ead9f746002fed82a43b9ac1fdda0",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "agent",
+      "message": "The shipped engine has no installer to document. The plan docs/program/plans/20261124145600_make-forgel-and-forgel-code-install-and-.md marks backlog item 2, 'Add the engine's one-command installer with pre-install version resolution', as blocked ('the dependency scout exceeded its step limit'), and that task's spec (docs/program/specs/20261124152248_add-the-engine-s-one-command-installer-w.md) states 'The owner decides this task's scope before it can be implemented'. In this repository there is no install script (no install.sh anywhere; only deploy/entrypoint.sh and Django template scripts), no uninstall path, no private prefix, no launcher placed on PATH, no marked profile block or shell-reachability handling (no 'export PATH' in the tree), and no determination of the version a configured source or release ref would provide. The only shipped piece is the version inquiry in src/forgel/engine_version.py ('forgel version [--json]', dispatched from src/forgel/entry.py), which alone cannot satisfy FR-1, FR-2, FR-3, FR-5, FR-6, FR-7, AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 and AC-9. Writing the installation, entry point, pre-install version determination, strictly-newer comparison and removal text would document behaviour the shipped installer and engine do not perform, which FR-8, AC-8 and the specification's own Risks section forbid. Decision needed: unblock and implement the engine installer task first, then re-run this documentation task against the shipped behaviour."
+    },
+    "report": "docs/program/agent/20261124152248_document-the-engine-installer-and-versio.md"
+  }
 }
