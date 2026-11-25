@@ -62,6 +62,9 @@ from .sandbox import CommandRunner, SandboxError, docker_runner
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
+PROMPT_READ_OBSERVATION = 30_000
+PROMPT_RUN_OBSERVATION = 16_000
+PROMPT_OTHER_OBSERVATION = 20_000
 MAX_INVALID_REPLIES = 8
 MAX_MARKUP_RETRIES = 10
 MAX_LIST_ENTRIES = 200
@@ -476,6 +479,24 @@ def _cap(text: str, limit: int = MAX_OBSERVATION) -> str:
         + f"\n... [output truncated, {len(text)} chars; rerun with a "
         "narrower command or read the file with read_file]"
     )
+
+
+def _prompt_observation(kind: str, observation: str) -> str:
+    """Bound model input while preserving the full observation in the transcript."""
+
+    limit = {
+        "read_file": PROMPT_READ_OBSERVATION,
+        "run": PROMPT_RUN_OBSERVATION,
+    }.get(kind, PROMPT_OTHER_OBSERVATION)
+    if len(observation) <= limit:
+        return observation
+    head = limit // 2
+    tail = limit - head
+    marker = (
+        f"\n... [observation truncated for prompt: {len(observation)} chars; "
+        "the full observation is preserved in the task transcript]\n"
+    )
+    return observation[:head] + marker + observation[-tail:]
 
 
 def parse_actions(raw: str) -> list[dict[str, Any]]:
@@ -1557,7 +1578,7 @@ class CodingAgent:
                         _append_transcript(transcript_path, entry)
                     messages.append(
                         ModelMessage(
-                            "user", f"OBSERVATION:\n{_cap(observation)}"
+                            "user", f"OBSERVATION:\n{_prompt_observation(kind, observation)}"
                         )
                     )
                     if repeats >= 3:

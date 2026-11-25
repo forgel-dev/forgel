@@ -17,7 +17,9 @@ from forgel.coding_agent import (
     AgentError,
     CodingAgent,
     MAX_INVALID_REPLIES,
+    PROMPT_RUN_OBSERVATION,
     _preserved_evidence,
+    _prompt_observation,
     _safe_env,
 )
 from forgel.config import Settings
@@ -736,6 +738,20 @@ class CodingAgentTest(unittest.TestCase):
             set(),
         )
         self.assertGreater(len(observation), 9_000)
+
+    def test_prompt_observation_is_bounded_and_preserves_both_ends(self) -> None:
+        observation = "begin" + ("x" * 100_000) + "end"
+        rendered = _prompt_observation("run", observation)
+        self.assertTrue(rendered.startswith("begin"))
+        self.assertTrue(rendered.endswith("end"))
+        self.assertIn("observation truncated for prompt", rendered)
+        self.assertLess(
+            len(rendered), PROMPT_RUN_OBSERVATION + 200
+        )
+        self.assertEqual(
+            _prompt_observation("run", "short output"),
+            "short output",
+        )
 
     def test_run_cannot_be_used_to_print_a_file(self) -> None:
         agent = CodingAgent(
