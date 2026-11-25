@@ -1870,6 +1870,12 @@ def process_releases(
                 if str(task.get("status") or "")
                 in {"failed", "blocked"}
             ]
+            inactive = [
+                task
+                for task in items
+                if str(task.get("status") or "")
+                not in {"pending", "running", "review"}
+            ]
             decision = None
             if ledger is not None and client is not None and stopped:
                 from . import controller
@@ -1912,6 +1918,10 @@ def process_releases(
                                         or {}
                                     ),
                                 }
+                                for task in inactive
+                            ],
+                            "stopped": [
+                                str(task.get("id") or "")
                                 for task in stopped
                             ],
                         },
@@ -1963,6 +1973,47 @@ def process_releases(
                         f"[release] {release_id}: {limit_name} raised to "
                         f"{value:g}s"
                     )
+                if action == "respec":
+                    from . import runtime_ops
+
+                    task = stopped[0]
+                    task_id = str(task.get("id") or "")
+                    result = dict(task.get("result") or {})
+                    failure = result.get("failure") or result.get(
+                        "last_failure"
+                    ) or {}
+                    if not isinstance(failure, Mapping):
+                        failure = {}
+                    changes = str(
+                        decision.issue
+                        or decision.reason
+                        or decision.summary
+                        or failure.get("message")
+                        or ""
+                    ).strip()
+                    try:
+                        text = runtime_ops.run_operation(
+                            settings,
+                            ledger,
+                            project,
+                            "task_respec",
+                            {"task_id": task_id, "changes": changes},
+                            client,
+                            log,
+                        )
+                        tasks.retry_task(layout, task_id)
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"[release] {release_id}: respec: {exc}")
+                        release["status"] = "blocked"
+                        release["detail"] = f"respec failed: {exc}"
+                        save_release(layout, release)
+                        actions.append(f"blocked:{release_id}")
+                        continue
+                    release["status"] = "running"
+                    save_release(layout, release)
+                    actions.append(f"respec:{task_id}")
+                    log(f"[release] {release_id}: {text}; task queued")
+                    continue
                 if decision.operation in {"task_retry", "task_restart"}:
                     from . import runtime_ops
 
