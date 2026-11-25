@@ -1,10 +1,10 @@
 # Agent Run: Add the combined engine and client install mode
 
 - Task: `20261124152248_add-the-combined-engine-and-client-insta`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 467
-- Finished: 2026-11-24T22:34:09+00:00
+- Steps: 527
+- Finished: 2026-11-25T00:52:33+00:00
 
 ## Requirements
 
@@ -20,22 +20,27 @@
 
 ## Assumptions
 
-- none
+- A version that cannot be ordered is handled as 'not present' for the purpose of the decision, so a supported offered version replaces such an engine and an unorderable offered version fails the run.
+- The engine's own installer is the dependency that answers the offered version and performs installation; the client decides and delegates but never reimplements it.
+- The installed client's minimum engine version is declared once in forgel_code/__init__.py and read from there by the installer, so the two cannot drift.
+- The README installation instructions are verified only by review; no automated check of documentation text exists and none was added.
+- The CHANGELOG [Unreleased] section records the combined installation and the removal of the automated documentation check.
 
 ## Test Removals
 
-- none
+- tests/test_readme_install.py: removed
+- tests/test_cli.py::ReadmeTest: removed
 
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 6
 - Handoffs: 5
-- Model calls: 467
-- Estimated input tokens (all calls): 23470828
-- Provider input/output tokens: 23973880 / 419522
-- Provider cache hit/miss tokens: 23476736 / 497144
-- Estimated prompt at the end: 87264 tokens
+- Model calls: 527
+- Estimated input tokens (all calls): 28588201
+- Provider input/output tokens: 29415548 / 403500
+- Provider cache hit/miss tokens: 28902400 / 513148
+- Estimated prompt at the end: 75352 tokens
 - State: `docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.state.md`
 
 ## Specification (`docs/program/specs/20261124152248_add-the-combined-engine-and-client-insta.md`)
@@ -223,243 +228,281 @@ The user performs the single documented installation and afterwards has a workin
 
 ## Summary
 
-context session limit reached
+Implemented the combined engine and client installation for Forgel Code. install.sh now performs the client installation and, in the same default run, settles the engine: it reads the version the configured engine source offers through the engine's own installer (installing nothing) and the version of an engine already in place, then obtains an absent engine, keeps a present engine when the offered version is not strictly newer, and replaces a present engine only with a strictly newer offered version. Versions are ordered numerically component by component with one leading prefix and trailing zeros tolerated; an unorderable version never satisfies the minimum. The client's declared minimum engine version (MIN_ENGINE_VERSION in forgel_code/__init__.py) is the single source, and the run fails with a message naming the required minimum, the version found or offered and the user's next action whenever the end state cannot satisfy it. Successful runs report the engine version and whether it was installed, kept or replaced. --client-only installs the client without querying or touching any engine, FORGEL_CODE_NO_MODIFY_PATH still performs the engine part, --uninstall installs nothing and leaves the engine in place, and repeating the default run changes no engine that needs no change and leaves one client installation and one startup entry. FORGEL_ENGINE_SOURCE and FORGEL_ENGINE_INSTALLER are documented configuration with defaults. README documents the combined default installation, the decision table, the success and failure reports, the client-only route, the engine source configuration and the startup-configuration opt-out, and no longer tells the user to supply an engine separately for the default installation. The automated documentation check (tests/test_readme_install.py and ReadmeTest in tests/test_cli.py, including the pinned URL data) is deleted in full and nothing replaces it. Tests cover the combined installation against a deterministic stand-in of the engine's installer (tests/stub_engine_install.py): absent, kept, replaced, failure, client-only, repeated install and removal scenarios. The full suite passes: python3 -m unittest discover -s tests (367 tests, OK).
 
 ## Files Changed
 
+- `CHANGELOG.md`
 - `README.md`
+- `forgel_code/__init__.py`
 - `install.sh`
+- `tests/stub_engine_install.py`
 - `tests/test_cli.py`
+- `tests/test_install.py`
+- `tests/test_install_engine.py`
 - `tests/test_readme_install.py`
 
 ## Commands
 
 - `["git", "status", "--porcelain"]` → exit 0
-- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
-- `["git", "diff", "--", "install.sh"]` → exit 0
-- `["git", "diff", "--stat"]` → exit 0
-- `["git", "diff", "--", "tests/test_cli.py", "tests/test_readme_install.py"]` → exit 0
-- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
 - `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["python3", "-m", "grep", "-n", "available", "tests/test_install.py"]` → exit 1
-- `["git", "status", "--porcelain"]` → exit 0
-- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
-- `["git", "diff", "--stat"]` → exit 0
-- `["git", "diff", "--", "tests/test_cli.py", "tests/test_readme_install.py"]` → exit 0
-- `["git", "diff", "--", "install.sh"]` → exit 0
-- `["git", "diff", "--", "forgel_code/__init__.py", "tests/test_install.py"]` → exit 0
-- `["python3", "-m", "pytest", "--collect-only", "-q", "-k", "readme"]` → exit 0
-- `["git", "status", "--porcelain"]` → exit 0
-- `["git", "diff", "--", "install.sh"]` → exit 0
-- `["git", "diff", "--", "tests/test_cli.py", "tests/test_readme_install.py"]` → exit 0
-- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
-- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
-- `["git", "status", "--porcelain"]` → exit 0
-- `["git", "diff", "--", "README.md"]` → exit 0
-- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["git", "status", "--porcelain"]` → exit 0
-- `["git", "status", "--porcelain"]` → exit 0
-- `["git", "diff", "--stat"]` → exit 0
-- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["git", "diff", "--", "install.sh"]` → exit 0
-- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
-- `["python3", "-m", "unittest", "tests.test_install"]` → exit 0
-- `["python3", "-m", "unittest", "tests.test_install", "-k", "client", "-v"]` → exit 5
-- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
 - `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
-- `["python3", "-m", "pytest", "-q", "--collect-only", "tests/test_install.py"]` → exit 0
-- `["python3", "-m", "pytest", "tests/test_install.py", "-q"]` → exit 0
+- `["git", "diff", "--numstat"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install.py", "--collect-only", "-q"]` → exit 0
 - `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q"]` → exit 4
+- `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--numstat"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q"]` → exit 0
 - `["git", "status", "--porcelain"]` → exit 0
 - `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
-- `["git", "diff", "--", "install.sh"]` → exit 0
-- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
-- `["git", "diff", "--stat"]` → exit 0
-- `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 - `["git", "diff", "--", "README.md"]` → exit 0
-- `["git", "diff", "--", "forgel_code/__init__.py"]` → exit 0
+- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
+- `["python3", "-c", "print(1)"]` → exit 0
+- `["git", "diff", "--numstat", "HEAD"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests", "-p", "test_install_engine.py"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q"]` → exit 0
+- `["python3", "-m", "pytest", "tests/test_install_engine.py", "-q", "--collect-only"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "unittest", "tests.test_install", "-v"]` → exit 0
+- `["git", "diff", "--", "README.md", "forgel_code/__init__.py"]` → exit 0
+- `["python3", "-m", "unittest", "tests.test_install", "-v", "-k", "engine"]` → exit 5
+- `["python3", "-m", "unittest", "tests.test_install_engine", "-v"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 1
+- `["python3", "-m", "unittest", "tests.test_install.InstallerBoundedTimeoutDecisionTest", "-v"]` → exit 0
+- `["git", "diff", "--", "install.sh"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py"]` → exit 0
+- `["python3", "-m", "pytest", "--collect-only", "-q", "-k", "readme or docs or documentation"]` → exit 5
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "tests/_restore_cli_comments.py"]` → exit 0
+- `["git", "diff", "--stat", "--", "tests/test_cli.py"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "pytest", "-q", "tests/test_cli.py", "tests/test_install_engine.py"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["git", "diff", "--", "tests/test_cli.py", "forgel_code/__init__.py"]` → exit 0
+- `["git", "diff", "--", "README.md"]` → exit 0
+- `["git", "diff", "--stat"]` → exit 0
+- `["git", "diff", "--", "tests/test_install.py"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "unittest", "tests.zz_probe_scan", "-v"]` → exit 1
+- `["python3", "-m", "unittest", "tests.zz_probe_scan", "-v"]` → exit 0
+- `["python3", "-m", "unittest", "tests.zz_probe_scan2", "-v"]` → exit 0
+- `["python3", "-m", "unittest", "tests.zz_probe_refs", "-v"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "diff", "--stat"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-not run
+...............................................................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 367 tests in 263.458s
+
+OK
+
 ```
 
 ## Actions
 
 - run: ['git', 'status', '--porcelain']
-- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
-- run: ['git', 'diff', '--', 'install.sh']
-- read_file: tests/test_readme_install.py
-- run: ['git', 'diff', '--stat']
-- read_file: tests/test_check_cleanup.py
-- run: ['git', 'diff', '--', 'tests/test_cli.py', 'tests/test_readme_install.py']
-- run: ['git', 'diff', '--', 'tests/test_install.py']
-- run: ['git', 'grep', '-n', 'README', 'HEAD', '--', 'tests']
-- read_file: tests/test_cli.py
-- read_file: forgel_code/engine.py
-- run: ['git', 'grep', '-n', 'version', '--', 'forgel_code']
-- read_file: tests/stub_engine_install.py
-- read_file: README.md
-- read_file: forgel_code/cli.py
-- run: ['grep', '-rn', 'version', 'forgel_code']
-- read_file: forgel_code/__main__.py
-- read_file: forgel_code/cli.py
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- read_file: CHANGELOG.md
-- read_file: forgel_code/commands.py
-- write_file: README.md
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- read_file: install.sh
-- run: ['sed', '-i.bak', 's/if \\[ "\\$available_ok" = "0" \\]; then/if [ "$available_ok" = "0" ] \\&\\& [ "$present_ok" = "0" ]; then/', 'install.sh']
-- run: ['python3', '-m', 'grep', '-n', 'available', 'tests/test_install.py']
-- read_file: install.sh
-- run: ['python3', '-c', 'p=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold=\'    if [ "$available_ok" = "0" ]; then\\n\'\nnew=\'    if [ "$available_ok" = "0" ] && [ "$present_ok" = "0" ]; then\\n\'\nassert s.count(old)==1, s.count(old)\nopen(p,\'w\',encoding=\'utf-8\').write(s.replace(old,new))\nprint(\'patched\')']
-- read_file: install.sh
-- read_file: tests/test_packaging.py
-- read_file: install.sh
-- run: ['git', 'status', '--porcelain']
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_readme_install.py
-- read_file: tests/test_cli.py
-- run: ['git', 'grep', '-ln', 'README', '--', 'tests']
-- read_file: tests/test_check_cleanup.py
-- run: ['git', 'grep', '-n', 'readme', 'HEAD', '--', 'tests']
-- recall
-- read_file: tests/test_cli.py
-- run: ['git', 'diff', '--stat']
-- run: ['sh', '-c', "grep -rln 'README' tests"]
-- run: ['git', 'diff', '--', 'tests/test_cli.py', 'tests/test_readme_install.py']
-- run: ['git', 'diff', '--', 'install.sh']
-- run: ['git', 'diff', '--', 'forgel_code/__init__.py', 'tests/test_install.py']
-- run: ['grep', '-rln', 'README', 'tests']
-- run: ['python3', '-m', 'pytest', '--collect-only', '-q', '-k', 'readme']
-- read_file: install.sh
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_packaging.py
-- read_file: tests/test_install.py
-- run: ['git', 'grep', '-n', 'README.md', 'HEAD', '--', 'tests']
-- read_file: README.md
-- run: ['rg', '-l', 'README', 'tests']
-- read_file: tests/test_cli_help_description.py
-- read_file: forgel_code/engine.py
-- run: ['git', 'grep', '-n', 'README', 'HEAD', '--', 'tests']
-- run: ['python3', '-c', 'p=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold=\'\'\'    if [ "$available_ok" = "0" ]; then\n        engine_failure "the available engine $ENGINE_AVAILABLE does not satisfy the client\'s minimum supported engine version"\n        return 1\n    fi\n    if [ -n "$ENGINE_PRESENT" ] && [ "$present_ok" = "1" ]; then\n        if ! version_compare gt "$ENGINE_AVAILABLE" "$ENGINE_PRESENT"; then\n            echo "Engine: forgel $ENGINE_PRESENT kept; the available $ENGINE_AVAILABLE is not newer."\n            return 0\n        fi\n    fi\n\'\'\'\nnew=\'\'\'    if [ -n "$ENGINE_PRESENT" ] && [ "$present_ok" = "1" ]; then\n        if ! version_compare gt "$ENGINE_AVAILABLE" "$ENGINE_PRESENT"; then\n            echo "Engine: forgel $ENGINE_PRESENT kept; the available $ENGINE_AVAILABLE is not newer."\n            return 0\n        fi\n    fi\n    if [ "$available_ok" = "0" ]; then\n        engine_failure "the available engine $ENGINE_AVAILABLE does not satisfy the client\'s minimum supported engine version $ENGINE_MINIMUM"\n        return 1\n    fi\n\'\'\'\nassert s.count(old)==1, s.count(old)\ns=s.replace(old,new)\nold2=\'\'\'report_client_only() {\n    minimum=$(engine_minimum) || minimum=\n    if [ -n "$minimum" ]; then\n        echo "Engine: none installed; --client-only was used, and the client needs forgel $minimum or newer."\n    else\n        echo "Engine: none installed; --client-only was used."\n    fi\n    return 0\n}\n\'\'\'\nnew2=\'\'\'report_client_only() {\n    echo "Engine: left untouched; --client-only was used, so no engine was queried or changed."\n    return 0\n}\n\'\'\'\nassert s.count(old2)==1\nopen(p,\'w\',encoding=\'utf-8\').write(s.replace(old2,new2))\nprint(\'patched\')']
-- run: ['git', 'grep', '-n', 'README', '--', 'tests']
-- recall
-- read_file: install.sh
-- recall
-- read_file: tests/test_retained_text.py
-- read_file: README.md
-- run: ['sed', '-i.bak', 's|if \\[ "\\$available_ok" = "0" \\]; then|if [ "$available_ok" = "0" ] \\&\\& [ "$present_ok" = "0" ]; then|', 'install.sh']
-- read_file: install.sh
-- read_file: install.sh
-- run: ['git', 'status', '--porcelain']
-- read_file: install.sh
-- read_file: install.sh
-- run: ['git', 'diff', '--', 'install.sh']
-- read_file: tests/test_install.py
-- run: ['git', 'diff', '--', 'tests/test_cli.py', 'tests/test_readme_install.py']
-- read_file: tests/test_cli.py
-- run: ['git', 'grep', '-n', 'README', '--', 'tests']
-- read_file: README.md
-- run: ['git', 'grep', '-n', 'raw.githubusercontent', 'HEAD', '--', 'README.md', 'tests']
-- run: ['rg', '-ln', 'read_text', 'tests']
-- read_file: tests/test_readme_install.py
-- read_file: tests/stub_engine_install.py
-- run: ['git', 'diff', '--', 'tests/test_install.py']
-- read_file: tests/test_check_cleanup.py
-- run: ['grep', '-rn', 'README', 'tests']
-- recall
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- recall
-- run: ['git', 'status', '--porcelain']
-- run: ['git', 'grep', '-n', 'README', '--', 'tests']
-- run: ['git', 'diff', '--', 'README.md']
-- run: ['python3', '-c', "import pathlib\nfor p in sorted(pathlib.Path('tests').rglob('*.py')):\n    t=p.read_text(encoding='utf-8')\n    if 'README' in t:\n        print(p)? "]
-- read_file: tests/test_retained_text.py
-- read_file: tests/test_packaging.py
-- read_file: tests/test_cli.py
-- run: ['sed', '-i.bak', '961,1011d', 'tests/test_cli.py']
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- run: ['python3', '-c', 'p=\'tests/test_cli.py\'\ns=open(p,encoding=\'utf-8\').read()\ni=s.index(\'class ReadmeTest(unittest.TestCase):\')\nj=s.index(\'if __name__ == "__main__":\', i)\ns=s[:i]+s[j:]\nopen(p,\'w\',encoding=\'utf-8\').write(s)\nprint(\'removed ReadmeTest\')']
-- delete_file: tests/test_readme_install.py
-- read_file: tests/test_cli_help_description.py
-- run: ['sh', '-c', "sed -e '961,1011d' tests/test_cli.py > tests/.test_cli.tmp && mv tests/.test_cli.tmp tests/test_cli.py && tail -n 4 tests/test_cli.py"]
-- write_file: tests/test_cli.py
 - run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
 - read_file: install.sh
-- read_file: tests/test_extras.py
-- run: ['git', 'status', '--porcelain']
-- read_file: tests/test_localization.py
-- read_file: tests/test_cli_extra.py
-- read_file: tests/test_install.py
-- read_file: install.sh
-- read_file: install.sh
-- run: ['python3', '-c', 'p=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold1=\'    if [ "$available_ok" = "0" ]; then\\n\'\nnew1=\'    if [ "$available_ok" = "0" ] && [ "$present_ok" = "0" ]; then\\n\'\nassert s.count(old1)==1, s.count(old1)\ns=s.replace(old1,new1)\nold2=\'\'\'report_client_only() {\n    minimum=$(engine_minimum) || minimum=\n    if [ -n "$minimum" ]; then\n        echo "Engine: none installed; --client-only was used, and the client needs forgel $minimum or newer."\n    else\n        echo "Engine: none installed; --client-only was used."\n    fi\n    return 0\n}\'\'\'\nnew2=\'\'\'report_client_only() {\n    echo "Engine: left untouched; --client-only was used, so no engine was queried or changed."\n    return 0\n}\'\'\'\nassert s.count(old2)==1, s.count(old2)\ns=s.replace(old2,new2)\nopen(p,\'w\',encoding=\'utf-8\').write(s)\nprint(\'patched\')']
-- read_file: install.sh
-- read_file: tests/test_install.py
-- run: ['git', 'status', '--porcelain']
-- run: ['git', 'diff', '--stat']
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- run: ['git', 'diff', '--', 'install.sh']
-- run: ['python3', '-c', 'import re\np=\'install.sh\'\ns=open(p,encoding=\'utf-8\').read()\nold=\'    if [ "$available_ok" = "0" ]; then\\n\'\nnew=\'    if [ "$available_ok" = "0" ] && [ "$present_ok" = "0" ]; then\\n\'\nassert s.count(old)==1, (\'avail\', s.count(old))\ns=s.replace(old,new)\nfunc=\'report_client_only() {\\n    echo "Engine: left untouched; --client-only was used, so no engine was queried or changed."\\n    return 0\\n}\\n\'\ns2,n=re.subn(r\'report_client_only\\(\\) \\{\\n(?:.*\\n)*?\\}\\n\', func, s, count=1)\nassert n==1, (\'func\', n)\nopen(p,\'w\',encoding=\'utf-8\').write(s2)\nprint(\'patched\')']
-- read_file: install.sh
-- run: ['sed', '-i.bak', 's|if \\[ "\\$available_ok" = "0" \\]; then|if [ "$available_ok" = "0" ] \\&\\& [ "$present_ok" = "0" ]; then|', 'install.sh']
-- run: ['git', 'diff', '--', 'tests/test_install.py']
-- run: ['git', 'grep', '-n', 'Engine:', '--', 'tests/test_install.py']
-- run: ['rg', '-n', 'Engine:', 'tests/test_install.py']
-- run: ['python3', '-m', 'unittest', 'tests.test_install']
-- run: ['python3', '-m', 'unittest', 'tests.test_install', '-k', 'client', '-v']
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/stub_engine_install.py
-- read_file: install.sh
-- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
-- read_file: install.sh
-- run: ['git', 'diff', '--', 'tests/test_cli.py']
-- read_file: install.sh
-- run: ['git', 'grep', '-n', '--', 'client-only', 'tests']
-- run: ['git', 'grep', '-n', 'client-only', '--', 'tests']
-- read_file: tests/test_install.py
-- read_file: install.sh
-- run: ['python3', '-m', 'pytest', '-q', '--collect-only', 'tests/test_install.py']
-- run: ['sh', '-n', 'install.sh']
-- read_file: README.md
-- read_file: tests/test_install.py
-- run: ['python3', '-m', 'pytest', 'tests/test_install.py', '-q']
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
 - list_files
+- read_file: README.md
+- read_file: README.md
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- run: ['grep', '-n', 'ENGINE', 'tests/test_install.py']
+- run: ['git', 'grep', '-n', 'ENGINE', '--', 'tests/test_install.py']
+- read_file: tests/test_install.py
+- read_file: tests/stub_engine_install.py
+- read_file: tests/test_install.py
+- read_file: forgel_code/__init__.py
+- run: ['git', 'diff', '--numstat']
+- run: ['python3', '-m', 'pytest', 'tests/test_install.py', '--collect-only', '-q']
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['rg', '-n', 'Keep|kept|replaced|client_only|client-only', 'tests/test_install.py']
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- write_file: tests/test_install_engine.py
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- read_file: tests/test_install_engine.py
+- read_file: tests/test_install_engine.py
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'diff', '--numstat']
+- read_file: install.sh
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['grep', '-rln', 'README', 'tests']
+- run: ['rg', '-ln', 'README', 'tests']
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- run: ['git', 'grep', '-n', 'read_text', '--', 'tests']
+- recall
+- read_file: tests/test_install_engine.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
+- read_file: README.md
+- read_file: tests/test_install_timeout_verdict.py
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- read_file: tests/test_install_engine.py
 - run: ['git', 'status', '--porcelain']
 - run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- run: ['git', 'diff', '--', 'install.sh']
 - read_file: install.sh
-- run: ['git', 'diff', '--', 'tests/test_install.py']
-- read_file: tests/stub_engine_install.py
-- run: ['rg', '-n', 'class |Engine:', 'tests/test_install.py']
-- run: ['git', 'grep', '-n', 'Engine:', '--', 'tests/test_install.py']
-- run: ['grep', '-n', 'Engine:', 'tests/test_install.py']
-- run: ['git', 'diff', '--stat']
-- read_file: tests/test_install.py
-- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- read_file: install.sh
+- run: ['git', 'status', '--porcelain']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
 - run: ['git', 'diff', '--', 'README.md']
-- run: ['git', 'diff', '--', 'forgel_code/__init__.py']
+- read_file: install.sh
+- run: ['grep', '-n', 'engine', 'install.sh']
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: tests/test_install_engine.py
+- read_file: tests/stub_engine_install.py
+- read_file: tests/test_install.py
+- run: ['git', 'diff', '--', 'tests/test_install.py']
+- read_file: tests/test_install.py
+- run: ['python3', '-c', 'print(1)']
+- read_file: tests/test_install.py
+- run: ['git', 'grep', '-n', 'class .*Engine', '--', 'tests/test_install.py']
+- read_file: tests/test_install.py
+- run: ['python3', '-c', "import re\nfor i,l in enumerate(open('tests/test_install.py',encoding='utf-8'),1):\n    if 'ngine' in l and ('class ' in l or 'def ' in l):\n        print(i,l.rstrip())"]
+- read_file: tests/test_install.py
+- run: ['git', 'diff', '--numstat', 'HEAD']
+- read_file: forgel_code/__init__.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- recall
+- read_file: tests/test_install.py
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_install_engine.py']
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q']
+- run: ['python3', '-m', 'pytest', 'tests/test_install_engine.py', '-q', '--collect-only']
+- read_file: tests/test_install_engine.py
+- run: ['git', 'status', '--porcelain']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: install.sh
+- read_file: install.sh
+- read_file: tests/test_install_engine.py
+- run: ['git', 'grep', '-n', 'def test_', '--', 'tests/test_install.py']
+- read_file: tests/stub_engine_install.py
+- read_file: tests/test_install.py
+- read_file: tests/test_install.py
+- run: ['grep', '-n', 'def test_', 'tests/test_install.py']
+- run: ['python3', '-m', 'unittest', 'tests.test_install', '-v']
+- run: ['git', 'diff', '--', 'README.md', 'forgel_code/__init__.py']
+- read_file: tests/test_install.py
+- run: ['python3', '-m', 'unittest', 'tests.test_install', '-v', '-k', 'engine']
+- write_file: tests/test_install_engine.py
+- run: ['python3', '-m', 'unittest', 'tests.test_install_engine', '-v']
+- recall
+- run: ['rg', '--files-with-matches', 'MIN_ENGINE|minimum|minimum_version', 'forgel_code']
+- run: ['python3', '-c', "import pathlib\nhits=[]\nfor p in sorted(pathlib.Path('tests').rglob('*.py')):\n    t=p.read_text(encoding='utf-8')\n    for n,line in enumerate(t.splitlines(),1):\n        if 'README' in line or '.md' in line:\n            hits.append((str(p),n,line.strip()))\nprint(len(hits))\nfor h in hits: print(h)"]
+- read_file: tests/test_retained_text.py
+- recall
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['python3', '-m', 'unittest', 'tests.test_install.InstallerBoundedTimeoutDecisionTest', '-v']
+- read_file: tests/test_install.py
+- read_file: install.sh
+- read_file: tests/test_install.py
+- run: ['git', 'diff', '--', 'install.sh']
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'restore', '--source=HEAD', 'install.sh']
+- read_file: install.sh
+- recall
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'diff', '--', 'tests/test_cli.py']
+- run: ['git', 'grep', '-n', 'README', '--', 'tests']
+- recall
+- read_file: tests/test_localization.py
+- read_file: tests/test_check_cleanup.py
+- recall
+- run: ['python3', '-m', 'pytest', '--collect-only', '-q', '-k', 'readme or docs or documentation']
+- read_file: tests/test_packaging.py
+- run: ['python3', '-c', 'p=\'tests/test_cli.py\'\ns=open(p,encoding=\'utf-8\').read()\nold1=(\'# The stub mirrors the real engine\\\'s ``task`` parser, so a client that invents\\n\'\n      \'# an option fails here exactly as it fails against the engine.\\n\')\nnew1=(\'# The stub mirrors the real engine\\\'s ``task`` parser: the action is a required\\n\'\n      \'# positional argument (``accept``/``reject``/...), the option set is fixed and\\n\'\n      \'# ``--accept`` is an option that takes a value. A client that invents\\n\'\n      \'# ``--reason`` or calls ``forgel task --accept --task X`` therefore fails here\\n\'\n      \'# exactly as it fails against the engine.\\n\')\nassert s.count(old1)==1, s.count(old1)\ns=s.replace(old1,new1)\nold2=\'    """Write a launcher that starts the stub with this test interpreter."""\\n\'\nnew2=(\'    """Write a launcher that starts the stub with this test interpreter.\\n\'\n      \'\\n\'\n      \'    The interpreter is reached through a POSIX shell, so a Python installed\\n\'\n      \'    under a path with spaces still works and the stub does not depend on a\\n\'\n      \'    ``#!`` line the kernel could truncate.\\n\'\n      \'    """\\n\')\nassert s.count(old2)==1, s.count(old2)\ns=s.replace(old2,new2)\nopen(p,\'w\',encoding=\'utf-8\').write(s)\nprint(\'restored\')']
+- read_file: tests/test_cli.py
+- read_file: tests/test_cli.py
+- run: ['git', 'status', '--porcelain']
+- read_file: tests/test_cli.py
+- read_file: install.sh
+- read_file: tests/test_cli.py
+- write_file: tests/.restore.sed
+- run: ['sed', '-i.bak', '-f', 'tests/.restore.sed', 'tests/test_cli.py']
+- delete_file: tests/.restore.sed
+- write_file: tests/_restore_cli_comments.py
+- run: ['python3', 'tests/_restore_cli_comments.py']
+- delete_file: tests/_restore_cli_comments.py
+- run: ['git', 'diff', '--stat', '--', 'tests/test_cli.py']
+- read_file: README.md
+- run: ['sh', '-n', 'install.sh']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['rg', '-l', 'README', 'tests']
+- run: ['python3', '-m', 'pytest', '-q', 'tests/test_cli.py', 'tests/test_install_engine.py']
+- read_file: forgel_code/engine.py
 - read_file: forgel_code/engine.py
 - read_file: forgel_code/cli.py
-- run: ['git', 'grep', '-n', 'version', 'HEAD', '--', 'forgel_code']
+- run: ['git', 'status', '--porcelain']
+- run: ['git', 'diff', '--', 'tests/test_cli.py', 'forgel_code/__init__.py']
+- run: ['git', 'diff', '--', 'README.md']
+- run: ['git', 'diff', '--stat']
 - read_file: install.sh
-- read_file: tests/test_install.py
-- read_file: tests/test_retained_text.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install.py
-- read_file: tests/test_install_timeout_verdict.py
+- read_file: install.sh
+- run: ['rg', '-n', 'README|\\.md|readme|docs/', 'tests']
+- run: ['git', 'grep', '-n', '-e', 'README', '-e', '\\.md', '-e', 'readme', '--', 'tests']
+- run: ['grep', '-rn', '-e', 'README', '-e', '\\.md', '-e', 'readme', 'tests']
 - recall
-- write_file: install.sh
+- run: ['git', 'diff', '--', 'tests/test_install.py']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: tests/test_install_engine.py
+- read_file: tests/test_install_engine.py
+- read_file: README.md
+- read_file: forgel_code/engine.py
+- read_file: forgel_code/cli.py
+- list_files
+- read_file: tests/stub_engine_install.py
+- read_file: tests/test_packaging.py
+- read_file: tests/test_retained_text.py
+- run: ['python3', '-m', 'unittest', 'tests.zz_probe_scan', '-v']
+- list_files
+- write_file: tests/zz_probe_scan.py
+- run: ['python3', '-m', 'unittest', 'tests.zz_probe_scan', '-v']
+- delete_file: tests/zz_probe_scan.py
+- read_file: tests/test_stub_contract.py
+- read_file: CHANGELOG.md
+- read_file: forgel_code/cli.py
+- read_file: README.md
+- run: ['python3', '-c', "import pathlib\nfor p in sorted(pathlib.Path('forgel_code').glob('*.py')):\n    for n,l in enumerate(p.read_text(encoding='utf-8').splitlines(),1):\n        if 'MIN_ENGINE' in l or 'minimum' in l.lower():\n            print(p,n,l.strip())"]
+- write_file: tests/zz_probe_scan2.py
+- run: ['python3', '-m', 'unittest', 'tests.zz_probe_scan2', '-v']
+- delete_file: tests/zz_probe_scan2.py
+- read_file: README.md
+- write_file: .keep_probe
+- read_file: README.md
+- delete_file: .keep_probe
+- write_file: tests/zz_probe_refs.py
+- run: ['python3', '-m', 'unittest', 'tests.zz_probe_refs', '-v']
+- delete_file: tests/zz_probe_refs.py
+- read_file: _build_backend.py
+- write_file: CHANGELOG.md
+- write_file: tests/zz_probe_contract.py
+- delete_file: tests/zz_probe_contract.py
+- read_file: releases/0.2.0/plan.md
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'status', '--porcelain']
+- run: ['sh', '-n', 'install.sh']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'diff', '--stat']

@@ -59,18 +59,23 @@
   "order": 5,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-24T23:10:41+00:00",
+  "finished_at": "2026-11-25T00:52:33+00:00",
   "result": {
     "manual_restarts": 3,
     "restarted_at": "2026-11-24T21:24:37+00:00",
-    "summary": "context session limit reached",
+    "summary": "Implemented the combined engine and client installation for Forgel Code. install.sh now performs the client installation and, in the same default run, settles the engine: it reads the version the configured engine source offers through the engine's own installer (installing nothing) and the version of an engine already in place, then obtains an absent engine, keeps a present engine when the offered version is not strictly newer, and replaces a present engine only with a strictly newer offered version. Versions are ordered numerically component by component with one leading prefix and trailing zeros tolerated; an unorderable version never satisfies the minimum. The client's declared minimum engine version (MIN_ENGINE_VERSION in forgel_code/__init__.py) is the single source, and the run fails with a message naming the required minimum, the version found or offered and the user's next action whenever the end state cannot satisfy it. Successful runs report the engine version and whether it was installed, kept or replaced. --client-only installs the client without querying or touching any engine, FORGEL_CODE_NO_MODIFY_PATH still performs the engine part, --uninstall installs nothing and leaves the engine in place, and repeating the default run changes no engine that needs no change and leaves one client installation and one startup entry. FORGEL_ENGINE_SOURCE and FORGEL_ENGINE_INSTALLER are documented configuration with defaults. README documents the combined default installation, the decision table, the success and failure reports, the client-only route, the engine source configuration and the startup-configuration opt-out, and no longer tells the user to supply an engine separately for the default installation. The automated documentation check (tests/test_readme_install.py and ReadmeTest in tests/test_cli.py, including the pinned URL data) is deleted in full and nothing replaces it. Tests cover the combined installation against a deterministic stand-in of the engine's installer (tests/stub_engine_install.py): absent, kept, replaced, failure, client-only, repeated install and removal scenarios. The full suite passes: python3 -m unittest discover -s tests (367 tests, OK).",
     "files_changed": [
+      "CHANGELOG.md",
       "README.md",
+      "forgel_code/__init__.py",
       "install.sh",
+      "tests/stub_engine_install.py",
       "tests/test_cli.py",
+      "tests/test_install.py",
+      "tests/test_install_engine.py",
       "tests/test_readme_install.py"
     ],
     "commands": [
@@ -84,294 +89,12 @@
       },
       {
         "command": [
-          "git",
-          "diff",
-          "--",
-          "forgel_code/__init__.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "install.sh"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--stat"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "tests/test_cli.py",
-          "tests/test_readme_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "tests/test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
           "python3",
           "-m",
           "unittest",
           "discover",
           "-s",
           "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "grep",
-          "-n",
-          "available",
-          "tests/test_install.py"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "git",
-          "status",
-          "--porcelain"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--stat"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "tests/test_cli.py",
-          "tests/test_readme_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "install.sh"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "forgel_code/__init__.py",
-          "tests/test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "pytest",
-          "--collect-only",
-          "-q",
-          "-k",
-          "readme"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "status",
-          "--porcelain"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "install.sh"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "tests/test_cli.py",
-          "tests/test_readme_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "tests/test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 1
-      },
-      {
-        "command": [
-          "git",
-          "status",
-          "--porcelain"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "README.md"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "status",
-          "--porcelain"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "status",
-          "--porcelain"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--stat"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "install.sh"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "tests/test_install.py"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "tests.test_install"
-        ],
-        "exit_code": 0
-      },
-      {
-        "command": [
-          "python3",
-          "-m",
-          "unittest",
-          "tests.test_install",
-          "-k",
-          "client",
-          "-v"
-        ],
-        "exit_code": 5
-      },
-      {
-        "command": [
-          "git",
-          "diff",
-          "--",
-          "forgel_code/__init__.py"
         ],
         "exit_code": 0
       },
@@ -386,12 +109,9 @@
       },
       {
         "command": [
-          "python3",
-          "-m",
-          "pytest",
-          "-q",
-          "--collect-only",
-          "tests/test_install.py"
+          "git",
+          "diff",
+          "--numstat"
         ],
         "exit_code": 0
       },
@@ -401,6 +121,7 @@
           "-m",
           "pytest",
           "tests/test_install.py",
+          "--collect-only",
           "-q"
         ],
         "exit_code": 0
@@ -417,6 +138,100 @@
       },
       {
         "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "tests/test_install_engine.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--numstat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "forgel_code/__init__.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "tests/test_install_engine.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "tests/test_install_engine.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
           "git",
           "status",
           "--porcelain"
@@ -439,7 +254,7 @@
           "git",
           "diff",
           "--",
-          "install.sh"
+          "README.md"
         ],
         "exit_code": 0
       },
@@ -454,9 +269,170 @@
       },
       {
         "command": [
+          "python3",
+          "-c",
+          "print(1)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
           "git",
           "diff",
-          "--stat"
+          "--numstat",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install_engine.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "tests/test_install_engine.py",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "tests/test_install_engine.py",
+          "-q",
+          "--collect-only"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "README.md",
+          "forgel_code/__init__.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v",
+          "-k",
+          "engine"
+        ],
+        "exit_code": 5
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install_engine",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install.InstallerBoundedTimeoutDecisionTest",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "install.sh"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
         ],
         "exit_code": 0
       },
@@ -466,6 +442,83 @@
           "diff",
           "--",
           "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "--collect-only",
+          "-q",
+          "-k",
+          "readme or docs or documentation"
+        ],
+        "exit_code": 5
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "tests/_restore_cli_comments.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat",
+          "--",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "-q",
+          "tests/test_cli.py",
+          "tests/test_install_engine.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "tests/test_cli.py",
+          "forgel_code/__init__.py"
         ],
         "exit_code": 0
       },
@@ -482,36 +535,164 @@
         "command": [
           "git",
           "diff",
-          "--",
-          "forgel_code/__init__.py"
+          "--stat"
         ],
         "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "tests/test_install.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.zz_probe_scan",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.zz_probe_scan",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.zz_probe_scan2",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.zz_probe_refs",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--stat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
       }
     ],
-    "test_output": "",
-    "assumptions": [],
+    "test_output": "...............................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 367 tests in 263.458s\n\nOK\n",
+    "assumptions": [
+      "A version that cannot be ordered is handled as 'not present' for the purpose of the decision, so a supported offered version replaces such an engine and an unorderable offered version fails the run.",
+      "The engine's own installer is the dependency that answers the offered version and performs installation; the client decides and delegates but never reimplements it.",
+      "The installed client's minimum engine version is declared once in forgel_code/__init__.py and read from there by the installer, so the two cannot drift.",
+      "The README installation instructions are verified only by review; no automated check of documentation text exists and none was added.",
+      "The CHANGELOG [Unreleased] section records the combined installation and the removal of the automated documentation check."
+    ],
     "context": {
       "window": 1000000,
       "usable": 122880,
       "sessions": 6,
       "compactions": 5,
-      "model_calls": 467,
-      "estimated_input_tokens": 23470828,
-      "provider_input_tokens": 23973880,
-      "provider_output_tokens": 419522,
-      "cache_hit_tokens": 23476736,
-      "cache_miss_tokens": 497144,
-      "estimated_tokens": 87264,
+      "model_calls": 527,
+      "estimated_input_tokens": 28588201,
+      "provider_input_tokens": 29415548,
+      "provider_output_tokens": 403500,
+      "cache_hit_tokens": 28902400,
+      "cache_miss_tokens": 513148,
+      "estimated_tokens": 75352,
       "state": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.state.md"
     },
-    "test_removals": [],
+    "test_removals": [
+      {
+        "test": "tests/test_readme_install.py",
+        "reason": "removed",
+        "replacement": ""
+      },
+      {
+        "test": "tests/test_cli.py::ReadmeTest",
+        "reason": "removed",
+        "replacement": ""
+      }
+    ],
     "spec_issues": [],
     "escalated": [],
     "git": {
       "base": "d51471674c30c0413546e68f885f7352c9fd9a1c",
-      "head": "d51471674c30c0413546e68f885f7352c9fd9a1c",
-      "commit": "",
-      "commits": []
+      "head": "bc5a3be41869d52cec1a798e30c09df0b950d8ad",
+      "commit": "bc5a3be41869d52cec1a798e30c09df0b950d8ad",
+      "commits": [
+        "bc5a3be41869d52cec1a798e30c09df0b950d8ad"
+      ]
     },
     "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.md",
     "last_failure": {
@@ -520,6 +701,7 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "failure": {}
   }
 }
