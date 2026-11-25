@@ -59,6 +59,27 @@ class LimitsTest(unittest.TestCase):
             limits.get(self.layout, "audit_timeout"), 900
         )
 
+    def test_task_caps_are_defined_and_configurable(self) -> None:
+        self.assertEqual(
+            limits.get(self.layout, "task_calls"), 200
+        )
+        self.assertEqual(
+            limits.get(self.layout, "task_runs"), 120
+        )
+        self.assertEqual(
+            limits.get(self.layout, "task_input_tokens"), 12_000_000
+        )
+        self.assertIn("task_calls: 200 calls", limits.describe())
+        self.assertIn(
+            "task_input_tokens: 12000000 tokens", limits.describe()
+        )
+        limits.set_value(self.layout, "task_calls", 250)
+        self.assertEqual(
+            limits.get(self.layout, "task_calls"), 250
+        )
+        limits.set_value(self.layout, "task_runs", 10)
+        self.assertEqual(limits.get(self.layout, "task_runs"), 10)
+
     def test_the_runtime_operation_raises_a_limit(self) -> None:
         text = run_operation(
             self.settings,

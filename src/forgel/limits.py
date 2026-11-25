@@ -23,6 +23,9 @@ LIMITS: dict[str, float] = {
     "sandbox_timeout": 3_600.0,
     "git_timeout": 3_600.0,
     "clone_timeout": 3_600.0,
+    "task_calls": 200.0,
+    "task_runs": 120.0,
+    "task_input_tokens": 12_000_000.0,
 }
 
 REASONS: dict[str, str] = {
@@ -52,6 +55,27 @@ REASONS: dict[str, str] = {
     "clone_timeout": (
         "Cloning an adopted repository may take this long."
     ),
+    "task_calls": (
+        "A task may make this many model calls across attempts before it "
+        "stops with evidence; raise it with set_limit when the work "
+        "legitimately needs more."
+    ),
+    "task_runs": (
+        "A task may execute this many commands across attempts before it "
+        "stops with evidence; raise it with set_limit when the work "
+        "legitimately needs more."
+    ),
+    "task_input_tokens": (
+        "A task may spend this many estimated input tokens across attempts "
+        "before it stops with evidence; raise it with set_limit when the "
+        "work legitimately needs more."
+    ),
+}
+
+LIMIT_UNITS = {
+    "task_calls": " calls",
+    "task_runs": " runs",
+    "task_input_tokens": " tokens",
 }
 
 
@@ -106,7 +130,7 @@ def set_value(
     try:
         value = float(seconds)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"limit {name} must be a number of seconds") from exc
+        raise ValueError(f"limit {name} must be a positive number") from exc
     if value <= 0:
         raise ValueError(f"limit {name} must be positive")
     values = load(layout)
@@ -123,7 +147,11 @@ def set_value(
 def describe() -> str:
     lines = []
     for name in sorted(LIMITS):
+        if name in LIMIT_UNITS:
+            rendered = f"{int(LIMITS[name])}{LIMIT_UNITS[name]}"
+        else:
+            rendered = f"{LIMITS[name]:g}s"
         lines.append(
-            f"- {name}: {LIMITS[name]:g}s — {REASONS.get(name, '')}"
+            f"- {name}: {rendered} — {REASONS.get(name, '')}"
         )
     return "\n".join(lines)

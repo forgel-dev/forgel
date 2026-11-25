@@ -22,6 +22,7 @@ from forgel.coding_agent import (
     _prompt_observation,
     _safe_env,
 )
+from forgel import limits
 from forgel.config import Settings
 from forgel.daemon import run_daemon
 from forgel.layout import ProjectLayout
@@ -674,6 +675,92 @@ class CodingAgentTest(unittest.TestCase):
         )
         self.assertIn("## Context", report)
         self.assertIn("Handoffs:", report)
+
+    def test_task_call_limit_stops_with_evidence(self) -> None:
+        limits.set_value(self.layout, "task_calls", 2)
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps({"action": "list_files", "path": "."})
+                for _ in range(5)
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("task call limit reached", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "limit"
+        )
+        self.assertEqual(
+            stored["result"]["context"]["model_calls"], 2
+        )
+
+    def test_task_run_limit_stops_with_evidence(self) -> None:
+        limits.set_value(self.layout, "task_runs", 1)
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "run",
+                        "command": [sys.executable, "-c", "pass"],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "action": "run",
+                        "command": [sys.executable, "-c", "pass"],
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("task run limit reached", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "limit"
+        )
+        self.assertEqual(len(stored["result"]["commands"]), 1)
+
+    def test_task_input_token_limit_stops_with_evidence(self) -> None:
+        limits.set_value(self.layout, "task_input_tokens", 1)
+        task = self._task()
+        client = ScriptedModelClient(
+            [json.dumps({"action": "done", "summary": "done"})]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn(
+            "task input token limit reached", result.summary
+        )
+
+    def test_task_limits_are_cumulative_across_attempts(self) -> None:
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={"context": {"model_calls": 200}, "commands": []},
+        )
+        limits.set_value(self.layout, "task_calls", 200)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient([])
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("task call limit reached (200/200)", result.summary)
 
     def test_handoff_records_the_failing_check_and_next_step(self) -> None:
         write_text(

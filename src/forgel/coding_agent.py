@@ -1313,12 +1313,24 @@ class CodingAgent:
 
         window = self._context_window(layout)
         budget: ContextBudget = budget_for(window)
-        model_calls = 0
-        estimated_input_tokens = 0
-        provider_input_tokens = 0
-        provider_output_tokens = 0
-        cache_hit_tokens = 0
-        cache_miss_tokens = 0
+        prior_result = dict(task.get("result") or {})
+        prior_context = dict(prior_result.get("context") or {})
+        model_calls = int(prior_context.get("model_calls") or 0)
+        estimated_input_tokens = int(
+            prior_context.get("estimated_input_tokens") or 0
+        )
+        provider_input_tokens = int(
+            prior_context.get("provider_input_tokens") or 0
+        )
+        provider_output_tokens = int(
+            prior_context.get("provider_output_tokens") or 0
+        )
+        cache_hit_tokens = int(
+            prior_context.get("cache_hit_tokens") or 0
+        )
+        cache_miss_tokens = int(
+            prior_context.get("cache_miss_tokens") or 0
+        )
         state_path = layout.artifact(
             f"docs/program/agent/{task['id']}.state.md"
         )
@@ -1339,7 +1351,9 @@ class CodingAgent:
             ModelMessage("user", task_prompt),
         ]
         actions: list[str] = []
-        commands: list[dict[str, Any]] = []
+        commands: list[dict[str, Any]] = list(
+            prior_result.get("commands") or []
+        )
         touched: set[str] = set()
         recent: list[str] = []
         assumptions = [
@@ -1355,7 +1369,7 @@ class CodingAgent:
         failure_kind = "agent"
         invalid = 0
         markup_retries = 0
-        steps = 0
+        steps = model_calls
         sessions = 0
         compactions = 0
         signatures: dict[str, int] = {}
@@ -1434,6 +1448,51 @@ class CodingAgent:
             handed_off = False
             session_steps = 0
             while True:
+                call_limit = limits.get(
+                    layout, "task_calls", limits.LIMITS["task_calls"]
+                )
+                run_limit = limits.get(
+                    layout, "task_runs", limits.LIMITS["task_runs"]
+                )
+                token_limit = limits.get(
+                    layout,
+                    "task_input_tokens",
+                    limits.LIMITS["task_input_tokens"],
+                )
+                projected_tokens = (
+                    estimated_input_tokens
+                    + budget.usage(messages, model)
+                )
+                if model_calls >= call_limit:
+                    status = "failed"
+                    failure_kind = "limit"
+                    summary = (
+                        "task call limit reached "
+                        f"({model_calls:g}/{call_limit:g}); "
+                        "raise task_calls with set_limit"
+                    )
+                    terminal = True
+                    break
+                if len(commands) >= run_limit:
+                    status = "failed"
+                    failure_kind = "limit"
+                    summary = (
+                        "task run limit reached "
+                        f"({len(commands):g}/{run_limit:g}); "
+                        "raise task_runs with set_limit"
+                    )
+                    terminal = True
+                    break
+                if projected_tokens >= token_limit:
+                    status = "failed"
+                    failure_kind = "limit"
+                    summary = (
+                        "task input token limit reached "
+                        f"({projected_tokens:g}/{token_limit:g}); "
+                        "raise task_input_tokens with set_limit"
+                    )
+                    terminal = True
+                    break
                 if self.max_steps and session_steps >= self.max_steps:
                     status = "failed"
                     failure_kind = "agent"
