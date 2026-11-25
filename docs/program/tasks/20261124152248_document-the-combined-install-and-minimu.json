@@ -16,9 +16,43 @@
   "order": 7,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
-  "result": {}
+  "started_at": "2026-11-25T15:28:22+00:00",
+  "finished_at": "2026-11-25T15:28:25+00:00",
+  "result": {
+    "summary": "model call failed: model endpoint returned an empty answer",
+    "files_changed": [],
+    "commands": [],
+    "test_output": "",
+    "assumptions": [],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 1,
+      "estimated_input_tokens": 17129,
+      "provider_input_tokens": 8676,
+      "provider_output_tokens": 108,
+      "cache_hit_tokens": 4608,
+      "cache_miss_tokens": 4068,
+      "estimated_tokens": 8658,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
+      "head": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "infrastructure",
+      "message": "model call failed: model endpoint returned an empty answer"
+    },
+    "report": "docs/program/agent/20261124152248_document-the-combined-install-and-minimu.md"
+  }
 }
