@@ -16,28 +16,79 @@
   "order": 7,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-25T15:28:31+00:00",
+  "finished_at": "2026-11-25T15:57:43+00:00",
   "result": {
-    "summary": "model call failed: model endpoint returned an empty answer",
-    "files_changed": [],
-    "commands": [],
-    "test_output": "",
-    "assumptions": [],
+    "summary": "Updated the Forgel Code user documentation for the combined install and the minimum engine version. README.md now leads with one default install action that the text states installs the engine and the client together, with no option, flag or follow-up step (FR-1, FR-2); it no longer requires the reader to obtain an engine first (FR-3); it documents the engine's own `forgel-install` action as a separate single-action path (FR-4); the engine section states the repeat-install behaviour — the engine is installed only when missing or strictly older and an equal or newer engine is left untouched, never taken backwards (FR-6); a new 'Engine version' section states the one concrete minimum supported engine version (0.1.0) with the refusal of older engines (FR-5), describes the missing-engine message and the too-old message so each is actionable (FR-7, FR-8), and states that version output and the diagnostic help answer without an engine while engine-backed commands fail with that message (FR-9). The client-only section now presents an existing engine as the situation of that route rather than a precondition. Added prose keeps to behaviour with no internal structure, step ordering, timing, runtime bound, local environment detail or promise about an unpublished release (FR-10), and matches the shipped messages in `forgel_code/compat.py` and the installer behaviour in `install.sh` (FR-11). CHANGELOG.md's Unreleased/Added section gains one entry recording the combined default install, the engine's standalone install, the minimum supported engine version with its startup message, and the repeat-install behaviour that never takes an equal or newer engine backwards (FR-12). Documentation-only change; the repository gate (378 tests, OK) still passes.",
+    "files_changed": [
+      "CHANGELOG.md",
+      "README.md"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "..........................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 378 tests in 289.199s\n\nOK\n",
+    "assumptions": [
+      "The changelog records the documentation work as a single user-visible entry under Unreleased/Added, alongside the existing entries for the combined install and the version report rather than replacing them.",
+      "The concrete minimum documented is the value the client declares and enforces today, 0.1.0, taken from `forgel_code/__init__.py`.",
+      "The engine's standalone install is documented as `forgel-install --source <source> --install <version>`, the action `install.sh` already delegates to, rather than by restating the engine's own install text.",
+      "The diagnostic output that works without an engine is documented as the client's help text, since that is the only diagnostic surface the client has besides its version report."
+    ],
     "context": {
       "window": 1000000,
       "usable": 122880,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 1,
-      "estimated_input_tokens": 17129,
-      "provider_input_tokens": 8676,
-      "provider_output_tokens": 108,
-      "cache_hit_tokens": 4608,
-      "cache_miss_tokens": 4068,
-      "estimated_tokens": 8658,
+      "model_calls": 125,
+      "estimated_input_tokens": 5678767,
+      "provider_input_tokens": 5833335,
+      "provider_output_tokens": 123843,
+      "cache_hit_tokens": 5750016,
+      "cache_miss_tokens": 83319,
+      "estimated_tokens": 76466,
       "state": ""
     },
     "test_removals": [],
@@ -45,9 +96,11 @@
     "escalated": [],
     "git": {
       "base": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
-      "head": "bc13e6e136375649e419a0e5a8f3bb53b8f6c63c",
-      "commit": "",
-      "commits": []
+      "head": "28a08ebf67947a23939260d48da2c72e0b07be2a",
+      "commit": "28a08ebf67947a23939260d48da2c72e0b07be2a",
+      "commits": [
+        "28a08ebf67947a23939260d48da2c72e0b07be2a"
+      ]
     },
     "report": "docs/program/agent/20261124152248_document-the-combined-install-and-minimu.md",
     "last_failure": {
@@ -56,6 +109,7 @@
     },
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "failure": {}
   }
 }

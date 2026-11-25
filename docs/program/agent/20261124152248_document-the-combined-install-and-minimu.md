@@ -1,10 +1,10 @@
 # Agent Run: Document the combined install and minimum engine version
 
 - Task: `20261124152248_document-the-combined-install-and-minimu`
-- Status: `failed`
+- Status: `done`
 - Repository: `code`
-- Steps: 2
-- Finished: 2026-11-25T15:28:25+00:00
+- Steps: 125
+- Finished: 2026-11-25T15:57:43+00:00
 
 ## Requirements
 
@@ -20,7 +20,10 @@
 
 ## Assumptions
 
-- none
+- The changelog records the documentation work as a single user-visible entry under Unreleased/Added, alongside the existing entries for the combined install and the version report rather than replacing them.
+- The concrete minimum documented is the value the client declares and enforces today, 0.1.0, taken from `forgel_code/__init__.py`.
+- The engine's standalone install is documented as `forgel-install --source <source> --install <version>`, the action `install.sh` already delegates to, rather than by restating the engine's own install text.
+- The diagnostic output that works without an engine is documented as the client's help text, since that is the only diagnostic surface the client has besides its version report.
 
 ## Test Removals
 
@@ -31,11 +34,11 @@
 - Window limit: 1000000 tokens (usable 122880)
 - Sessions: 1
 - Handoffs: 0
-- Model calls: 1
-- Estimated input tokens (all calls): 17129
-- Provider input/output tokens: 8676 / 108
-- Provider cache hit/miss tokens: 4608 / 4068
-- Estimated prompt at the end: 8658 tokens
+- Model calls: 125
+- Estimated input tokens (all calls): 5678767
+- Provider input/output tokens: 5833335 / 123843
+- Provider cache hit/miss tokens: 5750016 / 83319
+- Estimated prompt at the end: 76466 tokens
 - State: not needed
 
 ## Specification (`docs/program/specs/20261124152248_document-the-combined-install-and-minimu.md`)
@@ -179,22 +182,134 @@ A reader of the client's front page copies the first install action they see and
 
 ## Summary
 
-model call failed: model endpoint returned an empty answer
+Updated the Forgel Code user documentation for the combined install and the minimum engine version. README.md now leads with one default install action that the text states installs the engine and the client together, with no option, flag or follow-up step (FR-1, FR-2); it no longer requires the reader to obtain an engine first (FR-3); it documents the engine's own `forgel-install` action as a separate single-action path (FR-4); the engine section states the repeat-install behaviour — the engine is installed only when missing or strictly older and an equal or newer engine is left untouched, never taken backwards (FR-6); a new 'Engine version' section states the one concrete minimum supported engine version (0.1.0) with the refusal of older engines (FR-5), describes the missing-engine message and the too-old message so each is actionable (FR-7, FR-8), and states that version output and the diagnostic help answer without an engine while engine-backed commands fail with that message (FR-9). The client-only section now presents an existing engine as the situation of that route rather than a precondition. Added prose keeps to behaviour with no internal structure, step ordering, timing, runtime bound, local environment detail or promise about an unpublished release (FR-10), and matches the shipped messages in `forgel_code/compat.py` and the installer behaviour in `install.sh` (FR-11). CHANGELOG.md's Unreleased/Added section gains one entry recording the combined default install, the engine's standalone install, the minimum supported engine version with its startup message, and the repeat-install behaviour that never takes an equal or newer engine backwards (FR-12). Documentation-only change; the repository gate (378 tests, OK) still passes.
 
 ## Files Changed
 
-- none
+- `CHANGELOG.md`
+- `README.md`
 
 ## Commands
 
-- none
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["git", "status", "--porcelain"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-not run
+..........................................................................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 378 tests in 289.199s
+
+OK
+
 ```
 
 ## Actions
 
-- none
+- read_file: README.md
+- read_file: CHANGELOG.md
+- search_files: MIN_ENGINE_VERSION|minimum|too old|no engine @ forgel_code
+- search_files: forgel-install|engine-only|--client-only|FORGEL_ENGINE_INSTALLER @ install.sh
+- search_files: forgel-install @ . *.md
+- read_file: forgel_code/compat.py
+- search_files: engine_install|run_engine_install|install_engine @ install.sh
+- read_file: install.sh
+- read_file: tests/stub_engine_install.py
+- read_file: forgel_code/__init__.py
+- search_files: forgel-dev/forgel|install.sh \| sh @ .
+- search_files: README|CHANGELOG @ tests
+- search_files: missing_message|outdated_message|unconfirmed_message|confirm\( @ forgel_code
+- search_files: def main|version_report|diagnos|doctor|add_parser @ forgel_code/cli.py
+- read_file: forgel_code/cli.py
+- read_file: forgel_code/cli.py
+- search_files: confirm|diagnostic|doctor @ forgel_code
+- search_files: compat|from .compat|import compat @ forgel_code
+- search_files: MIN_ENGINE_VERSION|supported\(|version_report @ .
+- search_files: diagnostic|diagnose|doctor|self-check|selfcheck @ .
+- read_file: forgel_code/engine.py
+- read_file: forgel_code/cli.py
+- search_files: compat|outdated|requires engine version|upgrade_instruction|INSTALL_INSTRUCTION @ tests
+- search_files: requires the|not found|unsupported engine|minimum supported @ tests
+- search_files: compat|confirm|supported|missing_message @ forgel_code/interactive.py
+- search_files: Engine\(|compat @ forgel_code
+- search_files: version @ forgel_code/interactive.py
+- read_file: forgel_code/__main__.py
+- search_files: compat @ .
+- search_files: 0\.1\.0|MIN_ENGINE @ tests
+- read_file: install.sh
+- search_files: executable not found|engine forgel|missing engine|could not be started @ tests
+- search_files: engine's own installer|engine installer|forgel-install @ .
+- search_files: available-version|--install |install VERSION @ .
+- edit_file: README.md
+- list_files
+- read_file: forgel_code/commands.py
+- search_files: or newer|could not be started|0\.1\.0 @ forgel_code
+- edit_file: README.md
+- read_file: README.md
+- search_files: version @ forgel_code/cli.py
+- search_files: requires @ tests
+- read_file: forgel_code/interactive.py
+- search_files: 0\.0\.|version_check|check_engine|engine_version @ tests
+- read_file: forgel_code/engine.py
+- read_file: tests/test_version_report.py
+- edit_file: README.md
+- read_file: README.md
+- read_file: README.md
+- search_files: "version"|'version'|EngineError\(missing @ forgel_code
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- search_files: executable not found|not found @ tests
+- edit_file: CHANGELOG.md
+- edit_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- read_file: CHANGELOG.md
+- read_file: README.md
+- edit_file: README.md
+- search_files: version @ tests/test_cli_extra.py
+- search_files: diagnostic|--help|doctor|status @ README.md
+- read_file: README.md
+- search_files: minimum|engine version|already @ README.md
+- read_file: README.md
+- edit_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: README.md
+- edit_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- read_file: forgel_code/compat.py
+- edit_file: README.md
+- read_file: README.md
+- search_files: minimum engine version|startup|compat @ releases
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- run: ['git', 'status', '--porcelain']
+- read_file: CHANGELOG.md
+- read_file: README.md
+- read_file: README.md
+- edit_file: CHANGELOG.md
+- search_files: from forgel_code @ tests
+- read_file: README.md
+- read_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- read_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- run: ['git', 'add', 'README.md', 'CHANGELOG.md']
