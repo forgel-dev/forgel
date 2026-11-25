@@ -54,12 +54,280 @@
   "order": 4,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-25T05:21:32+00:00",
+  "finished_at": "2026-11-25T06:20:26+00:00",
   "result": {
     "manual_restarts": 1,
-    "restarted_at": "2026-11-25T05:21:32+00:00"
+    "restarted_at": "2026-11-25T05:21:32+00:00",
+    "summary": "context session limit reached",
+    "files_changed": [],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-5"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "36510fb"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import forgel_code.compat"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "pytest",
+          "tests",
+          "-q"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-6"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "36510fb"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "--oneline",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-8"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "forgel_code/cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "--oneline",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "test_output": "",
+    "assumptions": [],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 6,
+      "compactions": 5,
+      "model_calls": 242,
+      "estimated_input_tokens": 12278405,
+      "provider_input_tokens": 12738581,
+      "provider_output_tokens": 237050,
+      "cache_hit_tokens": 12356219,
+      "cache_miss_tokens": 382362,
+      "estimated_tokens": 89072,
+      "state": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
+      "head": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "agent",
+      "message": "context session limit reached"
+    },
+    "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.md"
   }
 }
