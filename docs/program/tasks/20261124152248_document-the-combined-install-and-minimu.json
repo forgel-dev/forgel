@@ -110,6 +110,139 @@
     "attempts": 0,
     "rework_count": 0,
     "manual_retries": 1,
-    "failure": {}
+    "failure": {},
+    "qa": {
+      "status": "skipped",
+      "runtime": "documentation-only",
+      "report": "docs/program/agent/20261124152248_document-the-combined-install-and-minimu.qa.md",
+      "commands": [],
+      "checks": [],
+      "review_required": true,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The change is documentation-only: README.md and CHANGELOG.md, both committed in one signed commit with nothing unrelated. The client front page now opens its install part with the single combined install action, states that it needs no option or follow-up step, drops the old precondition that the reader must supply the engine beforehand (the client-only route is reframed as the situation of an existing installation), documents the engine's own standalone install as a separate single-action path, names one concrete minimum supported engine version (0.1.0) with the refusal of an older engine, describes the repeat-install behaviour (install only when missing or strictly older, equal or newer left untouched, never downgraded), describes both the missing-engine and too-old-engine messages with their versions and remedy, and states that version output (plain and --json) and a diagnostic answer work without an engine while engine-backed commands fail with the actionable message. The added prose is behavioural, in English, has no step ordering, timing, duration, runtime bound or local-environment detail, and makes no promise about an unpublished release. The changelog entry under [Unreleased] -> Added covers the combined default install, the standalone engine install, the minimum supported engine version with its startup message, and the never-downgrade repeat-install behaviour. No tests were added, read or removed, consistent with the documentation-as-text rule, and no previously correct install statement was made false. No blocking defect was found.",
+      "requirements": [
+        {
+          "requirement": "FR-1: The install part of the front page presents exactly one default install action before any other installation route and states it installs the engine and client together.",
+          "verdict": "pass",
+          "note": "The Install section opens with the combined statement and the single curl action; engine source, client-only, update and uninstall routes follow it."
+        },
+        {
+          "requirement": "FR-2: The default install needs no additional option, flag or follow-up step.",
+          "verdict": "pass",
+          "note": "Stated explicitly: 'needs no option, flag or follow-up step'; the shown command is unqualified."
+        },
+        {
+          "requirement": "FR-3: The page no longer requires the reader to obtain the engine themselves; an engine already required is framed as an existing installation.",
+          "verdict": "pass",
+          "note": "The old 'engine is then yours to supply ... before you use the client' precondition is replaced; the client-only route is described as the route for a reader whose engine is already in place."
+        },
+        {
+          "requirement": "FR-4: The engine's standalone install is documented as a separate single-action path.",
+          "verdict": "pass",
+          "note": "New 'The engine on its own' subsection with the `forgel-install --source ... --install <version>` action, for a reader who wants the engine alone or already has the client."
+        },
+        {
+          "requirement": "FR-5: One concrete minimum supported engine version is stated, with refusal of an older engine.",
+          "verdict": "pass",
+          "note": "'The one minimum supported engine version is 0.1.0'; the client accepts that or newer and refuses engine-backed work below it."
+        },
+        {
+          "requirement": "FR-6: The page states the repeat-install behaviour, including that an equal or newer engine is never taken backwards.",
+          "verdict": "pass",
+          "note": "Dedicated paragraph: client replaced, engine installed only when missing or strictly older, equal or newer left exactly as it is."
+        },
+        {
+          "requirement": "FR-7: The missing-engine message is described as stating no engine was found, naming the minimum version and pointing at an install.",
+          "verdict": "pass",
+          "note": "The 'No engine' bullet names the engine, the 0.1.0 minimum and the combined install as the pointer."
+        },
+        {
+          "requirement": "FR-8: The too-old-engine message is described as naming the found version and the minimum and pointing at the upgrade.",
+          "verdict": "pass",
+          "note": "The 'Too old' bullet states both the found and 0.1.0 minimum versions and points at re-running the combined install."
+        },
+        {
+          "requirement": "FR-9: The page states that version and diagnostic output work without an engine while engine-backed commands fail with the message.",
+          "verdict": "pass",
+          "note": "Names `forgel-code --version`, `forgel-code --version --json` and the diagnostic answer `forgel-code --help`, then states every engine-backed command fails."
+        },
+        {
+          "requirement": "FR-10: Statements are presented as shipped behaviour, with no internal structure, step ordering, timing, runtime bound, local environment or unpublished-release promise.",
+          "verdict": "pass",
+          "note": "The added prose is behavioural; the only version reference is the already published v0.2.0 installer URL."
+        },
+        {
+          "requirement": "FR-11: Everything added is English and agrees with the shipped product; a disagreement is corrected in the documentation.",
+          "verdict": "pass",
+          "note": "Text is English and consistent with the rest of the page (installer name, source variable, declared minimum); no statement contradicts the retained install text."
+        },
+        {
+          "requirement": "FR-12: The client's changelog gains an entry under unreleased changes covering the combined default install, the standalone engine install, the minimum supported engine version with its startup message, and the never-downgrade repeat install.",
+          "verdict": "pass",
+          "note": "One entry under [Unreleased] -> Added covers all four items."
+        },
+        {
+          "requirement": "AC-1: The first installation route is a single action said to install engine and client together, with no other route before it.",
+          "verdict": "pass",
+          "note": "Verified by reading the Install section."
+        },
+        {
+          "requirement": "AC-2: Nothing tells the reader to pre-install the engine in order to install the client.",
+          "verdict": "pass",
+          "note": "The former precondition is gone; the remaining statement about supplying an engine concerns engine-backed commands of an existing installation."
+        },
+        {
+          "requirement": "AC-3: The engine's standalone install is documented as its own separate path.",
+          "verdict": "pass",
+          "note": "Own subsection and own command."
+        },
+        {
+          "requirement": "AC-4: Exactly one concrete minimum supported engine version is stated together with the statement that an older engine is refused.",
+          "verdict": "pass",
+          "note": "0.1.0 stated repeatedly and consistently; refusal stated."
+        },
+        {
+          "requirement": "AC-5: The repeat-install paragraph states install only when missing or strictly older and that an equal or newer engine is left untouched.",
+          "verdict": "pass",
+          "note": "Present verbatim in behaviour terms."
+        },
+        {
+          "requirement": "AC-6: Both startup messages are described and each is actionable.",
+          "verdict": "pass",
+          "note": "Missing-engine bullet names the minimum and an install; too-old bullet names found and minimum and an upgrade."
+        },
+        {
+          "requirement": "AC-7: The page states version and diagnostic output work without an engine while engine-backed commands fail with the actionable message.",
+          "verdict": "pass",
+          "note": "Stated in the 'Engine version' subsection."
+        },
+        {
+          "requirement": "AC-8: The added prose contains no internal structure, step ordering, timing, duration, runtime bound, local-environment detail or unpublished-release reference.",
+          "verdict": "pass",
+          "note": "Added prose is behaviour-only."
+        },
+        {
+          "requirement": "AC-9: The changelog entry for unreleased changes covers all four user-visible items.",
+          "verdict": "pass",
+          "note": "Combined install, standalone engine install, minimum version with startup message, and never-downgrade repeat install are all present."
+        },
+        {
+          "requirement": "AC-10: Every documented statement agrees with the shipped product and no previously correct install statement was made false.",
+          "verdict": "pass",
+          "note": "The rewritten install intro preserves the Python/pip requirement and the launcher/profile statements; no retained sentence contradicts the new install story."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261124152248_document-the-combined-install-and-minimu.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-25T15:58:17+00:00",
+      "notes": ""
+    }
   }
 }
