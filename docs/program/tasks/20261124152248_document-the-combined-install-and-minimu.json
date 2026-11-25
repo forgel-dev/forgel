@@ -16,10 +16,10 @@
   "order": 7,
   "external_dependencies": [],
   "language": "en",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-25T15:28:22+00:00",
-  "finished_at": "2026-11-25T15:28:25+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "model call failed: model endpoint returned an empty answer",
     "files_changed": [],
@@ -49,10 +49,13 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261124152248_document-the-combined-install-and-minimu.md",
+    "last_failure": {
       "kind": "infrastructure",
       "message": "model call failed: model endpoint returned an empty answer"
     },
-    "report": "docs/program/agent/20261124152248_document-the-combined-install-and-minimu.md"
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   }
 }
