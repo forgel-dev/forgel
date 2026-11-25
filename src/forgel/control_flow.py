@@ -92,7 +92,7 @@ def control_state(layout: ProjectLayout) -> ControlState:
 
     current = tasks.current_task(layout)
     status = str(current.get("status") or "") if current is not None else ""
-    if status in {"failed", "blocked"}:
+    if current is not None and status in {"failed", "blocked"}:
         task_id = str(current.get("id") or "current task")
         return ControlState(
             leader=CONTROLLER,
@@ -106,7 +106,7 @@ def control_state(layout: ProjectLayout) -> ControlState:
                 "runtime executes that operation and returns the resulting state",
             ),
         )
-    if status in {"pending", "running", "review"}:
+    if current is not None and status in {"pending", "running", "review"}:
         task_id = str(current.get("id") or "current task")
         return ControlState(
             leader=RUNTIME,
