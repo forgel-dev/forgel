@@ -195,19 +195,16 @@ class PlannerTest(unittest.TestCase):
             self.assertIn("## Acceptance Criteria", text)
             self.assertEqual(task.get("requirements"), [])
             self.assertEqual(task.get("acceptance"), [])
-        self.assertIn("## Plan review", result.notes)
+        self.assertIn("## Release review", result.notes)
         artifact = (self.layout.root / result.artifact).read_text(
             encoding="utf-8"
         )
         self.assertIn("spec:", artifact)
 
-    def test_plan_review_records_an_insufficient_plan_and_proceeds(
-        self,
-    ) -> None:
+    def test_release_review_respecs_only_the_defective_task(self) -> None:
         specs = [_spec_for(item) for item in PLAN["tasks"]]
-        ignored = dict(PLAN)
-        ignored["plan_decision"] = "ignore"
-        ignored["notes"] = "The finding is not a real gap."
+        revised = _spec_for(PLAN["tasks"][0])
+        revised["requirements"] = ["Deliver the corrected result"]
         client = ScriptedModelClient(
             [
                 json.dumps(PLAN),
@@ -217,11 +214,27 @@ class PlannerTest(unittest.TestCase):
                     {
                         "sufficient": False,
                         "findings": [
-                            {"task": 0, "issue": "the result is missing"}
+                            {
+                                "task": 0,
+                                "kind": "contradiction",
+                                "issue": "the result conflicts with task 1",
+                            }
                         ],
                     }
                 ),
-                json.dumps(ignored),
+                json.dumps(
+                    {
+                        "plan_decision": "respec",
+                        "respec": [
+                            {
+                                "task": 0,
+                                "issue": "the result conflicts with task 1",
+                            }
+                        ],
+                    }
+                ),
+                json.dumps(revised),
+                json.dumps({"sufficient": True, "findings": []}),
             ]
         )
         result = plan_project(
@@ -233,17 +246,82 @@ class PlannerTest(unittest.TestCase):
             log=lambda _m: None,
         )
         self.assertFalse(result.blocked)
-        self.assertIn("the result is missing", result.notes)
         tasks = list_tasks(self.layout)
         self.assertEqual(len(tasks), 2)
-        self.assertFalse(
+        first = (self.layout.artifact(tasks[0]["spec"])).read_text(
+            encoding="utf-8"
+        )
+        second = (self.layout.artifact(tasks[1]["spec"])).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Deliver the corrected result", first)
+        self.assertIn("Deliver: Add an index page", second)
+        self.assertNotIn("Deliver the corrected result", second)
+
+    def test_release_review_blocks_after_one_correction(self) -> None:
+        specs = [_spec_for(item) for item in PLAN["tasks"]]
+        revised = _spec_for(PLAN["tasks"][0])
+        revised["requirements"] = ["Deliver the corrected result"]
+        client = ScriptedModelClient(
+            [
+                json.dumps(PLAN),
+                json.dumps(specs[0]),
+                json.dumps(specs[1]),
+                json.dumps(
+                    {
+                        "sufficient": False,
+                        "findings": [
+                            {
+                                "task": 0,
+                                "kind": "completeness",
+                                "issue": "the result is missing",
+                            }
+                        ],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "plan_decision": "respec",
+                        "respec": [
+                            {
+                                "task": 0,
+                                "issue": "the result is missing",
+                            }
+                        ],
+                    }
+                ),
+                json.dumps(revised),
+                json.dumps(
+                    {
+                        "sufficient": False,
+                        "findings": [
+                            {
+                                "task": 0,
+                                "kind": "completeness",
+                                "issue": "the result is still missing",
+                            }
+                        ],
+                    }
+                ),
+            ]
+        )
+        result = plan_project(
+            self.settings,
+            self.ledger,
+            self.project,
+            "Bring the project to M1",
+            client=client,
+            log=lambda _m: None,
+        )
+        self.assertTrue(result.blocked)
+        self.assertIn("the result is still missing", result.notes)
+        tasks = list_tasks(self.layout)
+        self.assertTrue(tasks)
+        self.assertTrue(
             all(task["status"] == "blocked" for task in tasks)
         )
-        self.assertTrue(
-            (self.layout.root / result.artifact).exists()
-        )
 
-    def test_plan_review_can_be_revised(self) -> None:
+    def test_release_review_can_revise_the_plan(self) -> None:
         specs = [_spec_for(item) for item in PLAN["tasks"]]
         revised = _spec_for(PLAN["tasks"][0])
         revised["requirements"] = ["Deliver the revised outcome"]
@@ -282,6 +360,82 @@ class PlannerTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("Deliver the revised outcome", text)
+
+    def test_release_review_sees_every_spec_field(self) -> None:
+        spec = _spec_for(PLAN["tasks"][0])
+        spec.update(
+            {
+                "constraints": ["CONSTRAINT-MARKER"],
+                "user_decisions": [
+                    {
+                        "decision": "DECISION-MARKER",
+                        "source": "decision log",
+                    }
+                ],
+                "product_intent": "PRODUCT-INTENT-MARKER",
+                "user_experience": "USER-EXPERIENCE-MARKER",
+                "work_packages": [
+                    {
+                        "title": "WORK-PACKAGE-MARKER",
+                        "requirements": [0],
+                        "acceptance": [0],
+                    }
+                ],
+            }
+        )
+        client = ScriptedModelClient(
+            [json.dumps({"sufficient": True, "findings": []})]
+        )
+
+        review = specs.review_release(
+            self.layout,
+            "Bring the project to M1",
+            "Plan notes",
+            [spec],
+            client,
+            log=lambda _m: None,
+        )
+
+        self.assertTrue(review.sufficient)
+        prompt = client.requests[0][1].content
+        for marker in (
+            "CONSTRAINT-MARKER",
+            "DECISION-MARKER",
+            "PRODUCT-INTENT-MARKER",
+            "USER-EXPERIENCE-MARKER",
+            "WORK-PACKAGE-MARKER",
+        ):
+            self.assertIn(marker, prompt)
+
+    def test_release_review_can_page_a_specification(self) -> None:
+        spec = _spec_for(PLAN["tasks"][0])
+        spec["problem"] = "A" * 9_000 + "PAGE-TWO-MARKER"
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "context_page",
+                        "key": "spec:0",
+                        "page": 2,
+                    }
+                ),
+                json.dumps({"sufficient": True, "findings": []}),
+            ]
+        )
+
+        review = specs.review_release(
+            self.layout,
+            "Bring the project to M1",
+            "Plan notes",
+            [spec],
+            client,
+            log=lambda _m: None,
+        )
+
+        self.assertTrue(review.sufficient)
+        self.assertIn(
+            "PAGE-TWO-MARKER", client.requests[1][-1].content
+        )
 
     def test_planner_handles_a_batch_of_actions(self) -> None:
         batch = [

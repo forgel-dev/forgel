@@ -1,10 +1,10 @@
-"""Formal task specifications and plan review.
+"""Formal task specifications and the release requirements gate.
 
 The planner decomposes a milestone into task intents. A separate requirements
-writer turns each intent into a formal specification document; a plan review
-then judges the whole set against the original problem, not against the specs
-themselves. The specification is the artifact the coding agent, QA and the
-independent reviewer work from; the task record is an index.
+writer turns each intent into a formal specification document; a release gate
+then judges the complete set against the original problem, the recorded user
+decisions and each other. The specification is the artifact the coding agent,
+QA and the independent reviewer work from; the task record is an index.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from . import requirements as requirements_doc
 from .artifacts import write_text
+from .context_window import CONTEXT_ACTION, ContextWindow, Item
 from .instructions import instruction_context
 from .layout import ProjectLayout
 from .model_output import json_objects
@@ -32,6 +33,7 @@ from .repo_tools import RESEARCH_ACTIONS, RepoActionError, execute_repo_action
 MAX_SPEC_STEPS = 50
 MAX_SPEC_CHARS = 12_000
 MAX_SPEC_RETRIES = 5
+MAX_REVIEW_PAGES = 40
 MAX_WORK_PACKAGE_ACCEPTANCE = 4
 SPEC_KEYS = {
     "problem",
@@ -57,21 +59,18 @@ class SpecError(RuntimeError):
     """The requirements writer could not produce a usable specification."""
 
 
-class PlanReviewError(SpecError):
-    """The plan does not solve the stated problem."""
-
-
 @dataclass
-class PlanReview:
+class ReleaseReview:
     sufficient: bool
     findings: list[dict[str, Any]] = field(default_factory=list)
 
     def to_markdown(self) -> str:
         if self.sufficient:
-            return "The plan review found the plan sufficient for the goal."
-        lines = ["The plan review found the plan insufficient for the goal:"]
+            return "The release review found the set sufficient."
+        lines = ["The release review found defects in the set:"]
         lines.extend(
-            f"- task {item.get('task')}: {item.get('issue')}"
+            f"- task {item.get('task')} [{item.get('kind')}]: "
+            f"{item.get('issue')}"
             for item in self.findings
         )
         return "\n".join(lines)
@@ -189,38 +188,49 @@ Rules:
 """
 
 
-PLAN_REVIEW_PROMPT = """You review a milestone plan and its specifications
-against the original problem. This is the planner's acceptance gate: after a
-specification is accepted it is binding and the coder follows it.
+RELEASE_REVIEW_PROMPT = """You are Forgel's release requirements gate. The
+planner has split one milestone into tasks, and writers have produced every
+task specification. You review the complete set before coding starts.
+
+This is a safety gate, not an improvement pass. Report only a concrete defect
+that makes the set unsound to start. Do not report a preference, a wording or
+style change, a simpler alternative, missing polish, or an opportunity to make
+an already valid plan better.
 
 Follow the project and repository instructions in the prompt. Repository rules
 are more specific and take precedence on conflict. Write findings in the
 artifact language they require.
 
-Answer two questions:
-1. If every task is completed exactly as specified, will the original problem
-   be solved?
-2. Does a specification have an explicit defect that makes it unsound to
-   implement — a logical contradiction, an unachievable requirement, a
-   security or architectural problem?
+Check the set as a whole:
+1. Cross-task contradiction: requirements, acceptance criteria, constraints,
+   non-goals or user decisions of different tasks that cannot all hold; two
+   tasks owning the same behavior in conflicting ways.
+2. Intent alignment: every outcome in the milestone goal, product intent, user
+   experience and recorded decisions is covered; no task conflicts with a
+   recorded decision or adds a product choice the owner did not ask for.
+3. Completeness and integrity: a required behavior no task delivers; an
+   assumption or promise no task delivers; a gap between tasks; a task that
+   can pass while the goal remains unmet; duplicate or overlapping tasks; an
+   impossible task order or repository split.
+4. A specification's internal defect: a logical contradiction, an unachievable
+   requirement, a security or architectural problem.
 
-Read the goal, the plan notes and the specifications. Name:
-- what the plan assumes but does not deliver;
-- which part of the goal no task covers;
-- any task that can be green while the problem remains unsolved;
-- any specification with one of the explicit defects above.
+Every finding must name the task index (use -1 for a set-level finding), the
+kind, and the concrete conflicting statements or missing outcome. Do not
+rewrite specifications. Do not report a defect you cannot point to in the
+provided text.
 
-Recorded user decisions in the specifications are binding. A plan that
-contradicts a recorded decision is insufficient even if every task passes.
-Do not reject for wording, style or preference, and do not rewrite the
-specifications; report concrete gaps and defects.
+The context is paged. To read any page, answer only with
+{"action": "context_page", "key": "<item key>", "page": <number>}; the runtime
+returns that page and asks again.
 
 Return exactly one JSON object:
 {"sufficient": true | false,
- "findings": [{"task": 0, "issue": "concrete gap or defect"}]}
+ "findings": [{"task": 0,
+               "kind": "contradiction | coverage | completeness | defect",
+               "issue": "concrete conflicting statements or missing outcome"}]}
 
-Use sufficient=true only when the plan as written solves the problem and no
-specification has an explicit defect. Return JSON only.
+Use sufficient=true only when no finding above exists. Return JSON only.
 """
 
 
@@ -878,79 +888,240 @@ def write_task_spec(
     return parsed
 
 
-def review_plan(
+def _review_spec_text(spec: Mapping[str, Any]) -> str:
+    """Every review-relevant field of one specification."""
+
+    def values(key: str) -> list[str]:
+        raw = spec.get(key) or []
+        if isinstance(raw, str):
+            raw = [raw]
+        if not isinstance(raw, list):
+            return []
+        return [
+            str(item).strip()
+            for item in raw
+            if str(item).strip()
+        ]
+
+    def bullets(key: str) -> str:
+        items = values(key)
+        return "\n".join(f"- {item}" for item in items) or "- none"
+
+    def dependencies() -> str:
+        items = []
+        for item in spec.get("external_dependencies") or []:
+            if not isinstance(item, Mapping):
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            items.append(
+                f"- {name}: interface={item.get('interface') or '—'}; "
+                f"docs={item.get('docs') or '—'}; "
+                f"mode={item.get('mode') or '—'}; "
+                f"evidence={item.get('evidence') or '—'}; "
+                f"stub={item.get('stub') or '—'}"
+            )
+        return "\n".join(items) or "- none"
+
+    def decisions() -> str:
+        items = []
+        for item in spec.get("user_decisions") or []:
+            if not isinstance(item, Mapping):
+                continue
+            decision = str(item.get("decision") or "").strip()
+            if not decision:
+                continue
+            items.append(
+                f"- {decision} "
+                f"(source: {item.get('source') or '—'})"
+            )
+        return "\n".join(items) or "- none"
+
+    def packages() -> str:
+        items = []
+        for item in spec.get("work_packages") or []:
+            if not isinstance(item, Mapping):
+                continue
+            items.append(
+                f"- {item.get('title') or '—'}: "
+                f"requirements={item.get('requirements') or []}; "
+                f"acceptance={item.get('acceptance') or []}"
+            )
+        return "\n".join(items) or "- none"
+
+    return "\n".join(
+        [
+            f"Title: {spec.get('title') or '—'}",
+            f"Repository: {spec.get('repo_id') or '(sole)'}",
+            f"Summary: {spec.get('summary') or '—'}",
+            f"Problem: {spec.get('problem') or '—'}",
+            f"Outcome: {spec.get('outcome') or '—'}",
+            f"Product intent: {spec.get('product_intent') or '—'}",
+            f"User experience: {spec.get('user_experience') or '—'}",
+            "Scope:\n" + bullets("scope"),
+            "Non-goals:\n" + bullets("non_goals"),
+            "Requirements:\n" + bullets("requirements"),
+            "Acceptance:\n" + bullets("acceptance"),
+            "Constraints:\n" + bullets("constraints"),
+            "Assumptions:\n" + bullets("assumptions"),
+            "Goals:\n" + bullets("goals"),
+            "User decisions:\n" + decisions(),
+            "User stories:\n" + bullets("user_stories"),
+            "Open questions:\n" + bullets("open_questions"),
+            "Work packages:\n" + packages(),
+            "External dependencies:\n" + dependencies(),
+            "Risks:\n" + bullets("risks"),
+            "Related documents:\n" + bullets("related_documents"),
+            "Revision history:\n" + bullets("revision_history"),
+        ]
+    )
+
+
+def review_release(
     layout: ProjectLayout,
     goal: str,
     notes: str,
     specs: Sequence[Mapping[str, Any]],
     client: ModelClient,
     log: Callable[[str], None] = print,
-) -> PlanReview:
-    """Judge the specs against the original problem."""
+) -> ReleaseReview:
+    """Judge the complete set of task specifications before coding."""
 
-    def render_one(index: int, spec: Mapping[str, Any]) -> str:
-        dependencies = "; ".join(
-            f"{item.get('name')} ({item.get('mode') or 'unknown'})"
-            for item in (spec.get("external_dependencies") or [])
-            if isinstance(item, dict)
-        ) or "none"
-        return (
-            f"--- Task {index}: {spec.get('title')} ---\n"
-            f"Problem: {spec.get('problem')}\n"
-            f"Outcome: {spec.get('outcome')}\n"
-            f"Scope: {'; '.join(spec.get('scope') or [])}\n"
-            f"Non-goals: {'; '.join(spec.get('non_goals') or [])}\n"
-            f"Requirements: {'; '.join(spec.get('requirements') or [])}\n"
-            f"Acceptance: {'; '.join(spec.get('acceptance') or [])}\n"
-            f"External dependencies: {dependencies}\n"
-            f"Assumptions: {'; '.join(spec.get('assumptions') or [])}\n"
-            f"Risks: {'; '.join(spec.get('risks') or [])}\n"
-        )
-
-    rendered = "\n\n".join(
-        render_one(index, spec) for index, spec in enumerate(specs)
+    items = [
+        Item("goal", "the milestone goal", goal or "—"),
+        Item("notes", "the plan notes", notes or "—"),
+    ]
+    decisions_path = layout.artifact("docs/program/decisions.md")
+    try:
+        decisions_text = decisions_path.read_text(encoding="utf-8")
+    except OSError:
+        decisions_text = "(no user-decision log yet)"
+    items.append(
+        Item("decisions", "recorded user decisions", decisions_text)
     )
     instructions = instruction_context(layout)
+    if instructions:
+        items.append(
+            Item(
+                "instructions",
+                "project and repository instructions",
+                instructions,
+            )
+        )
+    repo_ids = sorted(
+        {
+            str(spec.get("repo_id") or "").strip()
+            for spec in specs
+            if str(spec.get("repo_id") or "").strip()
+        }
+    )
+    for repo_id in repo_ids:
+        items.append(
+            Item(
+                f"repository:{repo_id}",
+                f"repository file tree: {repo_id}",
+                _context(layout, repo_id),
+            )
+        )
+    for index, spec in enumerate(specs):
+        items.append(
+            Item(
+                f"spec:{index}",
+                f"task {index}: {spec.get('title') or '—'}",
+                _review_spec_text(spec),
+            )
+        )
+    window = ContextWindow(items)
     messages = [
-        ModelMessage("system", PLAN_REVIEW_PROMPT),
+        ModelMessage("system", RELEASE_REVIEW_PROMPT),
         ModelMessage(
             "user",
-            "Project and repository instructions:\n"
-            + (instructions or "- none")
-            + f"\n\nMilestone goal:\n{goal}\n\nPlan notes:\n{notes or '—'}\n\n"
-            f"Specifications:\n{rendered[:MAX_SPEC_CHARS * 2]}",
+            f"Milestone goal:\n{goal or '—'}\n\n"
+            f"Plan notes:\n{notes or '—'}\n\n"
+            + window.render()
+            + "\n\nReturn the release review JSON now, or request a "
+            "context page with " + CONTEXT_ACTION + ".",
         ),
     ]
-    try:
-        raw = client.complete(
-            messages, model=project_model_name(layout.control)
-        )
-    except ModelError as exc:
-        raise SpecError(f"the plan review failed: {exc}") from exc
-    objects = json_objects(raw)
-    data = next(
-        (
-            item
-            for item in objects
-            if isinstance(item.get("sufficient"), bool)
-        ),
-        None,
-    )
-    if data is None:
-        keys = [sorted(item.keys()) for item in objects]
+    data: Any = None
+    page_index: int | None = None
+    for _ in range(MAX_REVIEW_PAGES):
+        try:
+            raw = client.complete(
+                messages, model=project_model_name(layout.control)
+            )
+        except ModelError as exc:
+            raise SpecError(f"the release review failed: {exc}") from exc
+        objects = json_objects(raw)
+        parsed = objects[-1] if objects else None
+        if (
+            isinstance(parsed, dict)
+            and str(parsed.get("action") or "") == "context_page"
+        ):
+            key = str(parsed.get("key") or "").strip()
+            try:
+                page = int(parsed.get("page") or 1)
+            except (TypeError, ValueError):
+                page = 0
+            try:
+                text = window.read(key, page)
+            except (KeyError, ValueError) as exc:
+                text = f"cannot read that context: {exc}"
+            messages.append(ModelMessage("assistant", raw))
+            if page_index is not None:
+                messages[page_index] = ModelMessage(
+                    "user",
+                    "[the previous context page was released; request it "
+                    "again if you still need it]",
+                )
+            messages.append(
+                ModelMessage(
+                    "user",
+                    text + "\n\nReturn the release review JSON now.",
+                )
+            )
+            page_index = len(messages) - 1
+            log(f"[review] context {key} page {page}")
+            continue
+        data = parsed
+        break
+    else:
         raise SpecError(
-            "the plan review did not return a verdict; "
-            f"model objects: {keys}; output: {raw[:600]}"
+            "the release review kept requesting context without a verdict"
         )
-    findings = [
-        {
-            "task": int(item.get("task", 0)),
-            "issue": str(item.get("issue") or "").strip(),
-        }
-        for item in (data.get("findings") or [])
-        if isinstance(item, dict)
-    ]
-    return PlanReview(bool(data["sufficient"]), findings)
+    if not isinstance(data, dict) or not isinstance(
+        data.get("sufficient"), bool
+    ):
+        keys = (
+            [sorted(item.keys()) for item in objects if isinstance(item, dict)]
+            if "objects" in locals()
+            else []
+        )
+        raise SpecError(
+            "the release review did not return a verdict; "
+            f"model objects: {keys}; output: {str(raw)[:600]}"
+        )
+    findings = []
+    for item in data.get("findings") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            task = int(item.get("task", -1))
+        except (TypeError, ValueError):
+            task = -1
+        issue = str(item.get("issue") or "").strip()
+        if not issue:
+            continue
+        findings.append(
+            {
+                "task": task,
+                "kind": str(item.get("kind") or "defect").strip()
+                or "defect",
+                "issue": issue,
+            }
+        )
+    return ReleaseReview(bool(data["sufficient"]), findings)
 
 
 def render_spec(

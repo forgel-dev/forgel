@@ -4,8 +4,9 @@ The planner is one model call with clean context: the project brief, the
 repository graph, the environment contract, recent tasks and the goal. It
 returns a small, ordered list of task intents: a title, the outcome, the
 repository and dependencies. A separate requirements writer expands each
-intent into a formal specification, and a plan review judges the whole set
-against the original problem before any task is queued.
+intent into a formal specification, and a release requirements gate judges
+the complete set against the original problem, the recorded decisions and
+each other before any task is queued.
 
 The plan is a project artifact: `docs/program/plans/<plan_id>.md`; each task
 specification is `docs/program/specs/<task_id>.md`. `--dry-run` previews the
@@ -55,7 +56,7 @@ from .repo_tools import (
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
 MAX_RESEARCH_STEPS = 50
-MAX_PLAN_REVISIONS = 20
+MAX_RELEASE_REVISIONS = 1
 
 
 class PlanningError(RuntimeError):
@@ -850,7 +851,7 @@ def plan_project(
         if blockers or global_blocked:
             notes = (
                 notes
-                + "\n\n## Plan review\n\n"
+                + "\n\n## Release review\n\n"
                 + "Skipped: the plan has blocked tasks that need a decision."
             )
             return PlanResult(
@@ -864,10 +865,20 @@ def plan_project(
                 blocked=True,
                 blockers=blockers,
             )
-        review = _spec_call(specs.review_plan,
+        review = _spec_call(specs.review_release,
             layout, goal, notes, preview, model_client, log
         )
-        notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
+        notes = notes + "\n\n## Release review\n\n" + review.to_markdown()
+        if not review.sufficient:
+            details = "; ".join(
+                f"task {item.get('task')} [{item.get('kind')}]: "
+                f"{item.get('issue')}"
+                for item in review.findings
+            ) or "no findings"
+            blockers.append(
+                "the release requirements review found defects: " + details
+            )
+            global_blocked = True
         return PlanResult(
             plan_id=plan_id,
             goal=goal,
@@ -876,7 +887,7 @@ def plan_project(
             repositories=repositories,
             release_id=release_id,
             dry_run=True,
-            blocked=bool(blockers),
+            blocked=bool(blockers) or global_blocked,
             blockers=blockers,
         )
 
@@ -899,6 +910,7 @@ def plan_project(
     product_question = ""
     revisions = 0
     integrated = False
+    rewrite_all = True
     while True:
         problem = integration_problem(layout, environment, repositories)
         if problem and not integrated:
@@ -908,9 +920,10 @@ def plan_project(
                 _integration_intent(problem, [*repos, *repositories])
             ] + items
             integrated = True
-        task_specs = []
-        blocked_tasks = set()
-        for index, item in enumerate(items):
+        if rewrite_all:
+            task_specs = []
+            blocked_tasks = set()
+        for index, item in enumerate(items if rewrite_all else []):
             log(f"[spec] task {index + 1}/{len(items)}: writing")
             try:
                 spec = _spec_call(specs.write_task_spec,
@@ -1004,7 +1017,7 @@ def plan_project(
             review = None
             break
         review = _spec_call(
-            specs.review_plan,
+            specs.review_release,
             layout,
             goal,
             notes,
@@ -1014,13 +1027,20 @@ def plan_project(
         )
         if review is None or review.sufficient:
             break
-        if revisions >= MAX_PLAN_REVISIONS:
-            break
-        revisions += 1
         details = "; ".join(
-            f"task {item.get('task')}: {item.get('issue')}"
+            f"task {item.get('task')} [{item.get('kind')}]: "
+            f"{item.get('issue')}"
             for item in review.findings
         ) or "no findings"
+        notes = notes + "\n\n## Release review findings\n\n" + details
+        if revisions >= MAX_RELEASE_REVISIONS:
+            blockers.append(
+                "the release requirements review still found defects: "
+                + details
+            )
+            global_blocked = True
+            break
+        revisions += 1
         messages.append(
             ModelMessage(
                 "assistant",
@@ -1044,17 +1064,24 @@ def plan_project(
         messages.append(
             ModelMessage(
                 "user",
-                "The plan review found these gaps:\n"
+                "The release requirements review found these defects:\n"
                 + details
-                + "\n\nDecide for each finding whether it is a real gap, "
-                "and return the complete plan JSON with \"plan_decision\" "
-                "set to:\n"
-                "- \"revise\": real gaps exist; return the revised plan;\n"
-                "- \"ignore\": the findings are not real gaps; explain why "
-                "in notes and keep the plan;\n"
-                "- \"ask\": a gap can only be resolved by a product "
-                "decision from the owner; put the one question in "
-                "\"product_question\".",
+                + "\n\nChoose the smallest correction that fixes exactly "
+                "these defects:\n"
+                "- \"respec\": rewrite only the listed task specifications; "
+                "return {\"plan_decision\": \"respec\", \"respec\": "
+                "[{\"task\": 0, \"issue\": \"the concrete defect\"}]}. "
+                "Do not change other tasks or add requirements beyond the "
+                "defect;\n"
+                "- \"revise\": only when the task set itself must change "
+                "(add, remove, merge or split tasks); return the complete "
+                "plan JSON with \"plan_decision\": \"revise\";\n"
+                "- \"ask\": only when a product decision the owner must "
+                "make is required; put the one question in "
+                "\"product_question\".\n"
+                "Never ignore a finding. Never choose respec or revise for "
+                "a preference, a wording change, a simpler alternative or "
+                "an improvement to an already valid plan.",
             )
         )
         try:
@@ -1062,30 +1089,89 @@ def plan_project(
                 messages, model=project_model_name(layout.control)
             )
         except ModelError as exc:
-            blockers.append(f"plan revision failed: {exc}")
+            blockers.append(f"release review correction failed: {exc}")
             global_blocked = True
             break
         objects = json_objects(raw)
         data = objects[-1] if objects else None
         if not isinstance(data, dict):
-            blockers.append("plan revision returned no plan")
+            blockers.append("release review correction returned no decision")
             global_blocked = True
             break
         product_question = str(
             data.get("product_question") or ""
         ).strip()
         decision = str(
-            data.get("plan_decision") or "revise"
+            data.get("plan_decision") or ""
         ).strip().lower()
+        if not decision:
+            decision = (
+                "revise"
+                if isinstance(data.get("tasks"), list)
+                else "respec"
+            )
         if decision == "ask" or product_question:
             break
-        if decision == "ignore":
-            notes = (
-                notes
-                + "\n\n## Plan review findings\n\n"
-                + details
+        if decision == "respec":
+            entries = data.get("respec")
+            if not isinstance(entries, list) or not entries:
+                blockers.append(
+                    "the release review correction returned no respec "
+                    "changes"
+                )
+                global_blocked = True
+                break
+            changes: list[tuple[int, str]] = []
+            try:
+                for entry in entries:
+                    if not isinstance(entry, Mapping):
+                        raise ValueError("a respec entry is not an object")
+                    index = int(entry.get("task"))
+                    issue = str(entry.get("issue") or "").strip()
+                    if index < 0 or index >= len(items):
+                        raise ValueError(
+                            f"task index {index} is outside the plan"
+                        )
+                    if not issue:
+                        raise ValueError("a respec entry has no issue")
+                    changes.append((index, issue))
+            except (TypeError, ValueError) as exc:
+                blockers.append(f"the respec correction is invalid: {exc}")
+                global_blocked = True
+                break
+            try:
+                for index, issue in changes:
+                    log(f"[spec] task {index + 1}/{len(items)}: respec")
+                    revised = _spec_call(
+                        specs.write_task_spec,
+                        settings,
+                        layout,
+                        goal,
+                        notes,
+                        items[index],
+                        model_client,
+                        log,
+                        review_issue=issue,
+                    )
+                    revised = _dependency_call(
+                        layout, items[index], revised, model_client, log
+                    )
+                    task_specs[index] = revised
+            except (
+                PlanningError,
+                dependencies.DependencyBlocked,
+            ) as exc:
+                blockers.append(f"the respec correction failed: {exc}")
+                global_blocked = True
+                break
+            rewrite_all = False
+            continue
+        if decision != "revise":
+            blockers.append(
+                "the planner returned an unknown release review decision: "
+                + repr(decision)
             )
-            log("[plan] the planner kept the plan; findings recorded")
+            global_blocked = True
             break
         try:
             notes, items, repositories = _parse_plan(
@@ -1117,6 +1203,7 @@ def plan_project(
             notes = notes + "\n\n## Blocked\n\n" + str(exc)
             break
         applied.update(str(entry["id"]) for entry in repositories)
+        rewrite_all = True
     if product_question:
         global_blocked = True
         blockers.append(
@@ -1126,17 +1213,21 @@ def plan_project(
         log("[plan] product decision required: " + product_question)
     if review is not None and not review.sufficient and not global_blocked:
         details = "; ".join(
-            f"task {item.get('task')}: {item.get('issue')}"
+            f"task {item.get('task')} [{item.get('kind')}]: "
+            f"{item.get('issue')}"
             for item in review.findings
         ) or "no findings"
-        notes = notes + "\n\n## Plan review findings\n\n" + details
-        log("[plan] review gaps recorded; the plan proceeds")
+        blockers.append(
+            "the release requirements review found defects: " + details
+        )
+        global_blocked = True
+        notes = notes + "\n\n## Release review findings\n\n" + details
     if review is not None:
-        notes = notes + "\n\n## Plan review\n\n" + review.to_markdown()
+        notes = notes + "\n\n## Release review\n\n" + review.to_markdown()
     else:
         notes = (
             notes
-            + "\n\n## Plan review\n\n"
+            + "\n\n## Release review\n\n"
             + "Skipped: the plan has blocked tasks that need a decision."
         )
 
