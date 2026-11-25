@@ -57,11 +57,11 @@
   "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
   "started_at": "2026-11-25T17:01:13+00:00",
-  "finished_at": "2026-11-25T17:01:13+00:00",
+  "finished_at": "2026-11-25T17:01:40+00:00",
   "result": {
     "manual_restarts": 1,
     "restarted_at": "2026-11-25T05:21:32+00:00",
-    "summary": "task call limit reached (242/200); raise task_calls with set_limit",
+    "summary": "the controlling agent stopped: the chosen step failed (limit command_timeout must be a positive number); try again later",
     "files_changed": [],
     "commands": [
       {
@@ -334,8 +334,9 @@
     "rework_count": 0,
     "manual_retries": 2,
     "failure": {
-      "kind": "limit",
-      "message": "task call limit reached (242/200); raise task_calls with set_limit"
+      "kind": "external",
+      "message": "the chosen step failed (limit command_timeout must be a positive number); try again later",
+      "retryable": true
     }
   }
 }
