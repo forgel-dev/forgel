@@ -702,6 +702,198 @@
     "attempts": 0,
     "rework_count": 0,
     "manual_retries": 1,
-    "failure": {}
+    "failure": {},
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.qa.md",
+      "commands": [
+        {
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "repo",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "repository test",
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "repo",
+          "repo": "code",
+          "workdir": "/Users/okalistratov/Documents/sites/code",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": false,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The attributed change implements the combined install: install.sh gains an engine phase that learns the offered version from the configured source without changing anything, reads the present engine version, then keeps, replaces or obtains the engine, enforces the client's declared minimum (`MIN_ENGINE_VERSION` in `forgel_code/__init__.py`), and reports `Engine: forgel <version> <installed|kept|replaced>` or fails with the minimum, the found/offered version and an action. A deterministic stand-in (`tests/stub_engine_install.py`) mirrors the recorded engine-installer contract and the new `tests/test_install_engine.py` exercises obtain/keep/replace/failure/client-only/uninstall/repeat cases through the real installer. The documentation check (`tests/test_readme_install.py` and the `ReadmeTest` in `tests/test_cli.py`) is deleted together with its supporting data and replaced by nothing, and the README/CHANGELOG are updated to describe the combined installation, the engine source, the client-only route, the no-profile-edit option and the leave-engine-on-uninstall behaviour. QA reports all repository and environment checks passing, the worktree is clean, and the removed tests carry justified `removed` reasons consistent with the mandated removal of documentation-reading checks. No unrelated, temporary or generated file is part of the attributed change, and I found no logical or security defect in the reviewed parts.",
+      "requirements": [
+        {
+          "requirement": "Default installation also ensures a supported engine in the same run (FR-1, AC-1)",
+          "verdict": "pass",
+          "note": "install.sh performs the engine phase by default; `EngineObtainedTest.test_absent_engine_is_installed_and_reported` shows the client plus an installed engine reported as `Engine: forgel 0.2.0 installed`."
+        },
+        {
+          "requirement": "The offered version is learned without changing the machine (FR-2)",
+          "verdict": "pass",
+          "note": "The engine installer is queried with `--available-version` through the stub contract, which installs nothing; `install_calls()` remains empty in the keep cases."
+        },
+        {
+          "requirement": "Absent engine is obtained; a present engine at or above the offered version is kept unchanged (FR-3, FR-4, AC-2, AC-4)",
+          "verdict": "pass",
+          "note": "`EngineObtainedTest` and `EngineKeptTest` assert an unchanged engine version and no install call for equal and higher present versions."
+        },
+        {
+          "requirement": "A strictly newer offered engine replaces the present one; an engine older than or equal to the present one is never installed (FR-5, FR-6, AC-3)",
+          "verdict": "pass",
+          "note": "`EngineReplacedTest` covers replacement; keep cases assert `install_calls() == []`, so no equal or older version is installed."
+        },
+        {
+          "requirement": "The finished state satisfies the declared minimum or the run fails (FR-7, AC-5, AC-6)",
+          "verdict": "pass",
+          "note": "Minimum is declared once in `forgel_code/__init__.py`, and the tests use `_declared_minimum()`; failure message contents are asserted by the failure scenarios covered by the passing repository checks."
+        },
+        {
+          "requirement": "A failed engine outcome reports the minimum, the found or offered version and an action, and is distinguishable from success (FR-8)",
+          "verdict": "pass",
+          "note": "The installer tracks ENGINE_MINIMUM/ENGINE_PRESENT/ENGINE_AVAILABLE for the failure report and exits non-zero; the README documents that the failure names the minimum, version and next action."
+        },
+        {
+          "requirement": "A successful installation states the engine version in place and how it was obtained (FR-9, AC-11)",
+          "verdict": "pass",
+          "note": "Asserted by the `Engine: forgel <version> installed|kept|replaced` lines in the engine tests and described in the README."
+        },
+        {
+          "requirement": "Version ordering tolerates one leading prefix and trailing zeros; an unorderable version never satisfies the minimum (FR-10, AC-9)",
+          "verdict": "pass",
+          "note": "`test_a_prefix_or_trailing_zeros_do_not_make_a_newer_version` keeps `v0.1.0.0` against offered `0.1`; the installer's comparison is component-wise and the README states the ordering rule."
+        },
+        {
+          "requirement": "The client-only installation installs the client and neither queries nor changes any engine (FR-11, AC-7)",
+          "verdict": "pass",
+          "note": "`--client-only` short-circuits the engine phase before any query; the README documents that route and the installer advertises the flag."
+        },
+        {
+          "requirement": "Removing the client installs nothing and leaves any engine in place (FR-12, AC-10)",
+          "verdict": "pass",
+          "note": "The uninstall path removes the prefix, launcher and PATH block only; the README states it leaves any engine in place."
+        },
+        {
+          "requirement": "The startup-configuration opt-out does not disable the engine part (FR-13)",
+          "verdict": "pass",
+          "note": "`FORGEL_CODE_NO_MODIFY_PATH` only skips profile editing and the fresh-shell check; the README states the engine part still happens."
+        },
+        {
+          "requirement": "The engine source is documented configuration with a stated default and a way to point it elsewhere (FR-14, AC-13)",
+          "verdict": "pass",
+          "note": "README documents `FORGEL_ENGINE_SOURCE` (default `https://github.com/forgel-dev/forgel`) and `FORGEL_ENGINE_INSTALLER`, with an example overriding the source; both are read by install.sh."
+        },
+        {
+          "requirement": "Repeating the default installation changes nothing that needs no change and leaves one client installation and one startup entry (FR-15, AC-8)",
+          "verdict": "pass",
+          "note": "The existing re-run guarantees (one marked block, replaced prefix) are unchanged and the engine keep case issues no install call on the second run."
+        },
+        {
+          "requirement": "README/CHANGELOG present the default installation as the way to obtain a working pair, document client-only and the engine source, and no longer instruct a separate engine for the default (FR-16, AC-11, AC-12, AC-13)",
+          "verdict": "pass",
+          "note": "The README adds 'The engine', 'Engine source' and 'Client only' sections describing the decision table, the failure report, the success report, the variables and the defaults; the prerequisites line no longer asks for the engine on PATH, and the CHANGELOG records the change."
+        },
+        {
+          "requirement": "No automated check reads documentation text and none replaces it (FR-17, AC-14)",
+          "verdict": "pass",
+          "note": "`tests/test_readme_install.py` is deleted in full with its data, `tests/test_cli.py` `ReadmeTest` is removed; no new documentation-reading check is added and no file reads README.md text."
+        },
+        {
+          "requirement": "Installation instructions are accepted or returned solely by reading their text (FR-18, AC-16)",
+          "verdict": "pass",
+          "note": "With the documentation checks gone, no automated verdict over README wording exists; this review judged the wording directly."
+        },
+        {
+          "requirement": "All other automated checks stay in place and unchanged; installer and client behaviour outside the combined installation is unchanged (FR-19, AC-15)",
+          "verdict": "pass",
+          "note": "Remaining tests (packaging, CLI, redaction, interactive, installer) are untouched by the diff; the attributed changes to install.sh only add the engine phase and its reporting."
+        },
+        {
+          "requirement": "No unrelated, temporary or generated file committed",
+          "verdict": "pass",
+          "note": "The attributed files are the installer, the version module, the README, the CHANGELOG, the engine stub and the engine/install/CLI tests; no debug or generated artifacts appear."
+        },
+        {
+          "requirement": "No weakened or unjustifiably deleted test",
+          "verdict": "pass",
+          "note": "The only deletions are the documentation-reading check and its CLI counterpart, both justified as `removed` by the mandated elimination of checks over documentation text (D-106), with no replacement check over documentation."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261124152248_add-the-combined-engine-and-client-insta.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-25T01:02:04+00:00",
+      "notes": ""
+    }
   }
 }
