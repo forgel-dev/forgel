@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping
 
-from .config import Settings
 from . import limits, specs, tasks
 from .artifacts import write_text
+from .config import Settings
+from .control_flow import RUNTIME_OPERATIONS
 from .daemon import _run_task, handle_failure, run_once
 from .layout import ProjectLayout
 from .ledger import Ledger
@@ -33,20 +34,7 @@ from .tasks import get_task
 
 Log = Callable[[str], None]
 
-OPERATIONS = (
-    "drive",
-    "task_retry",
-    "task_restart",
-    "task_respec",
-    "task_cancel",
-    "task_process",
-    "task_qa",
-    "task_review",
-    "release_resume",
-    "release_audit",
-    "release_finalize",
-    "set_limit",
-)
+OPERATIONS = RUNTIME_OPERATIONS
 
 
 def _task(
@@ -131,7 +119,7 @@ def _release(
     return releases[-1]
 
 
-def _restart_from_requirements(
+def _rewrite_specification(
     settings: Settings,
     ledger: Ledger,
     project: Mapping[str, Any],
@@ -139,9 +127,10 @@ def _restart_from_requirements(
     task: Mapping[str, Any],
     client: ModelClient,
     log: Log,
-    requested_changes: str = "",
+    requested_changes: str,
+    restart: bool,
 ) -> str:
-    """Rewrite the specification from the task's own request and start over."""
+    """Rewrite requirements through the shared writer, then apply the operation."""
 
     task_id = str(task["id"])
     repo_id = str(task.get("repo_id") or "").strip()
@@ -158,7 +147,9 @@ def _restart_from_requirements(
             notes = layout.artifact(request).read_text(encoding="utf-8")
         except OSError:
             notes = ""
-    log(f"[restart] {project['id']}: task {task_id}: rewriting spec")
+    operation = "restart" if restart else "respec"
+    activity = "rewriting spec" if restart else "rewriting requirements"
+    log(f"[{operation}] {project['id']}: task {task_id}: {activity}")
     spec = specs.write_task_spec(
         settings,
         layout,
@@ -180,7 +171,8 @@ def _restart_from_requirements(
             repo_id,
         ),
     )
-    tasks.restart_task(layout, task_id)
+    if restart:
+        tasks.restart_task(layout, task_id)
     tasks.update_task(
         layout,
         task_id,
@@ -193,21 +185,34 @@ def _restart_from_requirements(
             spec.get("external_dependencies") or []
         ),
     )
-    tasks.commit_task(layout, task_id, f"Restart spec {task_id}")
+    commit_title = "Restart spec" if restart else "Rewrite requirements"
+    tasks.commit_task(layout, task_id, f"{commit_title} {task_id}")
+    payload = {
+        "task": task_id,
+        "requirements": list(spec.get("requirements") or []),
+    }
+    if not restart:
+        payload["changes"] = requested_changes
     ledger.append_event(
         str(project["id"]),
-        "task_restart",
+        f"task_{operation}",
         status="completed",
-        payload={
-            "task": task_id,
-            "requirements": list(spec.get("requirements") or []),
-        },
+        payload=payload,
         artifact_refs=[ref],
         generation=ledger.current_generation(str(project["id"])),
     )
+    if not restart:
+        log(
+            f"[respec] {project['id']}: task {task_id}: requirements "
+            "rewritten; status unchanged"
+        )
+        return (
+            f"Task {task_id}: requirements rewritten; "
+            "the task status is unchanged."
+        )
     log(
         f"[restart] {project['id']}: task {task_id}: specification "
-        f"rewritten; task restarted"
+        "rewritten; task restarted"
     )
     stored = tasks.get_task(layout, task_id)
     if stored is not None:
@@ -227,90 +232,6 @@ def _restart_from_requirements(
         else "unknown"
     )
     return f"Task {task_id}: restarted; status {status}."
-
-
-def _rewrite_task_requirements(
-    settings: Settings,
-    ledger: Ledger,
-    project: Mapping[str, Any],
-    layout: ProjectLayout,
-    task: Mapping[str, Any],
-    client: ModelClient,
-    log: Log,
-    requested_changes: str,
-) -> str:
-    """Rewrite the task's requirements without changing its status or work."""
-
-    task_id = str(task["id"])
-    repo_id = str(task.get("repo_id") or "").strip()
-    intent = {
-        "title": task.get("title") or task_id,
-        "summary": task.get("summary") or task.get("title") or task_id,
-        "repo_id": repo_id,
-    }
-    goal = str(task.get("plan_goal") or task.get("title") or "—")
-    notes = ""
-    request = str(task.get("request") or "").strip()
-    if request:
-        try:
-            notes = layout.artifact(request).read_text(encoding="utf-8")
-        except OSError:
-            notes = ""
-    log(f"[respec] {project['id']}: task {task_id}: rewriting requirements")
-    spec = specs.write_task_spec(
-        settings,
-        layout,
-        goal,
-        notes,
-        intent,
-        client,
-        log=log,
-        requested_changes=requested_changes,
-        current_spec=_current_spec(layout, task),
-    )
-    ref = specs.spec_path(task_id)
-    write_text(
-        layout.artifact(ref),
-        specs.render_spec(
-            spec,
-            task_id,
-            str(task.get("plan_id") or ""),
-            repo_id,
-        ),
-    )
-    tasks.update_task(
-        layout,
-        task_id,
-        spec=ref,
-        requirements=list(spec.get("requirements") or []),
-        acceptance=list(spec.get("acceptance") or []),
-        work_packages=list(spec.get("work_packages") or []),
-        constraints=list(spec.get("constraints") or []),
-        external_dependencies=list(
-            spec.get("external_dependencies") or []
-        ),
-    )
-    tasks.commit_task(layout, task_id, f"Rewrite requirements {task_id}")
-    ledger.append_event(
-        str(project["id"]),
-        "task_respec",
-        status="completed",
-        payload={
-            "task": task_id,
-            "changes": requested_changes,
-            "requirements": list(spec.get("requirements") or []),
-        },
-        artifact_refs=[ref],
-        generation=ledger.current_generation(str(project["id"])),
-    )
-    log(
-        f"[respec] {project['id']}: task {task_id}: requirements "
-        "rewritten; status unchanged"
-    )
-    return (
-        f"Task {task_id}: requirements rewritten; "
-        "the task status is unchanged."
-    )
 
 
 def run_operation(
@@ -387,7 +308,7 @@ def run_operation(
             raise ValueError(
                 "no model is configured to rewrite the specification"
             )
-        return _restart_from_requirements(
+        return _rewrite_specification(
             settings,
             ledger,
             project,
@@ -396,6 +317,7 @@ def run_operation(
             client,
             log,
             requested_changes=_requested_changes(args),
+            restart=True,
         )
 
     if name == "task_respec":
@@ -410,7 +332,7 @@ def run_operation(
             raise ValueError(
                 "task_respec needs the requested requirement changes"
             )
-        return _rewrite_task_requirements(
+        return _rewrite_specification(
             settings,
             ledger,
             project,
@@ -419,6 +341,7 @@ def run_operation(
             client,
             log,
             changes,
+            restart=False,
         )
 
     if name == "release_resume":

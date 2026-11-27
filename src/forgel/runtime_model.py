@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from .control_flow import render_control_state
 from .layout import ProjectLayout
 from .release_train import list_releases
 
@@ -99,6 +100,8 @@ def process_model(
     lines = ["Pipeline:"]
     for stage, owner, detail in PROCESS:
         lines.append(f"- {stage}: {owner} — {detail}")
+    lines.append("Control ownership and visibility:")
+    lines.append(render_control_state(layout))
     lines.append("Control and gates:")
     for item in CONTROL:
         lines.append(f"- {item}")

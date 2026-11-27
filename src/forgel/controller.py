@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from . import limits, tasks
+from .control_flow import CONTROLLER_OPERATIONS
 from .config import Settings
 from .context_window import CONTEXT_ACTION, ContextWindow, Item
 from .environment import load_environment, render_environment
@@ -39,28 +40,7 @@ from .model_output import json_objects, looks_like_tool_markup
 MAX_CONTEXT_PAGES = 40
 MAX_MARKUP_RETRIES = 3
 
-OPERATIONS = (
-    "retry",
-    "task_retry",
-    "task_restart",
-    "rework",
-    "respec",
-    "accept",
-    "reject",
-    "cancel",
-    "block",
-    "run_task",
-    "task_process",
-    "task_qa",
-    "task_review",
-    "release_resume",
-    "release_audit",
-    "release_finalize",
-    "release_fix",
-    "set_limit",
-    "ask_user",
-    "stop",
-)
+OPERATIONS = CONTROLLER_OPERATIONS
 
 
 class ControllerError(RuntimeError):
