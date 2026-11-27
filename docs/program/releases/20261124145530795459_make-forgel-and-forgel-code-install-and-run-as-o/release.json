@@ -53,6 +53,14 @@
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": "",
-  "next_at": ""
+  "detail": "the controlling agent was unavailable: the controller kept returning tool-call markup",
+  "next_at": "",
+  "error_retries": 1,
+  "last_error": {
+    "stage": "controller",
+    "task": "20261124152248_add-the-engine-s-one-command-installer-w",
+    "message": "the controller kept returning tool-call markup",
+    "retries": 1,
+    "at": "2026-11-27T20:51:20+00:00"
+  }
 }

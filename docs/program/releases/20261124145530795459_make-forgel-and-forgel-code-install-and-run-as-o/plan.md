@@ -20,7 +20,7 @@ Make Forgel and Forgel Code install and run as one working pair: give the engine
 
 - `20261124152248_add-the-combined-engine-and-client-insta` — Add the combined engine and client install mode (code, done)
 - `20261124152248_add-the-engine-s-one-command-installer-w` — Add the engine's one-command installer with pre-install version resolution (main, blocked)
-- `20261124152248_check-the-engine-version-at-client-start` — Check the engine version at client startup (code, pending)
+- `20261124152248_check-the-engine-version-at-client-start` — Check the engine version at client startup (code, failed)
 - `20261124152248_declare-the-minimum-supported-engine-ver` — Declare the minimum supported engine version in the client (code, done)
 - `20261124152248_document-the-combined-install-and-minimu` — Document the combined install and minimum engine version (code, done)
 - `20261124152248_document-the-engine-installer-and-versio` — Document the engine installer and version contract (main, blocked)
