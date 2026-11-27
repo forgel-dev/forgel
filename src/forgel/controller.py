@@ -35,12 +35,12 @@ from .model import (
     cache_tokens,
     project_model_name,
 )
-from .model_output import json_objects, looks_like_tool_markup
-
-MAX_CONTEXT_PAGES = 40
-MAX_MARKUP_RETRIES = 3
+from .model_output import json_objects
 
 OPERATIONS = CONTROLLER_OPERATIONS
+
+
+MAX_CONTROLLER_MODEL_ERRORS = 3
 
 
 class ControllerError(RuntimeError):
@@ -546,16 +546,20 @@ def decide(
     calls = 0
     data: Any = None
     page_index: int | None = None
-    markup_retries = 0
-    for _ in range(MAX_CONTEXT_PAGES):
+    model_errors = 0
+    while True:
         try:
             raw = client.complete(
                 messages, model=project_model_name(layout.control)
             )
         except ModelError as exc:
-            raise ControllerError(
-                f"the controller call failed: {exc}"
-            ) from exc
+            model_errors += 1
+            if model_errors >= MAX_CONTROLLER_MODEL_ERRORS:
+                raise ControllerError(
+                    "the controlling model is unavailable: "
+                    f"{exc}; try again later"
+                ) from exc
+            continue
         calls += 1
         usage = getattr(client, "last_usage", None)
         if isinstance(usage, dict):
@@ -566,17 +570,18 @@ def decide(
             cache_miss += miss
         objects = json_objects(raw)
         parsed = objects[-1] if objects else None
-        if not isinstance(parsed, dict) and looks_like_tool_markup(raw):
-            markup_retries += 1
-            if markup_retries > MAX_MARKUP_RETRIES:
+        if not isinstance(parsed, dict):
+            model_errors += 1
+            if model_errors >= MAX_CONTROLLER_MODEL_ERRORS:
                 raise ControllerError(
-                    "the controller kept returning tool-call markup"
+                    "the controlling model is unavailable: it did not "
+                    "return a decision; try again later"
                 )
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
                     "user",
-                    "Return exactly one JSON object, not tool-call markup. "
+                    "Return exactly one JSON object. "
                     "To read a context page use " + CONTEXT_ACTION
                     + "; then decide.",
                 )
@@ -586,6 +591,7 @@ def decide(
             isinstance(parsed, dict)
             and str(parsed.get("action") or "") == "context_page"
         ):
+            model_errors = 0
             key = str(parsed.get("key") or "").strip()
             try:
                 page = int(parsed.get("page") or 1)
@@ -615,12 +621,9 @@ def decide(
                 f"[controller] {stage}: context {key} page {page}"
             )
             continue
+        model_errors = 0
         data = parsed
         break
-    else:
-        raise ControllerError(
-            "the controller kept requesting context without deciding"
-        )
     if not isinstance(data, dict):
         preview = " ".join(str(raw).split())[:300]
         raise ControllerError(

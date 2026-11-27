@@ -114,6 +114,7 @@
   "chat_repo_dependency_edges": "Зависимости: {edges}.",
   "chat_repo_separate": "Зависимостей нет: этот репозиторий ведётся в проекте отдельно.",
   "chat_tasks_none": "Задач нет. Запрос на изменение, отправленный обычным сообщением, поставит задачу в очередь.",
+  "chat_change_not_queued": "Запрос не поставлен в очередь: задача не создана.",
   "chat_tasks_header": "Задачи: {count}",
   "chat_task_usage": "Использование: /task cancel|retry|review <task-id>, /task accept <task-id> [заметка] или /task reject <task-id> [заметка]",
   "chat_task_cancelled": "Задача {task} отменена.",

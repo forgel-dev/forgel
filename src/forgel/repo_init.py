@@ -21,8 +21,6 @@ from .coding_agent import ALLOWED_EXECUTABLES, NPM_ALLOWED
 from .model import ModelClient, ModelError, ModelMessage
 from .model_output import json_objects
 
-MAX_STEPS = 16
-MAX_INVALID = 3
 MAX_OUTPUT = 6_000
 MAX_FILE_BYTES = 200_000
 READ_BYTES = 100_000
@@ -119,8 +117,7 @@ class RepoInitAgent:
                 ),
             ),
         ]
-        invalid = 0
-        for _ in range(MAX_STEPS):
+        while True:
             try:
                 raw = self.client.complete(
                     messages, model=self.model or None
@@ -131,9 +128,6 @@ class RepoInitAgent:
             objects = json_objects(raw)
             action = objects[0] if objects else None
             if not isinstance(action, dict):
-                invalid += 1
-                if invalid >= MAX_INVALID:
-                    return []
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
@@ -143,7 +137,6 @@ class RepoInitAgent:
                     )
                 )
                 continue
-            invalid = 0
             kind = str(action.get("action") or "").strip()
             messages.append(
                 ModelMessage(

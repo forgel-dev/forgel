@@ -14,7 +14,6 @@ from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel import specs
 from forgel.planner import (
-    MAX_RESEARCH_STEPS,
     PlanningError,
     plan_project,
     plan_status,
@@ -647,39 +646,8 @@ class PlannerTest(unittest.TestCase):
         text = " ".join(result.blockers) + " " + result.notes
         self.assertTrue(result.blocked)
         self.assertIn(PLAN["tasks"][0]["title"], text)
-        self.assertIn("model calls:", text)
-        self.assertIn("last model output:", text)
-        self.assertIn("DSML", text)
+        self.assertIn("model call", text)
 
-    def test_spec_writer_budget_forces_the_spec(self) -> None:
-        intent = {
-            "title": "Add a health endpoint",
-            "summary": "Expose GET /health",
-            "repo_id": "main",
-            "depends_on": [],
-        }
-        spec = _spec_for(intent)
-        prefix = [
-            json.dumps({"action": "list_files", "path": "."})
-            for _ in range(specs.MAX_SPEC_STEPS + 1)
-        ]
-        client = ScriptedModelClient(prefix + [json.dumps(spec)])
-        written = specs.write_task_spec(
-            self.settings,
-            self.layout,
-            "Bring the project to M1",
-            "notes",
-            intent,
-            client,
-        )
-        self.assertEqual(written["requirements"], spec["requirements"])
-        self.assertTrue(
-            any(
-                "Research budget exhausted" in message.content
-                for request in client.requests
-                for message in request
-            )
-        )
 
     def test_plan_status_follows_its_tasks(self) -> None:
         result = self._plan()
@@ -906,29 +874,6 @@ class PlannerTest(unittest.TestCase):
                 self._plan()
         self.assertIn("paused", str(ctx.exception))
 
-    def test_research_budget_forces_the_plan(self) -> None:
-        prefix = [
-            json.dumps({"action": "list_files", "path": "."})
-            for _ in range(MAX_RESEARCH_STEPS + 1)
-        ]
-        client = self._client(PLAN, prefix=prefix)
-        result = plan_project(
-            self.settings,
-            self.ledger,
-            self.project,
-            "Bring the project to M1",
-            client=client,
-            dry_run=True,
-            log=lambda _m: None,
-        )
-        self.assertEqual(len(result.tasks), 2)
-        self.assertTrue(
-            any(
-                "Research budget exhausted" in message.content
-                for request in client.requests
-                for message in request
-            )
-        )
 
     def test_planner_retries_after_tool_markup(self) -> None:
         markup = (

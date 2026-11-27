@@ -23,7 +23,6 @@ from .model_output import json_objects
 from .program_manifest import entries as manifest_entries
 from .repo_tools import RepoActionError, execute_repo_action
 
-MAX_SCOUT_STEPS = 10
 MODES = {"direct", "stub", "unavailable"}
 
 
@@ -193,7 +192,6 @@ def investigate(
     instructions = instruction_context(
         layout, [repo_id] if repo_id else None
     )
-    scout_retries = 0
     messages = [
         ModelMessage("system", DEPENDENCY_PROMPT),
         ModelMessage(
@@ -210,7 +208,7 @@ def investigate(
             + "\n\nInspect the repository, then return the dependency JSON.",
         ),
     ]
-    for _ in range(MAX_SCOUT_STEPS):
+    while True:
         try:
             raw = client.complete(
                 messages, model=project_model_name(layout.control)
@@ -263,20 +261,17 @@ def investigate(
             except DependencyBlocked:
                 raise
             except DependencyError as exc:
-                if scout_retries < 2:
-                    messages.append(ModelMessage("assistant", raw.strip()))
-                    messages.append(
-                        ModelMessage(
-                            "user",
-                            "Return exactly one JSON object with every "
-                            "dependency: {\"dependencies\": [{\"name\", "
-                            "\"mode\", \"interface\", \"docs\", \"evidence\", "
-                            "\"stub\"}]}. " + str(exc),
-                        )
+                messages.append(ModelMessage("assistant", raw.strip()))
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Return exactly one JSON object with every "
+                        "dependency: {\"dependencies\": [{\"name\", "
+                        "\"mode\", \"interface\", \"docs\", \"evidence\", "
+                        "\"stub\"}]}. " + str(exc),
                     )
-                    scout_retries += 1
-                    continue
-                raise
+                )
+                continue
             log(
                 f"[deps] {repo_id or 'main'}: "
                 f"{len(dependencies)} dependency(ies) checked"
@@ -290,4 +285,3 @@ def investigate(
                 "list. Do not use prose or tool-call markup.",
             )
         )
-    raise DependencyError("the dependency scout exceeded its step limit")

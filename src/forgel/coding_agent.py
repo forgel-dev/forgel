@@ -60,19 +60,16 @@ from .project_config import ConfigError, load_project_config
 from .repo_tools import READ_DEFAULT_LINES, read_text_page
 from .sandbox import CommandRunner, SandboxError, docker_runner
 
-MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
+MAX_REPEATED_ACTIONS = 5
+MAX_REPEAT_CORRECTIONS = 5
 PROMPT_READ_OBSERVATION = 50_000
 PROMPT_RUN_OBSERVATION = 16_000
 PROMPT_OTHER_OBSERVATION = 20_000
-MAX_INVALID_REPLIES = 8
-MAX_MARKUP_RETRIES = 10
 MAX_LIST_ENTRIES = 200
 MAX_SEARCH_RESULTS = 100
 SEARCH_TIMEOUT = 30.0
-MAX_REPEATED_ACTIONS = 5
-MAX_REPEAT_CORRECTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
     "read_file",
@@ -636,22 +633,9 @@ class CodingAgent:
         self.client = client
         self._allowed_scripts: set[str] = set()
         self._read_cache: dict[tuple[str, str, str, str], str] = {}
-        env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
-        if max_steps is not None:
-            steps = max(1, int(max_steps))
-        elif env_steps.isdigit() and int(env_steps) > 0:
-            steps = int(env_steps)
-        else:
-            steps = 0  # no step limit; context drives sessions
-        self.max_steps = min(steps, 5_000)
-        env_sessions = os.environ.get(
-            "FORGEL_AGENT_MAX_SESSIONS", ""
-        ).strip()
-        sessions = (
-            int(env_sessions) if env_sessions.isdigit() else MAX_SESSIONS
+        self.max_steps = (
+            max(1, int(max_steps)) if max_steps is not None else 0
         )
-        self.max_sessions = max(1, min(sessions, 20))
-
     def _context_window(self, layout: ProjectLayout) -> int:
         try:
             config = load_project_config(layout.control)
@@ -1370,8 +1354,6 @@ class CodingAgent:
         status = "failed"
         summary = "agent did not finish within the session limit"
         failure_kind = "agent"
-        invalid = 0
-        markup_retries = 0
         steps = model_calls
         sessions = 0
         compactions = 0
@@ -1446,56 +1428,17 @@ class CodingAgent:
             )
 
         terminal = False
-        for session in range(1, self.max_sessions + 1):
+        session = 0
+        while True:
+            session += 1
             sessions = session
             handed_off = False
             session_steps = 0
             while True:
-                call_limit = limits.get(
-                    layout, "task_calls", limits.LIMITS["task_calls"]
-                )
-                run_limit = limits.get(
-                    layout, "task_runs", limits.LIMITS["task_runs"]
-                )
-                token_limit = limits.get(
-                    layout,
-                    "task_input_tokens",
-                    limits.LIMITS["task_input_tokens"],
-                )
                 projected_tokens = (
                     estimated_input_tokens
                     + budget.usage(messages, model)
                 )
-                if model_calls >= call_limit:
-                    status = "failed"
-                    failure_kind = "limit"
-                    summary = (
-                        "task call limit reached "
-                        f"({model_calls:g}/{call_limit:g}); "
-                        "raise task_calls with set_limit"
-                    )
-                    terminal = True
-                    break
-                if len(commands) >= run_limit:
-                    status = "failed"
-                    failure_kind = "limit"
-                    summary = (
-                        "task run limit reached "
-                        f"({len(commands):g}/{run_limit:g}); "
-                        "raise task_runs with set_limit"
-                    )
-                    terminal = True
-                    break
-                if projected_tokens >= token_limit:
-                    status = "failed"
-                    failure_kind = "limit"
-                    summary = (
-                        "task input token limit reached "
-                        f"({projected_tokens:g}/{token_limit:g}); "
-                        "raise task_input_tokens with set_limit"
-                    )
-                    terminal = True
-                    break
                 if self.max_steps and session_steps >= self.max_steps:
                     status = "failed"
                     failure_kind = "agent"
@@ -1535,10 +1478,7 @@ class CodingAgent:
                         pass
                 batch = parse_actions(raw)
                 if not batch:
-                    if (
-                        looks_like_tool_markup(raw)
-                        and markup_retries < MAX_MARKUP_RETRIES
-                    ):
+                    if looks_like_tool_markup(raw):
                         messages.append(
                             ModelMessage("assistant", raw)
                         )
@@ -1550,9 +1490,7 @@ class CodingAgent:
                                 "provider-specific function calls.",
                             )
                         )
-                        markup_retries += 1
                         continue
-                    invalid += 1
                     messages.append(ModelMessage("assistant", raw))
                     messages.append(
                         ModelMessage(
@@ -1564,17 +1502,7 @@ class CodingAgent:
                             "or any other shape.",
                         )
                     )
-                    if invalid >= MAX_INVALID_REPLIES:
-                        status = "failed"
-                        summary = (
-                            "the model did not return a valid action "
-                            f"after {invalid} attempts"
-                        )
-                        terminal = True
-                        break
                     continue
-                invalid = 0
-                markup_retries = 0
                 for action in batch:
                     kind = str(action["action"])
                     messages.append(
@@ -1738,22 +1666,15 @@ class CodingAgent:
                         messages.append(ModelMessage("user", warning))
                         recent.append(warning)
                     if budget.should_compact(messages, model):
-                        if session < self.max_sessions:
-                            used = budget.usage(messages, model)
-                            messages, state_ref = handoff(session)
-                            invalid = 0
-                            compactions += 1
-                            handed_off = True
-                            print(
-                                f"[agent] {task['id']}: context handoff to "
-                                f"session {session + 1} "
-                                f"(~{used}/{budget.usable} tokens)"
-                            )
-                            break
-                        status = "failed"
-                        failure_kind = "agent"
-                        summary = "context session limit reached"
-                        terminal = True
+                        used = budget.usage(messages, model)
+                        messages, state_ref = handoff(session)
+                        compactions += 1
+                        handed_off = True
+                        print(
+                            f"[agent] {task['id']}: context handoff to "
+                            f"session {session + 1} "
+                            f"(~{used}/{budget.usable} tokens)"
+                        )
                         break
                 if terminal or handed_off:
                     break

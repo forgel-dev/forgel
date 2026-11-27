@@ -481,8 +481,6 @@ def _rewrite_spec_from_failure(
     return True
 
 
-MAX_CONTROLLER_STEPS = 10
-
 
 def _apply_controller_decision(
     settings: Settings,
@@ -755,7 +753,7 @@ def handle_failure(
         return
     from . import controller, limits
 
-    for _ in range(MAX_CONTROLLER_STEPS):
+    while True:
         task = tasks.get_task(layout, task_id)
         if task is None or task.get("status") != "failed":
             return
@@ -852,17 +850,6 @@ def handle_failure(
             f"[controller] task {task_id}: still failed after "
             f"{decision.operation}; asking the controller again"
         )
-    _controller_stopped(
-        settings,
-        ledger,
-        project,
-        layout,
-        task_id,
-        data,
-        "the controller did not resolve the task after "
-        f"{MAX_CONTROLLER_STEPS} steps; try again later",
-        log,
-    )
 
 def _controller_stopped(
     settings: Settings,

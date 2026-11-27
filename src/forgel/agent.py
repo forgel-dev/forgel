@@ -64,10 +64,6 @@ HISTORY_SUMMARY_CHARS = 6_000
 MAX_CONTEXT_CHARS = 24_000
 OVERVIEW_DOC_CHARS = 4_000
 OVERVIEW_TOTAL_CHARS = 14_000
-MAX_RESEARCH_STEPS = 20
-MAX_MARKUP_RETRIES = 3
-MAX_ANSWER_RETRIES = 3
-MAX_REQUEST_RETRIES = 3
 GENERIC_SKIP_DIRS = {
     ".git",
     ".forgel",
@@ -215,6 +211,10 @@ the next executable step now. Answer only for questions, status, or when a
 required argument, a material fork or a human gate blocks execution. If the
 request does not name the step, choose the next step from the project
 documents. Never reply with what you intend to do later.
+- Describe only what this JSON actually executes. A change_request queues a
+  request; never say that a task is restarted, a run started, work continued
+  or a release published unless the matching action is present in the same
+  JSON.
 
 A request that spans several repositories or describes a milestone-sized
 change is a plan, not one task: return kind="action", action="plan" with the
@@ -1374,17 +1374,7 @@ class ProjectAgent:
         repos = manifest_entries(layout)
         raw = ""
         answer: dict[str, Any] | None = None
-        markup_retries = 0
-        answer_retries = 0
-        request_retries = 0
-        research_steps = 0
-        for step in range(
-            MAX_RESEARCH_STEPS
-            + 1
-            + MAX_MARKUP_RETRIES
-            + MAX_ANSWER_RETRIES
-            + MAX_REQUEST_RETRIES
-        ):
+        while True:
             try:
                 raw = self.client.complete(messages, model=model)
             except ModelError as exc:
@@ -1403,21 +1393,9 @@ class ProjectAgent:
                 for item in objects
                 if str(item.get("action", "")) not in RESEARCH_ACTIONS
             ]
-            if actions and research_steps >= MAX_RESEARCH_STEPS:
-                if not finals:
-                    return AgentResult(
-                        text=(
-                            "I need more file reads than allowed for one "
-                            "answer. Please narrow the question."
-                        ),
-                        kind="error",
-                    )
-                actions = []
             if actions:
                 observations: list[str] = []
                 for data in actions:
-                    if research_steps >= MAX_RESEARCH_STEPS:
-                        break
                     args = dict(data.get("action_args") or {})
                     for key in ("path", "repo_id"):
                         if key in data and key not in args:
@@ -1431,7 +1409,6 @@ class ProjectAgent:
                     except RepoActionError as exc:
                         observation = f"error: {exc}"
                     observations.append(observation)
-                    research_steps += 1
                     repo = str(args.get("repo_id") or "").strip()
                     if not repo:
                         repo = next(
@@ -1466,7 +1443,7 @@ class ProjectAgent:
                 )
                 if not finals:
                     continue
-            if looks_like_tool_markup(raw) and markup_retries < MAX_MARKUP_RETRIES:
+            if looks_like_tool_markup(raw):
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
@@ -1478,7 +1455,6 @@ class ProjectAgent:
                         '{"kind": "answer", "reply": "..."}.',
                     )
                 )
-                markup_retries += 1
                 continue
             candidate = parse_answer(
                 json.dumps(finals[-1]) if finals else raw
@@ -1490,7 +1466,7 @@ class ProjectAgent:
                 not str(candidate["reply"]).strip()
                 or candidate["reply"] == UNFORMATTED_REPLY
             )
-            if unreadable and answer_retries < MAX_ANSWER_RETRIES:
+            if unreadable:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
@@ -1503,14 +1479,13 @@ class ProjectAgent:
                         "if you still need a file.",
                     )
                 )
-                answer_retries += 1
                 continue
             gaps = (
                 _change_request_gaps(candidate, repos)
                 if candidate["kind"] == "change_request"
                 else []
             )
-            if gaps and request_retries < MAX_REQUEST_RETRIES:
+            if gaps:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
@@ -1522,17 +1497,7 @@ class ProjectAgent:
                         "use its action instead of a new change request.",
                     )
                 )
-                request_retries += 1
                 continue
-            if gaps:
-                return AgentResult(
-                    text=(
-                        "The change was not queued: the request is missing "
-                        + ", ".join(gaps)
-                        + "."
-                    ),
-                    kind="error",
-                )
             answer = candidate
             break
         if answer is None:

@@ -22,7 +22,6 @@ from forgel.release_train import (
     AUDIT_TOTAL_TIMEOUT,
     INITIAL_VERSION,
     UNRESOLVED_RELEASE_DETAIL,
-    MAX_AUDIT_ERRORS,
     _audit_client,
     attach_blocked_release,
     discover_base,
@@ -1800,11 +1799,11 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertEqual(audit.get("errors"), 1)
         self.assertNotEqual(stored.get("status"), "blocked")
 
-    def test_repeated_audit_errors_block_the_release(self) -> None:
+    def test_repeated_audit_errors_do_not_block_the_release(self) -> None:
         release, _task = self._release()
         release_id = str(release["id"])
 
-        for _ in range(MAX_AUDIT_ERRORS):
+        for _ in range(20):
             process_releases(
                 self.settings,
                 self.ledger,
@@ -1816,7 +1815,8 @@ class ReleaseTrainTest(unittest.TestCase):
 
         stored = load_release(self.layout, release_id)
         assert stored is not None
-        self.assertEqual(stored.get("status"), "blocked")
+        self.assertNotEqual(stored.get("status"), "blocked")
+        self.assertEqual(stored["audit"]["errors"], 20)
 
 
 if __name__ == "__main__":

@@ -317,28 +317,6 @@ class AgentTest(unittest.TestCase):
         self.assertNotIn(UNFORMATTED_REPLY, text)
         self.assertTrue(text.strip())
 
-    def test_persistent_change_request_without_reply_is_not_an_error(self) -> None:
-        project = self._project("Gamma", "A gamma brief.")
-        layout = ProjectLayout.detect(project["workspace"])
-        repo_id = manifest_entries(layout)[0]["id"]
-        response = json.dumps(
-            {
-                "kind": "change_request",
-                "title": "Add a health check",
-                "summary": "Expose a health endpoint.",
-                "requirements": ["Expose /health"],
-                "acceptance": ["GET /health returns 200"],
-                "repo_id": repo_id,
-            }
-        )
-        client = ScriptedModelClient([response] * 4)
-        agent = ProjectAgent(self.settings, self.ledger, client)
-
-        result = agent.handle(project, "Add a health check", "@tester")
-
-        self.assertEqual(result.kind, "change_request")
-        self.assertNotIn(UNFORMATTED_REPLY, result.text)
-        self.assertIsNotNone(result.request)
 
     def test_change_request_is_recorded_as_an_artifact(self) -> None:
         project = self._project("Alpha", "An alpha brief.")

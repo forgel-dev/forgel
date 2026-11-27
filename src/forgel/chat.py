@@ -2154,6 +2154,15 @@ class CommandRouter:
             return Reply(
                 combined, drain=_wants_runtime(result)
             )
+        if (
+            str(getattr(result, "kind", "")) == "change_request"
+            and not getattr(result, "task_id", None)
+        ):
+            return Reply(
+                self._text(chat_id, "chat_change_not_queued"),
+                failed=True,
+                drain=False,
+            )
         return Reply(
             result.text,
             drain=str(getattr(result, "kind", "")) == "change_request",

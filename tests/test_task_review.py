@@ -17,7 +17,6 @@ from forgel.model import ScriptedModelClient
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.task_review import (
-    MAX_REVIEW_RETRIES,
     _review_prompt,
     accept_parked_green_tasks,
     accept_task,
@@ -932,20 +931,6 @@ class TaskReviewTest(unittest.TestCase):
         )
         self.assertEqual(result.status, "pass", result.summary)
 
-    def test_a_review_without_requirements_is_an_error(self) -> None:
-        task = self._task()
-        result = run_task_review(
-            self.settings,
-            self.ledger,
-            self.project,
-            task,
-            ScriptedModelClient(
-                [PASS_PARTIAL] * (MAX_REVIEW_RETRIES + 1)
-            ),
-            log=lambda _m: None,
-        )
-        self.assertEqual(result.status, "error")
-        self.assertIn("did not cover", result.summary)
 
     def test_acceptance_pushes_the_commit_to_the_remote(self) -> None:
         bare = self.home / "remote.git"

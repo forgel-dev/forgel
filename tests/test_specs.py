@@ -12,7 +12,6 @@ from forgel.model import ScriptedModelClient
 from forgel.program_manifest import set_entries
 from forgel.projects import create_project
 from forgel.specs import (
-    MAX_SPEC_RETRIES,
     _normalize_spec,
     SpecError,
     documentation_problems,

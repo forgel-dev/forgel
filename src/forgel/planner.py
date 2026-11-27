@@ -55,8 +55,6 @@ from .repo_tools import (
 
 MAX_TASKS = 20
 DEFAULT_TASKS = 8
-MAX_RESEARCH_STEPS = 50
-MAX_RELEASE_REVISIONS = 1
 
 
 class PlanningError(RuntimeError):
@@ -710,10 +708,7 @@ def plan_project(
     parsed: (
         tuple[str, list[dict[str, Any]], list[dict[str, Any]]] | None
     ) = None
-    plan_retries = 0
-    budget_notice = False
-    research_steps = 0
-    for _ in range(MAX_RESEARCH_STEPS + 4):
+    while True:
         try:
             raw = model_client.complete(
                 messages, model=project_model_name(layout.control)
@@ -735,8 +730,6 @@ def plan_project(
         ]
         observations: list[str] = []
         for action_data in actions:
-            if research_steps >= MAX_RESEARCH_STEPS:
-                break
             try:
                 observation = execute_repo_action(
                     layout, repos, action_data
@@ -744,7 +737,6 @@ def plan_project(
             except RepoActionError as exc:
                 observation = f"error: {exc}"
             observations.append(observation)
-            research_steps += 1
         if observations:
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
@@ -764,53 +756,32 @@ def plan_project(
                 )
                 break
             except PlanningError as exc:
-                if plan_retries < 2:
-                    if not observations:
-                        messages.append(
-                            ModelMessage("assistant", raw.strip())
-                        )
+                if not observations:
                     messages.append(
-                        ModelMessage(
-                            "user",
-                            f"The plan is invalid: {exc}. Return a "
-                            "corrected, complete JSON plan object with notes "
-                            "and tasks. Existing repositories are context: do "
-                            "not list one in repositories; use its id in a "
-                            "task. Do not use tool-call markup, XML, "
-                            "provider-specific function calls or prose.",
-                        )
+                        ModelMessage("assistant", raw.strip())
                     )
-                    plan_retries += 1
-                    continue
-                raise PlanningError(str(exc)) from exc
-        if not actions:
-            if plan_retries < 2:
-                messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
                         "user",
-                        "Return exactly one JSON plan object with notes and "
-                        "tasks. Do not use tool-call markup, XML, "
+                        f"The plan is invalid: {exc}. Return a "
+                        "corrected, complete JSON plan object with notes "
+                        "and tasks. Existing repositories are context: do "
+                        "not list one in repositories; use its id in a "
+                        "task. Do not use tool-call markup, XML, "
                         "provider-specific function calls or prose.",
                     )
                 )
-                plan_retries += 1
                 continue
-            raise PlanningError("the planner did not return a plan")
-        if research_steps >= MAX_RESEARCH_STEPS and not observations:
-            if budget_notice:
-                raise PlanningError(
-                    "the planner exceeded the research step limit"
-                )
+        if not actions:
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
                     "user",
-                    "Research budget exhausted. Return the final plan JSON "
-                    "object now; do not read or list more files.",
+                    "Return exactly one JSON plan object with notes and "
+                    "tasks. Do not use tool-call markup, XML, "
+                    "provider-specific function calls or prose.",
                 )
             )
-            budget_notice = True
             continue
     if parsed is None:
         raise PlanningError("the planner did not return a plan")
@@ -908,7 +879,6 @@ def plan_project(
     blocked_tasks: set[int] = set()
     review = None
     product_question = ""
-    revisions = 0
     integrated = False
     rewrite_all = True
     while True:
@@ -1033,14 +1003,6 @@ def plan_project(
             for item in review.findings
         ) or "no findings"
         notes = notes + "\n\n## Release review findings\n\n" + details
-        if revisions >= MAX_RELEASE_REVISIONS:
-            blockers.append(
-                "the release requirements review still found defects: "
-                + details
-            )
-            global_blocked = True
-            break
-        revisions += 1
         messages.append(
             ModelMessage(
                 "assistant",

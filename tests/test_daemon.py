@@ -480,39 +480,6 @@ class DaemonTest(unittest.TestCase):
                 stored["result"]["feedback"], ["Add the test"]
             )
 
-    def test_the_controller_loop_has_a_guard(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            settings, ledger, project, layout, task = (
-                self._failed_task(tmp)
-            )
-            client = ScriptedModelClient(
-                [
-                    json.dumps(
-                        {"operation": "task_qa", "reason": "again"}
-                    )
-                ]
-                * 11
-            )
-            with patch(
-                "forgel.runtime_ops.run_task_qa",
-                return_value=SimpleNamespace(status="pass"),
-            ):
-                handle_failure(
-                    settings,
-                    ledger,
-                    project,
-                    layout,
-                    task["id"],
-                    client,
-                    lambda _m: None,
-                )
-
-            stored = get_task(layout, task["id"])
-            assert stored is not None
-            self.assertEqual(stored["status"], "failed")
-            self.assertIn(
-                "did not resolve", stored["result"]["summary"]
-            )
 
     def test_the_controller_asks_the_owner_as_the_last_resort(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

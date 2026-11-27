@@ -53,7 +53,6 @@ from .tasks import (
 MAX_DIFF_CHARS = 16_000
 MAX_FILE_CHARS = 12_000
 MAX_QA_CHARS = 2_000
-MAX_REVIEW_RETRIES = 10
 REMOVAL_REASONS = {"removed", "replaced", "wrong"}
 PUSH_RETRY_SECONDS = 60
 TEST_PATH = re.compile(
@@ -742,6 +741,7 @@ def _record_review(
     )
 
 
+
 def _review_window(
     settings: Settings, layout: ProjectLayout
 ) -> int:
@@ -825,8 +825,6 @@ def run_task_review(
     ]
     raw = ""
     parsed: dict[str, Any] | None = None
-    answer_retries = 0
-    coverage_retries = 0
     model = project_model_name(layout.control)
     budget = budget_for(_review_window(settings, layout))
     while True:
@@ -838,9 +836,7 @@ def run_task_review(
                 task,
                 ReviewResult(
                     status="error",
-                    summary=(
-                        "the reviewer context window is exhausted"
-                    ),
+                    summary="the reviewer context window is exhausted",
                 ),
                 log,
             )
@@ -901,44 +897,23 @@ def run_task_review(
             try:
                 parsed = _parse_review(json.dumps(finals[-1]))
             except (ValueError, json.JSONDecodeError) as exc:
-                if answer_retries < MAX_REVIEW_RETRIES:
-                    if not observations:
-                        messages.append(
-                            ModelMessage("assistant", raw.strip())
-                        )
+                if not observations:
                     messages.append(
-                        ModelMessage(
-                            "user",
-                            "Return exactly one JSON verdict object with "
-                            "verdict, summary, requirements and blocking. "
-                            "Do not use tool-call markup, XML, "
-                            "provider-specific function calls or prose.",
-                        )
+                        ModelMessage("assistant", raw.strip())
                     )
-                    answer_retries += 1
-                    continue
-                return _record_review(
-                    ledger,
-                    layout,
-                    project,
-                    task,
-                    ReviewResult(
-                        status="error",
-                        summary=(
-                            "Reviewer returned an unusable answer: "
-                            f"{exc}"
-                        ),
-                        output=_cap(raw, MAX_QA_CHARS),
-                    ),
-                    log,
+                messages.append(
+                    ModelMessage(
+                        "user",
+                        "Return exactly one JSON verdict object with "
+                        "verdict, summary, requirements and blocking. "
+                        "Do not use tool-call markup, XML, "
+                        "provider-specific function calls or prose. "
+                        f"The previous answer was unusable: {exc}",
+                    )
                 )
+                continue
             expected = _expected_acceptance(layout, task)
-            if (
-                expected
-                and len(parsed["requirements"]) < expected
-                and coverage_retries < MAX_REVIEW_RETRIES
-            ):
-                coverage_retries += 1
+            if expected and len(parsed["requirements"]) < expected:
                 messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
                     ModelMessage(
@@ -953,30 +928,17 @@ def run_task_review(
                 continue
             break
         if not actions:
-            if answer_retries < MAX_REVIEW_RETRIES:
-                messages.append(ModelMessage("assistant", raw.strip()))
-                messages.append(
-                    ModelMessage(
-                        "user",
-                        "Return exactly one JSON verdict object with "
-                        "verdict, summary, requirements and blocking. "
-                        "Do not use tool-call markup, XML, "
-                        "provider-specific function calls or prose.",
-                    )
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    "Return exactly one JSON verdict object with "
+                    "verdict, summary, requirements and blocking. "
+                    "Do not use tool-call markup, XML, "
+                    "provider-specific function calls or prose.",
                 )
-                answer_retries += 1
-                continue
-            return _record_review(
-                ledger,
-                layout,
-                project,
-                task,
-                ReviewResult(
-                    status="error",
-                    summary="the reviewer returned no usable JSON",
-                ),
-                log,
             )
+            continue
     if parsed is None:
         return _record_review(
             ledger,

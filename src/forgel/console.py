@@ -433,9 +433,23 @@ def _explain_outcomes(
 TERMINAL_RELEASES = {"released", "tagged", "partial", "blocked", "failed"}
 
 
+def _release_marker(release: dict) -> str:
+    error = release.get("last_error") or {}
+    return "|".join(
+        [
+            str(release.get("status") or ""),
+            str(release.get("detail") or ""),
+            str(release.get("next_at") or ""),
+            str(release.get("error_retries") or 0),
+            str(error.get("stage") or ""),
+            str(error.get("message") or ""),
+        ]
+    )
+
+
 def _release_snapshot(layout: ProjectLayout) -> dict[str, str]:
     return {
-        str(release.get("id")): str(release.get("status") or "")
+        str(release.get("id")): _release_marker(release)
         for release in list_releases(layout)
     }
 
@@ -447,9 +461,10 @@ def _changed_releases(
     for release in list_releases(layout):
         release_id = str(release.get("id") or "")
         status = str(release.get("status") or "")
-        if before.get(release_id) == status:
+        if before.get(release_id) == _release_marker(release):
             continue
-        if before.get(release_id) == "tagged" and status == "released":
+        previous = str(before.get(release_id) or "")
+        if previous.split("|", 1)[0] == "tagged" and status == "released":
             continue
         if status not in TERMINAL_RELEASES:
             continue

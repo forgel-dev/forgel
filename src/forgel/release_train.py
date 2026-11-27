@@ -61,11 +61,8 @@ RELEASES_DIR = "docs/program/releases"
 REPO_RELEASES_DIR = "releases"
 CHANGELOG = "CHANGELOG.md"
 INITIAL_VERSION = "0.1.0"
-MAX_AUDIT_ERRORS = 15
 AUDIT_TOTAL_TIMEOUT = limits.LIMITS["audit_timeout"]
-MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
-MAX_RELEASE_CONTROLLER_STEPS = 5
 UNRESOLVED_RELEASE_DETAIL = (
     "the release has a failed or cancelled task"
 )
@@ -171,22 +168,7 @@ def _hand_back_release(
 ) -> None:
     """Return an internal failure to the controller, or stop at the cap."""
 
-    error = release.get("last_error") or {}
     retries = int(release.get("error_retries") or 0)
-    if retries >= MAX_RELEASE_CONTROLLER_STEPS:
-        release["status"] = "blocked"
-        release["detail"] = (
-            "the controller reached its step limit after an internal "
-            f"failure: {str(error.get('message') or '')[:2_000]}"
-        )
-        release["next_at"] = ""
-        save_release(layout, release)
-        actions.append(f"blocked:{release_id}")
-        log(
-            f"[release] {release_id}: controller step limit reached; "
-            "the release waits for a decision"
-        )
-        return
     release["status"] = "running"
     release["detail"] = ""
     release["next_at"] = ""
@@ -194,7 +176,7 @@ def _hand_back_release(
     actions.append(f"controller:{release_id}")
     log(
         f"[release] {release_id}: internal failure handed back to the "
-        f"controller ({retries}/{MAX_RELEASE_CONTROLLER_STEPS})"
+        f"controller ({retries} attempts)"
     )
 
 
@@ -205,21 +187,7 @@ def _hand_back_audit(
 ) -> None:
     """Return an audit operation failure to the audit controller."""
 
-    error = release.get("last_error") or {}
     retries = int(release.get("error_retries") or 0)
-    if retries >= MAX_RELEASE_CONTROLLER_STEPS:
-        release["status"] = "blocked"
-        release["detail"] = (
-            "the audit controller reached its step limit after an "
-            f"internal failure: {str(error.get('message') or '')[:2_000]}"
-        )
-        release["next_at"] = ""
-        save_release(layout, release)
-        log(
-            f"[release] {release['id']}: audit controller step limit "
-            "reached; the release waits for a decision"
-        )
-        return
     release["status"] = "running"
     release["detail"] = ""
     release["next_at"] = ""
@@ -227,7 +195,7 @@ def _hand_back_audit(
     save_release(layout, release)
     log(
         f"[release] {release['id']}: audit failure handed back to the "
-        f"controller ({retries}/{MAX_RELEASE_CONTROLLER_STEPS})"
+        f"controller ({retries} attempts)"
     )
 
 
@@ -1029,15 +997,11 @@ def audit_release(
         parsed = _parse_audit(raw)
     except (ModelError, ValueError) as exc:
         # An infrastructure error says nothing about the change set: it does
-        # not consume an audit round and does not stop the release until the
-        # same error repeats MAX_AUDIT_ERRORS times.
+        # not consume an audit round and does not stop the release.
         audit["errors"] = int(audit.get("errors") or 0) + 1
         audit["verdict"] = "error"
         audit["summary"] = f"the audit could not run: {exc}"
         release["audit"] = audit
-        if int(audit["errors"]) >= MAX_AUDIT_ERRORS:
-            release["status"] = "blocked"
-            release["detail"] = audit["summary"]
         save_release(layout, release)
         log(f"[release] {release['id']}: audit error: {exc}")
         return False
@@ -1247,7 +1211,7 @@ def _queue_fix_tasks(
         for task in release_tasks(layout, str(release["id"]))
     }
     created = 0
-    for finding in findings[:MAX_FIX_FINDINGS]:
+    for finding in findings:
         issue = str(finding.get("issue") or "").strip()
         if not issue:
             continue

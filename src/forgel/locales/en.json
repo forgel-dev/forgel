@@ -114,6 +114,7 @@
   "chat_repo_dependency_edges": "Dependency edges: {edges}.",
   "chat_repo_separate": "No dependency edges recorded: this repository is maintained separately inside the project.",
   "chat_tasks_none": "No tasks. A change request sent as a plain message queues one.",
+  "chat_change_not_queued": "The request was not queued: no task was created.",
   "chat_tasks_header": "Tasks: {count}",
   "chat_task_usage": "Usage: /task cancel|retry|review <task-id>, /task accept <task-id> [note] or /task reject <task-id> [note]",
   "chat_task_cancelled": "Cancelled task {task}.",

@@ -30,10 +30,7 @@ from .model import (
 from .program_manifest import entries as manifest_entries
 from .repo_tools import RESEARCH_ACTIONS, RepoActionError, execute_repo_action
 
-MAX_SPEC_STEPS = 50
 MAX_SPEC_CHARS = 12_000
-MAX_SPEC_RETRIES = 5
-MAX_REVIEW_PAGES = 40
 MAX_WORK_PACKAGE_ACCEPTANCE = 4
 SPEC_KEYS = {
     "problem",
@@ -678,13 +675,11 @@ def write_task_spec(
     model = project_model_name(layout.control)
     parsed: dict[str, Any] | None = None
     retries = 0
-    research_steps = 0
-    budget_notice = False
     attempts = 0
     markup_retries = 0
     research_paths: list[str] = []
     last_observation = ""
-    for _ in range(MAX_SPEC_STEPS + MAX_SPEC_RETRIES + 6):
+    while True:
         attempts += 1
         try:
             raw = client.complete(messages, model=model)
@@ -708,8 +703,6 @@ def write_task_spec(
         ]
         observations: list[str] = []
         for data in actions:
-            if research_steps >= MAX_SPEC_STEPS:
-                break
             args = dict(data.get("action_args") or {})
             for key in ("path", "repo_id"):
                 if key in data and key not in args:
@@ -723,7 +716,6 @@ def write_task_spec(
             except RepoActionError as exc:
                 observation = f"error: {exc}"
             observations.append(observation)
-            research_steps += 1
             research_paths.append(
                 f"{data['action']}:{args.get('path') or ''}"
             )
@@ -748,26 +740,25 @@ def write_task_spec(
             and not _looks_like_spec(item)
         ]
         if unknown and not finals:
-            if markup_retries < MAX_SPEC_RETRIES:
-                names = ", ".join(
-                    sorted(
-                        {
-                            str(item.get("action") or "")
-                            for item in unknown
-                        }
-                    )
+            names = ", ".join(
+                sorted(
+                    {
+                        str(item.get("action") or "")
+                        for item in unknown
+                    }
                 )
-                messages.append(ModelMessage("assistant", raw.strip()))
-                messages.append(
-                    ModelMessage(
-                        "user",
-                        f"Unknown action(s): {names}. The only research "
-                        "actions are list_files and read_file. Return one "
-                        "of them or the final specification JSON.",
-                    )
+            )
+            messages.append(ModelMessage("assistant", raw.strip()))
+            messages.append(
+                ModelMessage(
+                    "user",
+                    f"Unknown action(s): {names}. The only research "
+                    "actions are list_files and read_file. Return one "
+                    "of them or the final specification JSON.",
                 )
-                markup_retries += 1
-                continue
+            )
+            markup_retries += 1
+            continue
         if finals:
             try:
                 parsed = _normalize_spec(finals[-1], intent)
@@ -779,20 +770,6 @@ def write_task_spec(
                     raise SpecError("; ".join(documentation[:5]))
                 break
             except SpecError as exc:
-                if retries >= MAX_SPEC_RETRIES:
-                    keys = sorted(finals[-1].keys())
-                    raise SpecError(
-                        _diagnostics(
-                            intent,
-                            attempts,
-                            research_paths,
-                            retries,
-                            markup_retries,
-                            raw,
-                            last_observation,
-                            f"{exc}; model keys: {keys}",
-                        )
-                    ) from exc
                 if not observations:
                     messages.append(ModelMessage("assistant", raw.strip()))
                 messages.append(
@@ -821,7 +798,7 @@ def write_task_spec(
                 )
                 retries += 1
                 continue
-        if _looks_like_tool_markup(raw) and markup_retries < MAX_SPEC_RETRIES:
+        if _looks_like_tool_markup(raw):
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
@@ -835,20 +812,6 @@ def write_task_spec(
             markup_retries += 1
             continue
         if not actions:
-            if retries >= MAX_SPEC_RETRIES:
-                raise SpecError(
-                    _diagnostics(
-                        intent,
-                        attempts,
-                        research_paths,
-                        retries,
-                        markup_retries,
-                        raw,
-                        last_observation,
-                        "the requirements writer did not return a "
-                        "specification",
-                    )
-                )
             messages.append(ModelMessage("assistant", raw.strip()))
             messages.append(
                 ModelMessage(
@@ -859,31 +822,15 @@ def write_task_spec(
             )
             retries += 1
             continue
-        if research_steps >= MAX_SPEC_STEPS and not observations:
-            if budget_notice:
-                raise SpecError(
-                    _diagnostics(
-                        intent,
-                        attempts,
-                        research_paths,
-                        retries,
-                        markup_retries,
-                        raw,
-                        last_observation,
-                        "the requirements writer exceeded the research "
-                        "step limit",
-                    )
-                )
-            messages.append(ModelMessage("assistant", raw.strip()))
-            messages.append(
-                ModelMessage(
-                    "user",
-                    "Research budget exhausted. Return the final spec JSON "
-                    "now; do not read or list more files.",
-                )
+        messages.append(ModelMessage("assistant", raw.strip()))
+        messages.append(
+            ModelMessage(
+                "user",
+                "Return a complete JSON specification with explicit "
+                "requirements and acceptance criteria.",
             )
-            budget_notice = True
-            continue
+        )
+        continue
     if parsed is None:
         raise SpecError(
             _diagnostics(
@@ -1058,7 +1005,7 @@ def review_release(
     ]
     data: Any = None
     page_index: int | None = None
-    for _ in range(MAX_REVIEW_PAGES):
+    while True:
         try:
             raw = client.complete(
                 messages, model=project_model_name(layout.control)
@@ -1098,10 +1045,6 @@ def review_release(
             continue
         data = parsed
         break
-    else:
-        raise SpecError(
-            "the release review kept requesting context without a verdict"
-        )
     if not isinstance(data, dict) or not isinstance(
         data.get("sufficient"), bool
     ):

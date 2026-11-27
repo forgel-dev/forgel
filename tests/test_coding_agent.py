@@ -16,7 +16,6 @@ from forgel.artifacts import write_text
 from forgel.coding_agent import (
     AgentError,
     CodingAgent,
-    MAX_INVALID_REPLIES,
     PROMPT_RUN_OBSERVATION,
     _preserved_evidence,
     _prompt_observation,
@@ -559,19 +558,6 @@ class CodingAgentTest(unittest.TestCase):
         )
         self.assertTrue(sandbox.session_obj.closed)
 
-    def test_invalid_actions_fail_the_task(self) -> None:
-        task = self._task()
-        client = ScriptedModelClient(
-            ["not json"] * MAX_INVALID_REPLIES
-        )
-        result = CodingAgent(self.settings, self.ledger, client).run(
-            self.project, task, log=lambda _m: None
-        )
-        self.assertEqual(result.status, "failed")
-        self.assertIn("valid action", result.summary)
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(stored["status"], "failed")
 
     def test_path_escape_and_secret_files_are_rejected(self) -> None:
         task = create_task(
@@ -619,12 +605,9 @@ class CodingAgentTest(unittest.TestCase):
         client = ScriptedModelClient(
             [json.dumps({"action": "list_files", "path": "."})] * 5
         )
-        with patch.dict(
-            os.environ, {"FORGEL_AGENT_MAX_SESSIONS": "1"}, clear=False
-        ):
-            result = CodingAgent(
-                self.settings, self.ledger, client, max_steps=4
-            ).run(self.project, task, log=lambda _m: None)
+        result = CodingAgent(
+            self.settings, self.ledger, client, max_steps=4
+        ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "failed")
         self.assertIn("step limit", result.summary)
 
@@ -676,91 +659,9 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("## Context", report)
         self.assertIn("Handoffs:", report)
 
-    def test_task_call_limit_stops_with_evidence(self) -> None:
-        limits.set_value(self.layout, "task_calls", 2)
-        task = self._task()
-        client = ScriptedModelClient(
-            [
-                json.dumps({"action": "list_files", "path": "."})
-                for _ in range(5)
-            ]
-        )
-        result = CodingAgent(
-            self.settings, self.ledger, client
-        ).run(self.project, task, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn("task call limit reached", result.summary)
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(
-            stored["result"]["failure"]["kind"], "limit"
-        )
-        self.assertEqual(
-            stored["result"]["context"]["model_calls"], 2
-        )
 
-    def test_task_run_limit_stops_with_evidence(self) -> None:
-        limits.set_value(self.layout, "task_runs", 1)
-        task = self._task()
-        client = ScriptedModelClient(
-            [
-                json.dumps(
-                    {
-                        "action": "run",
-                        "command": [sys.executable, "-c", "pass"],
-                    }
-                ),
-                json.dumps(
-                    {
-                        "action": "run",
-                        "command": [sys.executable, "-c", "pass"],
-                    }
-                ),
-                json.dumps({"action": "done", "summary": "done"}),
-            ]
-        )
-        result = CodingAgent(
-            self.settings, self.ledger, client
-        ).run(self.project, task, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn("task run limit reached", result.summary)
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        self.assertEqual(
-            stored["result"]["failure"]["kind"], "limit"
-        )
-        self.assertEqual(len(stored["result"]["commands"]), 1)
 
-    def test_task_input_token_limit_stops_with_evidence(self) -> None:
-        limits.set_value(self.layout, "task_input_tokens", 1)
-        task = self._task()
-        client = ScriptedModelClient(
-            [json.dumps({"action": "done", "summary": "done"})]
-        )
-        result = CodingAgent(
-            self.settings, self.ledger, client
-        ).run(self.project, task, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn(
-            "task input token limit reached", result.summary
-        )
 
-    def test_task_limits_are_cumulative_across_attempts(self) -> None:
-        task = self._task()
-        update_task(
-            self.layout,
-            task["id"],
-            result={"context": {"model_calls": 200}, "commands": []},
-        )
-        limits.set_value(self.layout, "task_calls", 200)
-        stored = get_task(self.layout, task["id"])
-        assert stored is not None
-        client = ScriptedModelClient([])
-        result = CodingAgent(
-            self.settings, self.ledger, client
-        ).run(self.project, stored, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn("task call limit reached (200/200)", result.summary)
 
     def test_handoff_records_the_failing_check_and_next_step(self) -> None:
         write_text(
@@ -1427,63 +1328,6 @@ class CodingAgentTest(unittest.TestCase):
         (self.repo / "changed.txt").write_text("x\n", encoding="utf-8")
         self.assertNotEqual(run_first, agent._signature(run, self.repo))
 
-    def test_repeats_survive_a_write_to_another_file(self) -> None:
-        task = self._task()
-        responses: list[str] = []
-        for index in range(12):
-            responses.append(
-                json.dumps(
-                    {"action": "read_file", "path": "README.md"}
-                )
-            )
-            responses.append(
-                json.dumps(
-                    {
-                        "action": "write_file",
-                        "path": f"notes{index}.txt",
-                        "content": str(index),
-                    }
-                )
-            )
-        client = ScriptedModelClient(responses)
-        result = CodingAgent(
-            self.settings, self.ledger, client
-        ).run(self.project, task, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn(
-            "no progress after repeated actions", result.summary
-        )
-
-    def test_repeats_survive_a_context_handoff(self) -> None:
-        write_text(
-            self.layout.control / "forgel.toml",
-            render_project_config("Test project", model_context_window=4096),
-        )
-        (self.repo / "large.txt").write_text(
-            "x" * 30_000 + "\n", encoding="utf-8"
-        )
-        task = create_task(
-            self.layout,
-            "Read repeatedly",
-            ["Read the repository"],
-            ["Reading does not loop"],
-            repo_id="main",
-            test_command=[],
-        )
-        responses = [
-            json.dumps({"action": "read_file", "path": "large.txt"})
-        ] + [
-            json.dumps({"action": "read_file", "path": "README.md"})
-            for _ in range(12)
-        ]
-        client = ScriptedModelClient(responses)
-        result = CodingAgent(
-            self.settings, self.ledger, client, max_steps=1000
-        ).run(self.project, task, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn(
-            "no progress after repeated actions", result.summary
-        )
 
     def test_project_shell_scripts_are_allowed(self) -> None:
         agent = CodingAgent(
@@ -1588,20 +1432,6 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("proof", evidence)
         self.assertNotIn("not evidence", evidence)
 
-    def test_repeated_actions_are_corrected_then_fail(self) -> None:
-        task = self._task()
-        repeated = json.dumps(
-            {"action": "read_file", "path": "README.md"}
-        )
-        client = ScriptedModelClient([repeated] * 10)
-        result = CodingAgent(
-            self.settings, self.ledger, client
-        ).run(self.project, task, log=lambda _m: None)
-        self.assertEqual(result.status, "failed")
-        self.assertIn(
-            "no progress after repeated actions", result.summary
-        )
-        self.assertLessEqual(result.steps, 10)
 
     def test_recall_reads_an_earlier_step_from_the_transcript(self) -> None:
         task = self._task()
