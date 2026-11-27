@@ -674,6 +674,19 @@
       "actor": "auto",
       "at": "2026-11-27T23:34:50+00:00",
       "notes": ""
+    },
+    "push": {
+      "status": "pushed",
+      "repo": "code",
+      "branch": "main",
+      "detail": "",
+      "control": {
+        "status": "pushed",
+        "detail": "",
+        "branch": "main"
+      },
+      "attempts": 1,
+      "next_at": ""
     }
   },
   "work_packages": [
