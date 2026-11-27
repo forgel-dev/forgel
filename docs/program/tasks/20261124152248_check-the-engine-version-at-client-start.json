@@ -76,13 +76,398 @@
     }
   ],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-27T21:54:16+00:00",
+  "finished_at": "2026-11-27T23:26:38+00:00",
   "result": {
     "manual_restarts": 2,
-    "restarted_at": "2026-11-27T21:54:16+00:00"
+    "restarted_at": "2026-11-27T21:54:16+00:00",
+    "summary": "Completed and verified the engine-version confirmation at client startup. The client enforces a single declared minimum engine version (forgel_code/compat.py) that is the same value the version report shows; `--version` and help stay engine-free. Every other command and the interactive session confirm the engine once, ask for its version exactly once, and refuse a missing, too-old or unconfirmable engine before any operation request. Failure paths print one actionable English message naming the engine, the required minimum and the found version, with a single copy-pasteable install line, and reuse the existing plain/JSON failure reporting and non-zero exit codes. Version comparison follows the numeric-component rules. This session fixed the test doubles so they answer the version question: tests/stub_engine.py now defines the module-level ENGINE it referenced (the version answer previously raised NameError) and answers `version`/`--version` before replaying canned output, and tests/test_interactive.py's inline stub answers `version` and exports FORGEL_ENGINE so the real startup path reaches the stub. Verified with the repository gate `python3 -m unittest discover -s tests`: 378 tests, OK.",
+    "files_changed": [
+      "forgel_code/cli.py",
+      "forgel_code/interactive.py",
+      "tests/stub_engine.py",
+      "tests/test_cli.py",
+      "tests/test_cli_extra.py",
+      "tests/test_interactive.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-6"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "36510fb"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "28a08eb"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "bc13e6e"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-12"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "36510fb"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-4",
+          "--",
+          "forgel_code/compat.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--name-only",
+          "HEAD"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--name-status",
+          "36510fb"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "forgel_code/interactive.py",
+          "tests/test_cli_extra.py",
+          "tests/test_cli.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_stub_contract",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_stub_contract",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_stub_contract",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_stub_contract"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_stub_contract",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_stub_contract",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_interactive"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_interactive.BareStartTest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain",
+          "--untracked-files=all"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "log",
+          "--oneline",
+          "-5",
+          "--",
+          "tests/test_version_report.py",
+          "forgel_code/compat.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "..........................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 378 tests in 267.460s\n\nOK\n",
+    "assumptions": [
+      "The stub engine doubles were corrected rather than the confirmation bypassed: the tests kept exercising the client's real startup path.",
+      "The install line uses the client's own version tag for the published install script, so running it installs a current engine and is safe to re-run in both the missing and the too-old case.",
+      "Version questions are answered by the engine's `version` command in the machine-readable form, matching the client's existing engine protocol."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 5,
+      "compactions": 4,
+      "model_calls": 531,
+      "estimated_input_tokens": 26513514,
+      "provider_input_tokens": 26668888,
+      "provider_output_tokens": 526186,
+      "cache_hit_tokens": 26256512,
+      "cache_miss_tokens": 412376,
+      "estimated_tokens": 57244,
+      "state": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "28a08ebf67947a23939260d48da2c72e0b07be2a",
+      "head": "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3",
+      "commit": "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3",
+      "commits": [
+        "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.md"
   },
   "work_packages": [
     {
