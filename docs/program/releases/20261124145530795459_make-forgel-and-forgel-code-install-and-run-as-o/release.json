@@ -6,7 +6,7 @@
   "release_class": "minor",
   "plan_id": "20261124145600_make-forgel-and-forgel-code-install-and-",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "status": "planned",
+  "status": "failed",
   "tasks": [
     "20261124152248_emit-a-machine-readable-engine-version",
     "20261124152248_add-the-engine-s-one-command-installer-w",
@@ -53,5 +53,6 @@
   },
   "control_push": {},
   "finalized_at": "",
-  "detail": ""
+  "detail": "",
+  "next_at": ""
 }

@@ -55,6 +55,10 @@
 
 {{acceptance}}
 
+## Work Packages
+
+{{work_packages}}
+
 ## Scope Boundaries
 
 {{scope}}

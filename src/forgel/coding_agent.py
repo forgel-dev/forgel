@@ -19,6 +19,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -62,15 +63,22 @@ from .sandbox import CommandRunner, SandboxError, docker_runner
 MAX_SESSIONS = 6
 MAX_FILE_BYTES = 200_000
 MAX_OBSERVATION = 200_000
+PROMPT_READ_OBSERVATION = 50_000
+PROMPT_RUN_OBSERVATION = 16_000
+PROMPT_OTHER_OBSERVATION = 20_000
 MAX_INVALID_REPLIES = 8
 MAX_MARKUP_RETRIES = 10
 MAX_LIST_ENTRIES = 200
+MAX_SEARCH_RESULTS = 100
+SEARCH_TIMEOUT = 30.0
 MAX_REPEATED_ACTIONS = 5
 MAX_REPEAT_CORRECTIONS = 5
 ALLOWED_ACTIONS = {
     "list_files",
     "read_file",
+    "search_files",
     "recall",
+    "edit_file",
     "write_file",
     "delete_file",
     "run",
@@ -176,7 +184,9 @@ XML or provider-specific function calls; the runtime understands only the
 JSON actions below.
 {"action": "list_files", "path": "."}
 {"action": "read_file", "path": "relative/path", "offset": 1, "limit": 2000}
+{"action": "search_files", "pattern": "text or POSIX extended regex", "path": ".", "glob": "*.py", "literal": false, "context": 2}
 {"action": "recall", "from": 1, "count": 5}
+{"action": "edit_file", "path": "relative/path", "old": "exact current text", "new": "replacement text", "expected_sha256": "value shown by read_file"}
 {"action": "write_file", "path": "relative/path", "content": "..."}
 {"action": "delete_file", "path": "relative/path"}
 {"action": "run", "command": ["python", "-m", "unittest"], "timeout": 60}
@@ -208,12 +218,20 @@ Autonomy (D-075):
 
 Rules:
 - Implement exactly the explicit requirements. Do not add unrelated features.
+- A specification may group requirements into work packages. Work on one work
+  package at a time: implement and verify its acceptance criteria, then
+  continue to the next. Do not mix packages in one change.
+- Use search_files to locate symbols and relevant lines before reading a file.
+  Use read_file only for the ranges needed for the current decision.
 - Use read_file for file contents. run is only for tests, build and
   dependency-install commands; never use python, grep, cat or similar to print
   a file. read_file returns a numbered line range with a continuation hint;
   read the next range with offset instead of writing helper scripts.
 - A file you have read is in the conversation. Do not read it again before
-  editing; when you know the exact change, call write_file immediately.
+  editing; when you know the exact change, call edit_file with the exact old
+  text (without the numbered display prefix), the replacement, and the
+  sha256 that read_file showed. The old text must occur exactly once. Use
+  write_file only for a new file or a full replacement.
 - Do not repeat an action. If you see the same observation twice, change the
   approach or make the edit.
 - If the task changes documentation only, edit the document and call done; do
@@ -478,6 +496,26 @@ def _cap(text: str, limit: int = MAX_OBSERVATION) -> str:
     )
 
 
+def _prompt_observation(kind: str, observation: str) -> str:
+    """Bound model input while preserving the full observation in the transcript."""
+
+    limit = {
+        "read_file": PROMPT_READ_OBSERVATION,
+        "search_files": PROMPT_READ_OBSERVATION,
+        "run": PROMPT_RUN_OBSERVATION,
+    }.get(kind, PROMPT_OTHER_OBSERVATION)
+    if len(observation) <= limit:
+        return observation
+    head = limit // 2
+    tail = limit - head
+    marker = (
+        f"\n... [observation truncated for prompt: {len(observation)} chars; "
+        "the full observation is preserved in the task transcript; "
+        "continue with a narrower read range or a repository search]\n"
+    )
+    return observation[:head] + marker + observation[-tail:]
+
+
 def parse_actions(raw: str) -> list[dict[str, Any]]:
     """Every allowed action object in a model reply, in order."""
 
@@ -533,6 +571,58 @@ def _preserved_evidence(path: Path) -> str:
     return "\n\n".join(parts)
 
 
+def _file_digest(path: Path) -> str:
+    """Return a short content digest without exposing the file's contents."""
+
+    try:
+        if not path.is_file():
+            return "missing"
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            while chunk := handle.read(1_048_576):
+                digest.update(chunk)
+        return digest.hexdigest()[:16]
+    except OSError:
+        return "unreadable"
+
+
+def _repo_fingerprint(repo: Path) -> str:
+    """Fingerprint product state, excluding the runtime's own process files."""
+
+    digest = hashlib.sha256(git_ops.head_sha(repo).encode("utf-8"))
+    for item in git_ops.status_paths(repo):
+        product = _task_path(item)
+        if not product:
+            continue
+        digest.update(product.encode("utf-8"))
+        digest.update(_file_digest(repo / product).encode("ascii"))
+    return digest.hexdigest()[:16]
+
+
+def _handoff_next_step(
+    actions: Sequence[str], failing_check: str
+) -> str:
+    if failing_check:
+        return (
+            f"Investigate the failing command `{failing_check}` and "
+            "change the code or the approach; do not repeat it unchanged."
+        )
+    if actions:
+        last = actions[-1]
+        if last.startswith(
+            ("write_file:", "edit_file:", "delete_file:")
+        ):
+            return (
+                "Run the relevant check for the changed files, "
+                "then continue."
+            )
+        return (
+            f"Continue from the last action ({last}); use the repository "
+            "state and the files changed."
+        )
+    return "Continue from the current repository state and the changed files."
+
+
 class CodingAgent:
     def __init__(
         self,
@@ -545,6 +635,7 @@ class CodingAgent:
         self.ledger = ledger
         self.client = client
         self._allowed_scripts: set[str] = set()
+        self._read_cache: dict[tuple[str, str, str, str], str] = {}
         env_steps = os.environ.get("FORGEL_AGENT_MAX_STEPS", "").strip()
         if max_steps is not None:
             steps = max(1, int(max_steps))
@@ -582,6 +673,7 @@ class CodingAgent:
         repo_id, repo = self._repository(layout, task)
         if not (repo / ".git").exists():
             raise AgentError(f"repository {repo_id} has no git history")
+        self._read_cache.clear()
         # Each attempt starts from the current HEAD. The review is state-based
         # and uses the attributed files, not a commit range, so unrelated
         # commits between attempts never enter the review.
@@ -1224,12 +1316,24 @@ class CodingAgent:
 
         window = self._context_window(layout)
         budget: ContextBudget = budget_for(window)
-        model_calls = 0
-        estimated_input_tokens = 0
-        provider_input_tokens = 0
-        provider_output_tokens = 0
-        cache_hit_tokens = 0
-        cache_miss_tokens = 0
+        prior_result = dict(task.get("result") or {})
+        prior_context = dict(prior_result.get("context") or {})
+        model_calls = int(prior_context.get("model_calls") or 0)
+        estimated_input_tokens = int(
+            prior_context.get("estimated_input_tokens") or 0
+        )
+        provider_input_tokens = int(
+            prior_context.get("provider_input_tokens") or 0
+        )
+        provider_output_tokens = int(
+            prior_context.get("provider_output_tokens") or 0
+        )
+        cache_hit_tokens = int(
+            prior_context.get("cache_hit_tokens") or 0
+        )
+        cache_miss_tokens = int(
+            prior_context.get("cache_miss_tokens") or 0
+        )
         state_path = layout.artifact(
             f"docs/program/agent/{task['id']}.state.md"
         )
@@ -1250,7 +1354,9 @@ class CodingAgent:
             ModelMessage("user", task_prompt),
         ]
         actions: list[str] = []
-        commands: list[dict[str, Any]] = []
+        commands: list[dict[str, Any]] = list(
+            prior_result.get("commands") or []
+        )
         touched: set[str] = set()
         recent: list[str] = []
         assumptions = [
@@ -1266,7 +1372,7 @@ class CodingAgent:
         failure_kind = "agent"
         invalid = 0
         markup_retries = 0
-        steps = 0
+        steps = model_calls
         sessions = 0
         compactions = 0
         signatures: dict[str, int] = {}
@@ -1276,6 +1382,22 @@ class CodingAgent:
             changed = sorted(
                 set(touched) | set(git_ops.status_paths(repo))
             )
+            last_command = commands[-1] if commands else {}
+            command_text = " ".join(
+                str(item)
+                for item in (last_command.get("command") or [])
+            )
+            last_exit = last_command.get("exit_code")
+            failing_check = ""
+            last_test_outcome = "not run"
+            if command_text:
+                if last_exit == 0:
+                    last_test_outcome = f"passed: {command_text}"
+                else:
+                    last_test_outcome = (
+                        f"failed: {command_text} (exit {last_exit})"
+                    )
+                    failing_check = command_text
             state = SessionState(
                 task_id=str(task["id"]),
                 title=str(task["title"]),
@@ -1294,6 +1416,9 @@ class CodingAgent:
                 actions=list(actions),
                 commands=list(commands),
                 observations=list(recent),
+                next_step=_handoff_next_step(actions, failing_check),
+                last_test_outcome=last_test_outcome,
+                failing_check=failing_check,
             )
             max_state_tokens = max(
                 512, int(budget.window * STATE_CONTEXT_RATIO)
@@ -1304,7 +1429,6 @@ class CodingAgent:
                     max_tokens=max_state_tokens, model=model
                 ),
             )
-            signatures.clear()
             return (
                 [
                     ModelMessage("system", SYSTEM_PROMPT),
@@ -1327,6 +1451,51 @@ class CodingAgent:
             handed_off = False
             session_steps = 0
             while True:
+                call_limit = limits.get(
+                    layout, "task_calls", limits.LIMITS["task_calls"]
+                )
+                run_limit = limits.get(
+                    layout, "task_runs", limits.LIMITS["task_runs"]
+                )
+                token_limit = limits.get(
+                    layout,
+                    "task_input_tokens",
+                    limits.LIMITS["task_input_tokens"],
+                )
+                projected_tokens = (
+                    estimated_input_tokens
+                    + budget.usage(messages, model)
+                )
+                if model_calls >= call_limit:
+                    status = "failed"
+                    failure_kind = "limit"
+                    summary = (
+                        "task call limit reached "
+                        f"({model_calls:g}/{call_limit:g}); "
+                        "raise task_calls with set_limit"
+                    )
+                    terminal = True
+                    break
+                if len(commands) >= run_limit:
+                    status = "failed"
+                    failure_kind = "limit"
+                    summary = (
+                        "task run limit reached "
+                        f"({len(commands):g}/{run_limit:g}); "
+                        "raise task_runs with set_limit"
+                    )
+                    terminal = True
+                    break
+                if projected_tokens >= token_limit:
+                    status = "failed"
+                    failure_kind = "limit"
+                    summary = (
+                        "task input token limit reached "
+                        f"({projected_tokens:g}/{token_limit:g}); "
+                        "raise task_input_tokens with set_limit"
+                    )
+                    terminal = True
+                    break
                 if self.max_steps and session_steps >= self.max_steps:
                     status = "failed"
                     failure_kind = "agent"
@@ -1491,9 +1660,9 @@ class CodingAgent:
                         )
                         terminal = True
                         break
-                    signature = self._signature(action)
+                    signature = self._signature(action, repo)
                     repeats = 0
-                    if kind in {"read_file", "write_file", "run"}:
+                    if kind in {"read_file", "search_files", "write_file", "run"}:
                         repeats = signatures.get(signature, 0) + 1
                         signatures[signature] = repeats
                         if repeats >= MAX_REPEATED_ACTIONS:
@@ -1557,7 +1726,7 @@ class CodingAgent:
                         _append_transcript(transcript_path, entry)
                     messages.append(
                         ModelMessage(
-                            "user", f"OBSERVATION:\n{_cap(observation)}"
+                            "user", f"OBSERVATION:\n{_prompt_observation(kind, observation)}"
                         )
                     )
                     if repeats >= 3:
@@ -1568,10 +1737,6 @@ class CodingAgent:
                         )
                         messages.append(ModelMessage("user", warning))
                         recent.append(warning)
-                    if kind in {"write_file", "delete_file"} and (
-                        observation.startswith(("wrote ", "deleted "))
-                    ):
-                        signatures.clear()
                     if budget.should_compact(messages, model):
                         if session < self.max_sessions:
                             used = budget.usage(messages, model)
@@ -1908,12 +2073,75 @@ Files:
                 data = path.read_bytes()
                 if b"\x00" in data:
                     return "binary file; not displayed", None
-                return read_text_page(
-                    path,
-                    action.get("offset", 1),
-                    action.get("limit", READ_DEFAULT_LINES),
-                    display=str(action.get("path") or ""),
-                ), None
+                digest = hashlib.sha256(data).hexdigest()[:16]
+                cache_key = (
+                    str(path),
+                    str(action.get("offset", 1)),
+                    str(action.get("limit", READ_DEFAULT_LINES)),
+                    digest,
+                )
+                cached = self._read_cache.get(cache_key)
+                if cached is not None:
+                    return cached, None
+                rendered = (
+                    f"sha256:{digest}\n"
+                    + read_text_page(
+                        path,
+                        action.get("offset", 1),
+                        action.get("limit", READ_DEFAULT_LINES),
+                        display=str(action.get("path") or ""),
+                    )
+                )
+                self._read_cache[cache_key] = rendered
+                return rendered, None
+            if kind == "search_files":
+                return self._search(layout, repo, action), None
+            if kind == "edit_file":
+                path = self._path(repo, action.get("path"))
+                self._check_write_path(path)
+                if not path.is_file():
+                    return f"file not found: {action.get('path')}", None
+                old = action.get("old")
+                new = action.get("new")
+                expected = str(
+                    action.get("expected_sha256") or ""
+                ).strip().lower()
+                if not isinstance(old, str) or not old:
+                    return "edit_file needs a non-empty old string", None
+                if not isinstance(new, str):
+                    return "edit_file needs a string new value", None
+                if not expected:
+                    return (
+                        "edit_file needs expected_sha256 from read_file",
+                        None,
+                    )
+                try:
+                    text = path.read_text(encoding="utf-8")
+                    digest = hashlib.sha256(
+                        path.read_bytes()
+                    ).hexdigest()
+                except (OSError, UnicodeDecodeError) as exc:
+                    return f"cannot read {action.get('path')}: {exc}", None
+                if expected not in {digest, digest[:16]}:
+                    return (
+                        "conflict: the file changed; read it again",
+                        None,
+                    )
+                count = text.count(old)
+                if count != 1:
+                    return (
+                        "old text must occur exactly once "
+                        f"(found {count})",
+                        None,
+                    )
+                updated = text.replace(old, new, 1)
+                raw = updated.encode("utf-8")
+                if len(raw) > MAX_FILE_BYTES:
+                    return f"file too large ({len(raw)} bytes)", None
+                self._atomic_write(path, updated)
+                relative = path.relative_to(repo.resolve()).as_posix()
+                touched.add(relative)
+                return f"edited {relative}", None
             if kind == "write_file":
                 path = self._path(repo, action.get("path"))
                 self._check_write_path(path)
@@ -2003,6 +2231,29 @@ Files:
         if _is_secret_name(name):
             raise AgentError(f"refusing to write secret-like file {name}")
 
+    def _atomic_write(self, path: Path, text: str) -> None:
+        fd, temporary = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.chmod(temporary, path.stat().st_mode)
+            except OSError:
+                pass
+            os.replace(temporary, path)
+        except BaseException:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
+
     @staticmethod
     def _looks_like_file_inspection(command: Sequence[str]) -> bool:
         executable = Path(command[0]).name
@@ -2022,25 +2273,42 @@ Files:
             )
         return False
 
-    @staticmethod
-    def _signature(action: Mapping[str, Any]) -> str:
+    def _signature(self, action: Mapping[str, Any], repo: Path) -> str:
         kind = str(action.get("action"))
         path = str(action.get("path") or "")
         if kind == "read_file":
+            try:
+                digest = _file_digest(self._path(repo, path))
+            except AgentError:
+                digest = "invalid"
             return (
                 f"read_file:{path}:"
-                f"{action.get('offset', '')}:{action.get('limit', '')}"
+                f"{action.get('offset', '')}:{action.get('limit', '')}:{digest}"
             )
-        if kind in {"list_files", "delete_file"}:
+        if kind == "delete_file":
             return f"{kind}:{path}"
         if kind == "write_file":
             content = str(action.get("content") or "")
             digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
             return f"write_file:{path}:{digest}"
         if kind == "run":
-            return "run:" + json.dumps(
+            command = json.dumps(
                 action.get("command"), sort_keys=True, ensure_ascii=False
             )
+            return f"run:{command}:{_repo_fingerprint(repo)}"
+        if kind == "search_files":
+            query = json.dumps(
+                {
+                    "pattern": action.get("pattern"),
+                    "path": action.get("path"),
+                    "glob": action.get("glob"),
+                    "literal": action.get("literal"),
+                    "context": action.get("context"),
+                },
+                sort_keys=True,
+                ensure_ascii=False,
+            )
+            return f"search_files:{query}:{_repo_fingerprint(repo)}"
         return kind
 
     def _command(self, value: Any) -> list[str]:
@@ -2146,6 +2414,87 @@ Files:
         output = merge_output(completed.stdout, completed.stderr)
         return completed.returncode, _cap(output)
 
+    def _search(
+        self,
+        layout: ProjectLayout,
+        repo: Path,
+        action: Mapping[str, Any],
+    ) -> str:
+        pattern = str(action.get("pattern") or "").strip()
+        if not pattern:
+            return "search_files needs a pattern"
+        if len(pattern) > 256:
+            return "search pattern is too long"
+        try:
+            target = self._path(repo, str(action.get("path") or "."))
+        except AgentError as exc:
+            return f"error: {exc}"
+        if not target.exists():
+            return f"not found: {action.get('path')}"
+        try:
+            context = max(0, min(int(action.get("context", 2)), 5))
+        except (TypeError, ValueError):
+            context = 2
+        argv = [
+            "git",
+            "grep",
+            "-n",
+            "-I",
+            "-E",
+            "--untracked",
+            "-C",
+            str(context),
+        ]
+        if action.get("literal"):
+            argv.append("-F")
+        argv.extend(["-e", pattern, "--"])
+        relative = target.relative_to(repo.resolve()).as_posix()
+        glob = str(action.get("glob") or "").strip()
+        if glob:
+            argv.append(f"{relative}/{glob}" if relative != "." else glob)
+        else:
+            argv.append(relative)
+        try:
+            completed = subprocess.run(
+                argv,
+                cwd=str(repo),
+                env=_safe_env(layout),
+                capture_output=True,
+                text=True,
+                timeout=SEARCH_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return f"search timed out after {SEARCH_TIMEOUT:g}s"
+        except (OSError, subprocess.SubprocessError) as exc:
+            return f"cannot search: {exc}"
+        output = (completed.stdout + completed.stderr).strip()
+        if completed.returncode == 1:
+            return "no matches"
+        if completed.returncode != 0:
+            return f"search failed: {output[-4_000:]}"
+        matches: list[str] = []
+        for line in output.splitlines():
+            if line == "--":
+                continue
+            parts = line.split(":", 2)
+            if len(parts) < 3:
+                continue
+            filename = parts[0]
+            if contract.is_control_path(filename) or _is_secret_name(
+                Path(filename).name
+            ):
+                continue
+            matches.append(line)
+            if len(matches) >= MAX_SEARCH_RESULTS:
+                break
+        if not matches:
+            return "no matches"
+        rendered = "\n".join(matches)
+        if len(matches) >= MAX_SEARCH_RESULTS:
+            rendered += "\n... [search results truncated]"
+        return _cap(rendered, PROMPT_READ_OBSERVATION)
+
     @staticmethod
     def _list(repo: Path) -> str:
         lines: list[str] = []
@@ -2165,8 +2514,13 @@ Files:
     @staticmethod
     def _action_summary(action: Mapping[str, Any]) -> str:
         kind = action.get("action")
-        if kind in {"read_file", "write_file", "delete_file"}:
+        if kind in {"read_file", "write_file", "delete_file", "edit_file"}:
             return f"{kind}: {action.get('path')}"
+        if kind == "search_files":
+            pattern = str(action.get("pattern") or "")
+            path = str(action.get("path") or ".")
+            glob = str(action.get("glob") or "")
+            return f"search_files: {pattern} @ {path} {glob}".rstrip()
         if kind == "run":
             return f"run: {action.get('command')}"
         return str(kind)

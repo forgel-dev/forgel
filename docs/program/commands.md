@@ -18,10 +18,10 @@ Flat top level:
 | field | meaning |
 |---|---|
 | `ok` | success flag |
-| `kind` | `answer`, `change_request`, `action`, `plan`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `control`, `daemon` |
+| `kind` | `answer`, `change_request`, `action`, `plan`, `status`, `tasks`, `task`, `projects`, `session`, `use`, `history`, `control`, `daemon`, `version` |
 | `text` | the reply text a human would see |
 | `error` | empty on success, a description otherwise |
-| payload | one of `task` (+ `task_id`), `tasks`, `plan`, `project`, `projects`, `history`, `paused`, `cycles` |
+| payload | one of `task` (+ `task_id`), `tasks`, `plan`, `project`, `projects`, `history`, `paused`, `cycles`, `version` |
 
 A failed call exits non-zero and still writes one JSON object with
 `"ok": false` and the reason in `error`; the same reason goes to stderr. The

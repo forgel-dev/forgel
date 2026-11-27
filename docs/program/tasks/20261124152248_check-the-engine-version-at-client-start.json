@@ -56,12 +56,12 @@
   "language": "en",
   "status": "failed",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-25T05:21:32+00:00",
-  "finished_at": "2026-11-25T06:20:26+00:00",
+  "started_at": "2026-11-25T17:01:13+00:00",
+  "finished_at": "2026-11-25T17:01:40+00:00",
   "result": {
     "manual_restarts": 1,
     "restarted_at": "2026-11-25T05:21:32+00:00",
-    "summary": "context session limit reached",
+    "summary": "the controlling agent stopped: the chosen step failed (limit command_timeout must be a positive number); try again later",
     "files_changed": [],
     "commands": [
       {
@@ -304,30 +304,39 @@
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 6,
-      "compactions": 5,
+      "sessions": 1,
+      "compactions": 0,
       "model_calls": 242,
       "estimated_input_tokens": 12278405,
       "provider_input_tokens": 12738581,
       "provider_output_tokens": 237050,
       "cache_hit_tokens": 12356219,
       "cache_miss_tokens": 382362,
-      "estimated_tokens": 89072,
-      "state": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.state.md"
+      "estimated_tokens": 17311,
+      "state": ""
     },
     "test_removals": [],
     "spec_issues": [],
     "escalated": [],
     "git": {
-      "base": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
-      "head": "36510fbe3c01155ad4d5f781214d2b3de9228ccc",
+      "base": "28a08ebf67947a23939260d48da2c72e0b07be2a",
+      "head": "28a08ebf67947a23939260d48da2c72e0b07be2a",
       "commit": "",
       "commits": []
     },
-    "failure": {
-      "kind": "agent",
-      "message": "context session limit reached"
+    "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.md",
+    "last_failure": {
+      "kind": "external",
+      "message": "the chosen step failed (limit command_timeout must be a positive number); try again later",
+      "retryable": true
     },
-    "report": "docs/program/agent/20261124152248_check-the-engine-version-at-client-start.md"
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 2,
+    "failure": {
+      "kind": "external",
+      "message": "the chosen step failed (limit command_timeout must be a positive number); try again later",
+      "retryable": true
+    }
   }
 }

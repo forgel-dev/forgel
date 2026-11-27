@@ -17,15 +17,19 @@ from forgel.coding_agent import (
     AgentError,
     CodingAgent,
     MAX_INVALID_REPLIES,
+    PROMPT_RUN_OBSERVATION,
     _preserved_evidence,
+    _prompt_observation,
     _safe_env,
 )
+from forgel import limits
 from forgel.config import Settings
 from forgel.daemon import run_daemon
 from forgel.layout import ProjectLayout
 from forgel.ledger import Ledger
 from forgel.model import ScriptedModelClient
 from forgel.project_config import render_project_config
+from forgel.repo_tools import read_text_page
 from forgel.tasks import (
     create_task,
     get_task,
@@ -672,6 +676,145 @@ class CodingAgentTest(unittest.TestCase):
         self.assertIn("## Context", report)
         self.assertIn("Handoffs:", report)
 
+    def test_task_call_limit_stops_with_evidence(self) -> None:
+        limits.set_value(self.layout, "task_calls", 2)
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps({"action": "list_files", "path": "."})
+                for _ in range(5)
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("task call limit reached", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "limit"
+        )
+        self.assertEqual(
+            stored["result"]["context"]["model_calls"], 2
+        )
+
+    def test_task_run_limit_stops_with_evidence(self) -> None:
+        limits.set_value(self.layout, "task_runs", 1)
+        task = self._task()
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "action": "run",
+                        "command": [sys.executable, "-c", "pass"],
+                    }
+                ),
+                json.dumps(
+                    {
+                        "action": "run",
+                        "command": [sys.executable, "-c", "pass"],
+                    }
+                ),
+                json.dumps({"action": "done", "summary": "done"}),
+            ]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("task run limit reached", result.summary)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        self.assertEqual(
+            stored["result"]["failure"]["kind"], "limit"
+        )
+        self.assertEqual(len(stored["result"]["commands"]), 1)
+
+    def test_task_input_token_limit_stops_with_evidence(self) -> None:
+        limits.set_value(self.layout, "task_input_tokens", 1)
+        task = self._task()
+        client = ScriptedModelClient(
+            [json.dumps({"action": "done", "summary": "done"})]
+        )
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn(
+            "task input token limit reached", result.summary
+        )
+
+    def test_task_limits_are_cumulative_across_attempts(self) -> None:
+        task = self._task()
+        update_task(
+            self.layout,
+            task["id"],
+            result={"context": {"model_calls": 200}, "commands": []},
+        )
+        limits.set_value(self.layout, "task_calls", 200)
+        stored = get_task(self.layout, task["id"])
+        assert stored is not None
+        client = ScriptedModelClient([])
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, stored, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn("task call limit reached (200/200)", result.summary)
+
+    def test_handoff_records_the_failing_check_and_next_step(self) -> None:
+        write_text(
+            self.layout.control / "forgel.toml",
+            render_project_config("Test project", model_context_window=4096),
+        )
+        (self.repo / "large.txt").write_text(
+            "x" * 30_000 + "\n", encoding="utf-8"
+        )
+        task = create_task(
+            self.layout,
+            "Record the handoff",
+            ["Record the failing check"],
+            ["The handoff names the failure"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps(
+                {
+                    "action": "run",
+                    "command": [
+                        sys.executable,
+                        "-c",
+                        "import sys; sys.exit(3)",
+                    ],
+                }
+            ),
+            json.dumps({"action": "read_file", "path": "large.txt"}),
+            json.dumps({"action": "done", "summary": "recorded"}),
+            json.dumps(
+                {
+                    "commit": [],
+                    "revert": ["large.txt"],
+                    "ignore": [],
+                    "escalate": [],
+                }
+            ),
+        ]
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client, max_steps=1000
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "done", result.summary)
+        state = self.layout.artifact(
+            f"docs/program/agent/{task['id']}.state.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("## Last Test Outcome", state)
+        self.assertIn("failed:", state)
+        self.assertIn("exit 3", state)
+        self.assertIn("## Failing Check", state)
+        self.assertIn("## Next Step", state)
+        self.assertIn("Investigate the failing command", state)
+
     def test_free_text_queues_a_task_the_daemon_runs(self) -> None:
         request = {
             "kind": "change_request",
@@ -736,6 +879,20 @@ class CodingAgentTest(unittest.TestCase):
             set(),
         )
         self.assertGreater(len(observation), 9_000)
+
+    def test_prompt_observation_is_bounded_and_preserves_both_ends(self) -> None:
+        observation = "begin" + ("x" * 100_000) + "end"
+        rendered = _prompt_observation("run", observation)
+        self.assertTrue(rendered.startswith("begin"))
+        self.assertTrue(rendered.endswith("end"))
+        self.assertIn("observation truncated for prompt", rendered)
+        self.assertLess(
+            len(rendered), PROMPT_RUN_OBSERVATION + 200
+        )
+        self.assertEqual(
+            _prompt_observation("run", "short output"),
+            "short output",
+        )
 
     def test_run_cannot_be_used_to_print_a_file(self) -> None:
         agent = CodingAgent(
@@ -933,6 +1090,400 @@ class CodingAgentTest(unittest.TestCase):
             self.settings, self.ledger, client
         ).run(self.project, task, log=lambda _m: None)
         self.assertEqual(result.status, "done", result.summary)
+
+    def _search_fixtures(self) -> None:
+        src = self.repo / "src"
+        src.mkdir()
+        (src / "a.py").write_text("needle = 1\n", encoding="utf-8")
+        (src / "b.txt").write_text("needle\n", encoding="utf-8")
+        (src / "literal.py").write_text("a.b\naxb\n", encoding="utf-8")
+        (self.repo / "other.py").write_text(
+            "other = 'needle'\n", encoding="utf-8"
+        )
+        (self.repo / "untracked.py").write_text(
+            "untracked needle\n", encoding="utf-8"
+        )
+        (self.repo / "secrets.toml").write_text(
+            "token = 'needle'\n", encoding="utf-8"
+        )
+        docs = self.repo / "docs" / "program"
+        docs.mkdir(parents=True, exist_ok=True)
+        (docs / "note.md").write_text("needle\n", encoding="utf-8")
+        _run(
+            self.repo,
+            "add",
+            "src/a.py",
+            "src/b.txt",
+            "src/literal.py",
+            "other.py",
+            "secrets.toml",
+            "docs/program/note.md",
+        )
+        _run(
+            self.repo,
+            "-c",
+            "user.name=T",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "-m",
+            "search fixtures",
+        )
+
+    def test_search_files_finds_tracked_and_untracked_and_filters_secrets(
+        self,
+    ) -> None:
+        self._search_fixtures()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": "needle"},
+            set(),
+        )
+        self.assertIn("src/a.py", observation)
+        self.assertIn("src/b.txt", observation)
+        self.assertIn("untracked.py", observation)
+        self.assertNotIn("secrets.toml", observation)
+        self.assertNotIn("docs/program", observation)
+
+    def test_search_files_respects_glob_and_path(self) -> None:
+        self._search_fixtures()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        by_glob, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "needle",
+                "glob": "*.py",
+            },
+            set(),
+        )
+        self.assertIn("src/a.py", by_glob)
+        self.assertNotIn("src/b.txt", by_glob)
+        by_path, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "needle",
+                "path": "src",
+            },
+            set(),
+        )
+        self.assertIn("src/a.py", by_path)
+        self.assertNotIn("other.py", by_path)
+
+    def test_search_files_supports_literal_mode(self) -> None:
+        self._search_fixtures()
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        literal, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "a.b",
+                "path": "src/literal.py",
+                "literal": True,
+            },
+            set(),
+        )
+        self.assertIn("a.b", literal)
+        self.assertNotIn("axb", literal)
+        regex, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "a.b",
+                "path": "src/literal.py",
+            },
+            set(),
+        )
+        self.assertIn("a.b", regex)
+        self.assertIn("axb", regex)
+
+    def test_search_files_rejects_invalid_queries(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        empty, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": ""},
+            set(),
+        )
+        self.assertIn("needs a pattern", empty)
+        long_pattern, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": "x" * 257},
+            set(),
+        )
+        self.assertIn("too long", long_pattern)
+        outside, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "search_files",
+                "pattern": "x",
+                "path": "../outside",
+            },
+            set(),
+        )
+        self.assertIn("error", outside)
+        invalid, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "search_files", "pattern": "["},
+            set(),
+        )
+        self.assertIn("search failed", invalid)
+
+    def test_read_cache_invalidates_when_content_changes(self) -> None:
+        path = self.repo / "cache.txt"
+        path.write_text("old\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        first, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": "cache.txt"},
+            set(),
+        )
+        self.assertIn("old", first)
+        path.write_text("new\n", encoding="utf-8")
+        second, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": "cache.txt"},
+            set(),
+        )
+        self.assertIn("new", second)
+        self.assertNotIn("old", second)
+
+    def _read_digest(self, agent, path: str) -> str:
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {"action": "read_file", "path": path},
+            set(),
+        )
+        self.assertTrue(observation.startswith("sha256:"))
+        return observation.splitlines()[0].split(":", 1)[1]
+
+    def test_edit_file_applies_an_exact_unique_change(self) -> None:
+        path = self.repo / "edit.txt"
+        path.write_text("alpha\nbeta\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        digest = self._read_digest(agent, "edit.txt")
+        touched: set[str] = set()
+        observation, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "beta",
+                "new": "gamma",
+                "expected_sha256": digest,
+            },
+            touched,
+        )
+        self.assertIn("edited", observation)
+        self.assertEqual(
+            path.read_text(encoding="utf-8"), "alpha\ngamma\n"
+        )
+        self.assertIn("edit.txt", touched)
+        self.assertEqual(
+            [item.name for item in self.repo.glob(".edit.txt.*.tmp")],
+            [],
+        )
+
+    def test_edit_file_rejects_a_stale_or_non_unique_old_text(self) -> None:
+        path = self.repo / "edit.txt"
+        path.write_text("x\nx\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        digest = self._read_digest(agent, "edit.txt")
+        stale, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "x",
+                "new": "y",
+                "expected_sha256": "0" * 16,
+            },
+            set(),
+        )
+        self.assertIn("conflict", stale)
+        repeated, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "x",
+                "new": "y",
+                "expected_sha256": digest,
+            },
+            set(),
+        )
+        self.assertIn("exactly once", repeated)
+        missing, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "missing",
+                "new": "y",
+                "expected_sha256": digest,
+            },
+            set(),
+        )
+        self.assertIn("found 0", missing)
+        self.assertEqual(path.read_text(encoding="utf-8"), "x\nx\n")
+
+    def test_edit_file_rejects_secret_missing_file_and_no_hash(self) -> None:
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        (self.repo / ".env").write_text("SECRET=1\n", encoding="utf-8")
+        secret, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": ".env",
+                "old": "SECRET=1",
+                "new": "SECRET=2",
+                "expected_sha256": "0" * 16,
+            },
+            set(),
+        )
+        self.assertIn("secret-like", secret)
+        missing, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "missing.txt",
+                "old": "a",
+                "new": "b",
+                "expected_sha256": "0" * 16,
+            },
+            set(),
+        )
+        self.assertIn("file not found", missing)
+        path = self.repo / "edit.txt"
+        path.write_text("alpha\n", encoding="utf-8")
+        no_hash, _ = agent._execute(
+            self.layout,
+            self.repo,
+            {
+                "action": "edit_file",
+                "path": "edit.txt",
+                "old": "alpha",
+                "new": "beta",
+            },
+            set(),
+        )
+        self.assertIn("expected_sha256", no_hash)
+        self.assertEqual(path.read_text(encoding="utf-8"), "alpha\n")
+
+    def test_signatures_are_content_and_state_aware(self) -> None:
+        path = self.repo / "sig.txt"
+        path.write_text("one\n", encoding="utf-8")
+        agent = CodingAgent(
+            self.settings, self.ledger, ScriptedModelClient([])
+        )
+        read = {"action": "read_file", "path": "sig.txt"}
+        first = agent._signature(read, self.repo)
+        self.assertEqual(first, agent._signature(read, self.repo))
+        path.write_text("two\n", encoding="utf-8")
+        self.assertNotEqual(first, agent._signature(read, self.repo))
+
+        run = {
+            "action": "run",
+            "command": [sys.executable, "-c", "pass"],
+        }
+        run_first = agent._signature(run, self.repo)
+        self.assertEqual(run_first, agent._signature(run, self.repo))
+        (self.repo / "changed.txt").write_text("x\n", encoding="utf-8")
+        self.assertNotEqual(run_first, agent._signature(run, self.repo))
+
+    def test_repeats_survive_a_write_to_another_file(self) -> None:
+        task = self._task()
+        responses: list[str] = []
+        for index in range(12):
+            responses.append(
+                json.dumps(
+                    {"action": "read_file", "path": "README.md"}
+                )
+            )
+            responses.append(
+                json.dumps(
+                    {
+                        "action": "write_file",
+                        "path": f"notes{index}.txt",
+                        "content": str(index),
+                    }
+                )
+            )
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn(
+            "no progress after repeated actions", result.summary
+        )
+
+    def test_repeats_survive_a_context_handoff(self) -> None:
+        write_text(
+            self.layout.control / "forgel.toml",
+            render_project_config("Test project", model_context_window=4096),
+        )
+        (self.repo / "large.txt").write_text(
+            "x" * 30_000 + "\n", encoding="utf-8"
+        )
+        task = create_task(
+            self.layout,
+            "Read repeatedly",
+            ["Read the repository"],
+            ["Reading does not loop"],
+            repo_id="main",
+            test_command=[],
+        )
+        responses = [
+            json.dumps({"action": "read_file", "path": "large.txt"})
+        ] + [
+            json.dumps({"action": "read_file", "path": "README.md"})
+            for _ in range(12)
+        ]
+        client = ScriptedModelClient(responses)
+        result = CodingAgent(
+            self.settings, self.ledger, client, max_steps=1000
+        ).run(self.project, task, log=lambda _m: None)
+        self.assertEqual(result.status, "failed")
+        self.assertIn(
+            "no progress after repeated actions", result.summary
+        )
 
     def test_project_shell_scripts_are_allowed(self) -> None:
         agent = CodingAgent(

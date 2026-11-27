@@ -34,13 +34,372 @@
   "order": 1,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-25T13:37:54+00:00",
+  "finished_at": "2026-11-25T14:08:00+00:00",
   "result": {
     "manual_restarts": 1,
     "resume_count": 1,
-    "resumed_at": "2026-11-24T23:10:41+00:00"
+    "resumed_at": "2026-11-24T23:10:41+00:00",
+    "summary": "Added a program-facing engine version report. `forgel version [--json]` (dispatched in `forgel.entry` before the client and legacy parsers, so it never loads settings or starts a model session) writes the engine's usual one-object JSON envelope with `kind: \"version\"` and the `major.minor.patch` version, and on failure exits non-zero with `ok: false` and the reason in `error` (also on stderr). The reported value is taken from the single release declaration (`[project] version` in `pyproject.toml`), falling back to the distribution metadata written from it when the declaration is not shipped; `forgel.__version__` and the existing `--version` flag now read through the same resolver instead of a second hard-coded copy. Reading the version needs no project, stored configuration, ledger, model access or network, works from any working directory, accepts the shared `--json`/`--home` arguments without using them, and writes nothing. `docs/program/commands.md` documents the new `version` kind and command. Existing reports and human-readable outputs are untouched; the installer and client are unchanged. Added `tests/test_engine_version.py` (9 tests: declared value, comparable shape, empty HOME/cwd run leaving no state, single-authority source, failure signalling, non-comparable values rejected, unknown arguments refused, entry-point dispatch, package `__version__`). Full gate `python3 -m unittest discover -s tests` passes: 797 tests OK, including the engine/client e2e gate that previously failed because the version report rejected the shared `--home` argument.",
+    "files_changed": [
+      "src/forgel/__init__.py",
+      "src/forgel/engine_version.py",
+      "src/forgel/entry.py",
+      "tests/test_engine_version.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import importlib.metadata as m; print(m.version('forgel'))"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import forgel, importlib.metadata as m; print(forgel.__file__); print(m.distribution('forgel')._path)"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "tests/e2e/run_client_e2e.py"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-c",
+          "import sys; sys.argv=['forgel','version','--json','--home','/tmp/nonexistenthome']; from forgel.entry import main; raise SystemExit(main())"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "tests/e2e/run_client_e2e.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--",
+          "src/forgel/__init__.py",
+          "src/forgel/entry.py"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "forgel",
+          "--version"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_engine_version",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests/test_engine_version.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--porcelain"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261125140520_inspect-and-finish: context handoff to session 2 (~6513/3072 tokens)\n[agent] 20261125140529_record-the-handoff: context handoff to session 2 (~2761/3072 tokens)\n[agent] 20261125140529_record-the-handoff: context handoff to session 3 (~7036/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 2 (~6499/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 3 (~3083/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 4 (~3141/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 5 (~3210/3072 tokens)\n[agent] 20261125140535_read-repeatedly: context handoff to session 6 (~3237/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[au\n... [output truncated, 10616 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "The report reuses the engine's existing program-facing envelope (ok/kind/text/error plus payload) and is invoked as `forgel version [--json]`, like the other program-facing commands; the client's `--home` argument is accepted but unused because the report reads no configuration.",
+      "The version is the `major.minor.patch` value of the release declaration; a declaration that is not comparable is not stated, and the distribution metadata is used as the same value seen by an installed engine that ships without the declaration.",
+      "`forgel.__version__` and the existing `forgel --version` flag now resolve through the same single authority instead of a duplicated constant, so no second editable statement remains.",
+      "The command is documented in `docs/program/commands.md` next to the other program-facing commands."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 184,
+      "estimated_input_tokens": 8862221,
+      "provider_input_tokens": 9207217,
+      "provider_output_tokens": 183226,
+      "cache_hit_tokens": 9055488,
+      "cache_miss_tokens": 151729,
+      "estimated_tokens": 60065,
+      "state": "docs/program/agent/20261124152248_emit-a-machine-readable-engine-version.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "eab361cbf6ef059e49febf86eac4de46e849a111",
+      "head": "975530c6b243bf5197f74acab87d5b9062abb732",
+      "commit": "975530c6b243bf5197f74acab87d5b9062abb732",
+      "commits": [
+        "975530c6b243bf5197f74acab87d5b9062abb732"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124152248_emit-a-machine-readable-engine-version.md",
+    "qa": {
+      "status": "pass",
+      "runtime": "local + environment.yaml",
+      "report": "docs/program/agent/20261124152248_emit-a-machine-readable-engine-version.qa.md",
+      "commands": [
+        {
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        },
+        {
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness"
+        }
+      ],
+      "checks": [
+        {
+          "criterion": "environment test",
+          "command": "python3 -m unittest discover -s tests",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "environment",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_self_hosting_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        },
+        {
+          "criterion": "environment e2e",
+          "command": "env FORGEL_MODEL_MODE=script PYTHONPATH=src python tests/e2e/run_client_e2e.py",
+          "exit_code": 0,
+          "verdict": "pass",
+          "scope": "e2e",
+          "repo": "",
+          "workdir": "/Users/okalistratov/Documents/sites/metaharness",
+          "output": "",
+          "failure": ""
+        }
+      ],
+      "review_required": false,
+      "failure_kind": ""
+    },
+    "review": {
+      "status": "pass",
+      "summary": "The change adds a program-facing engine version report and removes the second, editable statement of the version. `src/forgel/engine_version.py` reads `[project] version` from `pyproject.toml` (the release declaration, which the repository's own python release preset rewrites), falls back to distribution metadata only when the declaration is not shipped, requires a comparable major.minor.patch value and raises a typed error otherwise; `src/forgel/entry.py` dispatches `forgel version` before the client parser and the legacy CLI, so it never loads settings, opens the ledger or builds a model, and it reports success and failure in the engine's existing flat envelope (non-zero exit, `ok: false`, reason in `error` and on stderr). `src/forgel/__init__.py` no longer keeps a static `__version__` and delegates to the same resolver, so the package attribute cannot disagree with the release. Existing program-facing reports and human-readable outputs are not modified, `--json`/`--home` are accepted the same way the other program-facing commands accept them, and the new tests read the real declaration, cover the empty-machine case, the comparable shape, the failure path and entry dispatch; no test or check was removed or relaxed, and QA reports every gate passing unchanged. The only observations are minor and non-blocking: the command emits machine output even without `--json` (a new command, not an alteration of an existing output), and a malformed declared version falls through to installed metadata instead of failing, which the release train never produces.",
+      "requirements": [
+        {
+          "requirement": "FR-1: On request, the engine states its own version in a form another program reads directly, without interpreting human-readable text.",
+          "verdict": "pass",
+          "note": "`forgel version` writes one JSON object through the existing `envelope`/`write` helpers; the value is in the `version` field and `kind` is `version`."
+        },
+        {
+          "requirement": "FR-2: The stated version is the version the release declares; the engine keeps no second, independently editable statement that can disagree with it.",
+          "verdict": "pass",
+          "note": "`declared_version()` reads `[project] version` from `pyproject.toml`; the static `__version__ = \"0.1.0\"` was removed and now delegates, and the python release preset already rewrites the same field, so no second editable statement remains. Installed metadata is only the same value as built from that file and is used only when the declaration is not shipped."
+        },
+        {
+          "requirement": "FR-3: The version is expressed so that two versions can be compared component by component.",
+          "verdict": "pass",
+          "note": "`COMPARABLE` requires `major.minor.patch` digits and the command refuses to state anything else; the test asserts three non-negative integer components."
+        },
+        {
+          "requirement": "FR-4: The version is obtainable with no project, no stored configuration, no model credential, no pre-existing user data and no network, from any working directory, leaving no state behind.",
+          "verdict": "pass",
+          "note": "The path reads only a file next to the package (or distribution metadata); it never touches the working directory, settings, home or network, and the test runs it in an empty directory with HOME/FORGEL_HOME redirected and asserts the directory stays empty."
+        },
+        {
+          "requirement": "FR-5: Obtaining the version neither starts model work nor reads or changes project, task or account records.",
+          "verdict": "pass",
+          "note": "Dispatch happens before `client.maybe_dispatch` and `cli.main`; only module imports occur, no ledger, task or account record is opened or written."
+        },
+        {
+          "requirement": "FR-6: When the version cannot be stated, the failure is signalled as a failure and carries its reason where the engine's other program-facing reports carry it.",
+          "verdict": "pass",
+          "note": "`version_command` returns 1 with the usual envelope (`ok: false`, reason in `error`) and prints the reason to stderr; covered by `test_failure_is_a_failure_with_its_reason`."
+        },
+        {
+          "requirement": "FR-7: The engine's other program-facing reports and its human-readable outputs keep their current behaviour.",
+          "verdict": "pass",
+          "note": "No existing command, envelope helper, locale string or legacy CLI output was edited; the new route sits before the client parser and the legacy CLI, and `cost` and the client commands are untouched. The new command emitting its machine form without `--json` is a property of a new report, not a change to an existing one."
+        },
+        {
+          "requirement": "FR-8: No other check or test is removed, weakened or relaxed; the installer and client behaviour stay as they are.",
+          "verdict": "pass",
+          "note": "No test was removed or loosened; the change adds `tests/test_engine_version.py`, touches no installer or client code, and QA reports the environment gates passing unchanged."
+        },
+        {
+          "requirement": "AC-1: A program obtains the engine's own version directly, without interpreting human-readable text, and the value equals the version the release declares.",
+          "verdict": "pass",
+          "note": "`forgel version --json` returns `{\"version\": ...}` equal to `[project] version`; the tests compare against a freshly parsed `pyproject.toml`."
+        },
+        {
+          "requirement": "AC-2: The version is obtainable with no project, no stored configuration, no model access and no network, from any working directory, leaving nothing behind.",
+          "verdict": "pass",
+          "note": "`test_reads_with_nothing_set_up_and_leaves_nothing_behind` changes into an empty temporary directory with HOME/FORGEL_HOME pointing there and asserts no file is created."
+        },
+        {
+          "requirement": "AC-3: All remaining checks pass unchanged.",
+          "verdict": "pass",
+          "note": "QA verdict pass with environment test and both e2e checks at exit 0; no test removal was detected."
+        },
+        {
+          "requirement": "Constraint: the release-declared version is the single authority; the report must not add a second editable statement.",
+          "verdict": "pass",
+          "note": "The only writable declaration is `pyproject.toml`; the package attribute and the report both derive from it, so nothing in the repository can be edited independently to disagree."
+        },
+        {
+          "requirement": "Constraint: the change adds a report and must not alter any existing program-facing report or human-readable output.",
+          "verdict": "pass",
+          "note": "The diff adds a route and a module; `client_cli.envelope`/`write` are reused unchanged and no existing command, envelope field or localized text is modified."
+        },
+        {
+          "requirement": "Constraint: the report must be usable before the surrounding system is configured.",
+          "verdict": "pass",
+          "note": "It runs before settings loading, ledger access and model construction, so it works on an unconfigured machine."
+        },
+        {
+          "requirement": "Constraint: no existing check or test may be removed, weakened or relaxed.",
+          "verdict": "pass",
+          "note": "Only additions in the test suite; no assertion or guard was touched."
+        },
+        {
+          "requirement": "Assumption: the report follows the engine's existing program-facing conventions instead of inventing new ones.",
+          "verdict": "pass",
+          "note": "It is a `forgel` subcommand accepting `--json`/`--home` and reporting through the shared flat envelope; no new calling convention, transport or envelope shape is introduced."
+        },
+        {
+          "requirement": "Assumption: everything that reports or compares a version takes it from the release declaration.",
+          "verdict": "pass",
+          "note": "`forgel.__version__` now resolves through the same function, so the package attribute and the command cannot disagree."
+        },
+        {
+          "requirement": "Change composition: every file the task needs is present and no unrelated, temporary, debug or generated file is committed.",
+          "verdict": "pass",
+          "note": "The attributed files are exactly the new module, its tests and the two dispatch/attribute edits; no stray or generated file is part of the commit, and the uncommitted program artifacts are process bookkeeping, not product files."
+        }
+      ],
+      "blocking": [],
+      "report": "docs/program/agent/20261124152248_emit-a-machine-readable-engine-version.review.md"
+    },
+    "acceptance": {
+      "status": "accepted",
+      "actor": "auto",
+      "at": "2026-11-25T14:16:38+00:00",
+      "notes": ""
+    },
+    "push": {
+      "status": "pushed",
+      "repo": "main",
+      "branch": "feature/coding-agent-efficiency",
+      "detail": "",
+      "control": null,
+      "attempts": 1,
+      "next_at": ""
+    }
   }
 }

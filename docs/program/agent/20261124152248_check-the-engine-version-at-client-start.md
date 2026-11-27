@@ -4,7 +4,7 @@
 - Status: `failed`
 - Repository: `code`
 - Steps: 242
-- Finished: 2026-11-25T06:20:26+00:00
+- Finished: 2026-11-25T17:01:13+00:00
 
 ## Requirements
 
@@ -29,14 +29,14 @@
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 6
-- Handoffs: 5
+- Sessions: 1
+- Handoffs: 0
 - Model calls: 242
 - Estimated input tokens (all calls): 12278405
 - Provider input/output tokens: 12738581 / 237050
 - Provider cache hit/miss tokens: 12356219 / 382362
-- Estimated prompt at the end: 89072 tokens
-- State: `docs/program/agent/20261124152248_check-the-engine-version-at-client-start.state.md`
+- Estimated prompt at the end: 17311 tokens
+- State: not needed
 
 ## Specification (`docs/program/specs/20261124152248_check-the-engine-version-at-client-start.md`)
 
@@ -210,7 +210,7 @@ A user who runs a client operation without the engine sees a short message that 
 
 ## Summary
 
-context session limit reached
+task call limit reached (242/200); raise task_calls with set_limit
 
 ## Files Changed
 
@@ -253,143 +253,4 @@ not run
 
 ## Actions
 
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/engine.py
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- read_file: tests/stub_engine.py
-- read_file: forgel_code/__init__.py
-- read_file: tests/test_cli.py
-- read_file: install.sh
-- read_file: tests/test_cli.py
-- run: ['git', 'status', '--porcelain']
-- read_file: tests/test_interactive.py
-- read_file: forgel_code/interactive.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/engine.py
-- read_file: forgel_code/__init__.py
-- read_file: forgel_code/cli.py
-- run: ['grep', '-n', 'compat\\|MIN_ENGINE_VERSION\\|confirm\\|def run\\|def default_engine\\|def main', 'forgel_code/interactive.py']
-- read_file: forgel_code/interactive.py
-- recall
-- run: ['git', 'status', '--porcelain']
-- run: ['git', 'ls-files', 'forgel_code', 'tests']
-- run: ['git', 'log', '--oneline', '-5']
-- run: ['git', 'diff', 'forgel_code/cli.py']
-- run: ['git', 'show', '--stat', '36510fb']
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- read_file: tests/stub_engine.py
-- read_file: forgel_code/interactive.py
-- read_file: tests/test_stub_contract.py
-- read_file: tests/test_interactive.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli_extra.py
-- read_file: tests/test_interactive.py
-- read_file: install.sh
-- read_file: install.sh
-- read_file: tests/test_packaging.py
-- read_file: tests/test_packaging_types.py
-- run: ['git', 'grep', '-n', 'stub_engine', 'tests']
-- read_file: tests/test_idle_refresh.py
-- run: ['git', 'status', '--porcelain']
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
-- run: ['python3', '-c', 'import forgel_code.compat']
-- run: ['python3', '-m', 'pytest', 'tests', '-q']
-- read_file: tests/stub_engine.py
-- recall
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- run: ['git', 'grep', '-n', 'STUB_ENGINE', 'tests']
-- read_file: install.sh
-- run: ['git', 'log', '--oneline', '-6']
-- read_file: tests/test_cli_extra.py
-- run: ['grep', '-rn', 'ENGINE_STUB\\|STUB_ENGINE\\|version', 'tests/test_interactive.py']
-- run: ['git', 'diff', 'forgel_code/cli.py']
-- run: ['git', 'show', '--stat', '36510fb']
-- read_file: forgel_code/interactive.py
-- run: ['git', 'grep', '-n', 'def default_engine', '--', 'forgel_code/interactive.py']
-- read_file: forgel_code/interactive.py
-- read_file: tests/test_interactive.py
-- run: ['git', 'grep', '-n', 'stub_engine', 'tests']
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_stub_contract.py
-- read_file: tests/test_interactive.py
-- run: ['git', 'status', '--porcelain']
-- read_file: forgel_code/cli.py
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
-- read_file: tests/stub_engine.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_stub_contract.py
-- read_file: forgel_code/engine.py
-- read_file: install.sh
-- run: ['git', 'diff', 'forgel_code/cli.py']
-- read_file: forgel_code/interactive.py
-- run: ['git', 'grep', '-n', 'def run', 'forgel_code/interactive.py']
-- read_file: forgel_code/interactive.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_interactive.py
-- run: ['git', 'show', '--stat', '--oneline', 'HEAD']
-- run: ['grep', '-n', '0.1.0', 'install.sh']
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/engine.py
-- read_file: forgel_code/__init__.py
-- read_file: forgel_code/interactive.py
-- read_file: tests/stub_engine.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_stub_contract.py
-- read_file: install.sh
-- run: ['git', 'status', '--porcelain']
-- run: ['git', 'diff']
-- run: ['git', 'log', '--oneline', '-8']
-- run: ['git', 'show', '--stat', 'HEAD']
-- read_file: tests/test_cli_extra.py
-- read_file: tests/test_interactive.py
-- run: ['git', 'grep', '-n', 'MIN_ENGINE', '--', '.']
-- run: ['git', 'grep', '-n', 'version', '--', 'forgel_code/engine.py', 'forgel_code/compat.py']
-- read_file: forgel_code/render.py
-- read_file: forgel_code/commands.py
-- read_file: forgel_code/session.py
-- read_file: tests/test_idle_refresh.py
-- run: ['git', 'grep', '-n', 'engine.run\\|def run\\|Engine(', '--', 'forgel_code']
-- read_file: forgel_code/commands.py
-- read_file: forgel_code/session.py
-- read_file: forgel_code/render.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/engine.py
-- read_file: forgel_code/interactive.py
-- read_file: tests/stub_engine.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_interactive.py
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- run: ['git', 'diff', 'forgel_code/cli.py']
-- run: ['git', 'show', '--stat', '--oneline', 'HEAD']
-- run: ['git', 'grep', '-n', '0.1.0', '--', 'install.sh', 'forgel_code', 'tests']
-- read_file: README.md
-- run: ['git', 'ls-files']
-- read_file: forgel_code/__main__.py
-- read_file: tests/stub_engine_install.py
-- read_file: tests/test_install_engine.py
-- read_file: tests/test_install.py
-- read_file: forgel_code/cli.py
-- read_file: forgel_code/compat.py
-- read_file: forgel_code/__init__.py
-- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
-- run: ['git', 'status', '--porcelain']
-- read_file: tests/stub_engine.py
-- read_file: tests/test_stub_contract.py
-- read_file: tests/test_cli.py
-- read_file: tests/test_cli.py
-- read_file: forgel_code/engine.py
-- read_file: install.sh
-- read_file: forgel_code/interactive.py
+- none

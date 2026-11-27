@@ -74,3 +74,22 @@ def decisions_table(decisions: Sequence[Any]) -> str:
         "|----|----------|--------|\n"
         + "\n".join(rows)
     )
+
+
+def work_packages_text(
+    packages: Sequence[Mapping[str, Any]],
+    requirements: Sequence[str],
+    acceptance: Sequence[str],
+) -> str:
+    groups: list[str] = []
+    for index, item in enumerate(packages, 1):
+        title = str(item.get("title") or f"Work package {index}").strip()
+        lines = [f"### {index}. {title}"]
+        for position in item.get("requirements") or []:
+            if isinstance(position, int) and 0 <= position < len(requirements):
+                lines.append(f"- {requirements[position]}")
+        for position in item.get("acceptance") or []:
+            if isinstance(position, int) and 0 <= position < len(acceptance):
+                lines.append(f"- {acceptance[position]}")
+        groups.append("\n".join(lines))
+    return "\n\n".join(groups) or "- None stated."

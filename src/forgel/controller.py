@@ -100,6 +100,9 @@ the runtime understands only the JSON forms above.
 
 Use only the facts in the context. Do not repeat what is already proven to
 work. Do not ask the owner to choose between internal process options.
+Every inactive task carries its full record and specification in the context.
+The "stopped" list names the tasks a release operation acts on; the other
+inactive tasks are context. Read the tasks before choosing.
 
 The context is paged, not truncated. The manifest lists every item and its
 page count; the first pages that fit are shown. To read any page, answer only
@@ -132,6 +135,7 @@ RELEASE_ACTIONS = {
     "set_limit",
     "task_retry",
     "task_restart",
+    "respec",
 }
 # Any operation the model may choose is mapped to a stage action. Nothing
 # falls through: a tool that does not exist for the stage is its equivalent,
@@ -165,6 +169,8 @@ def release_action(operation: str) -> str:
         return name
     if name == "set_limit":
         return "set_limit"
+    if name == "respec":
+        return "respec"
     if name in {"release_resume", "release_audit"}:
         return "audit"
     if name == "ask_user":
@@ -263,6 +269,88 @@ def _task_id(context: Mapping[str, Any]) -> str:
     return str(task.get("id") or "").strip()
 
 
+def _task_items(
+    layout: ProjectLayout,
+    ledger: Ledger,
+    project: Mapping[str, Any],
+    task: Mapping[str, Any],
+    key_suffix: str = "",
+    details: bool = False,
+) -> list[Item]:
+    """The record, specification and optional evidence for one task."""
+
+    task_id = str(task.get("id") or "")
+    label = str(task.get("title") or task_id)
+    suffix = f":{key_suffix}" if key_suffix else ""
+    items = [
+        Item(
+            f"task{suffix}",
+            f"the full task record: {label}",
+            json.dumps(task, ensure_ascii=False, indent=1),
+        )
+    ]
+    result = task.get("result") or {}
+    items.append(
+        Item(
+            f"history{suffix}",
+            f"attempts and previous decisions: {label}",
+            _history(ledger, str(project.get("id")), result),
+        )
+    )
+    spec_ref = str(task.get("spec") or "").strip()
+    spec = _read(
+        layout.artifact(spec_ref)
+        if spec_ref
+        else layout.artifact(f"docs/program/specs/{task_id}.md")
+    )
+    if spec:
+        items.append(
+            Item(
+                f"specification{suffix}",
+                f"the task specification: {label}",
+                spec,
+            )
+        )
+    if details:
+        for report_suffix, key, title in (
+            ("", "agent_report", "the agent's report"),
+            (".qa.md", "qa_report", "the QA report"),
+            (".review.md", "review_report", "the review report"),
+        ):
+            text = _read(
+                layout.artifact(
+                    f"docs/program/agent/{task_id}{report_suffix}.md"
+                )
+            )
+            if text:
+                items.append(Item(f"{key}{suffix}", f"{title}: {label}", text))
+        try:
+            from .task_review import task_diff, _commit_series
+
+            diff = task_diff(layout, task)
+            series = _commit_series(layout, task)
+        except Exception:  # noqa: BLE001 - the diff is optional context
+            diff = ""
+            series = ""
+        if diff:
+            items.append(
+                Item(
+                    f"diff{suffix}",
+                    f"the task's net change: {label}",
+                    diff,
+                )
+            )
+        if series:
+            items.append(
+                Item(
+                    f"commit_series{suffix}",
+                    f"the task's commits in order: {label}",
+                    series,
+                )
+            )
+    return items
+
+
 def _window(
     layout: ProjectLayout,
     project: Mapping[str, Any],
@@ -286,67 +374,40 @@ def _window(
             json.dumps(dict(context), ensure_ascii=False, indent=1),
         ),
     ]
+    seen_tasks: set[str] = set()
     task_id = _task_id(context)
     if task_id:
         task = tasks.get_task(layout, task_id)
         if task is not None:
-            items.append(
-                Item(
-                    "task",
-                    "the full task record",
-                    json.dumps(task, ensure_ascii=False, indent=1),
+            seen_tasks.add(task_id)
+            items.extend(
+                _task_items(
+                    layout, ledger, project, task, details=True
                 )
             )
-            result = task.get("result") or {}
-            items.append(
-                Item(
-                    "history",
-                    "attempts and previous decisions",
-                    _history(ledger, str(project.get("id")), result),
+    stopped_tasks = context.get("tasks")
+    if isinstance(stopped_tasks, list):
+        for entry in stopped_tasks:
+            if not isinstance(entry, Mapping):
+                continue
+            stopped_id = str(entry.get("id") or "").strip()
+            if not stopped_id or stopped_id in seen_tasks:
+                continue
+            task = tasks.get_task(layout, stopped_id)
+            if task is None:
+                continue
+            seen_tasks.add(stopped_id)
+            items.extend(
+                _task_items(
+                    layout,
+                    ledger,
+                    project,
+                    task,
+                    key_suffix=stopped_id,
+                    details=str(task.get("status") or "")
+                    in {"failed", "blocked"},
                 )
             )
-            spec_ref = str(task.get("spec") or "").strip()
-            spec = _read(
-                layout.artifact(spec_ref)
-                if spec_ref
-                else layout.artifact(f"docs/program/specs/{task_id}.md")
-            )
-            if spec:
-                items.append(
-                    Item("specification", "the task specification", spec)
-                )
-            for suffix, key, title in (
-                ("", "agent_report", "the agent's report"),
-                (".qa.md", "qa_report", "the QA report"),
-                (".review.md", "review_report", "the review report"),
-            ):
-                text = _read(
-                    layout.artifact(
-                        f"docs/program/agent/{task_id}{suffix}.md"
-                    )
-                )
-                if text:
-                    items.append(Item(key, title, text))
-            try:
-                from .task_review import task_diff, _commit_series
-
-                diff = task_diff(layout, task)
-                series = _commit_series(layout, task)
-            except Exception:  # noqa: BLE001 - the diff is optional context
-                diff = ""
-                series = ""
-            if diff:
-                items.append(
-                    Item("diff", "the task's net change", diff)
-                )
-            if series:
-                items.append(
-                    Item(
-                        "commit_series",
-                        "the task's commits in order",
-                        series,
-                    )
-                )
     try:
         environment = load_environment(layout)
     except Exception:  # noqa: BLE001 - a broken contract is context too
@@ -407,7 +468,7 @@ def _window(
         items.append(
             Item(
                 "release_tasks",
-                "the release's tasks",
+                "the release's inactive tasks",
                 json.dumps(
                     release_tasks, ensure_ascii=False, indent=1
                 ),

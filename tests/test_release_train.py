@@ -21,6 +21,7 @@ from forgel.providers.github import GithubProvider
 from forgel.release_train import (
     AUDIT_TOTAL_TIMEOUT,
     INITIAL_VERSION,
+    UNRESOLVED_RELEASE_DETAIL,
     MAX_AUDIT_ERRORS,
     _audit_client,
     attach_blocked_release,
@@ -60,6 +61,24 @@ FAIL_AUDIT = json.dumps(
         ],
     }
 )
+RESPEC_SPEC = {
+    "problem": "The work is missing.",
+    "outcome": "The work is done.",
+    "scope": ["the work"],
+    "non_goals": [],
+    "requirements": ["The work is done."],
+    "acceptance": ["The work works."],
+    "constraints": [],
+    "assumptions": [],
+    "risks": [],
+    "goals": ["The work exists."],
+    "user_decisions": [],
+    "user_stories": [],
+    "open_questions": [],
+    "related_documents": [],
+    "revision_history": ["1.0.0 — initial"],
+    "external_dependencies": [],
+}
 MINOR_AUDIT = json.dumps(
     {
         "verdict": "fail",
@@ -1026,6 +1045,312 @@ class ReleaseTrainTest(unittest.TestCase):
                 {"pending", "failed", "blocked"},
                 operation,
             )
+
+    def test_the_release_controller_receives_inactive_task_specs(
+        self,
+    ) -> None:
+        done = create_task(
+            self.layout,
+            "Finished work",
+            ["Ship the finished work"],
+            ["The finished work runs"],
+            repo_id="web",
+            spec="docs/program/specs/done.md",
+            release_id="20261125120000_blocked-spec",
+            release_class="minor",
+        )
+        write_text(
+            self.layout.artifact("docs/program/specs/done.md"),
+            "DONE-SPEC-MARKER",
+        )
+        update_task(
+            self.layout,
+            str(done["id"]),
+            status="done",
+            result={
+                "acceptance": {
+                    "status": "accepted",
+                    "actor": "auto",
+                    "at": "2026-11-25T00:00:00+00:00",
+                    "notes": "",
+                }
+            },
+        )
+        done_stored = get_task(self.layout, str(done["id"]))
+        assert done_stored is not None
+        task = create_task(
+            self.layout,
+            "Blocked installer",
+            ["Ship the installer"],
+            ["The installer runs"],
+            repo_id="web",
+            spec="docs/program/specs/blocked.md",
+            release_id="20261125120000_blocked-spec",
+            release_class="minor",
+        )
+        write_text(
+            self.layout.artifact("docs/program/specs/blocked.md"),
+            "RELEASE-SPEC-MARKER",
+        )
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="blocked",
+            result={
+                "summary": (
+                    "blocked: the dependency scout exceeded its step limit"
+                ),
+                "blocked_by": "decision",
+            },
+        )
+        stored = get_task(self.layout, str(task["id"]))
+        assert stored is not None
+        release = plan_release(
+            self.layout,
+            self.project,
+            "20261125120000_blocked-spec",
+            title="Blocked installer",
+            request="Blocked installer",
+            release_class="minor",
+            task_items=[done_stored, stored],
+            ledger=self.ledger,
+            settings=self.settings,
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {"operation": "stop", "reason": "seen the spec"}
+                )
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        prompt = client.requests[0][1].content
+        self.assertIn("DONE-SPEC-MARKER", prompt)
+        self.assertIn("RELEASE-SPEC-MARKER", prompt)
+        stored_release = load_release(
+            self.layout, str(release["id"])
+        )
+        assert stored_release is not None
+        self.assertEqual(stored_release["status"], "blocked")
+
+    def test_a_respec_decision_rewrites_and_requeues_the_task(
+        self,
+    ) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {
+                    "kind": "qa",
+                    "message": "the specification is incomplete",
+                },
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "respec",
+                        "issue": (
+                            "The specification must describe the widget "
+                            "behavior."
+                        ),
+                        "reason": "the current specification is incomplete",
+                    }
+                ),
+                json.dumps(RESPEC_SPEC),
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = get_task(self.layout, str(task["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "pending")
+        self.assertEqual(
+            stored["requirements"], RESPEC_SPEC["requirements"]
+        )
+        spec_path = self.layout.artifact(
+            f"docs/program/specs/{task['id']}.md"
+        )
+        self.assertIn(
+            "The work is done.", spec_path.read_text(encoding="utf-8")
+        )
+        stored_release = load_release(
+            self.layout, str(release["id"])
+        )
+        assert stored_release is not None
+        self.assertEqual(stored_release["status"], "running")
+        self.assertIn(
+            "The current specification is",
+            client.requests[1][-1].content,
+        )
+        self.assertIn(
+            "The specification must describe the widget behavior.",
+            client.requests[1][-1].content,
+        )
+
+    def test_process_releases_builds_a_client_for_the_controller(
+        self,
+    ) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "qa", "message": "the test failed"},
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "rework",
+                        "reason": "retry the task",
+                    }
+                )
+            ]
+        )
+        with patch(
+            "forgel.release_train.build_model_client",
+            return_value=client,
+        ) as build:
+            process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                None,
+                log=lambda _m: None,
+            )
+        build.assert_called_once()
+        stored_release = load_release(
+            self.layout, str(release["id"])
+        )
+        assert stored_release is not None
+        self.assertEqual(stored_release["status"], "running")
+        stored = get_task(self.layout, str(task["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "pending")
+
+    def test_a_controller_failure_retries_the_release(self) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "qa", "message": "the test failed"},
+            },
+        )
+        actions = process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient([]),
+            log=lambda _m: None,
+        )
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "failed")
+        self.assertTrue(stored.get("next_at"))
+        self.assertIn(f"retry:{release['id']}", actions)
+
+    def test_an_unresolved_release_block_is_retried(self) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "qa", "message": "the test failed"},
+            },
+        )
+        release["status"] = "blocked"
+        release["detail"] = UNRESOLVED_RELEASE_DETAIL
+        save_release(self.layout, release)
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "rework",
+                        "reason": "retry the task",
+                    }
+                )
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+        stored_task = get_task(self.layout, str(task["id"]))
+        assert stored_task is not None
+        self.assertEqual(stored_task["status"], "pending")
+
+    def test_a_release_without_a_model_blocks_with_a_clear_reason(
+        self,
+    ) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "qa", "message": "the test failed"},
+            },
+        )
+        with patch(
+            "forgel.release_train.build_model_client",
+            return_value=None,
+        ):
+            process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                None,
+                log=lambda _m: None,
+            )
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertIn(
+            "no model is configured", str(stored.get("detail"))
+        )
 
     def test_a_failed_release_task_goes_back_to_work(self) -> None:
         release, task = self._release()

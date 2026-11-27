@@ -179,6 +179,7 @@ def _rewrite_specification(
         spec=ref,
         requirements=list(spec.get("requirements") or []),
         acceptance=list(spec.get("acceptance") or []),
+        work_packages=list(spec.get("work_packages") or []),
         constraints=list(spec.get("constraints") or []),
         external_dependencies=list(
             spec.get("external_dependencies") or []

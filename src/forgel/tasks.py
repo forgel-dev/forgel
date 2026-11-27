@@ -64,6 +64,7 @@ def create_task(
     requirements: list[str],
     acceptance: list[str],
     constraints: list[str] | None = None,
+    work_packages: list[dict[str, Any]] | None = None,
     repo_id: str = "",
     test_command: list[str] | None = None,
     assumptions: list[str] | None = None,
@@ -95,6 +96,10 @@ def create_task(
         "summary": summary.strip(),
         "requirements": requirements,
         "acceptance": acceptance,
+        "work_packages": [
+            dict(item) for item in (work_packages or [])
+            if isinstance(item, dict)
+        ],
         "constraints": [
             item.strip() for item in (constraints or []) if item.strip()
         ],
@@ -402,21 +407,39 @@ def _retry_ready(
     return (now or datetime.now(timezone.utc)) >= moment
 
 
+def schedule_key(task: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Ordered tasks first, by plan order; unordered tasks keep time order."""
+
+    try:
+        order = int(task.get("order") or 0)
+    except (TypeError, ValueError):
+        order = 0
+    ordered = order > 0
+    return (
+        0 if ordered else 1,
+        order if ordered else 0,
+        str(task.get("created_at") or ""),
+        str(task.get("id") or ""),
+    )
+
+
 def next_pending_task(
     layout: ProjectLayout,
     now: datetime | None = None,
     release_id: str = "",
 ) -> dict[str, Any] | None:
-    tasks = list_tasks(layout)
-    for task in tasks:
+    candidates: list[dict[str, Any]] = []
+    for task in list_tasks(layout):
         if task.get("status") != "pending":
             continue
         if release_id and str(task.get("release_id") or "") != release_id:
             continue
         if not _retry_ready(task, now):
             continue
-        return task
-    return None
+        candidates.append(task)
+    if not candidates:
+        return None
+    return min(candidates, key=schedule_key)
 
 
 def listed_tasks(layout: ProjectLayout) -> list[dict[str, Any]]:
