@@ -832,6 +832,27 @@ class ReleaseTrainTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "running")
 
+    def test_an_audit_controller_failure_stops_without_retry(self) -> None:
+        release, _task = self._release()
+        client = ScriptedModelClient([FAIL_AUDIT])
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "failed")
+        self.assertFalse(stored.get("next_at"))
+        self.assertEqual(
+            stored["last_error"]["stage"], "audit_controller"
+        )
+
     def test_a_stop_decision_blocks_the_release(self) -> None:
         release, _task = self._release()
         client = ScriptedModelClient(
@@ -1035,7 +1056,7 @@ class ReleaseTrainTest(unittest.TestCase):
             assert stored is not None
             self.assertIn(
                 stored["status"],
-                {"running", "blocked"},
+                {"running", "blocked", "failed"},
                 operation,
             )
             again = get_task(self.layout, str(task["id"]))
@@ -1254,7 +1275,45 @@ class ReleaseTrainTest(unittest.TestCase):
         assert stored is not None
         self.assertEqual(stored["status"], "pending")
 
-    def test_a_controller_failure_retries_the_release(self) -> None:
+    def test_a_controller_handoff_keeps_the_runtime_active(self) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="blocked",
+            result={
+                "summary": "blocked: the dependency scout stopped",
+                "blocked_by": "decision",
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "respec",
+                        "issue": "rewrite the task scope",
+                    }
+                )
+            ]
+        )
+        with patch(
+            "forgel.runtime_ops.run_operation",
+            side_effect=RuntimeError("RESPEC-ERROR-MARKER"),
+        ):
+            processed = run_once(
+                self.settings,
+                self.ledger,
+                client=client,
+                log=lambda _m: None,
+            )
+
+        self.assertIn(self.project["id"], processed)
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+        self.assertEqual(stored["last_error"]["stage"], "respec")
+
+    def test_a_controller_failure_stops_without_retry(self) -> None:
         release, task = self._release()
         update_task(
             self.layout,
@@ -1276,8 +1335,9 @@ class ReleaseTrainTest(unittest.TestCase):
         stored = load_release(self.layout, str(release["id"]))
         assert stored is not None
         self.assertEqual(stored["status"], "failed")
-        self.assertTrue(stored.get("next_at"))
-        self.assertIn(f"retry:{release['id']}", actions)
+        self.assertFalse(stored.get("next_at"))
+        self.assertEqual(stored["last_error"]["stage"], "controller")
+        self.assertIn(f"failed:{release['id']}", actions)
 
     def test_an_unresolved_release_block_is_retried(self) -> None:
         release, task = self._release()
@@ -1350,6 +1410,221 @@ class ReleaseTrainTest(unittest.TestCase):
         self.assertEqual(stored["status"], "blocked")
         self.assertIn(
             "no model is configured", str(stored.get("detail"))
+        )
+
+    def test_a_failed_respec_is_handed_to_the_controller(
+        self,
+    ) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="blocked",
+            result={
+                "summary": "blocked: the dependency scout stopped",
+                "blocked_by": "decision",
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "respec",
+                        "issue": "rewrite the task scope",
+                    }
+                )
+            ]
+        )
+        with patch(
+            "forgel.runtime_ops.run_operation",
+            side_effect=RuntimeError("RESPEC-ERROR-MARKER"),
+        ):
+            actions = process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                client,
+                log=lambda _m: None,
+            )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+        self.assertFalse(stored.get("next_at"))
+        self.assertEqual(stored["last_error"]["stage"], "respec")
+        self.assertIn(
+            "RESPEC-ERROR-MARKER", stored["last_error"]["message"]
+        )
+        self.assertIn(f"controller:{release['id']}", actions)
+        again = get_task(self.layout, str(task["id"]))
+        assert again is not None
+        self.assertEqual(again["status"], "blocked")
+        second = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "rework",
+                        "reason": "try another step",
+                    }
+                )
+            ]
+        )
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            second,
+            log=lambda _m: None,
+        )
+        self.assertIn(
+            "RESPEC-ERROR-MARKER", second.requests[0][-1].content
+        )
+
+    def test_the_controller_can_stop_after_an_internal_error(
+        self,
+    ) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="blocked",
+            result={
+                "summary": "blocked: the dependency scout stopped",
+                "blocked_by": "decision",
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "respec",
+                        "issue": "rewrite the task scope",
+                    }
+                )
+            ]
+        )
+        with patch(
+            "forgel.runtime_ops.run_operation",
+            side_effect=RuntimeError("RESPEC-ERROR-MARKER"),
+        ):
+            process_releases(
+                self.settings,
+                self.ledger,
+                self.project,
+                self.layout,
+                client,
+                log=lambda _m: None,
+            )
+        reason = "the same writer failure is unavoidable"
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            ScriptedModelClient(
+                [
+                    json.dumps(
+                        {"operation": "block", "reason": reason}
+                    )
+                ]
+            ),
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "blocked")
+        self.assertEqual(stored["detail"], reason)
+        self.assertFalse(stored.get("next_at"))
+        self.assertNotIn("last_error", stored)
+
+    def test_a_bad_set_limit_is_handed_to_the_controller(self) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "agent", "message": "bad limit"},
+            },
+        )
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "set_limit",
+                        "reason": "raise the limit",
+                        "args": {
+                            "name": "command_timeout",
+                            "seconds": "not-a-number",
+                        },
+                    }
+                )
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        stored = load_release(self.layout, str(release["id"]))
+        assert stored is not None
+        self.assertEqual(stored["status"], "running")
+        self.assertFalse(stored.get("next_at"))
+        self.assertEqual(stored["last_error"]["stage"], "set_limit")
+        self.assertIn("positive number", stored["last_error"]["message"])
+
+    def test_the_controller_receives_the_last_internal_error(
+        self,
+    ) -> None:
+        release, task = self._release()
+        update_task(
+            self.layout,
+            str(task["id"]),
+            status="failed",
+            result={
+                "summary": "broken",
+                "failure": {"kind": "agent", "message": "failed"},
+            },
+        )
+        release["last_error"] = {
+            "stage": "respec",
+            "task": str(task["id"]),
+            "message": "LAST-ERROR-MARKER",
+            "retries": 1,
+            "at": "2026-11-25T17:02:26+00:00",
+        }
+        save_release(self.layout, release)
+        client = ScriptedModelClient(
+            [
+                json.dumps(
+                    {
+                        "operation": "rework",
+                        "reason": "try another step",
+                    }
+                )
+            ]
+        )
+
+        process_releases(
+            self.settings,
+            self.ledger,
+            self.project,
+            self.layout,
+            client,
+            log=lambda _m: None,
+        )
+
+        self.assertIn(
+            "LAST-ERROR-MARKER", client.requests[0][-1].content
         )
 
     def test_a_failed_release_task_goes_back_to_work(self) -> None:

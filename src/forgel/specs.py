@@ -251,7 +251,17 @@ def _package_indices(
         raise SpecError(f"a work package {label} list must be a list")
     result: list[int] = []
     for item in value:
-        if isinstance(item, bool) or not isinstance(item, int):
+        if isinstance(item, bool):
+            raise SpecError(
+                f"a work package {label} index must be an integer"
+            )
+        if isinstance(item, str):
+            text = item.strip()
+            if re.fullmatch(r"[0-9]+", text):
+                item = int(text)
+        elif isinstance(item, float) and item.is_integer():
+            item = int(item)
+        if not isinstance(item, int):
             raise SpecError(
                 f"a work package {label} index must be an integer"
             )
@@ -800,7 +810,9 @@ def write_task_spec(
                         "documentation file. Group every requirement and "
                         "acceptance criterion into cohesive work packages; "
                         "every index appears once and a package covers at "
-                        "most four acceptance criteria. A respec issue is "
+                        "most four acceptance criteria. Work package indices "
+                        "must be JSON integers, for example [0, 1]; never "
+                        "strings, decimals or booleans. A respec issue is "
                         "binding: remove the option it rejected and keep "
                         "requirements and acceptance consistent. Return "
                         "a complete JSON specification without a test "

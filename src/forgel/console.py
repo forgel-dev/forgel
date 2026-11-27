@@ -476,6 +476,13 @@ def _release_fallback(lang: str, release: dict) -> str:
     ).strip()
     if detail and str(release.get("status")) in {"blocked", "failed", "partial"}:
         text += " " + _t(lang, "release_outcome_detail", detail=detail)
+    moment = str(release.get("next_at") or "").strip()
+    if moment and str(release.get("status")) in {"failed", "partial"}:
+        text += " " + _t(
+            lang, "release_outcome_retry", moment=moment
+        )
+    elif str(release.get("status")) in {"blocked", "failed"}:
+        text += " " + _t(lang, "release_outcome_no_retry")
     return text
 
 
@@ -491,6 +498,26 @@ def _release_observation(
                 "class": release.get("release_class"),
                 "status": release.get("status"),
                 "detail": release.get("detail"),
+                "next_at": release.get("next_at"),
+                "retry_at": release.get("next_at"),
+                "error_retries": release.get("error_retries", 0),
+                "last_error": {
+                    "stage": (release.get("last_error") or {}).get(
+                        "stage"
+                    ),
+                    "task": (release.get("last_error") or {}).get(
+                        "task"
+                    ),
+                    "message": _cap_text(
+                        (release.get("last_error") or {}).get("message"),
+                        2_000,
+                    ),
+                    "retries": (release.get("last_error") or {}).get(
+                        "retries"
+                    ),
+                }
+                if release.get("last_error")
+                else {},
                 "audit_summary": (release.get("audit") or {}).get(
                     "summary"
                 ),

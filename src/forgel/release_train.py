@@ -65,6 +65,7 @@ MAX_AUDIT_ERRORS = 15
 AUDIT_TOTAL_TIMEOUT = limits.LIMITS["audit_timeout"]
 MAX_FIX_FINDINGS = 3
 RELEASE_RETRY_SECONDS = 60
+MAX_RELEASE_CONTROLLER_STEPS = 5
 UNRESOLVED_RELEASE_DETAIL = (
     "the release has a failed or cancelled task"
 )
@@ -136,6 +137,103 @@ def _retry_at() -> str:
 
 def _due(moment: str) -> bool:
     return not moment or moment <= _now()
+
+
+def _record_release_error(
+    release: dict[str, Any],
+    stage: str,
+    message: object,
+    task_id: str = "",
+) -> None:
+    """Record an internal failure for the controller; do not retry it."""
+
+    text = str(message).strip() or f"{stage} failed"
+    try:
+        retries = int(release.get("error_retries") or 0) + 1
+    except (TypeError, ValueError):
+        retries = 1
+    release["error_retries"] = retries
+    release["last_error"] = {
+        "stage": stage,
+        "task": task_id,
+        "message": text,
+        "retries": retries,
+        "at": _now(),
+    }
+
+
+def _hand_back_release(
+    release: dict[str, Any],
+    layout: ProjectLayout,
+    actions: list[str],
+    release_id: str,
+    log: Callable[[str], None],
+) -> None:
+    """Return an internal failure to the controller, or stop at the cap."""
+
+    error = release.get("last_error") or {}
+    retries = int(release.get("error_retries") or 0)
+    if retries >= MAX_RELEASE_CONTROLLER_STEPS:
+        release["status"] = "blocked"
+        release["detail"] = (
+            "the controller reached its step limit after an internal "
+            f"failure: {str(error.get('message') or '')[:2_000]}"
+        )
+        release["next_at"] = ""
+        save_release(layout, release)
+        actions.append(f"blocked:{release_id}")
+        log(
+            f"[release] {release_id}: controller step limit reached; "
+            "the release waits for a decision"
+        )
+        return
+    release["status"] = "running"
+    release["detail"] = ""
+    release["next_at"] = ""
+    save_release(layout, release)
+    actions.append(f"controller:{release_id}")
+    log(
+        f"[release] {release_id}: internal failure handed back to the "
+        f"controller ({retries}/{MAX_RELEASE_CONTROLLER_STEPS})"
+    )
+
+
+def _hand_back_audit(
+    release: dict[str, Any],
+    layout: ProjectLayout,
+    log: Callable[[str], None],
+) -> None:
+    """Return an audit operation failure to the audit controller."""
+
+    error = release.get("last_error") or {}
+    retries = int(release.get("error_retries") or 0)
+    if retries >= MAX_RELEASE_CONTROLLER_STEPS:
+        release["status"] = "blocked"
+        release["detail"] = (
+            "the audit controller reached its step limit after an "
+            f"internal failure: {str(error.get('message') or '')[:2_000]}"
+        )
+        release["next_at"] = ""
+        save_release(layout, release)
+        log(
+            f"[release] {release['id']}: audit controller step limit "
+            "reached; the release waits for a decision"
+        )
+        return
+    release["status"] = "running"
+    release["detail"] = ""
+    release["next_at"] = ""
+    release["controller_retry"] = True
+    save_release(layout, release)
+    log(
+        f"[release] {release['id']}: audit failure handed back to the "
+        f"controller ({retries}/{MAX_RELEASE_CONTROLLER_STEPS})"
+    )
+
+
+def _clear_release_error(release: dict[str, Any]) -> None:
+    release.pop("last_error", None)
+    release["error_retries"] = 0
 
 
 def _slug(value: str) -> str:
@@ -1002,8 +1100,18 @@ def audit_release(
                         "title": release.get("title"),
                         "request": release.get("request"),
                         "status": release.get("status"),
+                        "detail": release.get("detail"),
+                        "next_at": release.get("next_at"),
+                        "retry_at": release.get("next_at"),
+                        "error_retries": release.get(
+                            "error_retries", 0
+                        ),
+                        "last_error": (
+                            release.get("last_error") or {}
+                        ),
                         "repos": release.get("repos") or {},
                     },
+                    "last_error": release.get("last_error") or {},
                     "audit": {
                         "rounds": audit.get("rounds"),
                         "verdict": audit.get("verdict"),
@@ -1031,17 +1139,29 @@ def audit_release(
             error = str(exc)
             log(f"[controller] release audit decision failed: {exc}")
         if decision is None:
-            release["status"] = "blocked"
-            release["detail"] = (
-                "the controlling agent stopped: the model request failed "
-                f"({error or 'no decision'}); try again later"
+            _record_release_error(
+                release,
+                "audit_controller",
+                error or "no decision",
             )
+            release["status"] = "failed"
+            release["detail"] = (
+                "the controlling agent was unavailable: "
+                + (error or "no decision")
+            )
+            release["next_at"] = ""
             save_release(layout, release)
-            log(f"[release] {release['id']}: controller stopped")
+            log(
+                f"[release] {release['id']}: "
+                f"{release['detail']}; no automatic retry"
+            )
             return False
         action = controller.release_action(decision.operation)
         if action == "audit":
             release["status"] = "running"
+            release["detail"] = ""
+            release["next_at"] = ""
+            _clear_release_error(release)
             save_release(layout, release)
             return False
         if action == "ask_user":
@@ -1052,6 +1172,7 @@ def audit_release(
                 or audit.get("summary")
                 or "the audit failed"
             )
+            _clear_release_error(release)
             save_release(layout, release)
             log(
                 f"[release] {release['id']}: needs the owner: "
@@ -1062,20 +1183,37 @@ def audit_release(
             limit_name = str(
                 decision.args.get("name") or "command_timeout"
             ).strip()
-            value = limits.set_value(
-                layout, limit_name, decision.args.get("seconds")
-            )
+            try:
+                value = limits.set_value(
+                    layout, limit_name, decision.args.get("seconds")
+                )
+            except Exception as exc:  # noqa: BLE001
+                _record_release_error(release, "audit_set_limit", exc)
+                _hand_back_audit(release, layout, log)
+                return False
             release["status"] = "running"
+            release["detail"] = ""
+            release["next_at"] = ""
+            _clear_release_error(release)
             save_release(layout, release)
             log(
                 f"[release] {release['id']}: {limit_name} raised to "
                 f"{value:g}s"
             )
             return False
-        if action == "fix" and _queue_fix_tasks(
-            layout, release, items, blocking, log
-        ):
+        try:
+            fixed = action == "fix" and _queue_fix_tasks(
+                layout, release, items, blocking, log
+            )
+        except Exception as exc:  # noqa: BLE001
+            _record_release_error(release, "audit_fix", exc)
+            _hand_back_audit(release, layout, log)
+            return False
+        if fixed:
             release["status"] = "running"
+            release["detail"] = ""
+            release["next_at"] = ""
+            _clear_release_error(release)
             save_release(layout, release)
             return False
         release["status"] = "blocked"
@@ -1085,10 +1223,12 @@ def audit_release(
             or audit.get("summary")
             or "the audit failed"
         )
+        _clear_release_error(release)
         save_release(layout, release)
         return False
     release["status"] = "blocked"
     release["detail"] = audit.get("summary") or "the audit failed"
+    _clear_release_error(release)
     save_release(layout, release)
     log(f"[release] {release['id']}: audit blocked the release")
     return False
@@ -1843,6 +1983,7 @@ def process_releases(
             release["status"] = "failed"
             release["detail"] = ""
             release["next_at"] = ""
+            _clear_release_error(release)
             status = "failed"
             save_release(layout, release)
         if status in {"blocked", "cancelled"}:
@@ -1915,7 +2056,17 @@ def process_releases(
                                 "id": release.get("id"),
                                 "title": release.get("title"),
                                 "status": release.get("status"),
+                                "detail": release.get("detail"),
+                                "next_at": release.get("next_at"),
+                                "retry_at": release.get("next_at"),
+                                "error_retries": release.get(
+                                    "error_retries", 0
+                                ),
+                                "last_error": (
+                                    release.get("last_error") or {}
+                                ),
                             },
+                            "last_error": release.get("last_error") or {},
                             "limits": {
                                 **limits.LIMITS,
                                 **limits.load(layout),
@@ -1979,6 +2130,7 @@ def process_releases(
                         or decision.summary
                         or "the release stopped on a task"
                     )
+                    _clear_release_error(release)
                     save_release(layout, release)
                     actions.append(f"blocked:{release_id}")
                     continue
@@ -1989,6 +2141,7 @@ def process_releases(
                         or decision.reason
                         or "the release stopped on a task"
                     )
+                    _clear_release_error(release)
                     save_release(layout, release)
                     log(
                         f"[release] {release_id}: needs the owner: "
@@ -2000,11 +2153,23 @@ def process_releases(
                     limit_name = str(
                         decision.args.get("name") or "command_timeout"
                     ).strip()
-                    value = limits.set_value(
-                        layout,
-                        limit_name,
-                        decision.args.get("seconds"),
-                    )
+                    try:
+                        value = limits.set_value(
+                            layout,
+                            limit_name,
+                            decision.args.get("seconds"),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        _record_release_error(
+                            release,
+                            "set_limit",
+                            exc,
+                            str(stopped[0]["id"]),
+                        )
+                        _hand_back_release(
+                            release, layout, actions, release_id, log
+                        )
+                        continue
                     log(
                         f"[release] {release_id}: {limit_name} raised to "
                         f"{value:g}s"
@@ -2039,15 +2204,17 @@ def process_releases(
                         )
                         tasks.retry_task(layout, task_id)
                     except Exception as exc:  # noqa: BLE001
-                        log(f"[release] {release_id}: respec: {exc}")
-                        release["status"] = "blocked"
-                        release["detail"] = f"respec failed: {exc}"
-                        save_release(layout, release)
-                        actions.append(f"blocked:{release_id}")
+                        _record_release_error(
+                            release, "respec", exc, task_id
+                        )
+                        _hand_back_release(
+                            release, layout, actions, release_id, log
+                        )
                         continue
                     release["status"] = "running"
                     release["detail"] = ""
                     release["next_at"] = ""
+                    _clear_release_error(release)
                     save_release(layout, release)
                     actions.append(f"respec:{task_id}")
                     log(f"[release] {release_id}: {text}; task queued")
@@ -2066,20 +2233,20 @@ def process_releases(
                             log,
                         )
                     except Exception as exc:  # noqa: BLE001
-                        log(
-                            f"[release] {release_id}: "
-                            f"{decision.operation}: {exc}"
+                        _record_release_error(
+                            release,
+                            decision.operation,
+                            exc,
+                            str(stopped[0]["id"]),
                         )
-                        release["status"] = "blocked"
-                        release["detail"] = (
-                            f"{decision.operation} failed: {exc}"
+                        _hand_back_release(
+                            release, layout, actions, release_id, log
                         )
-                        save_release(layout, release)
-                        actions.append(f"blocked:{release_id}")
                         continue
                     release["status"] = "running"
                     release["detail"] = ""
                     release["next_at"] = ""
+                    _clear_release_error(release)
                     save_release(layout, release)
                     actions.append(
                         f"{decision.operation}:{stopped[0]['id']}"
@@ -2096,17 +2263,27 @@ def process_releases(
                 data["feedback"] = decision.feedback or (
                     [decision.reason] if decision.reason else []
                 )
-                tasks.update_task(
-                    layout,
-                    str(task["id"]),
-                    status="pending",
-                    started_at="",
-                    finished_at="",
-                    result=data,
-                )
+                try:
+                    tasks.update_task(
+                        layout,
+                        str(task["id"]),
+                        status="pending",
+                        started_at="",
+                        finished_at="",
+                        result=data,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    _record_release_error(
+                        release, "rework", exc, str(task["id"])
+                    )
+                    _hand_back_release(
+                        release, layout, actions, release_id, log
+                    )
+                    continue
                 release["status"] = "running"
                 release["detail"] = ""
                 release["next_at"] = ""
+                _clear_release_error(release)
                 save_release(layout, release)
                 actions.append(f"retry:{task['id']}")
                 log(
@@ -2132,17 +2309,23 @@ def process_releases(
                     save_release(layout, release)
                     actions.append(f"blocked:{release_id}")
                     continue
+                _record_release_error(
+                    release,
+                    "controller",
+                    controller_error or "no decision",
+                    str(stopped[0]["id"]),
+                )
                 release["status"] = "failed"
                 release["detail"] = (
                     "the controlling agent was unavailable: "
                     + (controller_error or "no decision")
                 )
-                release["next_at"] = _retry_at()
+                release["next_at"] = ""
                 save_release(layout, release)
-                actions.append(f"retry:{release_id}")
+                actions.append(f"failed:{release_id}")
                 log(
                     f"[release] {release_id}: "
-                    f"{release['detail']}; retry scheduled"
+                    f"{release['detail']}; no automatic retry"
                 )
                 continue
             release["status"] = "blocked"
@@ -2181,6 +2364,10 @@ def process_releases(
                 release["status"] = "ready"
                 save_release(layout, release)
             else:
+                if release.pop("controller_retry", False):
+                    actions.append(f"controller:{release_id}")
+                    waiting.append(repos)
+                    continue
                 if str(release.get("status")) == "blocked":
                     actions.append(f"blocked:{release_id}")
                     continue

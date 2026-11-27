@@ -160,6 +160,11 @@ class ControllerTest(unittest.TestCase):
                     {"id": first["id"], "status": "blocked"},
                     {"id": second["id"], "status": "failed"},
                 ],
+                "last_error": {
+                    "stage": "respec",
+                    "task": first["id"],
+                    "message": "LAST-ERROR-MARKER",
+                },
             },
             client,
             log=lambda _m: None,
@@ -170,6 +175,7 @@ class ControllerTest(unittest.TestCase):
         self.assertIn("SPEC-MARKER-FAILED", prompt)
         self.assertIn(f"specification:{first['id']}", prompt)
         self.assertIn(f"specification:{second['id']}", prompt)
+        self.assertIn("LAST-ERROR-MARKER", prompt)
 
     def test_tool_markup_is_retried_with_a_json_correction(self) -> None:
         client = ScriptedModelClient(

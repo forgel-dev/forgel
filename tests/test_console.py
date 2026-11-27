@@ -15,6 +15,7 @@ from forgel.console import (
     _explain_outcomes,
     _explain_release_outcome,
     _peak_wait,
+    _release_fallback,
     _task_observation,
     _task_snapshot,
     run_console,
@@ -412,6 +413,35 @@ class ConsoleTest(unittest.TestCase):
         self.assertIn("1.9.0", prompt)
         self.assertIn("v1.9.0", prompt)
         self.assertNotIn("audit.md", prompt)
+
+    def test_a_release_fallback_mentions_retry_only_when_scheduled(
+        self,
+    ) -> None:
+        retrying = {
+            "id": "release-1",
+            "status": "failed",
+            "detail": "respec failed: invalid work package",
+            "next_at": "2026-11-27T20:30:00+00:00",
+            "repos": {},
+        }
+        self.assertIn(
+            "Повтор запланирован",
+            _release_fallback("ru", retrying),
+        )
+        stopped = {
+            "id": "release-2",
+            "status": "blocked",
+            "detail": "the work cannot continue",
+            "repos": {},
+        }
+        self.assertIn(
+            "Автоматического повтора не будет",
+            _release_fallback("ru", stopped),
+        )
+        self.assertNotIn(
+            "Повтор запланирован",
+            _release_fallback("ru", stopped),
+        )
 
     def test_a_task_in_a_release_is_not_reported_separately(self) -> None:
         project_id = create_project(

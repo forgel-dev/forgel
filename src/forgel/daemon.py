@@ -1206,8 +1206,12 @@ def run_once(
             )
         if project_is_done(ledger, project_id):
             layout = ProjectLayout.detect(project["workspace"])
-            if process_releases(
+            actions = process_releases(
                 settings, ledger, project, layout, client, log
+            )
+            if any(
+                action.startswith(("released:", "controller:"))
+                for action in actions
             ):
                 processed.append(project_id)
             continue
@@ -1229,7 +1233,7 @@ def run_once(
             settings, ledger, project, layout, client, log
         )
         if any(
-            action.startswith("released:")
+            action.startswith(("released:", "controller:"))
             for action in release_actions
         ):
             processed.append(project_id)

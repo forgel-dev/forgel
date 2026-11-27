@@ -199,6 +199,44 @@ class WorkPackageTest(unittest.TestCase):
                 ]
             )
 
+    def test_integer_like_package_indices_are_normalized(self) -> None:
+        spec = self._spec(
+            [
+                {
+                    "title": "First package",
+                    "requirements": ["0"],
+                    "acceptance": ["0", 1.0],
+                },
+                {
+                    "title": "Second package",
+                    "requirements": [1],
+                    "acceptance": ["2", 3, 4],
+                },
+            ]
+        )
+        self.assertEqual(
+            spec["work_packages"][0]["requirements"], [0]
+        )
+        self.assertEqual(
+            spec["work_packages"][0]["acceptance"], [0, 1]
+        )
+        self.assertEqual(
+            spec["work_packages"][1]["acceptance"], [2, 3, 4]
+        )
+
+    def test_non_integral_package_indices_are_rejected(self) -> None:
+        for value in (True, 0.5, "one"):
+            with self.assertRaises(SpecError):
+                self._spec(
+                    [
+                        {
+                            "title": "Bad package",
+                            "requirements": [value],
+                            "acceptance": [0, 1, 2, 3, 4],
+                        }
+                    ]
+                )
+
     def test_work_packages_must_cover_every_item_once(self) -> None:
         with self.assertRaises(SpecError):
             self._spec(

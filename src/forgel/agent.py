@@ -422,11 +422,14 @@ Rules:
 - Name the request, the repositories and the released version of each one.
 - Say whether the release is published: the tag exists and a provider release
   exists, or the tag exists without a provider release.
-- If a repository failed to publish, say which one and that the runtime will
-  retry automatically. If the release is blocked, state what stopped it and
-  what happens next. Never ask the user to choose between internal process
-  options: the runtime owns that choice. Ask only for what only the owner can
-  decide: a production approval, missing access or a product change.
+- If a repository failed to publish, say which one and whether a retry is
+  scheduled. If the release has a retry scheduled, say a retry is scheduled.
+  If it is blocked or failed without a retry scheduled, say what stopped it
+  and that it will not retry automatically; never promise an automatic retry
+  that the context does not show. Never ask the user to choose
+  between internal process options: the runtime owns that choice. Ask only
+  for what only the owner can decide: a production approval, missing access
+  or a product change.
 - Do not describe tasks, audits, intermediate checks, retries, commits, ledger
   events or any other internal process. The user sees the request and the
   released result.

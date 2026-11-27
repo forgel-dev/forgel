@@ -102,7 +102,11 @@ Use only the facts in the context. Do not repeat what is already proven to
 work. Do not ask the owner to choose between internal process options.
 Every inactive task carries its full record and specification in the context.
 The "stopped" list names the tasks a release operation acts on; the other
-inactive tasks are context. Read the tasks before choosing.
+inactive tasks are context. Read the tasks before choosing. A last_error
+item reports a runtime step that failed before it changed the work; account
+for it when choosing the next step. Before repeating a step, decide whether
+it can produce a different result. If the same failure is unavoidable, stop
+and report the concrete reason and evidence instead of repeating it.
 
 The context is paged, not truncated. The manifest lists every item and its
 page count; the first pages that fit are shown. To read any page, answer only
@@ -374,6 +378,15 @@ def _window(
             json.dumps(dict(context), ensure_ascii=False, indent=1),
         ),
     ]
+    last_error = context.get("last_error")
+    if isinstance(last_error, Mapping) and last_error:
+        items.append(
+            Item(
+                "last_error",
+                "the last internal failure",
+                json.dumps(last_error, ensure_ascii=False, indent=1),
+            )
+        )
     seen_tasks: set[str] = set()
     task_id = _task_id(context)
     if task_id:
