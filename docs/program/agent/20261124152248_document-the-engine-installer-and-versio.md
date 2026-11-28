@@ -1,10 +1,10 @@
 # Agent Run: Document the engine installer and version contract
 
 - Task: `20261124152248_document-the-engine-installer-and-versio`
-- Status: `failed`
+- Status: `done`
 - Repository: `main`
-- Steps: 107
-- Finished: 2026-11-25T15:27:39+00:00
+- Steps: 278
+- Finished: 2026-11-28T08:45:52+00:00
 
 ## Requirements
 
@@ -20,7 +20,10 @@
 
 ## Assumptions
 
-- none
+- The existing documentation task was continued rather than restarted: the installer, entry point, uninstall path and pre-install version determination are now shipped by install.sh on this branch, so the guidance describes that shipped behaviour instead of the earlier blocked state.
+- The strictly-newer comparison is documented as the rule the caller driving the installer applies (the engine installer installs the target it resolved), matching the shipped installer, which offers `--resolve` for the available version and no downgrade check of its own.
+- Removal is documented as removing the engine tree, the entry point and the installer's start-up block while keeping the user's configuration and project material under `~/.forgel`, which is what the shipped uninstall does.
+- Documentation was verified by reading it against the shipped installer and version report only; per the repository rules no automated check that reads documentation was added.
 
 ## Test Removals
 
@@ -29,14 +32,14 @@
 ## Context
 
 - Window limit: 1000000 tokens (usable 122880)
-- Sessions: 1
-- Handoffs: 0
-- Model calls: 107
-- Estimated input tokens (all calls): 5675067
-- Provider input/output tokens: 5890695 / 43940
-- Provider cache hit/miss tokens: 5800960 / 89735
-- Estimated prompt at the end: 81798 tokens
-- State: not needed
+- Sessions: 2
+- Handoffs: 1
+- Model calls: 278
+- Estimated input tokens (all calls): 14532658
+- Provider input/output tokens: 15016993 / 257138
+- Provider cache hit/miss tokens: 14766592 / 250401
+- Estimated prompt at the end: 65429 tokens
+- State: `docs/program/agent/20261124152248_document-the-engine-installer-and-versio.state.md`
 
 ## Specification (`docs/program/specs/20261124152248_document-the-engine-installer-and-versio.md`)
 
@@ -191,96 +194,613 @@ A user who wants only the engine finds the install step at the start of the proj
 
 ## Summary
 
-The shipped engine has no installer to document. The plan docs/program/plans/20261124145600_make-forgel-and-forgel-code-install-and-.md marks backlog item 2, 'Add the engine's one-command installer with pre-install version resolution', as blocked ('the dependency scout exceeded its step limit'), and that task's spec (docs/program/specs/20261124152248_add-the-engine-s-one-command-installer-w.md) states 'The owner decides this task's scope before it can be implemented'. In this repository there is no install script (no install.sh anywhere; only deploy/entrypoint.sh and Django template scripts), no uninstall path, no private prefix, no launcher placed on PATH, no marked profile block or shell-reachability handling (no 'export PATH' in the tree), and no determination of the version a configured source or release ref would provide. The only shipped piece is the version inquiry in src/forgel/engine_version.py ('forgel version [--json]', dispatched from src/forgel/entry.py), which alone cannot satisfy FR-1, FR-2, FR-3, FR-5, FR-6, FR-7, AC-1, AC-2, AC-3, AC-5, AC-6, AC-7 and AC-9. Writing the installation, entry point, pre-install version determination, strictly-newer comparison and removal text would document behaviour the shipped installer and engine do not perform, which FR-8, AC-8 and the specification's own Risks section forbid. Decision needed: unblock and implement the engine installer task first, then re-run this documentation task against the shipped behaviour.
+Documented the engine installer and version contract in the user-facing introduction, the detailed install guide, and the release notes, consistent with the shipped installer and the shipped version report. README's Install section is now the first thing a user reads: prerequisites (checkout plus Python 3.11 or newer on PATH), the single step `sh install.sh`, where the engine and the `forgel` entry point land (`~/.local/share/forgel`, `~/.local/bin/forgel`, or the `FORGEL_INSTALL_ROOT`/`FORGEL_BIN_DIR` overrides), the delimited start-up block that puts the command directory ahead on PATH, starting a new terminal session, and what to do when the name is still unreachable in the user's own shell. It states how the install is confirmed with the engine's `version --json` report, that the report is one JSON object a program consumes directly as the supported compatibility judgement and needs no project, model credential or particular working directory, that `sh install.sh --resolve` determines the version a configured source and reference would provide before anything is installed and that this value is what an installed engine is compared against, that only a strictly newer available version replaces an installed engine while an equal or older one leaves it untouched, and what `--uninstall` removes and which configuration and project material under `~/.forgel` it keeps. docs/install.md was brought in line with the same shipped behaviour: prerequisites and the single step, a new section on placement, shell reachability and the remedy for an unreachable location, a new section on confirming the install and the directly consumable report, the pre-install determination and the strictly-newer comparison rule, and removal rewritten to name the engine tree, the entry point, the start-up block and the kept user data. CHANGELOG.md gains entries for the single install step with entry point and shell reachability, pre-install version determination, the comparison rule, removal that keeps user data, and the directly consumable version report. No installer, entry point, version-reporting or removal behaviour was changed, no release version or tag was named, and no test, guard or assertion inspecting documentation was added. Verified by running the repository gate, `python3 -m unittest discover -s tests`, which passed (820 tests), plus the installer and version suites specifically; every documented name, option, default location and output shape was read from install.sh, src/forgel/engine_version.py, src/forgel/entry.py and tests/test_install.py.
 
 ## Files Changed
 
-- none
+- `CHANGELOG.md`
+- `README.md`
+- `docs/install.md`
 
 ## Commands
 
-- none
+- `["git", "show", "--stat", "92fdf31"]` → exit 0
+- `["git", "show", "--stat", "0320f4d"]` → exit 0
+- `["git", "show", "--stat", "106a30f"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests", "-q"]` → exit 124
+- `["git", "status", "--short"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "status", "--short"]` → exit 0
+- `["git", "diff", "README.md", "docs/install.md"]` → exit 0
+- `["python3", "-m", "unittest", "tests.test_engine_version", "tests.test_install", "-q"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
+- `["python3", "-m", "unittest", "discover", "-s", "tests"]` → exit 0
 
 ## Final Test Output
 
 ```
-not run
+[agent] 20261128084305_inspect-and-finish: context handoff to session 2 (~6504/3072 tokens)
+[agent] 20261128084312_record-the-handoff: context handoff to session 2 (~2752/3072 tokens)
+[agent] 20261128084312_record-the-handoff: context handoff to session 3 (~7027/3072 tokens)
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[intake] running
+[intake] completed
+[jurisdiction] running
+[jurisdiction] completed
+[recipe] running
+[recipe] completed
+[architecture] running
+[architecture] completed
+[repo_plan] running
+[repo_plan] completed
+[feature_plan] running
+[feature_plan] completed
+[spec] running
+[spec] completed
+[spec_review] running
+[spec_review] completed
+[dev] running
+[dev] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[review] running
+[review] completed
+[qa] running
+[qa] completed
+[acceptance] running
+[acceptance] completed
+[audit] running
+[audit] completed
+[approval] running
+[approval] awaiting staging approval (pending)
+[approval] running
+[approval] completed
+[done] running
+[done] completed
+[github] GitHub API is unreachable; the branch is pushed without pull-request checks
+[github] demo-622f47ec: no API credentials (no usable GitHub credentials; GitHub App is not configured; no PAT; no GitHub CLI session); pushing the branch without a pull request
+.........................................................................error: unknown project 'missing-project'
+..error: unknown project 'missing-project'
+...[model] script mode: /private/var/folders/2g/9_qkdxhs6hx0fm8bm1wtlshr0000gq/T/tmp5ktwy_s5/model-script.json does not exist
+.....error: say needs text: --text "..." or a trailing argument
+.................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 820 tests in 180.337s
+
+OK
+
 ```
 
 ## Actions
 
-- list_files
-- list_files
-- search_files: forgel @ scripts *
-- search_files: install @ . *.sh
-- search_files: install\.sh @ .
-- read_file: README.md
-- search_files: install @ README.md
-- search_files: forgel-code|forgel_code @ . *.sh
-- list_files
-- search_files: __version__|--version|engine_version @ src *.py
-- read_file: src/forgel/engine_version.py
-- read_file: src/forgel/entry.py
-- search_files: pipx|uv tool install|releases/latest @ . *.md
-- search_files: forgel version @ .
-- list_files
-- search_files: installer @ . *.md
-- search_files: 20261124145600 @ .
-- search_files: console_scripts|\[project\.scripts\]|\[project\] @ . *.toml
-- read_file: pyproject.toml
-- search_files: uninstall|\bsh\b|curl @ README.md
-- search_files: uninstall @ . *.py
-- list_files
-- search_files: CHANGELOG|changelog @ . *.md
-- search_files: install @ docs *.md
-- search_files: installer|install step|single install @ docs/program *.md
-- list_files
-- search_files: install @ tests *.py
-- list_files
-- search_files: combined install|one install step|install and run @ docs *.md
-- search_files: make-forgel-and-forgel-code @ .
-- search_files: install @ PLAN.md
-- read_file: README.md
-- search_files: get\.forgel|forgel-dev/forgel/.*install|releases/latest|installer @ . *
-- search_files: pipx|venv|PyPI|pypi|bin_dir|\.local/bin @ src *.py
-- search_files: release ref|release_ref|source ref|FORGEL_SOURCE|FORGEL_REPO @ . *.py
-- search_files: ^##  @ README.md
+- recall
+- recall
+- recall
+- recall
+- recall
+- recall
+- recall
 - read_file: install.sh
-- search_files: PATH @ . *.sh
-- search_files: install and run @ docs/program/plans
-- list_files
-- search_files: single install step @ .
-- read_file: docs/program/agent/20261122062911_make-install-sh-put-forgel-code-on-path-.md
-- search_files: def .*_command\(|install_command|tool_install @ src *.py
-- read_file: registry/recipes.json
-- search_files: uninstall @ .
-- read_file: Makefile
-- search_files: pip install|uv tool|pipx|install-sh|get\.forgel @ . *.md
-- search_files: install @ . *.yml
-- search_files: forgel version|version --json|version_command @ . *
-- search_files: ^#!/ @ .
-- search_files: https://forgel|raw.githubusercontent|install @ . install*
-- search_files: Make Forgel and Forgel Code install @ .
-- search_files: curl|download|github.com/forgel @ src *.py
-- search_files: install @ docs/program/plans
+- recall
+- recall
+- recall
+- read_file: install.sh
+- search_files: newer|newer than|strictly @ . *.py
 - read_file: docs/program/plans/20261124145600_make-forgel-and-forgel-code-install-and-.md
-- search_files: launcher|marked block|prefix @ src/forgel *.py
-- search_files: \| *sh|sh -s|--uninstall @ .
-- search_files: export PATH @ .
-- search_files: one-command installer @ .
-- search_files: available @ src *.py
-- search_files: 20261124 @ docs/program/agent
-- search_files: 20261124152248_emit-a-machine-readable-engine-version @ docs/program/specs
-- search_files: engine_version @ tests *.py
-- search_files: instal @ . src/forgel/*.sh
-- search_files: profile|PATH @ src/forgel *.py
-- search_files: one-command-installer|marked profile block|private prefix @ .
-- search_files: install @ src *install*
-- search_files: one-command @ .
+- read_file: src/forgel/release_train.py
+- recall
+- run: ['git', 'show', '--stat', '92fdf31']
+- read_file: tests/test_install.py
+- read_file: src/forgel/release_train.py
+- search_files: Changelog @ . CHANGELOG.md
+- search_files: Unreleased @ . *.py
+- search_files: def write|def envelope @ src/forgel/client_cli.py *.py
+- read_file: src/forgel/release_train.py
+- read_file: README.md
+- recall
+- search_files: version @ README.md README.md
+- search_files: forgel version @ . README.md
+- search_files: def envelope|def write @ src/forgel *.py
+- read_file: src/forgel/client_cli.py
+- run: ['git', 'show', '--stat', '0320f4d']
+- search_files: install|Install @ README.md README.md
+- read_file: pyproject.toml
+- read_file: src/forgel/entry.py
 - read_file: tests/test_engine_version.py
-- search_files: 20261124152248_document-the-engine-installer @ docs/program/agent
-- search_files: #! @ . *.sh
-- search_files: set -eu|set -euo @ .
-- search_files: install|PATH|profile @ INTERNAL.md
-- read_file: docs/program/specs/20261124152248_add-the-engine-s-one-command-installer-w.md
-- search_files: FORGEL_PREFIX|forgel-launcher|bin/forgel|get-forgel @ .
+- search_files: installed|INSTALLED @ install.sh *.sh
+- search_files: Install|install @ INTERNAL.md INTERNAL.md
+- run: ['git', 'show', '--stat', '106a30f']
+- recall
+- search_files: version @ src/forgel/cli.py *.py
+- search_files: FORGEL_HOME @ src/forgel *.py
+- search_files: git clone|clone the @ . README.md
+- search_files: forgel version|engine version|version report|__version__ @ . *.md
+- list_files
+- search_files: ^##  @ README.md README.md
+- recall
+- search_files: README|docs/install @ tests *.py
+- search_files: home|HOME @ src/forgel/layout.py *.py
+- read_file: README.md
+- edit_file: README.md
+- read_file: src/forgel/release_train.py
+- read_file: README.md
+- read_file: README.md
+- search_files: 20261124152248_document-the-engine-installer @ docs/program *
+- search_files: release.md @ releases *
+- edit_file: README.md
+- write_file: CHANGELOG.md
+- edit_file: README.md
+- read_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- edit_file: docs/install.md
+- read_file: docs/install.md
+- edit_file: docs/install.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- read_file: docs/install.md
+- edit_file: docs/install.md
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests', '-q']
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- read_file: README.md
+- edit_file: README.md
+- edit_file: docs/install.md
+- read_file: docs/install.md
+- edit_file: docs/install.md
+- edit_file: docs/install.md
+- read_file: docs/install.md
+- run: ['git', 'status', '--short']
+- run: ['git', 'status', '--short']
+- run: ['git', 'status', '--short']
+- run: ['git', 'status', '--short']
+- run: ['git', 'diff', 'README.md', 'docs/install.md']
+- read_file: install.sh
+- read_file: install.sh
+- read_file: install.sh
+- read_file: src/forgel/engine_version.py
+- search_files: strictly|newer|ordering\(|installed_version @ . *.py
+- read_file: tests/test_install.py
+- search_files: def envelope @ src/forgel/client_cli.py *.py
+- search_files: def envelope @ src/forgel *.py
+- read_file: src/forgel/client_cli.py
+- search_files: installed|same version|already @ install.sh *.sh
+- search_files: strictly newer|idempotent|available version|installed engine @ docs/program/plans *.md
+- search_files: install\.sh|--resolve @ src *.py
+- read_file: docs/install.md
+- read_file: docs/install.md
+- search_files: README|docs/install @ tests *.py
+- read_file: README.md
+- read_file: CHANGELOG.md
+- search_files: forgel_home|\.forgel|FORGEL_HOME @ src/forgel/layout.py *.py
+- search_files: def home|home\( @ src/forgel/layout.py *.py
+- search_files: forgel @ src/forgel/layout.py *.py
+- search_files: FORGEL_HOME @ src *.py
+- search_files: repos @ src/forgel/layout.py *.py
+- search_files: CHANGELOG @ src/forgel *.py
+- search_files: install|Install|version|pip @ README.md README.md
+- search_files: sh install|forgel version|uninstall @ . *.md
+- edit_file: README.md
+- run: ['python3', '-m', 'unittest', 'tests.test_engine_version', 'tests.test_install', '-q']
+- run: ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+- read_file: README.md
+- recall
+- search_files: install|pip |PATH @ README.md README.md
+- read_file: README.md
+- run: ['git', 'ls-files', 'install.sh', 'tests/test_install.py', 'src/forgel/engine_version.py', 'tests/test_engine_version.py', 'CHANGELOG.md']
+- search_files: version_command|version @ src/forgel/entry.py entry.py
+- search_files: version @ src entry.py
+- search_files: version @ . entry.py
+- recall
+- recall
+- search_files: installer|sh install|pip install|forgel version @ . README.md
+- read_file: src/forgel/release_train.py
+- edit_file: docs/install.md
+- read_file: docs/install.md
+- edit_file: docs/install.md
+- read_file: docs/install.md
+- read_file: README.md
+- read_file: docs/install.md
+- read_file: tests/test_install.py
+- read_file: src/forgel/release_train.py
+- read_file: README.md
+- read_file: CHANGELOG.md
+- read_file: docs/install.md

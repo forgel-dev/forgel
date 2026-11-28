@@ -16,42 +16,172 @@
   "order": 6,
   "external_dependencies": [],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-28T08:17:51+00:00",
+  "finished_at": "2026-11-28T08:45:52+00:00",
   "result": {
-    "summary": "stopped by the controller: The documentation task is sound but has an unmet prerequisite that this task cannot create. The failure is not a specification defect (the spec explicitly requires documenting only shipped behaviour), not a repository test or environment problem, and not a limit; the earlier decisions — respec, retry, two reworks, restart, QA, and a raised limit — have all exhausted the space of re-runs, and each returned the same fact: the engine has no installer, entry point on PATH, profile/reachability handling, uninstall path, or pre-install version determination. The only shipped piece is the version inquiry, so FR-1, FR-2, FR-3, FR-5, FR-6, FR-7 and their acceptance criteria cannot be met truthfully, and writing them anyway would break FR-8/AC-8. The plan's backlog item 2, which must implement the installer, is itself marked blocked (dependency scout exceeded its step limit), and the escalated install.sh/test_install.py from an earlier attempt were never committed. Re-running this task unchanged reproduces the same conclusion; no runtime next-step operation can retarget the prerequisite task from here. The work must stop with this reason so the plan sequencing is corrected: unblock and implement the engine installer task, then re-queue this documentation task against the shipped behaviour.",
-    "files_changed": [],
-    "commands": [],
-    "test_output": "",
-    "assumptions": [],
+    "summary": "Documented the engine installer and version contract in the user-facing introduction, the detailed install guide, and the release notes, consistent with the shipped installer and the shipped version report. README's Install section is now the first thing a user reads: prerequisites (checkout plus Python 3.11 or newer on PATH), the single step `sh install.sh`, where the engine and the `forgel` entry point land (`~/.local/share/forgel`, `~/.local/bin/forgel`, or the `FORGEL_INSTALL_ROOT`/`FORGEL_BIN_DIR` overrides), the delimited start-up block that puts the command directory ahead on PATH, starting a new terminal session, and what to do when the name is still unreachable in the user's own shell. It states how the install is confirmed with the engine's `version --json` report, that the report is one JSON object a program consumes directly as the supported compatibility judgement and needs no project, model credential or particular working directory, that `sh install.sh --resolve` determines the version a configured source and reference would provide before anything is installed and that this value is what an installed engine is compared against, that only a strictly newer available version replaces an installed engine while an equal or older one leaves it untouched, and what `--uninstall` removes and which configuration and project material under `~/.forgel` it keeps. docs/install.md was brought in line with the same shipped behaviour: prerequisites and the single step, a new section on placement, shell reachability and the remedy for an unreachable location, a new section on confirming the install and the directly consumable report, the pre-install determination and the strictly-newer comparison rule, and removal rewritten to name the engine tree, the entry point, the start-up block and the kept user data. CHANGELOG.md gains entries for the single install step with entry point and shell reachability, pre-install version determination, the comparison rule, removal that keeps user data, and the directly consumable version report. No installer, entry point, version-reporting or removal behaviour was changed, no release version or tag was named, and no test, guard or assertion inspecting documentation was added. Verified by running the repository gate, `python3 -m unittest discover -s tests`, which passed (820 tests), plus the installer and version suites specifically; every documented name, option, default location and output shape was read from install.sh, src/forgel/engine_version.py, src/forgel/entry.py and tests/test_install.py.",
+    "files_changed": [
+      "CHANGELOG.md",
+      "README.md",
+      "docs/install.md"
+    ],
+    "commands": [
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "92fdf31"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "0320f4d"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "show",
+          "--stat",
+          "106a30f"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-q"
+        ],
+        "exit_code": 124
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "README.md",
+          "docs/install.md"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_engine_version",
+          "tests.test_install",
+          "-q"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261128084305_inspect-and-finish: context handoff to session 2 (~6504/3072 tokens)\n[agent] 20261128084312_record-the-handoff: context handoff to session 2 (~2752/3072 tokens)\n[agent] 20261128084312_record-the-handoff: context handoff to session 3 (~7027/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[sp\n... [output truncated, 10317 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "The existing documentation task was continued rather than restarted: the installer, entry point, uninstall path and pre-install version determination are now shipped by install.sh on this branch, so the guidance describes that shipped behaviour instead of the earlier blocked state.",
+      "The strictly-newer comparison is documented as the rule the caller driving the installer applies (the engine installer installs the target it resolved), matching the shipped installer, which offers `--resolve` for the available version and no downgrade check of its own.",
+      "Removal is documented as removing the engine tree, the entry point and the installer's start-up block while keeping the user's configuration and project material under `~/.forgel`, which is what the shipped uninstall does.",
+      "Documentation was verified by reading it against the shipped installer and version report only; per the repository rules no automated check that reads documentation was added."
+    ],
     "context": {
       "window": 1000000,
       "usable": 122880,
-      "sessions": 1,
-      "compactions": 0,
-      "model_calls": 107,
-      "estimated_input_tokens": 5675067,
-      "provider_input_tokens": 5890695,
-      "provider_output_tokens": 43940,
-      "cache_hit_tokens": 5800960,
-      "cache_miss_tokens": 89735,
-      "estimated_tokens": 81798,
-      "state": ""
+      "sessions": 2,
+      "compactions": 1,
+      "model_calls": 278,
+      "estimated_input_tokens": 14532658,
+      "provider_input_tokens": 15016993,
+      "provider_output_tokens": 257138,
+      "cache_hit_tokens": 14766592,
+      "cache_miss_tokens": 250401,
+      "estimated_tokens": 65429,
+      "state": "docs/program/agent/20261124152248_document-the-engine-installer-and-versio.state.md"
     },
     "test_removals": [],
     "spec_issues": [],
     "escalated": [],
     "git": {
-      "base": "ac09a5b8769ead9f746002fed82a43b9ac1fdda0",
-      "head": "ac09a5b8769ead9f746002fed82a43b9ac1fdda0",
-      "commit": "",
-      "commits": []
+      "base": "6977d41307f90a5760c59383b520f19244d40022",
+      "head": "36379d47194f260ab07a1b2b0846e90f1b4d4218",
+      "commit": "36379d47194f260ab07a1b2b0846e90f1b4d4218",
+      "commits": [
+        "36379d47194f260ab07a1b2b0846e90f1b4d4218"
+      ]
     },
     "report": "docs/program/agent/20261124152248_document-the-engine-installer-and-versio.md",
     "attempts": 0,
     "rework_count": 0,
-    "manual_retries": 1
+    "manual_retries": 1,
+    "resume_count": 1,
+    "resumed_at": "2026-11-28T08:17:51+00:00",
+    "last_summary": "stopped by the controller: The documentation task is sound but has an unmet prerequisite that this task cannot create. The failure is not a specification defect (the spec explicitly requires documenting only shipped behaviour), not a repository test or environment problem, and not a limit; the earlier decisions — respec, retry, two reworks, restart, QA, and a raised limit — have all exhausted the space of re-runs, and each returned the same fact: the engine has no installer, entry point on PATH, profile/reachability handling, uninstall path, or pre-install version determination. The only shipped piece is the version inquiry, so FR-1, FR-2, FR-3, FR-5, FR-6, FR-7 and their acceptance criteria cannot be met truthfully, and writing them anyway would break FR-8/AC-8. The plan's backlog item 2, which must implement the installer, is itself marked blocked (dependency scout exceeded its step limit), and the escalated install.sh/test_install.py from an earlier attempt were never committed. Re-running this task unchanged reproduces the same conclusion; no runtime next-step operation can retarget the prerequisite task from here. The work must stop with this reason so the plan sequencing is corrected: unblock and implement the engine installer task, then re-queue this documentation task against the shipped behaviour.",
+    "failure": {}
   }
 }
