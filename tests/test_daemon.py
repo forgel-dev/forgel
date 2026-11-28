@@ -586,6 +586,55 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(stored["status"], "pending")
             self.assertTrue(any("paused" in line for line in logs))
 
+    def test_release_work_keeps_the_project_processed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = self._settings(tmp)
+            ledger = Ledger(settings.db_path)
+            self.addCleanup(ledger.close)
+            project_id = create_project(
+                settings,
+                ledger,
+                "Release demo",
+                "A demo brief.",
+                mode="brownfield",
+            )
+            project = ledger.get_project(project_id)
+            assert project is not None
+            layout = ProjectLayout.detect(project["workspace"])
+            task = create_task(
+                layout,
+                "Do the work",
+                ["Do it"],
+                ["It is done"],
+                repo_id="main",
+            )
+            tasks.update_task(layout, task["id"], status="blocked")
+            working = (
+                f"task_restart:{task['id']}",
+                f"task_retry:{task['id']}",
+                f"retry:{task['id']}",
+                f"respec:{task['id']}",
+            )
+            terminal = ("blocked:release", "failed:release")
+            for action in working:
+                with patch(
+                    "forgel.daemon.process_releases",
+                    return_value=[action],
+                ):
+                    processed = run_once(
+                        settings, ledger, log=lambda _message: None
+                    )
+                self.assertEqual(processed, [project_id], action)
+            for action in terminal:
+                with patch(
+                    "forgel.daemon.process_releases",
+                    return_value=[action],
+                ):
+                    processed = run_once(
+                        settings, ledger, log=lambda _message: None
+                    )
+                self.assertEqual(processed, [], action)
+
     def test_duplicate_workspaces_are_skipped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = self._settings(tmp)

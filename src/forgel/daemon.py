@@ -31,6 +31,18 @@ from .orchestrator import Orchestrator
 from .release_train import eligible_pending_task, process_releases
 from .state import STAGES
 
+# Release actions after which the train has moved work and needs another
+# pass. Terminal stops (``blocked:``/``failed:``) and self-retrying audit
+# actions stay out so the loop can idle instead of spinning.
+RELEASE_WORK_ACTIONS = (
+    "released:",
+    "controller:",
+    "retry:",
+    "respec:",
+    "task_retry:",
+    "task_restart:",
+)
+
 
 def project_is_done(ledger: Ledger, project_id: str) -> bool:
     state = ledger.checkpoint_state(project_id)
@@ -1197,7 +1209,7 @@ def run_once(
                 settings, ledger, project, layout, client, log
             )
             if any(
-                action.startswith(("released:", "controller:"))
+                action.startswith(RELEASE_WORK_ACTIONS)
                 for action in actions
             ):
                 processed.append(project_id)
@@ -1220,7 +1232,7 @@ def run_once(
             settings, ledger, project, layout, client, log
         )
         if any(
-            action.startswith(("released:", "controller:"))
+            action.startswith(RELEASE_WORK_ACTIONS)
             for action in release_actions
         ):
             processed.append(project_id)
