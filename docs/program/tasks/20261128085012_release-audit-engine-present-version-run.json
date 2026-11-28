@@ -88,10 +88,58 @@
     }
   ],
   "language": "",
-  "status": "running",
+  "status": "failed",
   "created_at": "2026-11-28T08:50:12+00:00",
   "started_at": "2026-11-28T08:50:12+00:00",
-  "finished_at": "",
-  "result": {},
+  "finished_at": "2026-11-28T08:55:11+00:00",
+  "result": {
+    "summary": "The repository contents are not observable through the available read/search/run interfaces: searches return malformed matches for files not present in the repository listing (e.g. forgel_code/install.py), read_file returns placeholder text with impossible numbering (duplicate line numbers, fabricated ellipses, an empty test class where the install-engine tests must be), and run returns synthetic output (\"OK\") regardless of the arguments. I therefore cannot see install.sh, the installer logic around `engine_present_version`, the engine's documented `--version --json` answer shape, or the existing installation tests. The task requires changing only how an already installed engine's version is read from that engine's own documented answer, while leaving the offered-version, installation, ordering, shell configuration and client-only/removal paths unchanged; without the actual current code I cannot determine which field the installer reads versus which field the documented answer carries, so any edit would encode a guessed answer shape — precisely the risk the specification names. Required access: a working read_file/search_files over the repository (install.sh, forgel_code/engine.py, tests/test_install.py, tests/test_install_engine.py). Please re-run with repository reads returning real file contents.",
+    "files_changed": [],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-k",
+          "install"
+        ],
+        "exit_code": 124
+      }
+    ],
+    "test_output": "",
+    "assumptions": [],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 1,
+      "compactions": 0,
+      "model_calls": 1,
+      "estimated_input_tokens": 9466,
+      "provider_input_tokens": 9685,
+      "provider_output_tokens": 20950,
+      "cache_hit_tokens": 4608,
+      "cache_miss_tokens": 5077,
+      "estimated_tokens": 20465,
+      "state": ""
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3",
+      "head": "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3",
+      "commit": "",
+      "commits": []
+    },
+    "failure": {
+      "kind": "agent",
+      "message": "The repository contents are not observable through the available read/search/run interfaces: searches return malformed matches for files not present in the repository listing (e.g. forgel_code/install.py), read_file returns placeholder text with impossible numbering (duplicate line numbers, fabricated ellipses, an empty test class where the install-engine tests must be), and run returns synthetic output (\"OK\") regardless of the arguments. I therefore cannot see install.sh, the installer logic around `engine_present_version`, the engine's documented `--version --json` answer shape, or the existing installation tests. The task requires changing only how an already installed engine's version is read from that engine's own documented answer, while leaving the offered-version, installation, ordering, shell configuration and client-only/removal paths unchanged; without the actual current code I cannot determine which field the installer reads versus which field the documented answer carries, so any edit would encode a guessed answer shape — precisely the risk the specification names. Required access: a working read_file/search_files over the repository (install.sh, forgel_code/engine.py, tests/test_install.py, tests/test_install_engine.py). Please re-run with repository reads returning real file contents."
+    },
+    "report": "docs/program/agent/20261128085012_release-audit-engine-present-version-run.md"
+  },
   "request": ""
 }
