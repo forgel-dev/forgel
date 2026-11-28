@@ -3,17 +3,56 @@
 Forgel has a one-command installer. It installs the engine for the invoking
 user on Linux and macOS, without administrator rights, without a shared
 location and without asking questions, so another installer can drive it
-unattended.
+unattended. Before you start, satisfy its prerequisites: a Linux or macOS
+machine, a checkout of this repository, and Python 3.11 or newer on `PATH`.
+Nothing else is required, and the command below — run from the checkout root —
+is the complete install step.
 
 ```
 sh install.sh
 ```
 
 Progress, advice and failures go to standard error. Standard output carries
-exactly one line on success: the installed engine version as a plain value,
-the same version the installed engine reports about itself with
-`forgel version --json`. Start a new terminal session and run `forgel`; no
-start-up setting needs to be edited by hand.
+exactly one line on success: the installed engine version as a plain value.
+Start a new terminal session and run `forgel`; no start-up setting needs to be
+edited by hand.
+
+## Placing the engine and reaching it
+
+The installer puts the engine under `FORGEL_INSTALL_ROOT` and its entry point
+at `FORGEL_BIN_DIR` as the `forgel` command. It then makes that directory
+reachable in newly started terminal sessions, and checks a newly started
+session the way your start-up settings would: when the name does not reach the
+installed engine there — including when an older engine would be chosen first
+— the install ends unsuccessfully, names the cause and the next action, and
+reports no version.
+
+A session that was already running keeps the start-up settings it read before
+the install. Start a new one. When the name is still missing there, run the
+entry point by its full path — `~/.local/bin/forgel` by default, or the
+`forgel` command in the command directory the installer named — and check that
+your shell reads the start-up file the installer named; adding that directory
+to `PATH` in the file your shell reads has the same effect.
+
+## Confirming the installation
+
+Ask the installed engine which version it is:
+
+```
+forgel version --json
+```
+
+The answer is exactly one JSON object on standard output, and its `version`
+field is the installed engine version — the same value the install reported.
+Reading it needs no project, no model credential and no particular working
+directory, and it writes nothing. A program consumes that object directly
+instead of interpreting human-oriented text, so this report is the supported
+way for another tool to judge engine compatibility. When the engine cannot
+state a comparable version, the command ends unsuccessfully, names the cause
+and reports no version, so a caller never reads a partial answer.
+
+When the name `forgel` does not reach the entry point in the session at hand,
+run `$FORGEL_BIN_DIR/forgel version --json`; the report is the same.
 
 ## Answering which version a target would install
 
@@ -35,12 +74,14 @@ and reports no version at all.
 sh install.sh --uninstall
 ```
 
-Removal takes back exactly what the installer added: the installed engine and
-the installer's contribution to the user's terminal start-up settings. It
-leaves every other user setting as it was and leaves the user's engine data in
-place. Afterwards `forgel` is no longer reachable by name in a newly started
-terminal session. When nothing was installed, removal succeeds and says that
-nothing was installed.
+Removal takes back exactly what the installer added: the installed engine
+under `FORGEL_INSTALL_ROOT` and the `forgel` entry point in `FORGEL_BIN_DIR`,
+together with the installer's contribution to the user's terminal start-up
+settings. It leaves every other line of that file as it was and keeps the
+user's own configuration and project material under `~/.forgel`, which the
+engine's home holds. Afterwards `forgel` is no longer reachable by name in a
+newly started terminal session. When nothing was installed, removal succeeds
+and says that nothing was installed.
 
 ## Inputs
 
@@ -58,6 +99,13 @@ Both modes read the same inputs, so a caller can resolve a target and then
 install that same target; the version the resolution mode reports is the
 version that install then produces. An unknown or unsupported value ends
 unsuccessfully with a message naming the cause and the next action.
+
+The resolved version is what an already installed engine is compared against.
+The comparison rule is strictly newer: only an available version that is
+strictly newer than the installed one replaces it, and an equal or older
+available version leaves the installed engine untouched. `sh install.sh`
+installs the target it resolved, so a tool that keeps the engine current asks
+for the available version first and installs only when the rule says to.
 
 ## Requirements
 

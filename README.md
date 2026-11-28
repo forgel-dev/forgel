@@ -16,20 +16,66 @@
 
 ## Install
 
-On Linux or macOS, install the engine for your user with one action — no
-administrator rights, no shared location and no hand-edited start-up settings:
+On Linux or macOS, one action installs the engine for your user — no
+administrator rights, no shared location and no start-up file edited by hand.
+The only prerequisite is Python 3.11 or newer on `PATH`; the installer never
+installs an interpreter itself.
+
+Run the installer from the checkout root, once:
 
 ```bash
-sh install.sh            # install or upgrade
-sh install.sh --resolve  # print the version the chosen target would install
-sh install.sh --uninstall
+sh install.sh
+```
+
+That single step puts the engine under `~/.local/share/forgel` and its entry
+point at `~/.local/bin/forgel`, and adds one delimited block to your shell
+start-up file that puts `~/.local/bin` ahead of the rest of `PATH`. Start a new
+terminal session — the one you are in has already read its start-up settings —
+and run `forgel`. The installer also checks a newly started session and stops
+with the cause and the next action when the name does not reach the installed
+engine. When `forgel` is still not found in your own session, run
+`~/.local/bin/forgel` directly and check that your shell reads the start-up
+file the installer named.
+`FORGEL_BIN_DIR` places the entry point in another directory, and the start-up
+block points `PATH` at that directory instead.
+
+The same installer answers two narrower questions without repeating the step:
+
+```bash
+sh install.sh --resolve    # print the version the chosen target would install
+sh install.sh --uninstall  # remove the engine and keep your data
 ```
 
 Standard output carries one plain value: the installed engine version on
-success, or the version the target would install for `--resolve`. Start a new
-terminal session and run `forgel`. Target source, target reference, runtime
-interpreter and locations are inputs with documented defaults. See
-[docs/install.md](docs/install.md).
+success, the version the target would install for `--resolve`, or an outcome
+line for `--uninstall`. Confirm the installed version by asking the engine:
+
+```bash
+forgel version --json    # one JSON object; its "version" field is the answer
+```
+
+The answer needs no project, no model credential and no particular working
+directory. It is exactly one JSON object on standard output, so another program
+reads its `version` field directly instead of interpreting human-oriented text,
+and that report is the supported way for another tool to judge engine
+compatibility. When the engine cannot state a comparable version, the call
+fails and reports no version instead of a partial answer.
+
+A configured source and reference (`FORGEL_SOURCE`, `FORGEL_REF`) determine the
+version a target would provide before anything is installed on the machine:
+`sh install.sh --resolve` answers that question, changes nothing and leaves an
+installed engine at its version. Its answer is what an already installed engine
+is compared against, and the comparison rule is strictly newer: a tool driving
+the installer replaces an installed engine only when the available version is
+strictly newer, and an equal or older available version leaves the installed
+engine untouched. `sh install.sh` itself installs the target it resolved, so
+the comparison belongs to the caller that keeps the engine current.
+
+`sh install.sh --uninstall` removes the engine, its entry point and the
+installer's block in the start-up file; a new terminal session no longer
+reaches `forgel`, and your configuration and project material under `~/.forgel`
+are kept. Target source, target reference, runtime interpreter and locations
+are inputs with documented defaults. See [docs/install.md](docs/install.md).
 
 ## One Client
 
