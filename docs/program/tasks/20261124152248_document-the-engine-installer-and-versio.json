@@ -16,10 +16,10 @@
   "order": 6,
   "external_dependencies": [],
   "language": "en",
-  "status": "blocked",
+  "status": "pending",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "2026-11-25T15:20:28+00:00",
-  "finished_at": "2026-11-25T15:28:22+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "stopped by the controller: The documentation task is sound but has an unmet prerequisite that this task cannot create. The failure is not a specification defect (the spec explicitly requires documenting only shipped behaviour), not a repository test or environment problem, and not a limit; the earlier decisions — respec, retry, two reworks, restart, QA, and a raised limit — have all exhausted the space of re-runs, and each returned the same fact: the engine has no installer, entry point on PATH, profile/reachability handling, uninstall path, or pre-install version determination. The only shipped piece is the version inquiry, so FR-1, FR-2, FR-3, FR-5, FR-6, FR-7 and their acceptance criteria cannot be met truthfully, and writing them anyway would break FR-8/AC-8. The plan's backlog item 2, which must implement the installer, is itself marked blocked (dependency scout exceeded its step limit), and the escalated install.sh/test_install.py from an earlier attempt were never committed. Re-running this task unchanged reproduces the same conclusion; no runtime next-step operation can retarget the prerequisite task from here. The work must stop with this reason so the plan sequencing is corrected: unblock and implement the engine installer task, then re-queue this documentation task against the shipped behaviour.",
     "files_changed": [],
@@ -49,6 +49,9 @@
       "commit": "",
       "commits": []
     },
-    "report": "docs/program/agent/20261124152248_document-the-engine-installer-and-versio.md"
+    "report": "docs/program/agent/20261124152248_document-the-engine-installer-and-versio.md",
+    "attempts": 0,
+    "rework_count": 0,
+    "manual_retries": 1
   }
 }
