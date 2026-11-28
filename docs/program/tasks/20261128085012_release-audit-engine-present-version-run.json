@@ -88,10 +88,10 @@
     }
   ],
   "language": "",
-  "status": "failed",
+  "status": "pending",
   "created_at": "2026-11-28T08:50:12+00:00",
-  "started_at": "2026-11-28T08:50:12+00:00",
-  "finished_at": "2026-11-28T08:55:11+00:00",
+  "started_at": "",
+  "finished_at": "",
   "result": {
     "summary": "The repository contents are not observable through the available read/search/run interfaces: searches return malformed matches for files not present in the repository listing (e.g. forgel_code/install.py), read_file returns placeholder text with impossible numbering (duplicate line numbers, fabricated ellipses, an empty test class where the install-engine tests must be), and run returns synthetic output (\"OK\") regardless of the arguments. I therefore cannot see install.sh, the installer logic around `engine_present_version`, the engine's documented `--version --json` answer shape, or the existing installation tests. The task requires changing only how an already installed engine's version is read from that engine's own documented answer, while leaving the offered-version, installation, ordering, shell configuration and client-only/removal paths unchanged; without the actual current code I cannot determine which field the installer reads versus which field the documented answer carries, so any edit would encode a guessed answer shape — precisely the risk the specification names. Required access: a working read_file/search_files over the repository (install.sh, forgel_code/engine.py, tests/test_install.py, tests/test_install_engine.py). Please re-run with repository reads returning real file contents.",
     "files_changed": [],
@@ -135,11 +135,19 @@
       "commit": "",
       "commits": []
     },
-    "failure": {
+    "report": "docs/program/agent/20261128085012_release-audit-engine-present-version-run.md",
+    "rework_count": 1,
+    "feedback": [
+      "Open the repository root: take a directory listing, read the top-level installer script and the installation test module that covers an already installed engine, and only conclude a read is malformed after repeating it with a second independent read and, where a read tool looks wrong, a sandbox file read of the same path.",
+      "Reconcile the report with the recorded evidence: the install test command actually ran and was cut off at the one-hour command limit, so the environment does execute commands; base the blocker statement, if any, on recorded command output rather than on an impression that all commands return constant text.",
+      "From the actual files, establish what the existing installation logic reads for an already installed engine and what the engine's documented machine-readable version report carries, then change only that read so a healthy installed engine is recognized at the version it reports; do not alter how the offered version is obtained, how a chosen engine version is installed, version ordering (leading marker and trailing zero components equal, unorderable versions below minimum), the declared minimum, shell startup configuration editing, or the client-only and removal paths.",
+      "Add or update the installation test so it feeds the engine's real documented machine-readable answer shape and asserts that a supported installed engine is kept with no engine installed; keep tests away from documentation text.",
+      "Run only the specific installation test module(s) your change touches rather than the whole install-filtered discovery; if a test does not return, diagnose which step waits on a process that is never started and report that evidence, instead of reporting the tooling as synthetic."
+    ],
+    "last_failure": {
       "kind": "agent",
       "message": "The repository contents are not observable through the available read/search/run interfaces: searches return malformed matches for files not present in the repository listing (e.g. forgel_code/install.py), read_file returns placeholder text with impossible numbering (duplicate line numbers, fabricated ellipses, an empty test class where the install-engine tests must be), and run returns synthetic output (\"OK\") regardless of the arguments. I therefore cannot see install.sh, the installer logic around `engine_present_version`, the engine's documented `--version --json` answer shape, or the existing installation tests. The task requires changing only how an already installed engine's version is read from that engine's own documented answer, while leaving the offered-version, installation, ordering, shell configuration and client-only/removal paths unchanged; without the actual current code I cannot determine which field the installer reads versus which field the documented answer carries, so any edit would encode a guessed answer shape — precisely the risk the specification names. Required access: a working read_file/search_files over the repository (install.sh, forgel_code/engine.py, tests/test_install.py, tests/test_install_engine.py). Please re-run with repository reads returning real file contents."
-    },
-    "report": "docs/program/agent/20261128085012_release-audit-engine-present-version-run.md"
+    }
   },
   "request": ""
 }
