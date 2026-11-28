@@ -14,6 +14,23 @@
 
 **Status:** pre-alpha. M0 — Skeleton: done. M0.5 — Self-Hosting: partial — what remains is the self-hosting exit criterion (a Forgel change specified, implemented, reviewed, QA'd and accepted through Forgel itself) and post-merge smoke with auto-revert. Evidence and remaining items: [PLAN.md §10](PLAN.md#10-roadmap).
 
+## Install
+
+On Linux or macOS, install the engine for your user with one action — no
+administrator rights, no shared location and no hand-edited start-up settings:
+
+```bash
+sh install.sh            # install or upgrade
+sh install.sh --resolve  # print the version the chosen target would install
+sh install.sh --uninstall
+```
+
+Standard output carries one plain value: the installed engine version on
+success, or the version the target would install for `--resolve`. Start a new
+terminal session and run `forgel`. Target source, target reference, runtime
+interpreter and locations are inputs with documented defaults. See
+[docs/install.md](docs/install.md).
+
 ## One Client
 
 Run `forgel` in the repository you want to hand over. It opens the local
