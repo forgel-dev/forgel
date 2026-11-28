@@ -88,13 +88,18 @@
     }
   ],
   "language": "",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-28T08:50:12+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-28T08:56:36+00:00",
+  "finished_at": "2026-11-28T09:35:22+00:00",
   "result": {
-    "summary": "The repository contents are not observable through the available read/search/run interfaces: searches return malformed matches for files not present in the repository listing (e.g. forgel_code/install.py), read_file returns placeholder text with impossible numbering (duplicate line numbers, fabricated ellipses, an empty test class where the install-engine tests must be), and run returns synthetic output (\"OK\") regardless of the arguments. I therefore cannot see install.sh, the installer logic around `engine_present_version`, the engine's documented `--version --json` answer shape, or the existing installation tests. The task requires changing only how an already installed engine's version is read from that engine's own documented answer, while leaving the offered-version, installation, ordering, shell configuration and client-only/removal paths unchanged; without the actual current code I cannot determine which field the installer reads versus which field the documented answer carries, so any edit would encode a guessed answer shape — precisely the risk the specification names. Required access: a working read_file/search_files over the repository (install.sh, forgel_code/engine.py, tests/test_install.py, tests/test_install_engine.py). Please re-run with repository reads returning real file contents.",
-    "files_changed": [],
+    "summary": "Fixed the combined installation's read of an engine that is already installed. `engine_present_version` in `install.sh` previously ran `forgel --version --json` and read `payload[\"engine\"][\"version\"]`; it now asks the engine the way the client asks it — the installed client's own engine handle (`forgel version --json`, resolved with the client in `PYTHONPATH`) — and reads the answer with the client's own reader of the engine's documented version report, so the installation and the client cannot disagree about which answer carries the version. Nothing else about the engine part changed: the offered version is still obtained from the engine's own installer, installing a chosen version is still delegated, the version ordering (leading marker and trailing zero components equal, unorderable versions below the minimum), the declared minimum, the failure report, shell configuration editing, `--client-only` and `--uninstall` are untouched. The deterministic stand-in for the engine's installer now writes an engine that answers its documented version report only to `forgel version --json` and answers the engine's structured unsupported-command answer plus a non-zero exit to any other form, so an undocumented read can no longer look healthy in the tests. `tests/test_install_engine.py` asks the engine in the documented form too, and a new case places a real engine that answers its own documented report, asserts the installer asked exactly `version --json`, installs no engine, and reports the version it kept. A changelog entry under Fixed describes the behaviour. Verified with `python3 -m unittest tests.test_install_engine` (18 tests OK), `python3 -m unittest tests.test_install_engine tests.test_install` (74 tests OK) and the repository gate `python3 -m unittest discover -s tests` (379 tests OK).",
+    "files_changed": [
+      "CHANGELOG.md",
+      "install.sh",
+      "tests/stub_engine_install.py",
+      "tests/test_install_engine.py"
+    ],
     "commands": [
       {
         "command": [
@@ -108,22 +113,112 @@
           "install"
         ],
         "exit_code": 124
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install_engine"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install_engine"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install_engine.EngineKeptTest"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install_engine",
+          "tests.test_install"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "status",
+          "--short"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "git",
+          "diff"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
       }
     ],
-    "test_output": "",
-    "assumptions": [],
+    "test_output": "...........................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 379 tests in 361.114s\n\nOK\n",
+    "assumptions": [
+      "The engine's documented machine-readable version answer is the one the client's own startup compatibility check relies on (`forgel version --json`, version under `engine.version`), and the installation now uses that same client code path instead of reimplementing the read.",
+      "An engine that cannot be started, or that answers nothing readable, still counts as no engine present; an engine that answers without a version also follows the existing no-present-engine decision, which the requirements keep.",
+      "The engine question is now made through the installed client's engine handle, so it is bounded by the client's own default engine timeout rather than waiting unbounded; no new option or knob was added."
+    ],
     "context": {
       "window": 1000000,
       "usable": 122880,
       "sessions": 1,
       "compactions": 0,
-      "model_calls": 1,
-      "estimated_input_tokens": 9466,
-      "provider_input_tokens": 9685,
-      "provider_output_tokens": 20950,
-      "cache_hit_tokens": 4608,
-      "cache_miss_tokens": 5077,
-      "estimated_tokens": 20465,
+      "model_calls": 89,
+      "estimated_input_tokens": 4632774,
+      "provider_input_tokens": 4838436,
+      "provider_output_tokens": 124267,
+      "cache_hit_tokens": 4757248,
+      "cache_miss_tokens": 81188,
+      "estimated_tokens": 75219,
       "state": ""
     },
     "test_removals": [],
@@ -131,9 +226,11 @@
     "escalated": [],
     "git": {
       "base": "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3",
-      "head": "bff1cb9fe59aafe58322cd8cca417dc3429bc8d3",
-      "commit": "",
-      "commits": []
+      "head": "c505a24bfd4dcae1e16c7516d84ce31a8f326d84",
+      "commit": "c505a24bfd4dcae1e16c7516d84ce31a8f326d84",
+      "commits": [
+        "c505a24bfd4dcae1e16c7516d84ce31a8f326d84"
+      ]
     },
     "report": "docs/program/agent/20261128085012_release-audit-engine-present-version-run.md",
     "rework_count": 1,
@@ -147,7 +244,8 @@
     "last_failure": {
       "kind": "agent",
       "message": "The repository contents are not observable through the available read/search/run interfaces: searches return malformed matches for files not present in the repository listing (e.g. forgel_code/install.py), read_file returns placeholder text with impossible numbering (duplicate line numbers, fabricated ellipses, an empty test class where the install-engine tests must be), and run returns synthetic output (\"OK\") regardless of the arguments. I therefore cannot see install.sh, the installer logic around `engine_present_version`, the engine's documented `--version --json` answer shape, or the existing installation tests. The task requires changing only how an already installed engine's version is read from that engine's own documented answer, while leaving the offered-version, installation, ordering, shell configuration and client-only/removal paths unchanged; without the actual current code I cannot determine which field the installer reads versus which field the documented answer carries, so any edit would encode a guessed answer shape — precisely the risk the specification names. Required access: a working read_file/search_files over the repository (install.sh, forgel_code/engine.py, tests/test_install.py, tests/test_install_engine.py). Please re-run with repository reads returning real file contents."
-    }
+    },
+    "failure": {}
   },
   "request": ""
 }
