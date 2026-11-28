@@ -23,11 +23,15 @@ Make Forgel and Forgel Code install and run as one working pair: give the engine
 - `20261124152248_check-the-engine-version-at-client-start` — Check the engine version at client startup (code, done)
 - `20261124152248_declare-the-minimum-supported-engine-ver` — Declare the minimum supported engine version in the client (code, done)
 - `20261124152248_document-the-combined-install-and-minimu` — Document the combined install and minimum engine version (code, done)
-- `20261124152248_document-the-engine-installer-and-versio` — Document the engine installer and version contract (main, blocked)
+- `20261124152248_document-the-engine-installer-and-versio` — Document the engine installer and version contract (main, done)
 - `20261124152248_emit-a-machine-readable-engine-version` — Emit a machine-readable engine version (main, done)
+- `20261128085012_release-audit-engine-present-version-run` — Release audit: `engine_present_version` runs `forgel --version --json` and reads `payload["engi (code, pending)
+- `20261128085012_release-audit-the-combined-install-tests` — Release audit: The combined-install tests use `tests/stub_engine_install.py`, which encodes the (code, pending)
+- `20261128085012_release-audit-the-combined-installer-inv` — Release audit: The combined installer invokes `"$ENGINE_INSTALLER" --source ... --available-ver (code, pending)
+- `20261128085012_release-audit-the-main-repository-diff-c` — Release audit: The main repository diff contains changes to `src/forgel/daemon.py` and `tests/t (main, pending)
 
 ## Audit
 
-- Rounds: 0
-- Verdict: not run
-- Report: `—`
+- Rounds: 1
+- Verdict: fail
+- Report: `docs/program/releases/20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o/audit.md`

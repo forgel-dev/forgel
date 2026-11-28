@@ -1,0 +1,30 @@
+{
+  "id": "20261128085012_release-audit-the-combined-install-tests",
+  "title": "Release audit: The combined-install tests use `tests/stub_engine_install.py`, which encodes the",
+  "spec": "",
+  "summary": "Add an integration test that executes the real engine `install.sh`/`forgel version --json` contract, or generate and validate the stub against that contract. Update the tests so they fail on the current contract mismatch.",
+  "requirements": [
+    "The combined-install tests use `tests/stub_engine_install.py`, which encodes the same assumed `forgel-install` interface and nested engine JSON. No test runs the actual engine installer or the actual engine version report, so the release's required one-command pair and idempotent keep/replace behavior are not verified against the other repository."
+  ],
+  "acceptance": [
+    "The release audit finding is resolved: The combined-install tests use `tests/stub_engine_install.py`, which encodes the same assumed `forgel-install` interface and nested engine JSON. No test runs the actual engine installer or the actual engine version report, so the release's required one-command pair and idempotent keep/replace behavior are not verified against the other repository.",
+    "Existing tests pass"
+  ],
+  "work_packages": [],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
+  "release_id": "20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o",
+  "release_class": "minor",
+  "order": 0,
+  "external_dependencies": [],
+  "language": "",
+  "status": "pending",
+  "created_at": "2026-11-28T08:50:12+00:00",
+  "started_at": "",
+  "finished_at": "",
+  "result": {}
+}

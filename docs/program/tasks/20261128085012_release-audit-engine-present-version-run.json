@@ -1,0 +1,97 @@
+{
+  "id": "20261128085012_release-audit-engine-present-version-run",
+  "title": "Release audit: `engine_present_version` runs `forgel --version --json` and reads `payload[\"engi",
+  "spec": "docs/program/specs/20261128085012_release-audit-engine-present-version-run.md",
+  "summary": "Invoke the documented `version --json` command and parse the top-level `version` (or accept both documented shapes). Add a test using the engine's real reported JSON shape so an installed engine is correctly kept.",
+  "requirements": [
+    "A default combined installation run determines the version of an engine that is already installed only from that engine's own documented version answer.",
+    "An engine that answers its documented version report is recognized as present at the version it reports; the no-engine path applies only when the engine cannot be started at all.",
+    "A present engine at or above the declared minimum is kept when the offered version is equal to it or not strictly newer; no engine is installed and the run states the version it kept.",
+    "A strictly newer offered version replaces a present supported engine, while an offered version equal to or older than the present engine never replaces it, so no successful run leaves an engine older than the one it found.",
+    "A second default run after a successful default run installs no engine, leaves the same engine version in place, and leaves exactly one client installation that is usable from a fresh session.",
+    "A present engine whose version differs from another only by a leading version marker or by trailing zero components is treated as the same version, and a present version that cannot be ordered never satisfies the minimum and is replaced by a supported offered version.",
+    "A run that cannot reach a supported engine still ends as a failure that names the required minimum version, the version found or offered, and the action the user can take.",
+    "The mode that installs the client alone and the removal mode touch no engine, and leaving the user's shell startup configuration untouched still settles the engine in place."
+  ],
+  "acceptance": [
+    "With a supported engine installed that answers its documented version report, a default run completes successfully, states the engine version in place and how it was obtained, and never describes the engine as missing, unreadable or unconfirmed; check: review of the change together with an observed default run against an existing supported engine.",
+    "In that run the version reported for the engine equals the version the installed engine reports about itself; check: review of an observed run that shows both versions.",
+    "An installed engine above the declared minimum is kept unchanged with no engine installed when the offered version is equal to it, older than it, or the same apart from a leading version marker or trailing zero components, and the run says it was kept; check: review of observed runs for the equal, older and marker-or-trailing-zero cases.",
+    "An installed engine older than the offered version is replaced by that strictly newer version and the run states the replacement, while an installed engine newer than the offered version stays unchanged and the run reports no engine installation; check: review of observed runs for both directions.",
+    "After two successive default runs the engine version is unchanged, the second run reports no engine installation, and exactly one usable client installation remains; check: review of two observed consecutive default runs.",
+    "With no engine installed at all, the run still obtains a supported offered version and states the version it installed and how it was obtained; check: review of an observed default run in an environment without an engine.",
+    "A failure caused by an unsupported, unreachable or below-minimum version names the required minimum, the version found or offered, and the action the user can take; a run that installs the client alone, a removal run, and a run that leaves the shell startup configuration untouched all behave as before with respect to the engine; check: review of the failure message and of those observed runs."
+  ],
+  "work_packages": [
+    {
+      "title": "Recognizing an installed engine",
+      "requirements": [
+        0,
+        1
+      ],
+      "acceptance": [
+        0,
+        1
+      ]
+    },
+    {
+      "title": "Keep, replace and repeat",
+      "requirements": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "acceptance": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "title": "Paths that must stay unchanged",
+      "requirements": [
+        6,
+        7
+      ],
+      "acceptance": [
+        5,
+        6
+      ]
+    }
+  ],
+  "constraints": [],
+  "repo_id": "code",
+  "test_command": [],
+  "assumptions": [],
+  "plan_id": "",
+  "plan_goal": "Make Forgel and Forgel Code install and run as one working pair: give the engine `forgel` its own installer, add a mode of the Forgel Code installer that installs both binaries together (offered by default in the README, idempotent — when the engine is already present it compares versions and installs only a strictly newer one), and introduce a declared minimum supported engine version for Forgel Code, checked at startup, so a missing or too-old engine produces a clear actionable message instead of `engine forgel: executable not found: forgel`.",
+  "release_id": "20261124145530795459_make-forgel-and-forgel-code-install-and-run-as-o",
+  "release_class": "minor",
+  "order": 0,
+  "external_dependencies": [
+    {
+      "name": "Forgel engine version answer",
+      "interface": "The installation runs the installed engine's documented machine-readable report (`forgel version --json`) and reads the engine version from the single JSON object's top-level `version` field. Tests exercise this through a fake engine executable placed in a temp directory by the fixture, never through a real installed engine, so the reported version is fixed and the legacy `forgel --version --json` form yields human-readable text (forcing the buggy path to fail instead of silently reading a wrong key).",
+      "docs": "forgel-dev/forgel repository documentation for the engine's version report (cited as `docs` in the task dependency record)",
+      "mode": "stub",
+      "evidence": "Task dependency record: \"Forgel engine version answer: interface: The engine's own documented machine-readable report of its version; the installation reads the installed engine's version from it.; docs: forgel-dev/forgel repository documentation for the engine's version report\". Released documented contract quoted by the audit finding: \"The engine's documented report is `forgel version --json`, whose single JSON object carries the version at top-level `version`\" and \"runs `forgel --version --json` and reads `payload[\"engine\"][\"version\"]`\". The project repository list in the task (`main: application`, `code: application`) contains no engine repository, and no locally installed engine binary or test service is declared for this environment, so the stub below is the deterministic surface the tests can rely on.",
+      "stub": "\"\"\"Deterministic fake Forgel engine exposing only the documented CLI surface.\n\nDocumented contract (forgel-dev/forgel):\n    $ forgel version --json\n    {\"version\": \"<semver>\"}      # one JSON object, version at top level\n\nThe undocumented form `forgel --version --json` prints human-readable text,\nso any code that parses it as JSON fails instead of silently reading a wrong\nkey - which is exactly the release-audit finding under test.\n\"\"\"\nfrom __future__ import annotations\n\nimport os\nimport stat\nimport sys\n\nDEFAULT_VERSION = \"1.4.0\"\n\n_ENGINE_TEMPLATE = '''#!{python}\nimport json\nimport sys\n\nVERSION = {version!r}\n\nargv = sys.argv[1:]\n\n\ndef human():\n    sys.stdout.write(\"forgel \" + VERSION + \"\\\\n\")\n    return 0\n\n\ndef json_report():\n    sys.stdout.write(json.dumps({{\"version\": VERSION}}) + \"\\\\n\")\n    return 0\n\n\nif argv and argv[0] == \"version\":\n    raise SystemExit(json_report() if \"--json\" in argv[1:] else human())\n\nif argv and argv[0] in (\"--version\", \"-V\"):\n    raise SystemExit(human())\n\nsys.stderr.write(\"unknown command: \" + (argv[0] if argv else \"\") + \"\\\\n\")\nraise SystemExit(2)\n'''\n\n\ndef write_fake_engine(directory, version=DEFAULT_VERSION, name=\"forgel\"):\n    \"\"\"Write an executable fake engine into *directory* and return its path.\"\"\"\n    os.makedirs(directory, exist_ok=True)\n    path = os.path.join(directory, name)\n    source = _ENGINE_TEMPLATE.format(\n        python=sys.executable or \"/usr/bin/env python3\",\n        version=version,\n    )\n    with open(path, \"w\", encoding=\"utf-8\") as handle:\n        handle.write(source)\n    os.chmod(\n        path,\n        os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH,\n    )\n    return path"
+    },
+    {
+      "name": "Forgel engine installation",
+      "interface": "The installer asks a configured source which engine version it offers (without installing) and installs exactly one requested version, failing with a reason on error. Unchanged by this task: the stub only has to make the offered version and the installed version observable so the idempotency/no-downgrade assertions can be made deterministically.",
+      "docs": "forgel-dev/forgel repository documentation for the engine's installation (cited as `docs` in the task dependency record)",
+      "mode": "stub",
+      "evidence": "Task dependency record: \"Forgel engine installation: interface: Reports which engine version a configured source offers without installing, and installs one requested version, failing with a reason on error. Unchanged by this task.; docs: forgel-dev/forgel repository documentation for the engine's installation\". The task summary states the behavior the stub must support: the installer \"can install an offered version that is equal to or older than the present engine, defeating idempotency and possibly downgrading an existing engine\", i.e. the source reports an offered version and installs a requested one. No engine source repository or local/test install service is listed in the project repositories (`main: application`, `code: application`), so the deterministic fake source below is used.",
+      "stub": "\"\"\"Deterministic stand-in for a Forgel engine installation source.\n\nContract (forgel-dev/forgel): the source reports the version of the engine it\noffers (no install side effect), and installs exactly one requested version,\nfailing with a reason on error. After install, the engine reports its version\nthrough its documented report `forgel version --json`.\n\"\"\"\nfrom __future__ import annotations\n\nimport json\nimport os\nimport stat\nimport subprocess\nimport sys\n\n_ENGINE_TEMPLATE = '''#!{python}\nimport json\nimport sys\n\nVERSION = {version!r}\n\nargv = sys.argv[1:]\n\nif argv and argv[0] == \"version\":\n    if \"--json\" in argv[1:]:\n        sys.stdout.write(json.dumps({{\"version\": VERSION}}) + \"\\\\n\")\n    else:\n        sys.stdout.write(\"forgel \" + VERSION + \"\\\\n\")\n    raise SystemExit(0)\n\nif argv and argv[0] in (\"--version\", \"-V\"):\n    sys.stdout.write(\"forgel \" + VERSION + \"\\\\n\")\n    raise SystemExit(0)\n\nsys.stderr.write(\"unknown command\\\\n\")\nraise SystemExit(2)\n'''\n\n\nclass EngineInstallError(RuntimeError):\n    \"\"\"Installation failed; the message is the reason reported to the user.\"\"\"\n\n\nclass FakeEngineSource:\n    \"\"\"In-process source: offered version, install one version, read it back.\"\"\"\n\n    def __init__(self, directory, offered=\"1.4.0\"):\n        self.directory = os.path.abspath(directory)\n        self.offered = offered\n        self.installed = None\n        self.install_calls = []\n\n    @property\n    def binary(self):\n        return os.path.join(self.directory, \"forgel\")\n\n    def offered_version(self):\n        \"\"\"Version this source offers, computed without installing.\"\"\"\n        return self.offered\n\n    def install(self, version):\n        self.install_calls.append(version)\n        if version != self.offered:\n            raise EngineInstallError(\n                \"version %s is not offered by this source\" % version\n            )\n        os.makedirs(self.directory, exist_ok=True)\n        source = _ENGINE_TEMPLATE.format(\n            python=sys.executable or \"/usr/bin/env python3\",\n            version=version,\n        )\n        with open(self.binary, \"w\", encoding=\"utf-8\") as handle:\n            handle.write(source)\n        os.chmod(\n            self.binary,\n            os.stat(self.binary).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH,\n        )\n        self.installed = version\n        return self.binary\n\n    def present_version(self):\n        \"\"\"Version the installed engine reports through its documented report.\"\"\"\n        if self.installed is None:\n            return None\n        completed = subprocess.run(\n            [self.binary, \"version\", \"--json\"],\n            capture_output=True,\n            text=True,\n            check=True,\n        )\n        return json.loads(completed.stdout)[\"version\"]"
+    }
+  ],
+  "language": "",
+  "status": "running",
+  "created_at": "2026-11-28T08:50:12+00:00",
+  "started_at": "2026-11-28T08:50:12+00:00",
+  "finished_at": "",
+  "result": {},
+  "request": ""
+}
