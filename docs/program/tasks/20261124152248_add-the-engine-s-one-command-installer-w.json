@@ -84,13 +84,196 @@
     }
   ],
   "language": "en",
-  "status": "pending",
+  "status": "done",
   "created_at": "2026-11-24T15:22:48+00:00",
-  "started_at": "",
-  "finished_at": "",
+  "started_at": "2026-11-27T23:37:42+00:00",
+  "finished_at": "2026-11-28T00:26:46+00:00",
   "result": {
     "manual_restarts": 1,
-    "restarted_at": "2026-11-27T23:37:41+00:00"
+    "restarted_at": "2026-11-27T23:37:41+00:00",
+    "summary": "Added the engine's one-command per-user installer and its read-only version resolution, plus the documentation that states its behavior.\n\n- `install.sh` (new): a POSIX `sh` installer with three non-interactive modes — install/upgrade (default), `--resolve`, `--uninstall`. It installs only for the invoking user under `~/.local/share/forgel` with the `forgel` launcher under `~/.local/bin`, adds one delimited, self-identifying block to one user start-up file (never duplicating it and preserving every other line), starts a terminal session the way the user's settings would and fails with cause plus next action when the engine is not reachable by name or an older engine would win. It resolves the target, stages and verifies the engine (asking the engine for its own version) before replacing anything live, rolls back on failure, and prints exactly one plain version value on stdout equal to what the installed engine reports. `--resolve` prints the version the target would install and writes nothing; `--uninstall` removes exactly the launcher, the installer's block and the install root, keeps engine data, and reports when nothing was installed. Inputs come only from the environment (`FORGEL_SOURCE`, `FORGEL_REF`, `FORGEL_PYTHON`, `FORGEL_INSTALL_ROOT`, `FORGEL_BIN_DIR`) with documented defaults; the runtime check stops before any change and names the minimum (Python 3.11) and what to obtain.\n- `tests/test_install.py` (new): 13 end-to-end tests running the real script against an isolated home and target trees — resolve output/side effects/failure, install version equals the engine's own `version --json`, reachability in a newly started session, preserved settings and no duplicate block, idempotent re-run, newer target replacing the older one with a single reachable engine, clean removal with data intact and empty-session afterwards, no-op removal message, missing interpreter stopping with nothing changed, a shadowing engine failing and restoring settings, and a failed upgrade keeping the previous engine working.\n- `docs/install.md` (new) and a short `README.md` install section: states the behavior, the three modes, the output contract, the inputs and defaults, the start-up contribution and the failure/repetition rules. Documentation only; no check reads it.\n\nTested with the repository gate `python3 -m unittest discover -s tests` (819 tests, OK) and the new installer suite (13 tests, OK).",
+    "files_changed": [
+      "README.md",
+      "docs/install.md",
+      "install.sh",
+      "tests/test_install.py"
+    ],
+    "commands": [
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py",
+          "-v"
+        ],
+        "exit_code": 5
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "tests.test_install",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py",
+          "-v"
+        ],
+        "exit_code": 5
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py",
+          "-v"
+        ],
+        "exit_code": 1
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_install.py",
+          "-v"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "exit_code": 0,
+        "final_test": true
+      }
+    ],
+    "test_output": "[agent] 20261128002311_inspect-and-finish: context handoff to session 2 (~6510/3072 tokens)\n[agent] 20261128002317_record-the-handoff: context handoff to session 2 (~2758/3072 tokens)\n[agent] 20261128002317_record-the-handoff: context handoff to session 3 (~7033/3072 tokens)\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[spec] completed\n[spec_review] running\n[spec_review] completed\n[dev] running\n[dev] completed\n[review] running\n[review] completed\n[qa] running\n[qa] completed\n[acceptance] running\n[acceptance] completed\n[audit] running\n[audit] completed\n[approval] running\n[approval] awaiting staging approval (pending)\n[approval] running\n[approval] completed\n[done] running\n[done] completed\n[intake] running\n[intake] completed\n[jurisdiction] running\n[jurisdiction] completed\n[recipe] running\n[recipe] completed\n[architecture] running\n[architecture] completed\n[repo_plan] running\n[repo_plan] completed\n[feature_plan] running\n[feature_plan] completed\n[spec] running\n[sp\n... [output truncated, 10316 chars; rerun with a narrower command or read the file with read_file]",
+    "assumptions": [
+      "The install location is `~/.local/share/forgel` and the command directory `~/.local/bin`, both overridable by environment inputs, never shared.",
+      "The default target source is the official PyPI channel addressed by its JSON API, the default reference its latest stable release, and the default interpreter a supported interpreter already on PATH.",
+      "A target source may also be a local engine source tree (declared version read from `pyproject.toml`), which is what the end-to-end tests drive, since the published channel cannot be exercised offline.",
+      "Removal is a mode of the same script (`--uninstall`), its outcome line goes to stdout because it carries no version.",
+      "The start-up contribution is a single marked block in one start-up file chosen from the invoking user's shell (`.zshrc`, `.bash_profile`/`.bashrc`, otherwise `.profile`), removed by marker so unrelated settings are never touched.",
+      "Engine data lives under `~/.forgel` and is never touched by install or removal."
+    ],
+    "context": {
+      "window": 1000000,
+      "usable": 122880,
+      "sessions": 3,
+      "compactions": 2,
+      "model_calls": 169,
+      "estimated_input_tokens": 8122745,
+      "provider_input_tokens": 8256583,
+      "provider_output_tokens": 461925,
+      "cache_hit_tokens": 7964544,
+      "cache_miss_tokens": 292039,
+      "estimated_tokens": 77419,
+      "state": "docs/program/agent/20261124152248_add-the-engine-s-one-command-installer-w.state.md"
+    },
+    "test_removals": [],
+    "spec_issues": [],
+    "escalated": [],
+    "git": {
+      "base": "e39f637fa467841efaaa92e1a413c10e02991b76",
+      "head": "106a30f10e1b72f5e2e3d35abf260ab144214714",
+      "commit": "106a30f10e1b72f5e2e3d35abf260ab144214714",
+      "commits": [
+        "106a30f10e1b72f5e2e3d35abf260ab144214714"
+      ]
+    },
+    "failure": {},
+    "report": "docs/program/agent/20261124152248_add-the-engine-s-one-command-installer-w.md"
   },
   "work_packages": [
     {
